@@ -601,3 +601,24 @@ func (h *CatalogHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(s)
 }
+
+// RefreshProductCache refreshes the storefront product materialized view concurrently
+func (h *CatalogHandler) RefreshProductCache(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	_, err := db.Pool.Exec(ctx, "REFRESH MATERIALIZED VIEW CONCURRENTLY catalog.mv_products")
+	if err != nil {
+		log.Printf("[ADMIN CACHE ERROR] Failed to refresh mv_products: %v", err)
+		http.Error(w, `{"error":"Önbellek güncellenirken bir hata oluştu"}` + err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"success","message":"Ürün önbelleği başarıyla güncellendi."}`))
+}

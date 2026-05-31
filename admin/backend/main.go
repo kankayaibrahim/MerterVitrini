@@ -180,6 +180,7 @@ func main() {
 	mux.Handle("DELETE /api/v1/categories/{id}", authMiddleware(http.HandlerFunc(catalogHandler.DeleteCategory)))
 	mux.Handle("GET /api/v1/products", authMiddleware(http.HandlerFunc(catalogHandler.ListProducts)))
 	mux.Handle("GET /api/v1/products/{id}", authMiddleware(http.HandlerFunc(catalogHandler.GetProductByID)))
+	mux.Handle("POST /api/v1/products/refresh-cache", authMiddleware(http.HandlerFunc(catalogHandler.RefreshProductCache)))
 	mux.Handle("GET /api/v1/settings", authMiddleware(http.HandlerFunc(catalogHandler.GetSettings)))
 	mux.Handle("PUT /api/v1/settings", authMiddleware(http.HandlerFunc(catalogHandler.UpdateSettings)))
 

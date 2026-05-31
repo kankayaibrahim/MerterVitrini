@@ -1354,6 +1354,21 @@ func updateSyncStatus(runID string, status string, summary map[string]any) {
 	if err != nil {
 		log.Printf("[SYNC-%s] Failed to update sync status to %s: %v", runID, status, err)
 	}
+
+	// Proactively refresh storefront catalog cache if sync run completes successfully
+	if status == "success" {
+		log.Printf("[SYNC-%s] Sync succeeded. Triggering concurrent refresh of storefront catalog materialized view...", runID)
+		go func() {
+			refreshCtx, refreshCancel := context.WithTimeout(context.Background(), 45*time.Second)
+			defer refreshCancel()
+			_, err := db.Pool.Exec(refreshCtx, "REFRESH MATERIALIZED VIEW CONCURRENTLY catalog.mv_products")
+			if err != nil {
+				log.Printf("[SYNC] Failed to auto-refresh storefront catalog materialized view: %v", err)
+			} else {
+				log.Println("[SYNC] Storefront catalog materialized view successfully refreshed!")
+			}
+		}()
+	}
 }
 
 // --- Standardized B2B Parser Data Transfer Objects ---

@@ -86,28 +86,16 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	selectPrefix := `
 		SELECT p.id, p.feed_id, p.source_product_id, p.source_product_group_id, p.title, p.slug, p.slug_id, p.custom_sku, 
 		       p.short_description, p.description, p.brand_id, p.category_id, 
-		       p.gender, p.season, COALESCE(fab.fabric_name, 'Polyester') as kumas_fabric, p.desi_volume, p.shipping_weight_kg, 
+		       p.gender, p.season, p.kumas_fabric, p.desi_volume, p.shipping_weight_kg, 
 		       p.packing_ratio, p.series_ratio, p.minimum_order_quantity, 
-		       p.price, p.discounted_price, p.single_price, p.buying_price, p.currency, p.tax_rate, COALESCE(col.color_name, 'Standart') as color, p.stock, p.sku, p.barcode,
+		       p.price, p.discounted_price, p.single_price, p.buying_price, p.currency, p.tax_rate, p.color, p.stock, p.sku, p.barcode,
 		       p.is_active, 
-		       p.created_at, p.updated_at, COALESCE(NULLIF(b.alias_code, ''), b.brand_name) as brand_name, c.title as category_title,
-		       COALESCE(
-		           (SELECT json_agg(json_build_object('id', img.id, 'product_id', img.product_id, 'image_url', img.image_url, 'sort_order', img.sort_order, 'is_cover', img.is_cover) ORDER BY img.sort_order ASC)
-		            FROM catalog.product_images img
-		            WHERE img.product_id = p.id), '[]'::json
-		       ) as images_json,
-		       COALESCE(
-		           (SELECT json_object_agg(t.language_code, json_build_object('title', t.title, 'short_description', t.short_description, 'description', t.description))
-		            FROM catalog.product_translations t
-		            WHERE t.product_id = p.id), '{}'::json
-		       ) as translations_json `
+		       p.created_at, p.updated_at, p.brand_name, p.category_title,
+		       p.images_json,
+		       p.translations_json `
 
 	sqlBase := `
-		FROM catalog.products p
-		INNER JOIN catalog.brands b ON p.brand_id = b.id AND b.is_active = true
-		LEFT JOIN catalog.categories c ON p.category_id = c.id
-		LEFT JOIN catalog.colors col ON p.color_id = col.id
-		LEFT JOIN catalog.fabrics fab ON p.fabric_id = fab.id
+		FROM catalog.mv_products p
 		WHERE p.is_active = true`
 
 	args := []any{}
@@ -121,10 +109,10 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 					p.title ILIKE $%d 
 					OR p.custom_sku ILIKE $%d 
 					OR p.description ILIKE $%d 
-					OR c.title ILIKE $%d 
-					OR b.brand_name ILIKE $%d 
-					OR col.color_name ILIKE $%d
-					OR fab.fabric_name ILIKE $%d
+					OR p.category_title ILIKE $%d 
+					OR p.brand_name ILIKE $%d 
+					OR p.color ILIKE $%d
+					OR p.kumas_fabric ILIKE $%d
 					OR EXISTS (
 						SELECT 1 
 						FROM catalog.product_attributes_map pam 
@@ -160,13 +148,11 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if categoryID != "" {
-		// Matches target category (by ID or Slug) and recursively all its nested child paths
+		// Matches target category (by ID or Slug) and recursively all its nested child paths using view's precomputed node_path!
 		sqlBase += fmt.Sprintf(` AND (
 			p.category_id = (SELECT id FROM catalog.categories WHERE id::text = $%d OR slug = $%d LIMIT 1)
-			OR p.category_id IN (
-				SELECT id FROM catalog.categories WHERE node_path <@ (
-					SELECT node_path FROM catalog.categories WHERE id::text = $%d OR slug = $%d LIMIT 1
-				)
+			OR p.node_path <@ (
+				SELECT node_path FROM catalog.categories WHERE id::text = $%d OR slug = $%d LIMIT 1
 			)
 		)`, argIndex, argIndex, argIndex, argIndex)
 		args = append(args, categoryID)
@@ -401,7 +387,7 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Dynamic Attribute Facets
-	cleanSqlBase := strings.Replace(sqlBase, "FROM catalog.products p", "FROM catalog.products p INNER JOIN catalog.product_attributes_map pam ON p.id = pam.product_id INNER JOIN catalog.attribute_values av ON pam.attribute_value_id = av.id INNER JOIN catalog.attributes a ON av.attribute_id = a.id", 1)
+	cleanSqlBase := strings.Replace(sqlBase, "FROM catalog.mv_products p", "FROM catalog.mv_products p INNER JOIN catalog.product_attributes_map pam ON p.id = pam.product_id INNER JOIN catalog.attribute_values av ON pam.attribute_value_id = av.id INNER JOIN catalog.attributes a ON av.attribute_id = a.id", 1)
 	attrQuery := "SELECT a.attribute_name, av.attribute_value, COUNT(DISTINCT p.id) " + cleanSqlBase + " GROUP BY a.attribute_name, av.attribute_value"
 	if aRows, err := db.Pool.Query(ctx, attrQuery, baseArgs...); err == nil {
 		for aRows.Next() {
