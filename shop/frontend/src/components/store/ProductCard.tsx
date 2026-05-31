@@ -185,12 +185,12 @@ export default function ProductCard({
             <span>{t("min_order_qty", lang)}: {product.minimum_order_quantity} {t("piece", lang)}</span>
           </div>
           {product.packing_ratio && (
-            <div className="mt-1 py-1.5 px-2.5 bg-salmon-pink/5 border border-salmon-pink/20 rounded-[8px] flex items-center justify-between transition-colors duration-150 hover:bg-salmon-pink/[0.08] shadow-sm">
+            <div className="mt-1 py-1.5 px-2.5 bg-zinc-50 border border-cultured rounded-[8px] flex items-center justify-between transition-colors duration-150 hover:bg-[#fff5f6] hover:border-salmon-pink/30 shadow-sm">
               <span className="text-[9px] uppercase tracking-wider text-sonic-silver font-extrabold">
                 {t("series_sizes", lang).replace(":", "").trim()}
               </span>
-              <span className="text-[13px] font-black text-salmon-pink tracking-wide">
-                {product.packing_ratio.split(",").join(" - ")}
+              <span className="text-[12.5px] font-black text-eerie-black tracking-wide">
+                {product.packing_ratio.toUpperCase() === "STANDART" ? (lang === "tr" ? "STANDART" : "STANDARD") : product.packing_ratio.split(",").join(" - ")}
               </span>
             </div>
           )}

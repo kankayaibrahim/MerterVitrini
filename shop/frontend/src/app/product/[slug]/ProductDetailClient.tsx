@@ -191,8 +191,9 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
       attr.name.toLowerCase() !== "renk"
   );
   const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
-  const sizes = product.packing_ratio ? product.packing_ratio.split(",") : ["Standart"];
+  const rawSizes = product.packing_ratio ? product.packing_ratio.split(",") : ["Standart"];
   const ratios = product.series_ratio ? product.series_ratio.split("-") : ["1"];
+  const sizes = rawSizes.map(sz => sz.toUpperCase() === "STANDART" ? (lang === "tr" ? "Standart" : "Standard") : sz);
   const weightPerUnit = product.shipping_weight_kg || 0.35;
   const totalPkgWeight = unitsPerPkg * weightPerUnit;
 

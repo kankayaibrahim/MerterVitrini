@@ -1032,40 +1032,40 @@ export default function StorefrontLayout({
         <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
           
           {/* A. PREMIUM AUTO-SLIDING HERO CAROUSEL */}
-          <div className="relative rounded-[20px] overflow-hidden border border-cultured aspect-[21/9] min-h-[280px] bg-gradient-to-br from-[#fafafa] to-[#fff0f1] shadow-sm select-none mb-10 group">
+          <div className="relative rounded-[20px] overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9] min-h-[300px] xs:min-h-[320px] sm:min-h-[280px] bg-gradient-to-br from-[#fafafa] to-[#fff0f1] shadow-sm select-none mb-10 group">
             {/* Slide 1: Opportunities Promo */}
-            <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-8 md:p-16 ${activeSlide === 0 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
+            <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 0 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
               <img 
                 src={getLocalizedSliderBanner("opportunities")} 
                 alt={t("portal_daily_opportunities", lang)} 
                 className="absolute inset-0 w-full h-full object-cover" 
                 onError={handleSliderImageError("opportunities")}
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-white/60 via-white/20 to-transparent z-0" />
-              <div className="relative z-10 max-w-lg bg-white/80 backdrop-blur-md p-6 md:p-8 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-2">
-                <span className="text-salmon-pink font-extrabold text-[10px] sm:text-xs uppercase tracking-[2px]">{t("portal_wholesale_opportunities", lang)}</span>
-                <h2 className="font-sans font-extrabold text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_daily_opportunities", lang)}</h2>
-                <p className="text-xs text-sonic-silver font-semibold mt-1">{t("portal_daily_opportunities_desc", lang)}</p>
-                <a href="/tum-urunler" className="mt-3 px-5 py-2.5 bg-salmon-pink hover:bg-eerie-black text-white text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline">{t("portal_examine_catalog", lang)}</a>
+              <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
+              <div className="relative z-10 max-w-[90vw] sm:max-w-md md:max-w-lg bg-white/85 backdrop-blur-md p-5 sm:p-6 md:p-8 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
+                <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_wholesale_opportunities", lang)}</span>
+                <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_daily_opportunities", lang)}</h2>
+                <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_daily_opportunities_desc", lang)}</p>
+                <a href="/tum-urunler" className="mt-2.5 px-4 py-2 sm:px-5 sm:py-2.5 bg-salmon-pink hover:bg-eerie-black text-white text-[10px] sm:text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline">{t("portal_examine_catalog", lang)}</a>
               </div>
             </div>
 
             {/* Slide 2: Mobile App Promo */}
-            <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-8 md:p-16 ${activeSlide === 1 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
+            <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 1 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
               <img 
                 src={getLocalizedSliderBanner("app_promo")} 
                 alt={t("portal_download_app", lang)} 
                 className="absolute inset-0 w-full h-full object-cover" 
                 onError={handleSliderImageError("app_promo")}
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-white/60 via-white/20 to-transparent z-0" />
-              <div className="relative z-10 max-w-lg bg-white/80 backdrop-blur-md p-6 md:p-8 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-2">
-                <span className="text-salmon-pink font-extrabold text-[10px] sm:text-xs uppercase tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
-                <h2 className="font-sans font-extrabold text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_download_app", lang)}</h2>
-                <p className="text-xs text-sonic-silver font-semibold mt-1">{t("portal_download_app_desc", lang)}</p>
-                <div className="flex gap-2.5 mt-3">
-                  <span className="px-4 py-2 bg-eerie-black text-white text-[10px] font-extrabold rounded-[5px] border-none shadow-sm cursor-pointer select-none">{t("portal_app_store", lang)}</span>
-                  <span className="px-4 py-2 bg-eerie-black text-white text-[10px] font-extrabold rounded-[5px] border-none shadow-sm cursor-pointer select-none">{t("portal_google_play", lang)}</span>
+              <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
+              <div className="relative z-10 max-w-[90vw] sm:max-w-md md:max-w-lg bg-white/85 backdrop-blur-md p-5 sm:p-6 md:p-8 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
+                <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
+                <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_download_app", lang)}</h2>
+                <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_download_app_desc", lang)}</p>
+                <div className="flex gap-2 mt-2.5">
+                  <span className="px-3 py-1.5 xs:px-4 xs:py-2 bg-eerie-black text-white text-[9px] xs:text-[10px] font-extrabold rounded-[5px] border-none shadow-sm cursor-pointer select-none active:scale-[0.98] transition-transform">{t("portal_app_store", lang)}</span>
+                  <span className="px-3 py-1.5 xs:px-4 xs:py-2 bg-eerie-black text-white text-[9px] xs:text-[10px] font-extrabold rounded-[5px] border-none shadow-sm cursor-pointer select-none active:scale-[0.98] transition-transform">{t("portal_google_play", lang)}</span>
                 </div>
               </div>
             </div>
