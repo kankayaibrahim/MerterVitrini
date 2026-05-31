@@ -1,11 +1,11 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
+import React, { useState, useEffect } from "react";
 import { Product } from "@/types/store";
 import { getProductTitle, t } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice } from "@/app/utils";
 import { Heart, ShoppingBag, Eye, Star } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface ProductCardProps {
   product: Product;
@@ -19,7 +19,7 @@ interface ProductCardProps {
 const addToCartTranslations: Record<string, string> = {
   tr: "Sepete Ekle",
   en: "Add to Cart",
-  ar: "أضف إلى السلة",
+  ar: "أضf إلى السلة",
   ru: "В корзину",
   pl: "Dodaj do koszyka",
   bg: "Добави в количката",
@@ -35,7 +35,47 @@ export default function ProductCard({
   displayCurrency,
   exchangeRates,
 }: ProductCardProps) {
+  const router = useRouter();
   const title = getProductTitle(product, lang);
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const favs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]");
+      setIsFavorite(favs.includes(product.id));
+    }
+  }, [product.id]);
+
+  const toggleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const favs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]");
+    let updated: string[];
+    if (favs.includes(product.id)) {
+      updated = favs.filter((id: string) => id !== product.id);
+      setIsFavorite(false);
+    } else {
+      updated = [...favs, product.id];
+      setIsFavorite(true);
+      
+      // Dispatch standard success toast/event!
+      const newToast = { 
+        id: Math.random().toString(), 
+        message: `${title} - ${lang === "tr" ? "Favorilerime Eklendi!" : "Added to Favorites!"}` 
+      };
+      window.dispatchEvent(new CustomEvent("merter-show-toast", { detail: newToast }));
+    }
+    localStorage.setItem("merter_wishlist", JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent("merter-wishlist-update", { detail: updated }));
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button") || target.closest("a")) {
+      return;
+    }
+    router.push(`/product/${product.slug || product.id}`);
+  };
   
   let coverImg = "/placeholder.png";
   if (product.images && product.images.length > 0) {
@@ -90,8 +130,8 @@ export default function ProductCard({
   else if (lang === "fr") btnText = addToCartTranslations.fr;
 
   return (
-    <Link 
-      href={`/product/${product.slug || product.id}`}
+    <div 
+      onClick={handleCardClick}
       className="bg-white rounded-[15px] overflow-hidden flex flex-col h-full cursor-pointer relative border border-cultured group select-none shadow-sm hover:shadow-premium transition-all duration-300 block text-inherit no-underline"
     >
       {/* 1. Visual Image Container with double-image hover swap */}
@@ -133,6 +173,7 @@ export default function ProductCard({
 
         {/* Action buttons overlay */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 translate-x-3 group-hover:translate-x-0 transition-all duration-300 z-10">
+          {/* Quick View Button */}
           <button 
             type="button"
             className="w-9 h-9 bg-white border border-cultured rounded-[5px] flex items-center justify-center shadow-sm text-onyx hover:bg-eerie-black hover:text-white hover:border-eerie-black transition-all cursor-pointer"
@@ -140,18 +181,23 @@ export default function ProductCard({
               e.stopPropagation();
               onOpenModal(product.id);
             }}
+            title={lang === "tr" ? "Hızlı İncele" : "Quick View"}
           >
             <Eye className="w-4 h-4" />
           </button>
+          
+          {/* Add to Favorites (Wishlist) Button */}
           <button 
             type="button"
-            className="w-9 h-9 bg-white border border-cultured rounded-[5px] flex items-center justify-center shadow-sm text-onyx hover:bg-eerie-black hover:text-white hover:border-eerie-black transition-all cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenModal(product.id);
-            }}
+            className={`w-9 h-9 border rounded-[5px] flex items-center justify-center shadow-sm transition-all cursor-pointer ${
+              isFavorite 
+                ? "bg-salmon-pink border-salmon-pink text-white hover:bg-salmon-pink" 
+                : "bg-white border-cultured text-onyx hover:bg-eerie-black hover:text-white hover:border-eerie-black"
+            }`}
+            onClick={toggleFavorite}
+            title={lang === "tr" ? "Favorilerime Ekle" : "Add to Favorites"}
           >
-            <ShoppingBag className="w-4 h-4" />
+            <Heart className={`w-4 h-4 ${isFavorite ? "fill-white" : ""}`} />
           </button>
         </div>
       </div>
@@ -196,8 +242,8 @@ export default function ProductCard({
           )}
         </div>
         
-        {/* Pricing structure */}
-        <div className="flex items-baseline gap-2 mt-auto pt-3 border-t border-cultured">
+        {/* Pricing structure (Right-Aligned) */}
+        <div className="flex items-baseline justify-end gap-2 mt-auto pt-3 border-t border-cultured">
           {hasDiscount ? (
             <>
               <span className="text-[11px] text-sonic-silver line-through font-medium">
@@ -234,6 +280,6 @@ export default function ProductCard({
           <span>{btnText}</span>
         </button>
       </div>
-    </Link>
+    </div>
   );
 }

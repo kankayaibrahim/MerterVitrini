@@ -220,7 +220,7 @@ export default function ProductDetailsModal({
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="border border-cultured rounded-[5px] p-2.5 bg-white flex flex-col gap-0.5 shadow-sm">
                   <span className="text-[9px] uppercase font-bold text-sonic-silver tracking-[0.5px]">{t("fabric", lang)}</span>
-                  <span className="font-bold text-eerie-black truncate">{product.kumas_fabric || "Viskon / Pamuk"}</span>
+                  <span className="font-bold text-eerie-black truncate">{t(product.kumas_fabric || "Viskon / Pamuk", lang)}</span>
                 </div>
                 <div className="border border-cultured rounded-[5px] p-2.5 bg-white flex flex-col gap-0.5 shadow-sm">
                   <span className="text-[9px] uppercase font-bold text-sonic-silver tracking-[0.5px]">

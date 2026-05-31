@@ -402,9 +402,22 @@ export default function StorefrontLayout({
       }, 3000);
     };
 
+    const handleShowCustomToast = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setToasts((prev) => [...prev, customEvent.detail]);
+        setTimeout(() => {
+          setToasts((prev) => prev.filter(t => t.id !== customEvent.detail.id));
+        }, 3000);
+      }
+    };
+
     window.addEventListener("merter-add-to-cart", handleDirectAddToCart);
+    window.addEventListener("merter-show-toast", handleShowCustomToast);
+    
     return () => {
       window.removeEventListener("merter-add-to-cart", handleDirectAddToCart);
+      window.removeEventListener("merter-show-toast", handleShowCustomToast);
     };
   }, [lang]);
 

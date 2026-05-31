@@ -64,6 +64,30 @@ export default function Header({
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
+  const [wishlistCount, setWishlistCount] = useState(0);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const favs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]");
+      setWishlistCount(favs.length);
+
+      const handleWishlistUpdate = (e: Event) => {
+        const customEvent = e as CustomEvent;
+        if (customEvent.detail && Array.isArray(customEvent.detail)) {
+          setWishlistCount(customEvent.detail.length);
+        } else {
+          // If event payload isn't the array, read directly
+          const currentFavs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]");
+          setWishlistCount(currentFavs.length);
+        }
+      };
+      window.addEventListener("merter-wishlist-update", handleWishlistUpdate);
+      return () => {
+        window.removeEventListener("merter-wishlist-update", handleWishlistUpdate);
+      };
+    }
+  }, []);
+
 
   const currenciesList = [
     { code: "TRY", label: "TRY (TL)", flag: "🇹🇷" },
@@ -435,7 +459,7 @@ export default function Header({
               <button className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent">
                 <Heart className="w-[19px] h-[19px] sm:w-[20px] sm:h-[20px]" />
                 <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[13px] h-[13px] flex items-center justify-center font-bold text-[7.5px] leading-none shadow-sm">
-                  0
+                  {wishlistCount}
                 </span>
               </button>
 
@@ -574,7 +598,7 @@ export default function Header({
             <button className="p-2 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent">
               <Heart className="w-[22px] h-[22px]" />
               <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[17px] h-[17px] flex items-center justify-center font-bold text-[10px] leading-none shadow-sm">
-                0
+                {wishlistCount}
               </span>
             </button>
 
