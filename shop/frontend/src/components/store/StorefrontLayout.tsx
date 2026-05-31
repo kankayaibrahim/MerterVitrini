@@ -124,31 +124,24 @@ export default function StorefrontLayout({
 
     switch (lang) {
       case "en":
-        opportunities = "/banners/hero_opportunities_en.png";
         app_promo = "/banners/hero_app_en.png";
         break;
       case "ar":
-        opportunities = "/banners/hero_opportunities_ar.png";
         app_promo = "/banners/hero_app_ar.png";
         break;
       case "ru":
-        opportunities = "/banners/hero_opportunities_ru.png";
         app_promo = "/banners/hero_app_ru.png";
         break;
       case "pl":
-        opportunities = "/banners/hero_okazje_pl.png";
         app_promo = "/banners/hero_aplikacja_pl.png";
         break;
       case "bg":
-        opportunities = "/banners/hero_vazmozhnosti_bg.png";
         app_promo = "/banners/hero_prilozhenie_bg.png";
         break;
       case "de":
-        opportunities = "/banners/hero_chancen_de.png";
         app_promo = "/banners/hero_app_de.png";
         break;
       case "fr":
-        opportunities = "/banners/hero_opportunites_fr.png";
         app_promo = "/banners/hero_app_fr.png";
         break;
       default:
