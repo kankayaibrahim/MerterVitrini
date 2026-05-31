@@ -376,21 +376,31 @@ export default function StorefrontLayout({
     if (typeof window !== "undefined" && mode === "catalog") {
       const params = new URLSearchParams(window.location.search);
       const catParam = params.get("category");
-      const qParam = params.get("q");
+      const qParam = params.get("q") || "";
+
+      console.log(`[Search Log] URL Syncer triggered. window.location.search: "${window.location.search}". qParam from URL: "${qParam}"`);
 
       if (catParam) {
         setActiveCategoryId(catParam);
       }
-      if (qParam) {
-        setSearchQuery(qParam);
-        // Safely sync the desktop input box value
-        setTimeout(() => {
-          const searchInput = document.getElementById("searchInputDesktop") as HTMLInputElement;
-          if (searchInput) searchInput.value = qParam;
-        }, 100);
-      }
+      
+      setSearchQuery(qParam);
+
+      // Safely sync both desktop & mobile input box values
+      setTimeout(() => {
+        const searchInput = document.getElementById("searchInputDesktop") as HTMLInputElement;
+        if (searchInput) {
+          searchInput.value = qParam;
+          console.log(`[Search Log] Synced desktop input box value to: "${qParam}"`);
+        }
+        const searchInputMobile = document.getElementById("searchInputMobile") as HTMLInputElement;
+        if (searchInputMobile) {
+          searchInputMobile.value = qParam;
+          console.log(`[Search Log] Synced mobile input box value to: "${qParam}"`);
+        }
+      }, 100);
     }
-  }, [mode]);
+  }, [mode, typeof window !== "undefined" ? window.location.search : ""]);
 
   // --- Products Catalog Loader ---
   useEffect(() => {
@@ -459,7 +469,9 @@ export default function StorefrontLayout({
         };
       }
 
+      console.log(`[Search Log] Fetching products with queryParams: "${queryParams}"`);
       const data = await apiFetch<ProductsResponse>(`/products${queryParams}`);
+      console.log(`[Search Log] API response received. Product count: ${data?.products?.length || 0}`);
       if (data && data.products) {
         setProducts(data.products);
         setTotalProductsCount(data.total);
@@ -1095,6 +1107,12 @@ export default function StorefrontLayout({
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
                   onError={handleCollectionImageError("kadin")}
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
+                  <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_women_trend_desc", lang)}</span>
+                    <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_women_clothing", lang)}</h4>
+                  </div>
+                </div>
               </a>
 
               {/* Card 2: Erkek Giyim */}
@@ -1108,6 +1126,12 @@ export default function StorefrontLayout({
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
                   onError={handleCollectionImageError("erkek")}
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
+                  <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_men_trend_desc", lang)}</span>
+                    <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_men_clothing", lang)}</h4>
+                  </div>
+                </div>
               </a>
 
               {/* Card 3: İç Giyim */}
@@ -1121,6 +1145,12 @@ export default function StorefrontLayout({
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
                   onError={handleCollectionImageError("ic_giyim")}
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
+                  <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_lingerie_desc", lang)}</span>
+                    <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_lingerie", lang)}</h4>
+                  </div>
+                </div>
               </a>
 
               {/* Card 4: Aksesuar */}
@@ -1134,6 +1164,12 @@ export default function StorefrontLayout({
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
                   onError={handleCollectionImageError("aksesuar")}
                 />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
+                  <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_accessories_desc", lang)}</span>
+                    <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_accessories", lang)}</h4>
+                  </div>
+                </div>
               </a>
 
             </div>

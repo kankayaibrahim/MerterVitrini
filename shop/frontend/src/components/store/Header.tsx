@@ -193,17 +193,22 @@ export default function Header({
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
+    console.log(`[Search Log] Input field value changed: "${val}"`);
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
     searchTimeoutRef.current = setTimeout(() => {
       const trimmed = val.trim();
-      if (pathname === "/tum-urunler") {
-        setSearchQuery(trimmed);
-        setCurrentPage(1);
-      } else {
-        router.push(`/tum-urunler?q=${encodeURIComponent(trimmed)}`);
-      }
+      const prefix = getCategoryPrefix();
+      
+      // Determine the target URL while keeping the active language prefix
+      const targetUrl = trimmed 
+        ? `/${prefix}/tum-urunler?q=${encodeURIComponent(trimmed)}`
+        : `/${prefix}/tum-urunler`;
+      
+      console.log(`[Search Log] Debounced search trigger for: "${trimmed}". Target URL: "${targetUrl}"`);
+      router.push(targetUrl);
     }, 450);
   };
 
