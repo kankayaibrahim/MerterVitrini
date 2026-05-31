@@ -76,6 +76,7 @@ async function fetchLanguages(): Promise<Language[]> {
 
 // Generate static params at compilation time for active dynamic CMS pages
 export async function generateStaticParams() {
+  if (process.env.NEXT_BUILD_SSR === "true") return [];
   try {
     const activeLangs = await fetchLanguages();
     const response = await fetch("https://mertervitrini.com.tr/api/v1/store/pages?t=" + Date.now());

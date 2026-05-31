@@ -13,7 +13,7 @@ interface PageProps {
 export async function generateStaticParams() {
   try {
     // Skip or limit SSG during development or heavy builds to avoid network bottlenecks and rate limits.
-    const limit = process.env.NODE_ENV === "development" ? 0 : 15000;
+    const limit = (process.env.NODE_ENV === "development" || process.env.NEXT_BUILD_SSR === "true") ? 0 : 15000;
     if (limit === 0) return [];
 
     const response = await fetch(`https://mertervitrini.com.tr/api/v1/store/products?limit=${limit}&t=` + Date.now());

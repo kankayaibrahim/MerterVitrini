@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
+const isSSR = process.env.NEXT_BUILD_SSR === "true";
+
 const nextConfig: NextConfig = {
-  output: "export",
+  output: isSSR ? undefined : "export",
   trailingSlash: true,
   images: {
     unoptimized: true,

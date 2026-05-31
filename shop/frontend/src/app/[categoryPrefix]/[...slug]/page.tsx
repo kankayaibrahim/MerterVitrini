@@ -71,6 +71,7 @@ async function fetchLanguages(): Promise<Language[]> {
 
 // Generate static routes for all category prefixes and nested category slugs at compilation time
 export async function generateStaticParams() {
+  if (process.env.NEXT_BUILD_SSR === "true") return [];
   try {
     const response = await fetch("https://mertervitrini.com.tr/api/v1/store/categories?t=" + Date.now());
     const activeLangs = await fetchLanguages();

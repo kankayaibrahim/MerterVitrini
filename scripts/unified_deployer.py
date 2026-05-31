@@ -93,9 +93,10 @@ PROJECTS_CONFIG = {
 # PIPELINE RUNNER LOGIC (COMPILATION & SFTP DEPLOYMENT)
 # ==============================================================================
 class DeployPipeline:
-    def __init__(self, log_callback=print, remote_build=False):
+    def __init__(self, log_callback=print, remote_build=False, ssr_mode=False):
         self.log = log_callback
         self.remote_build = remote_build
+        self.ssr_mode = ssr_mode
         # Find repo root dir
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
         self.root_dir = os.path.abspath(os.path.join(self.script_dir, ".."))
@@ -213,18 +214,30 @@ class DeployPipeline:
             return
 
         self.log("[BUILD] Running Next.js production compilation...")
-        build_cmd = "cmd.exe /c npm run build" if sys.platform == "win32" else "npm run build"
+        if self.ssr_mode:
+            self.log("[BUILD] Next.js SSR Mode compilation activated!")
+            build_cmd = "cmd.exe /c \"set NEXT_BUILD_SSR=true&& npm run build\"" if sys.platform == "win32" else "NEXT_BUILD_SSR=true npm run build"
+        else:
+            build_cmd = "cmd.exe /c npm run build" if sys.platform == "win32" else "npm run build"
         
         t_start = time.time()
         self.run_local(build_cmd, cwd=proj_path)
         t_end = time.time()
         
-        out_dir = os.path.join(proj_path, "out")
-        if os.path.exists(out_dir):
-            self.log(f"[OK] Next.js frontend compiled successfully! Static out folder ready.")
-            self.record_time(proj_key, "frontend", "Next.js Yerel Derleme (npm run build)", t_end - t_start)
+        if self.ssr_mode:
+            dot_next = os.path.join(proj_path, ".next")
+            if os.path.exists(dot_next):
+                self.log(f"[OK] Next.js frontend compiled successfully! SSR .next folder ready.")
+                self.record_time(proj_key, "frontend", "Next.js Yerel Derleme (SSR - npm run build)", t_end - t_start)
+            else:
+                raise Exception(".next folder not found after build.")
         else:
-            raise Exception("Static 'out' folder not found after build.")
+            out_dir = os.path.join(proj_path, "out")
+            if os.path.exists(out_dir):
+                self.log(f"[OK] Next.js frontend compiled successfully! Static out folder ready.")
+                self.record_time(proj_key, "frontend", "Next.js Yerel Derleme (npm run build)", t_end - t_start)
+            else:
+                raise Exception("Static 'out' folder not found after build.")
 
     def deploy_backend(self, proj_key):
         self.log(f"\n==================================================")
@@ -416,6 +429,11 @@ WantedBy=multi-user.target
                 build_root = f"/var/www/build/{proj_key}"
                 self._ssh_cmd(ssh, f"mkdir -p {build_root}")
 
+                # Stop running frontend service in SSR mode if exists to release locks
+                if self.ssr_mode:
+                    self.log("[SYSTEMD] Stopping active shop-frontend service before deployment...")
+                    self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
+
                 # 2. Upload Sources (Pipelined)
                 sftp = ssh.open_sftp()
                 remote_archive = f"{build_root}/{archive_name}"
@@ -460,18 +478,26 @@ WantedBy=multi-user.target
                     self._ssh_cmd(ssh, f"echo \"{combined_hash}\" > {build_root}/frontend/package_hash.txt")
                 
                 self.log("[REMOTE-BUILD] Running: npm run build")
-                self._ssh_cmd(ssh, f"cd {build_root}/frontend && npm run build")
+                if self.ssr_mode:
+                    self._ssh_cmd(ssh, f"cd {build_root}/frontend && NEXT_BUILD_SSR=true npm run build")
+                else:
+                    self._ssh_cmd(ssh, f"cd {build_root}/frontend && npm run build")
                 t_rembuild_end = time.time()
                 self.record_time(proj_key, "frontend", "Sunucuda Next.js Derleme (npm install + build)", t_rembuild_end - t_rembuild_start)
 
-                # 5. Sync to final Nginx directory
-                self.log("[REMOTE-DEPLOY] Copying compiled static pages to Nginx directory...")
+                # 5. Sync to final runtime directory
+                self.log("[REMOTE-DEPLOY] Copying compiled files to final directory...")
                 t_sync_start = time.time()
                 self._ssh_cmd(ssh, f"mkdir -p {cfg['remote_dir']}")
-                deploy_cmd = (
-                    f"rsync -a --delete --exclude='uploads' {build_root}/frontend/out/ {cfg['remote_dir']}/ "
-                    f"|| (find {cfg['remote_dir']}/ -mindepth 1 -maxdepth 1 ! -name 'uploads' -exec rm -rf {{}} + && cp -r {build_root}/frontend/out/* {cfg['remote_dir']}/)"
-                )
+                if self.ssr_mode:
+                    deploy_cmd = (
+                        f"rsync -a --delete --exclude='uploads' --exclude='.git' {build_root}/frontend/ {cfg['remote_dir']}/"
+                    )
+                else:
+                    deploy_cmd = (
+                        f"rsync -a --delete --exclude='uploads' {build_root}/frontend/out/ {cfg['remote_dir']}/ "
+                        f"|| (find {cfg['remote_dir']}/ -mindepth 1 -maxdepth 1 ! -name 'uploads' -exec rm -rf {{}} + && cp -r {build_root}/frontend/out/* {cfg['remote_dir']}/)"
+                    )
                 self._ssh_cmd(ssh, deploy_cmd)
 
                 # 6. Secure symlinks for persistent media storage
@@ -481,10 +507,209 @@ WantedBy=multi-user.target
                 self._ssh_cmd(ssh, f"rm -rf {cfg['remote_dir']}/uploads")
                 self._ssh_cmd(ssh, f"ln -sfn /var/www/media {cfg['remote_dir']}/uploads")
 
-                # 7. Nginx Reload
+                # 7. Configure frontend systemd Service & dynamic Nginx config
+                t_service_start = time.time()
+                if self.ssr_mode:
+                    self.log("[SYSTEMD] Configuring shop-frontend systemd daemon service...")
+                    frontend_systemd = f"""[Unit]
+Description=Merter Vitrini Shop Storefront Frontend Service (Next.js SSR)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory={cfg['remote_dir']}
+ExecStart=/usr/bin/npm run start -- -p 3000
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production PORT=3000
+
+[Install]
+WantedBy=multi-user.target
+"""
+                    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".service") as tmp:
+                        tmp.write(frontend_systemd)
+                        tmp_path = tmp.name
+                    try:
+                        sftp = ssh.open_sftp()
+                        sftp.put(tmp_path, "/etc/systemd/system/shop-frontend.service")
+                        sftp.close()
+                    finally:
+                        os.remove(tmp_path)
+
+                    self._ssh_cmd(ssh, "systemctl daemon-reload")
+                    self._ssh_cmd(ssh, "systemctl enable shop-frontend")
+                    self._ssh_cmd(ssh, "systemctl restart shop-frontend")
+                else:
+                    self.log("[SYSTEMD] Disabling and stopping active shop-frontend service (static export mode)...")
+                    self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
+                    self._ssh_cmd(ssh, "systemctl disable shop-frontend || true")
+                    self._ssh_cmd(ssh, "rm -f /etc/systemd/system/shop-frontend.service")
+                    self._ssh_cmd(ssh, "systemctl daemon-reload")
+
+                # Dynamic Nginx Configuration rewrite
+                self.log("[NGINX] Dynamic Virtual Host configuration update...")
+                location_block = ""
+                if self.ssr_mode:
+                    location_block = f"""    # Support Next.js Dynamic SSR / ISR Reverse Proxy to Port 3000
+    location / {{
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}"""
+                else:
+                    location_block = f"""    # Support Next.js App Router static exports with clean URLs
+    location / {{
+        try_files $uri $uri/ $uri.html /index.html =404;
+    }}"""
+
+                nginx_conf = f"""# 1. Main Storefront Server Block (HTTPS)
+server {{
+    listen 443 ssl;
+    server_name 213.202.255.80 mertervitrini.com.tr www.mertervitrini.com.tr;
+
+    root {cfg['remote_dir']};
+    index index.html index.htm;
+
+    # Security Headers
+    server_tokens off;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+
+{location_block}
+
+    # Cache Next.js built chunks (highly optimized for browser caching)
+    location /_next/static/ {{
+        alias /var/www/mertervitrini.com.tr/frontend/_next/static/;
+        access_log off;
+        expires 365d;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    }}
+
+    # Cache static uploads (product cover/variant images) with strict security
+    location /uploads/ {{
+        alias /var/www/admin.mertervitrini.com.tr/frontend/uploads/;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, no-transform" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    }}
+
+    # Cache other static file extensions with security headers
+    location ~* \\.(?:ico|css|js|gif|jpe?g|png|svg|webp|avif|woff2?|eot|ttf|otf)$ {{
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, no-transform" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    }}
+
+    location /api/ {{
+        proxy_pass http://127.0.0.1:8081/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+
+    ssl_certificate /etc/letsencrypt/live/mertervitrini.com.tr/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/mertervitrini.com.tr/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}}
+
+# 2. Storefront Backend API Server Block (HTTPS)
+server {{
+    listen 443 ssl;
+    server_name api.mertervitrini.com.tr;
+
+    # Security Headers
+    server_tokens off;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+
+    location / {{
+        proxy_pass http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+
+    ssl_certificate /etc/letsencrypt/live/mertervitrini.com.tr/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/mertervitrini.com.tr/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}}
+
+# 3. HTTP redirect block (Port 80)
+server {{
+    listen 80;
+    server_name 213.202.255.80 mertervitrini.com.tr www.mertervitrini.com.tr api.mertervitrini.com.tr;
+
+    # Let Certbot challenges bypass HTTPS redirect
+    location /.well-known/acme-challenge/ {{
+        root {cfg['remote_dir']};
+        try_files $uri =404;
+    }}
+
+    location / {{
+        return 301 https://$host$request_uri;
+    }}
+}}"""
+                with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".conf") as tmp:
+                    tmp.write(nginx_conf)
+                    tmp_path = tmp.name
+                try:
+                    sftp = ssh.open_sftp()
+                    sftp.put(tmp_path, "/etc/nginx/conf.d/mertervitrini.com.tr.conf")
+                    sftp.close()
+                finally:
+                    os.remove(tmp_path)
+
+                # Nginx Reload
                 self._ssh_cmd(ssh, "systemctl restart nginx || true")
                 t_sync_end = time.time()
-                self.record_time(proj_key, "frontend", "Nginx Klasörüne Senkronizasyon & Restart", t_sync_end - t_sync_start)
+                self.record_time(proj_key, "frontend", "Nginx ve Servisler Yeniden Başlatıldı", t_sync_end - t_sync_start)
                 self.log(f"[OK] Frontend suite successfully built and deployed on production server!")
 
             finally:
@@ -493,14 +718,7 @@ WantedBy=multi-user.target
                     os.remove(archive_path)
             return
 
-        # LOCAL BUILD & DEPLOY FLOW (Compiles locally, uploads full compiled 'out' directory)
-        local_out = os.path.abspath(os.path.join(self.root_dir, cfg["path"], "out"))
-        
-        if not os.path.exists(local_out):
-            raise Exception(f"Compiled Next.js assets not found: {local_out}. Please build it first.")
-
-        # Archive files
-        self.log("[ARCHIVE] Packaging static out files for SFTP upload...")
+        # LOCAL BUILD & DEPLOY FLOW (Compiles locally, uploads compiled workspace or static out directory)
         archive_path = os.path.join(self.script_dir, cfg["archive_name"])
         
         t_tar_start = time.time()
@@ -513,28 +731,43 @@ WantedBy=multi-user.target
         except Exception:
             has_native_tar = False
 
-        if has_native_tar:
-            self.log("[ARCHIVE] Using high-performance native tar for packaging...")
-            parent_dir = os.path.dirname(local_out)
-            base_dir = os.path.basename(local_out)
-            try:
+        if self.ssr_mode:
+            self.log("[ARCHIVE] Packaging Next.js SSR workspace files (excluding node_modules)...")
+            parent_dir = os.path.dirname(os.path.abspath(os.path.join(self.root_dir, cfg["path"])))
+            base_dir = os.path.basename(cfg["path"])
+            if has_native_tar:
+                subprocess.run(
+                    ["tar", "-czf", archive_path, "-C", parent_dir, 
+                     "--exclude=node_modules", "--exclude=.git", base_dir],
+                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
+            else:
+                with tarfile.open(archive_path, "w:gz") as tar:
+                    src_path = os.path.join(parent_dir, base_dir)
+                    for root, dirs, files in os.walk(src_path):
+                        dirs[:] = [d for d in dirs if d not in ["node_modules", ".git"]]
+                        for file in files:
+                            full_path = os.path.join(root, file)
+                            rel_path = os.path.relpath(full_path, parent_dir)
+                            tar.add(full_path, arcname=rel_path)
+        else:
+            local_out = os.path.abspath(os.path.join(self.root_dir, cfg["path"], "out"))
+            if not os.path.exists(local_out):
+                raise Exception(f"Compiled Next.js assets not found: {local_out}. Please build it first.")
+            self.log("[ARCHIVE] Packaging static out files for SFTP upload...")
+            if has_native_tar:
+                parent_dir = os.path.dirname(local_out)
+                base_dir = os.path.basename(local_out)
                 subprocess.run(
                     ["tar", "-czf", archive_path, "-C", parent_dir, base_dir],
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
+                    check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
                 )
-            except Exception as e:
-                self.log(f"[ARCHIVE][WARNING] Native tar failed ({e}), falling back to Python tarfile...")
-                has_native_tar = False
-
-        if not has_native_tar:
-            self.log("[ARCHIVE] Using standard Python tarfile module (slow)...")
-            with tarfile.open(archive_path, "w:gz") as tar:
-                tar.add(local_out, arcname=os.path.basename(local_out))
+            else:
+                with tarfile.open(archive_path, "w:gz") as tar:
+                    tar.add(local_out, arcname=os.path.basename(local_out))
                 
         t_tar_end = time.time()
-        self.record_time(proj_key, "frontend", "Statik Çıktıları Sıkıştırma (Tar)", t_tar_end - t_tar_start)
+        self.record_time(proj_key, "frontend", "Statik/SSR Çıktıları Sıkıştırma (Tar)", t_tar_end - t_tar_start)
         self.log(f"[ARCHIVE] Package created -> {archive_path} ({os.path.getsize(archive_path) / (1024*1024):.2f} MB)")
 
         t_ssh_start = time.time()
@@ -546,6 +779,11 @@ WantedBy=multi-user.target
             # 1. Ensure directory
             self._ssh_cmd(ssh, f"mkdir -p {cfg['remote_dir']}")
 
+            # Stop running frontend service in SSR mode if exists to release locks
+            if self.ssr_mode:
+                self.log("[SYSTEMD] Stopping active shop-frontend service before deployment...")
+                self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
+
             # 2. Upload with high-performance pipelined stream
             sftp = ssh.open_sftp()
             remote_archive = f"{cfg['remote_dir']}/{cfg['archive_name']}"
@@ -555,7 +793,6 @@ WantedBy=multi-user.target
             with open(archive_path, "rb") as local_f:
                 with sftp.open(remote_archive, "wb") as remote_f:
                     remote_f.set_pipelined(True)
-                    # Stream in 128KB chunks
                     while True:
                         chunk = local_f.read(128 * 1024)
                         if not chunk:
@@ -574,6 +811,11 @@ WantedBy=multi-user.target
             t_extract_end = time.time()
             self.record_time(proj_key, "frontend", "Sunucuda Arşiv Açma (Tar Extract)", t_extract_end - t_extract_start)
 
+            # If SSR Mode, run npm install remotely on server
+            if self.ssr_mode:
+                self.log("[REMOTE-INSTALL] Running npm install on server...")
+                self._ssh_cmd(ssh, f"cd {cfg['remote_dir']} && npm install --no-audit --no-fund")
+
             # 4. Secure symlinks for persistent media storage
             self.log("[REMOTE-DEPLOY] Securing persistent media storage symbolic link...")
             self._ssh_cmd(ssh, f"mkdir -p /var/www/media/products/edusa /var/www/media/products/flora /var/www/media/products/noir")
@@ -581,11 +823,210 @@ WantedBy=multi-user.target
             self._ssh_cmd(ssh, f"rm -rf {cfg['remote_dir']}/uploads")
             self._ssh_cmd(ssh, f"ln -sfn /var/www/media {cfg['remote_dir']}/uploads")
 
-            # 5. Nginx Reload
+            # 5. Configure frontend systemd Service & dynamic Nginx config
+            t_service_start = time.time()
+            if self.ssr_mode:
+                self.log("[SYSTEMD] Configuring shop-frontend systemd daemon service...")
+                frontend_systemd = f"""[Unit]
+Description=Merter Vitrini Shop Storefront Frontend Service (Next.js SSR)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory={cfg['remote_dir']}
+ExecStart=/usr/bin/npm run start -- -p 3000
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=NODE_ENV=production PORT=3000
+
+[Install]
+WantedBy=multi-user.target
+"""
+                with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".service") as tmp:
+                    tmp.write(frontend_systemd)
+                    tmp_path = tmp.name
+                try:
+                    sftp = ssh.open_sftp()
+                    sftp.put(tmp_path, "/etc/systemd/system/shop-frontend.service")
+                    sftp.close()
+                finally:
+                    os.remove(tmp_path)
+
+                self._ssh_cmd(ssh, "systemctl daemon-reload")
+                self._ssh_cmd(ssh, "systemctl enable shop-frontend")
+                self._ssh_cmd(ssh, "systemctl restart shop-frontend")
+            else:
+                self.log("[SYSTEMD] Disabling and stopping active shop-frontend service (static export mode)...")
+                self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
+                self._ssh_cmd(ssh, "systemctl disable shop-frontend || true")
+                self._ssh_cmd(ssh, "rm -f /etc/systemd/system/shop-frontend.service")
+                self._ssh_cmd(ssh, "systemctl daemon-reload")
+
+            # Dynamic Nginx Configuration rewrite
+            self.log("[NGINX] Dynamic Virtual Host configuration update...")
+            location_block = ""
+            if self.ssr_mode:
+                location_block = f"""    # Support Next.js Dynamic SSR / ISR Reverse Proxy to Port 3000
+    location / {{
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}"""
+            else:
+                location_block = f"""    # Support Next.js App Router static exports with clean URLs
+    location / {{
+        try_files $uri $uri/ $uri.html /index.html =404;
+    }}"""
+
+            nginx_conf = f"""# 1. Main Storefront Server Block (HTTPS)
+server {{
+    listen 443 ssl;
+    server_name 213.202.255.80 mertervitrini.com.tr www.mertervitrini.com.tr;
+
+    root {cfg['remote_dir']};
+    index index.html index.htm;
+
+    # Security Headers
+    server_tokens off;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+
+{location_block}
+
+    # Cache Next.js built chunks (highly optimized for browser caching)
+    location /_next/static/ {{
+        alias /var/www/mertervitrini.com.tr/frontend/_next/static/;
+        access_log off;
+        expires 365d;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    }}
+
+    # Cache static uploads (product cover/variant images) with strict security
+    location /uploads/ {{
+        alias /var/www/admin.mertervitrini.com.tr/frontend/uploads/;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, no-transform" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    }}
+
+    # Cache other static file extensions with security headers
+    location ~* \\.(?:ico|css|js|gif|jpe?g|png|svg|webp|avif|woff2?|eot|ttf|otf)$ {{
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, no-transform" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    }}
+
+    location /api/ {{
+        proxy_pass http://127.0.0.1:8081/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+
+    ssl_certificate /etc/letsencrypt/live/mertervitrini.com.tr/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/mertervitrini.com.tr/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}}
+
+# 2. Storefront Backend API Server Block (HTTPS)
+server {{
+    listen 443 ssl;
+    server_name api.mertervitrini.com.tr;
+
+    # Security Headers
+    server_tokens off;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+
+    location / {{
+        proxy_pass http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+
+    ssl_certificate /etc/letsencrypt/live/mertervitrini.com.tr/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/mertervitrini.com.tr/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}}
+
+# 3. HTTP redirect block (Port 80)
+server {{
+    listen 80;
+    server_name 213.202.255.80 mertervitrini.com.tr www.mertervitrini.com.tr api.mertervitrini.com.tr;
+
+    # Let Certbot challenges bypass HTTPS redirect
+    location /.well-known/acme-challenge/ {{
+        root {cfg['remote_dir']};
+        try_files $uri =404;
+    }}
+
+    location / {{
+        return 301 https://$host$request_uri;
+    }}
+}}"""
+            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".conf") as tmp:
+                tmp.write(nginx_conf)
+                tmp_path = tmp.name
+            try:
+                sftp = ssh.open_sftp()
+                sftp.put(tmp_path, "/etc/nginx/conf.d/mertervitrini.com.tr.conf")
+                sftp.close()
+            finally:
+                os.remove(tmp_path)
+
+            # Nginx Reload
             t_nginx_start = time.time()
             self._ssh_cmd(ssh, "systemctl restart nginx || true")
             t_nginx_end = time.time()
-            self.record_time(proj_key, "frontend", "Nginx Yeniden Başlatma", t_nginx_end - t_nginx_start)
+            self.record_time(proj_key, "frontend", "Nginx ve Servisler Yeniden Başlatıldı", t_nginx_end - t_nginx_start)
             
             self.log(f"[OK] Frontend suite successfully deployed!")
         finally:
@@ -632,13 +1073,14 @@ if PYSIDE_AVAILABLE:
         log_signal = Signal(str)
         finished_signal = Signal(bool, str)
 
-        def __init__(self, tasks, remote_build=False):
+        def __init__(self, tasks, remote_build=False, ssr_mode=False):
             super().__init__()
             self.tasks = tasks # List of tuples: (project, component, action)
             self.remote_build = remote_build
+            self.ssr_mode = ssr_mode
 
         def run(self):
-            pipeline = DeployPipeline(log_callback=self.emit_log, remote_build=self.remote_build)
+            pipeline = DeployPipeline(log_callback=self.emit_log, remote_build=self.remote_build, ssr_mode=self.ssr_mode)
             try:
                 for proj, comp, action in self.tasks:
                     if action in ["build", "all"]:
@@ -793,6 +1235,11 @@ if PYSIDE_AVAILABLE:
             self.cb_build_on_server.setToolTip("İşlemleri kendi bilgisayarınız yerine sunucu üzerinde derler. 898MB yerine sadece kaynak dosyaları (~5MB) yükler.")
             self.cb_build_on_server.setChecked(True) # Enabled by default for massive speedup!
             toggles_layout.addWidget(self.cb_build_on_server)
+
+            self.cb_ssr_mode = QtWidgets.QCheckBox("Canlı Node.js (SSR) Modunda Çalıştır")
+            self.cb_ssr_mode.setToolTip("Next.js storefront uygulamasını static export yerine canlı bir Node.js sunucusu (systemd / SSR / ISR) olarak derler ve sunucuya reverse proxy ile kurar.")
+            self.cb_ssr_mode.setChecked(False)
+            toggles_layout.addWidget(self.cb_ssr_mode)
             layout.addLayout(toggles_layout)
 
             # Selection Grids
@@ -907,7 +1354,7 @@ if PYSIDE_AVAILABLE:
             self.append_log("[INFO] Pipeline işlemleri başlatılıyor...")
 
             # Run in QThread
-            self.worker = PipelineWorker(tasks, remote_build=self.cb_build_on_server.isChecked())
+            self.worker = PipelineWorker(tasks, remote_build=self.cb_build_on_server.isChecked(), ssr_mode=self.cb_ssr_mode.isChecked())
             self.worker.log_signal.connect(self.append_log)
             self.worker.finished_signal.connect(self.pipeline_finished)
             self.worker.start()
@@ -933,8 +1380,9 @@ def run_cli_headless(args):
     components = [args.component] if args.component != "all" else ["backend", "frontend"]
     action = args.action
     remote_build = getattr(args, "remote_build", False)
+    ssr_mode = getattr(args, "ssr", False)
     
-    pipeline = DeployPipeline(log_callback=print, remote_build=remote_build)
+    pipeline = DeployPipeline(log_callback=print, remote_build=remote_build, ssr_mode=ssr_mode)
     
     try:
         for proj in projects:
@@ -1006,6 +1454,11 @@ def main():
             "--remote-build",
             action="store_true",
             help="Build the frontend on the remote server via SSH (saves upload bandwidth)."
+        )
+        parser.add_argument(
+            "--ssr",
+            action="store_true",
+            help="Deploy storefront Next.js app in live dynamic Node.js Server Mode (SSR/ISR) with a systemd daemon, instead of Static Export."
         )
         args = parser.parse_args()
         run_cli_headless(args)
