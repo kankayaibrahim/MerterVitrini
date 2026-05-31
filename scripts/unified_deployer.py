@@ -467,7 +467,7 @@ WantedBy=multi-user.target
                 # Check MD5 hash on server to skip npm install if package files haven't changed
                 check_cmd = f"[ -d {build_root}/frontend/node_modules ] && [ -f {build_root}/frontend/package_hash.txt ] && [ \"$(cat {build_root}/frontend/package_hash.txt)\" = \"{combined_hash}\" ] && echo \"MATCH\" || echo \"NOMATCH\""
                 check_out, _ = self._ssh_cmd(ssh, check_cmd)
-                skip_npm_install = "MATCH" in check_out
+                skip_npm_install = check_out.strip() == "MATCH"
                 
                 t_rembuild_start = time.time()
                 if skip_npm_install:
@@ -524,7 +524,7 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-Environment=NODE_ENV=production PORT=3000
+Environment=NODE_ENV=production PORT=3000 NEXT_BUILD_SSR=true
 
 [Install]
 WantedBy=multi-user.target
@@ -592,7 +592,7 @@ server {{
 
     # Cache Next.js built chunks (highly optimized for browser caching)
     location /_next/static/ {{
-        alias /var/www/mertervitrini.com.tr/frontend/_next/static/;
+        alias /var/www/mertervitrini.com.tr/frontend/.next/static/;
         access_log off;
         expires 365d;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
