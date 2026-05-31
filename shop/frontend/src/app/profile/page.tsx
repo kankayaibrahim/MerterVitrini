@@ -444,7 +444,7 @@ export default function ProfilePage() {
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
-                        placeholder="+90 532..."
+                        placeholder={t("placeholder_phone", lang)}
                       />
                     </div>
                   </div>
@@ -505,7 +505,7 @@ export default function ProfilePage() {
                         value={taxNoTCKN}
                         onChange={(e) => setTaxNoTCKN(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
-                        placeholder="Örn: 1234567890"
+                        placeholder={t("placeholder_tax_id", lang)}
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
@@ -518,7 +518,7 @@ export default function ProfilePage() {
                         value={instagramUsername}
                         onChange={(e) => setInstagramUsername(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
-                        placeholder="Örn: mertertekstil"
+                        placeholder={t("placeholder_instagram", lang)}
                       />
                     </div>
                   </div>
@@ -533,7 +533,7 @@ export default function ProfilePage() {
                         value={billingAddress}
                         onChange={(e) => setBillingAddress(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner h-24 resize-none text-eerie-black"
-                        placeholder="Şirket unvanı, vergi dairesi ve fatura adresi..."
+                        placeholder={t("placeholder_billing_address", lang)}
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
@@ -545,7 +545,7 @@ export default function ProfilePage() {
                         value={deliveryAddress}
                         onChange={(e) => setDeliveryAddress(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner h-24 resize-none text-eerie-black"
-                        placeholder="Kargo teslimatı yapılacak depo / dükkan adresi..."
+                        placeholder={t("placeholder_shipping_address", lang)}
                       />
                     </div>
                   </div>

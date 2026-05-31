@@ -174,6 +174,13 @@ export default function StorefrontLayout({
     message: string;
   }
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [centerFlash, setCenterFlash] = useState<{
+    show: boolean;
+    productTitle: string;
+    quantity: number;
+    unitsPerPkg: number;
+    addedText: string;
+  } | null>(null);
 
   
   // --- Quote Inquiry Submission States ---
@@ -349,6 +356,18 @@ export default function StorefrontLayout({
       setTimeout(() => {
         setToasts((prev) => prev.filter(t => t.id !== newToast.id));
       }, 3000);
+
+      // Trigger center screen premium flash overlay
+      setCenterFlash({
+        show: true,
+        productTitle: prodTitle,
+        quantity,
+        unitsPerPkg,
+        addedText
+      });
+      setTimeout(() => {
+        setCenterFlash(null);
+      }, 1300);
     };
 
     const handleShowCustomToast = (e: Event) => {
@@ -1307,6 +1326,33 @@ export default function StorefrontLayout({
         ))}
       </div>
 
+      {/* 6. Center Premium Success Flash Modal */}
+      {centerFlash && centerFlash.show && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/20 backdrop-blur-[2px] transition-all duration-300 animate-fade-in">
+          <div className="bg-slate-900/95 border border-white/10 text-white rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-6 max-w-sm w-full mx-4 flex flex-col items-center justify-center text-center gap-4 transition-all duration-300 transform animate-scale-in backdrop-blur-md">
+            {/* Success Checkmark Circle with Ping effect */}
+            <div className="relative flex items-center justify-center w-16 h-16 bg-emerald-500/10 rounded-full border border-emerald-500/20 text-emerald-400">
+              <span className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping"></span>
+              <svg className="w-8 h-8 shrink-0 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            
+            <div className="space-y-1 w-full">
+              <h3 className="text-base font-extrabold text-white tracking-wide">
+                {lang === "tr" ? "Sepete Eklendi!" : centerFlash.addedText}
+              </h3>
+              <p className="text-xs font-semibold text-slate-300 line-clamp-2 max-w-[280px] mx-auto leading-normal">
+                {centerFlash.productTitle}
+              </p>
+              <p className="text-[11px] font-extrabold text-emerald-400 mt-2 bg-emerald-500/10 px-3 py-1 rounded-full w-fit mx-auto border border-emerald-500/20 shadow-sm">
+                {centerFlash.quantity} {lang === "tr" ? "Seri" : "Pack"} ({centerFlash.quantity * centerFlash.unitsPerPkg} {lang === "tr" ? "Adet" : "Pcs"})
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(12px) scale(0.95); }
@@ -1314,6 +1360,20 @@ export default function StorefrontLayout({
         }
         .animate-toast-in {
           animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.2s ease-out forwards;
+        }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.92); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .animate-scale-in {
+          animation: scaleIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.15) forwards;
         }
       `}</style>
     </div>

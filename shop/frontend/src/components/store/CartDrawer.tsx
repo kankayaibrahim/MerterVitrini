@@ -241,7 +241,7 @@ export default function CartDrawer({
                   } else if (lang === "ru") {
                     dateInfo = `* Курсы основаны на официальной публикации ЦБ Турции (TCMB) от ${formattedDate} (по часовому поясу TR/Стамбул)`;
                   } else if (lang === "ar") {
-                    dateInfo = `* الأسعار تعتمد на نشرة البنك المركزي التركي (TCMB) الرسمية بتاريخ ${formattedDate} (توقيت تركيا/إسطنبول)`;
+                    dateInfo = `* الأسعار تعتمد على النشرة الرسمية للبنك المركزي التركي (TCMB) بتاريخ ${formattedDate} (توقيت تركيا/إسطنبول)`;
                   } else if (lang === "de") {
                     dateInfo = `* Die Kurse basieren auf der offiziellen Veröffentlichung der TCMB vom ${formattedDate} (TR/Istanbul-Zeitzone gilt)`;
                   } else if (lang === "pl") {
@@ -256,12 +256,12 @@ export default function CartDrawer({
                     <div className="mt-3 pt-3 border-t border-dashed border-cultured flex flex-col gap-2.5 select-none bg-white p-3 rounded-[8px] border border-cultured">
                       <div className="flex flex-col gap-1">
                         <span className="text-xs uppercase font-extrabold text-sonic-silver tracking-[0.5px]">
-                          {lang === "tr" ? "Döviz Kuru Karşılıkları" : (lang === "fr" ? "Équivalences de taux de change" : "Exchange Rate Equivalents")}
+                          {t("exchange_rate_equivalents", lang)}
                         </span>
                         {ratesBanner.length > 0 && (
                           <div className="flex flex-col gap-0.5">
                             <span className="text-[10px] font-semibold text-spanish-gray">
-                              {lang === "tr" ? "Aktif TCMB Efektif Kurları:" : (lang === "fr" ? "Taux de change effectifs TCMB :" : "Active TCMB Exchange Rates:")}{" "}
+                              {t("active_tcmb_rates", lang)}{" "}
                               {ratesBanner.map((r, i) => (
                                 <span key={r.currency_code} className="font-bold text-sonic-silver">
                                   {i > 0 && " | "}1 {r.currency_code} = {Number(r.buying_rate).toFixed(4)} TL
@@ -308,7 +308,7 @@ export default function CartDrawer({
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
-                      placeholder="Örn: Halil Yılmaz"
+                      placeholder={t("placeholder_full_name", lang)}
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -318,7 +318,7 @@ export default function CartDrawer({
                       value={companyName}
                       onChange={(e) => setCompanyName(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
-                      placeholder="Örn: Yılmaz Tekstil Gmbh"
+                      placeholder={t("placeholder_company_name", lang)}
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -329,7 +329,7 @@ export default function CartDrawer({
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
-                      placeholder="Örn: +90 532..."
+                      placeholder={t("placeholder_phone", lang)}
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -340,7 +340,7 @@ export default function CartDrawer({
                       value={emailAddress}
                       onChange={(e) => setEmailAddress(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
-                      placeholder="Örn: halil@example.com"
+                      placeholder={t("placeholder_email", lang)}
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -349,7 +349,7 @@ export default function CartDrawer({
                       value={customerMessage}
                       onChange={(e) => setCustomerMessage(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm resize-none h-14 text-eerie-black"
-                      placeholder="Örn: Kargo firması tercihi vb."
+                      placeholder={t("placeholder_message", lang)}
                     />
                   </div>
 
