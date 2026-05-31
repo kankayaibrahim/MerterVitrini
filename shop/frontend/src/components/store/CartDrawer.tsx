@@ -57,6 +57,16 @@ export default function CartDrawer({
   displayCurrency = "TRY",
   exchangeRates = [],
 }: CartDrawerProps) {
+  // Calculate grand total in TRY and converted active display currency
+  const grandTotalInTRY = cart.reduce((sum, item) => {
+    const itemTotalUnits = item.packages_qty * item.units_per_package;
+    const itemPriceInOrig = itemTotalUnits * item.price_per_unit;
+    const itemPriceInTRY = convertPrice(itemPriceInOrig, item.currency || "TRY", "TRY", exchangeRates);
+    return sum + itemPriceInTRY;
+  }, 0);
+
+  const finalTotalPrice = convertPrice(grandTotalInTRY, "TRY", displayCurrency, exchangeRates);
+
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex justify-end">
       {/* Drawer overlay click catcher */}
@@ -121,7 +131,7 @@ export default function CartDrawer({
                       
                       <div className="flex-grow flex flex-col gap-1 pr-6">
                         <h4 className="text-sm font-bold text-eerie-black line-clamp-2 leading-relaxed">
-                          {item.title}
+                          {(item.title_translations && item.title_translations[lang]) || item.title}
                         </h4>
                         
                         <span className="text-xs font-bold text-salmon-pink block">
@@ -183,18 +193,11 @@ export default function CartDrawer({
                 </div>
                 <div className="flex justify-between text-base font-extrabold text-salmon-pink border-t border-cultured pt-2.5 mt-1 select-none">
                   <span>{t("grand_total", lang)}:</span>
-                  <span>{totalPrice.toFixed(2)} {displayCurrency}</span>
+                  <span>{finalTotalPrice.toFixed(2)} {displayCurrency}</span>
                 </div>
 
                 {/* Simultaneous Multi-Currency Equivalents Panel */}
                 {(() => {
-                  const grandTotalInTRY = cart.reduce((sum, item) => {
-                    const itemTotalUnits = item.packages_qty * item.units_per_package;
-                    const itemPriceInOrig = itemTotalUnits * item.price_per_unit;
-                    const itemPriceInTRY = convertPrice(itemPriceInOrig, item.currency || "TRY", "TRY", exchangeRates);
-                    return sum + itemPriceInTRY;
-                  }, 0);
-
                   const eqUSD = convertPrice(grandTotalInTRY, "TRY", "USD", exchangeRates);
                   const eqEUR = convertPrice(grandTotalInTRY, "TRY", "EUR", exchangeRates);
                   const eqGBP = convertPrice(grandTotalInTRY, "TRY", "GBP", exchangeRates);

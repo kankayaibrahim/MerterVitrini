@@ -111,4 +111,5 @@ export interface CartItem {
   weight_per_unit: number;
   image_url: string;
   currency?: string;
+  title_translations?: Record<string, string>;
 }

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Product } from "@/types/store";
 import { getProductTitle, t } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice } from "@/app/utils";
-import { Heart, ShoppingBag, Eye, Star } from "lucide-react";
+import { Heart, ShoppingBag, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface ProductCardProps {
@@ -214,14 +214,6 @@ export default function ProductCard({
           {title}
         </h3>
 
-        {/* Gold Rating Stars */}
-        <div className="flex items-center gap-0.5 text-sandy-brown">
-          <Star className="w-3 h-3 fill-current" />
-          <Star className="w-3 h-3 fill-current" />
-          <Star className="w-3 h-3 fill-current" />
-          <Star className="w-3 h-3 fill-current" />
-          <Star className="w-3 h-3 fill-current" />
-        </div>
         
         {/* B2B Specs */}
         <div className="flex flex-col gap-2 mt-1.5 text-[11px] font-semibold text-sonic-silver">

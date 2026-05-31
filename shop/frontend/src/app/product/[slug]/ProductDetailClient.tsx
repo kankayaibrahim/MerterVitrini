@@ -297,6 +297,16 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
           weight_per_unit: weightPerUnit,
           image_url: coverImg,
           currency: product.currency || "TRY",
+          title_translations: {
+            tr: product.title || "",
+            en: product.translations?.en?.title || product.title || "",
+            pl: product.translations?.pl?.title || product.title || "",
+            ar: product.translations?.ar?.title || product.title || "",
+            ru: product.translations?.ru?.title || product.title || "",
+            de: product.translations?.de?.title || product.title || "",
+            bg: product.translations?.bg?.title || product.title || "",
+            fr: product.translations?.fr?.title || product.title || "",
+          },
         });
       }
     }
