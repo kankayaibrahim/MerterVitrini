@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import { 
   FileText, 
   Trash2, 
@@ -218,7 +218,7 @@ export default function PagesManager({ apiUrl, token }: PagesManagerProps) {
     
     // Initialize translations maps for all loaded languages
     const initialTrans: Record<string, PageTranslation> = {};
-    activeLangs.forEach((l) => {
+    activeLangs.forEach((l: Language) => {
       initialTrans[l.code] = {
         title: "",
         content: "",
@@ -229,7 +229,7 @@ export default function PagesManager({ apiUrl, token }: PagesManagerProps) {
     setTranslations(initialTrans);
     
     // Default to TR language tab
-    const hasTr = activeLangs.some((l) => l.code === "tr");
+    const hasTr = activeLangs.some((l: Language) => l.code === "tr");
     if (hasTr) setActiveLangTab("tr");
     else if (activeLangs.length > 0) setActiveLangTab(activeLangs[0].code);
 
@@ -247,7 +247,7 @@ export default function PagesManager({ apiUrl, token }: PagesManagerProps) {
 
     // Fill translations safely
     const initialTrans: Record<string, PageTranslation> = {};
-    activeLangs.forEach((l) => {
+    activeLangs.forEach((l: Language) => {
       const existing = page.translations[l.code];
       initialTrans[l.code] = {
         title: existing?.title || "",
@@ -258,7 +258,7 @@ export default function PagesManager({ apiUrl, token }: PagesManagerProps) {
     });
     setTranslations(initialTrans);
 
-    const hasTr = activeLangs.some((l) => l.code === "tr");
+    const hasTr = activeLangs.some((l: Language) => l.code === "tr");
     if (hasTr) setActiveLangTab("tr");
     else if (activeLangs.length > 0) setActiveLangTab(activeLangs[0].code);
 
@@ -439,7 +439,7 @@ export default function PagesManager({ apiUrl, token }: PagesManagerProps) {
               </thead>
               <tbody className="divide-y divide-zinc-100 text-sm font-semibold text-zinc-700">
                 {pages.length > 0 ? (
-                  pages.map((page) => {
+                  pages.map((page: Page) => {
                     const trTitle = page.translations["tr"]?.title || page.translations[Object.keys(page.translations)[0]]?.title || "Başlıksız";
                     const activeLangsList = Object.keys(page.translations);
                     
@@ -453,8 +453,8 @@ export default function PagesManager({ apiUrl, token }: PagesManagerProps) {
                         </td>
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-1">
-                            {activeLangsList.map((lang) => {
-                              const matchLang = activeLangs.find(l => l.code === lang);
+                            {activeLangsList.map((lang: string) => {
+                              const matchLang = activeLangs.find((l: Language) => l.code === lang);
                               return (
                                 <span 
                                   key={lang} 
@@ -619,7 +619,7 @@ export default function PagesManager({ apiUrl, token }: PagesManagerProps) {
 
                 {/* Tabs button array */}
                 <div className="flex gap-1.5 flex-wrap">
-                  {activeLangs.map((lang) => {
+                  {activeLangs.map((lang: Language) => {
                     const hasTitle = (translations[lang.code]?.title || "").trim().length > 0;
                     
                     return (
@@ -645,7 +645,7 @@ export default function PagesManager({ apiUrl, token }: PagesManagerProps) {
               </div>
 
               {/* Translation Inputs block */}
-              {activeLangs.map((lang) => {
+              {activeLangs.map((lang: Language) => {
                 if (lang.code !== activeLangTab) return null;
                 const data = translations[lang.code] || { title: "", content: "", meta_title: "", meta_description: "" };
 
