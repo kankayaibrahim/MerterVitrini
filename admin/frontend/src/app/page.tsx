@@ -43,6 +43,7 @@ import GeographyManager from "../components/geography/GeographyManager";
 import PoliciesManager from "../components/policies/PoliciesManager";
 import TranslationManager from "../components/translate/TranslationManager";
 import CustomersManager from "../components/customers/CustomersManager";
+import PagesManager from "../components/pages/PagesManager";
 
 const LABELS = {
   SUB_TAB_PRODUCTS: "Ürün Listesi",
@@ -80,7 +81,9 @@ const LABELS = {
   SIDEBAR_TRANSLATE_HEADER: "Yapay Zeka Çeviri",
   SIDEBAR_TRANSLATE_SUB: "Çeviri Yönetimi",
   SIDEBAR_CUSTOMERS_HEADER: "Müşteri Yönetimi",
-  SIDEBAR_CUSTOMERS_SUB: "Müşteri Listesi"
+  SIDEBAR_CUSTOMERS_SUB: "Müşteri Listesi",
+  SIDEBAR_PAGES_HEADER: "Sayfa Yönetimi",
+  SIDEBAR_PAGES_SUB: "Dinamik Sayfalar"
 };
 
 export default function Home() {
@@ -90,7 +93,7 @@ export default function Home() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages">("dashboard");
   const [catalogSubTab, setCatalogSubTab] = useState<"products" | "categories">("products");
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -101,10 +104,11 @@ export default function Home() {
     geography: true,
     policies: true,
     translate: true,
-    customers: true
+    customers: true,
+    pages: true
   });
 
-  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers", subtab?: "products" | "categories") => {
+  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages", subtab?: "products" | "categories") => {
     setActiveTab(tab);
     if (subtab) {
       setCatalogSubTab(subtab);
@@ -139,10 +143,10 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | null;
+      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | null;
       const urlSubTab = params.get("subtab") as "products" | "categories" | null;
       
-      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate"].includes(urlTab)) {
+      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages"].includes(urlTab)) {
         setActiveTab(urlTab);
       }
       if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -156,10 +160,10 @@ export default function Home() {
     const handlePopState = () => {
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
-        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | null;
+        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | null;
         const urlSubTab = params.get("subtab") as "products" | "categories" | null;
         
-        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate"].includes(urlTab)) {
+        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages"].includes(urlTab)) {
           setActiveTab(urlTab);
         }
         if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -185,6 +189,8 @@ export default function Home() {
       setExpandedGroups(prev => ({ ...prev, policies: !prev.policies }));
     } else if (group === "translate") {
       setExpandedGroups(prev => ({ ...prev, translate: !prev.translate }));
+    } else if (group === "pages") {
+      setExpandedGroups(prev => ({ ...prev, pages: !prev.pages }));
     }
   };
 
@@ -999,6 +1005,38 @@ export default function Home() {
               )}
             </div>
 
+            {/* Accordion Group 8: Sayfa Yönetimi */}
+            <div className="flex flex-col">
+              <button
+                onClick={() => toggleGroup("pages")}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <FileText size={16} />
+                  {LABELS.SIDEBAR_PAGES_HEADER}
+                </div>
+                {expandedGroups.pages ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+
+              {expandedGroups.pages && (
+                <div className="pl-6 pr-2 py-1 flex flex-col gap-1 border-l border-zinc-800 ml-5 mt-1 animate-in slide-in-from-top-2 duration-200">
+                  <button
+                    onClick={() => {
+                      updateNavigation("pages");
+                      setSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === "pages"
+                        ? "bg-violet-500/10 text-violet-400 font-extrabold border-l-2 border-violet-500 pl-3"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    {LABELS.SIDEBAR_PAGES_SUB}
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
         </nav>
 
@@ -1276,6 +1314,11 @@ export default function Home() {
           {/* Tab 8: Müşteri Listesi & Yönetimi */}
           {activeTab === "customers" && (
             <CustomersManager apiUrl={apiUrl} token={token} />
+          )}
+
+          {/* Tab 9: Dinamik Sayfa Yönetimi (CMS) */}
+          {activeTab === "pages" && (
+            <PagesManager apiUrl={apiUrl} token={token} />
           )}
 
         </main>

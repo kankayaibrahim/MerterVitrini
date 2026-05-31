@@ -293,6 +293,22 @@ type LegalPolicy struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type PageTranslation struct {
+	Title           string  `json:"title"`
+	Content         string  `json:"content"`
+	MetaTitle       *string `json:"meta_title,omitempty"`
+	MetaDescription *string `json:"meta_description,omitempty"`
+}
+
+type Page struct {
+	ID           string                     `json:"id"`
+	Slug         string                     `json:"slug"`
+	IsActive     bool                       `json:"is_active"`
+	Translations map[string]PageTranslation `json:"translations"`
+	CreatedAt    time.Time                  `json:"created_at"`
+	UpdatedAt    time.Time                  `json:"updated_at"`
+}
+
 type PolicyAcceptance struct {
 	ID         string    `json:"id"`
 	UserID     string    `json:"user_id"`

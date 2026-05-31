@@ -135,6 +135,7 @@ func main() {
 	mux.HandleFunc("GET /api/v1/store/languages", catalogHandler.ListLanguages)
 	mux.HandleFunc("GET /api/v1/store/exchange-rates", catalogHandler.GetExchangeRates)
 	mux.HandleFunc("GET /api/v1/store/policies/{type}/active", policiesHandler.GetActivePolicyByType)
+	mux.HandleFunc("GET /api/v1/store/pages/{slug}", catalogHandler.GetPageBySlug)
 
 	// B2B Cart Quote Inquiries (Public - v1)
 	mux.HandleFunc("POST /api/v1/store/inquiries", inquiryHandler.SubmitInquiry)

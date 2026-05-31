@@ -139,6 +139,7 @@ func main() {
 	countriesHandler := handlers.NewCountriesHandler()
 	policiesHandler := handlers.NewPoliciesHandler()
 	translateHandler := handlers.NewTranslateHandler()
+	pagesHandler := handlers.NewPagesHandler()
 
 
 	// 6. Register HTTP Router using Go 1.22+ enhanced ServeMux pattern
@@ -237,6 +238,14 @@ func main() {
 	mux.Handle("POST /api/v1/policies", authMiddleware(http.HandlerFunc(policiesHandler.CreatePolicyVersion)))
 	mux.Handle("POST /api/v1/policies/{id}/activate", authMiddleware(http.HandlerFunc(policiesHandler.ActivatePolicyVersion)))
 	mux.HandleFunc("GET /api/v1/store/policies/{type}/active", policiesHandler.GetActivePolicyByType)
+
+	// Custom Pages CMS API routes (Secure Admin)
+	mux.Handle("GET /api/v1/pages", authMiddleware(http.HandlerFunc(pagesHandler.ListPages)))
+	mux.Handle("GET /api/v1/pages/{id}", authMiddleware(http.HandlerFunc(pagesHandler.GetPageByID)))
+	mux.Handle("POST /api/v1/pages", authMiddleware(http.HandlerFunc(pagesHandler.CreatePage)))
+	mux.Handle("PUT /api/v1/pages/{id}", authMiddleware(http.HandlerFunc(pagesHandler.UpdatePage)))
+	mux.Handle("DELETE /api/v1/pages/{id}", authMiddleware(http.HandlerFunc(pagesHandler.DeletePage)))
+	mux.Handle("GET /api/v1/pages/check-slug", authMiddleware(http.HandlerFunc(pagesHandler.CheckSlugUniqueness)))
 
 	// Auto-Translation Engine API routes
 	mux.Handle("GET /api/v1/translate/stats", authMiddleware(http.HandlerFunc(translateHandler.ListStats)))

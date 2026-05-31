@@ -190,5 +190,21 @@ export interface LegalPolicy {
   updated_at: string;
 }
 
+export interface PageTranslation {
+  title: string;
+  content: string;
+  meta_title?: string | null;
+  meta_description?: string | null;
+}
+
+export interface Page {
+  id: string;
+  slug: string;
+  is_active: boolean;
+  translations: Record<string, PageTranslation>;
+  created_at: string;
+  updated_at: string;
+}
+
 
 

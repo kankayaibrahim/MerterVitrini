@@ -951,4 +951,86 @@ func (h *CatalogHandler) GetExchangeRates(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(rates)
 }
 
+// GetPageBySlug fetches a single active custom page by its slug, returning all its translations
+func (h *CatalogHandler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	slug := r.PathValue("slug")
+	if slug == "" {
+		http.Error(w, `{"error":"Slug is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT p.id, p.slug, p.is_active, p.created_at, p.updated_at,
+		       t.language_code, t.title, t.content, t.meta_title, t.meta_description
+		FROM catalog.pages p
+		LEFT JOIN catalog.page_translations t ON p.id = t.page_id
+		WHERE p.slug = $1 AND p.is_active = true`
+
+	rows, err := db.Pool.Query(ctx, query, slug)
+	if err != nil {
+		log.Printf("[STORE API ERROR] Failed to fetch page by slug %s: %v", slug, err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var page *models.Page
+
+	for rows.Next() {
+		var (
+			pageID, pageSlug              string
+			isActive                      bool
+			createdAt, updatedAt          time.Time
+			langCode, title, content      *string
+			metaTitle, metaDescription    *string
+		)
+
+		err := rows.Scan(
+			&pageID, &pageSlug, &isActive, &createdAt, &updatedAt,
+			&langCode, &title, &content, &metaTitle, &metaDescription,
+		)
+		if err != nil {
+			log.Printf("[STORE API ERROR] Failed to scan page row: %v", err)
+			http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		if page == nil {
+			page = &models.Page{
+				ID:           pageID,
+				Slug:         pageSlug,
+				IsActive:     isActive,
+				Translations: make(map[string]models.PageTranslation),
+				CreatedAt:    createdAt,
+				UpdatedAt:    updatedAt,
+			}
+		}
+
+		if langCode != nil && title != nil && content != nil {
+			page.Translations[*langCode] = models.PageTranslation{
+				Title:           *title,
+				Content:         *content,
+				MetaTitle:       metaTitle,
+				MetaDescription: metaDescription,
+			}
+		}
+	}
+
+	if page == nil {
+		http.Error(w, `{"error":"Page not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(page)
+}
+
 
