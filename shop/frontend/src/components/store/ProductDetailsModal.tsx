@@ -22,6 +22,25 @@ interface ProductDetailsModalProps {
   exchangeRates?: any[];
 }
 
+const EXCLUDED_ATTR_NAMES = new Set([
+  // Turkish
+  "cinsiyet", "kumaş", "kumaş tipi", "kumas tipi", "renk",
+  // English
+  "gender", "fabric", "fabric type", "color", "colour",
+  // German
+  "geschlecht", "stoff", "stoffart", "farbe",
+  // French
+  "genre", "sexe", "tissu", "type de tissu", "couleur",
+  // Russian
+  "пол", "ткань", "тип ткани", "цвет",
+  // Polish
+  "płeć", "plec", "tkanina", "rodzaj tkaniny", "kolor",
+  // Bulgarian
+  "пол", "тъкан", "тип тъкан", "тип материя", "цвят",
+  // Arabic
+  "الجنس", "القماش", "نوع القماش", "اللون"
+]);
+
 export default function ProductDetailsModal({
   product,
   lang,
@@ -40,11 +59,7 @@ export default function ProductDetailsModal({
   const title = getProductTitle(product, lang);
   const desc = getProductDescription(product, lang);
   const dynamicAttrs = getProductAttributes(product, lang).filter(
-    (attr) => 
-      attr.name.toLowerCase() !== "cinsiyet" && 
-      attr.name.toLowerCase() !== "kumaş tipi" && 
-      attr.name.toLowerCase() !== "kumaş" && 
-      attr.name.toLowerCase() !== "renk"
+    (attr) => !EXCLUDED_ATTR_NAMES.has(attr.name.toLowerCase().trim())
   );
   const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
   const rawSizes = product.packing_ratio ? product.packing_ratio.split(",") : ["Standart"];

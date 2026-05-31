@@ -571,12 +571,13 @@ WantedBy=multi-user.target
         try_files $uri $uri/ $uri.html /index.html =404;
     }}"""
 
+                nginx_root = f"{cfg['remote_dir']}/public" if self.ssr_mode else cfg['remote_dir']
                 nginx_conf = f"""# 1. Main Storefront Server Block (HTTPS)
 server {{
     listen 443 ssl;
     server_name 213.202.255.80 mertervitrini.com.tr www.mertervitrini.com.tr;
 
-    root {cfg['remote_dir']};
+    root {nginx_root};
     index index.html index.htm;
 
     # Security Headers
@@ -591,8 +592,8 @@ server {{
 {location_block}
 
     # Cache Next.js built chunks (highly optimized for browser caching)
-    location /_next/static/ {{
-        alias /var/www/mertervitrini.com.tr/frontend/.next/static/;
+    location ^~ /_next/static/ {{
+        alias {cfg['remote_dir']}/.next/static/;
         access_log off;
         expires 365d;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
@@ -605,8 +606,8 @@ server {{
     }}
 
     # Cache static uploads (product cover/variant images) with strict security
-    location /uploads/ {{
-        alias /var/www/admin.mertervitrini.com.tr/frontend/uploads/;
+    location ^~ /uploads/ {{
+        alias {cfg['remote_dir']}/uploads/;
         access_log off;
         expires 30d;
         add_header Cache-Control "public, max-age=2592000, no-transform" always;
