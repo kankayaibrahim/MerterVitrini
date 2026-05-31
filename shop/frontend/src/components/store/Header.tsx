@@ -89,8 +89,19 @@ export default function Header({
   useEffect(() => {
     checkAuth();
     window.addEventListener("auth-change", checkAuth);
+
+    const handleOpenAuth = (e: Event) => {
+      const customEvent = e as CustomEvent<{ mode: "login" | "register" }>;
+      if (customEvent.detail && customEvent.detail.mode) {
+        setAuthMode(customEvent.detail.mode);
+        setIsAuthOpen(true);
+      }
+    };
+    window.addEventListener("merter-open-auth", handleOpenAuth);
+
     return () => {
       window.removeEventListener("auth-change", checkAuth);
+      window.removeEventListener("merter-open-auth", handleOpenAuth);
     };
   }, []);
 
@@ -663,24 +674,26 @@ export default function Header({
             
             {/* Show active category badge if any */}
             <div className="flex items-center gap-1.5">
-              {activeCategoryId ? (
-                <span className="px-2 py-0.5 bg-salmon-pink/10 text-salmon-pink rounded-full text-[10px] font-extrabold max-w-[120px] truncate">
-                  {(() => {
-                    const findInTree = (cats: Category[]): Category | null => {
-                      for (const c of cats) {
-                        if (c.slug === activeCategoryId || c.id === activeCategoryId) return c;
-                        if (c.children) {
-                          const f = findInTree(c.children);
-                          if (f) return f;
-                        }
-                      }
-                      return null;
-                    };
-                    const activeObj = findInTree(categories);
-                    return activeObj ? getCategoryTitle(activeObj, lang) : "";
-                  })()}
-                </span>
-              ) : (
+              {activeCategoryId ? (() => {
+                const findInTree = (cats: Category[]): Category | null => {
+                  for (const c of cats) {
+                    if (c.slug === activeCategoryId || c.id === activeCategoryId) return c;
+                    if (c.children) {
+                      const f = findInTree(c.children);
+                      if (f) return f;
+                    }
+                  }
+                  return null;
+                };
+                const activeObj = findInTree(categories);
+                const title = activeObj ? getCategoryTitle(activeObj, lang) : "";
+                if (!title) return null;
+                return (
+                  <span className="px-2 py-0.5 bg-salmon-pink/10 text-salmon-pink rounded-full text-[10px] font-extrabold max-w-[120px] truncate animate-fade-in">
+                    {title}
+                  </span>
+                );
+              })() : (
                 <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded-full text-[10px] font-extrabold">
                   {t("all_products", lang)}
                 </span>

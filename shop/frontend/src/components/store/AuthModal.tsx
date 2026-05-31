@@ -92,6 +92,27 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
 
   if (!isOpen) return null;
 
+  const handleGoogleLogin = () => {
+    if (typeof window !== "undefined") {
+      const origin = window.location.origin;
+      const keycloakUrl = "https://auth.mertervitrini.com.tr";
+      const realm = "merter";
+      const clientId = "admin-client";
+      const redirectUri = `${origin}/google-callback/`;
+      const scope = "openid profile email";
+      const idpHint = "google";
+
+      const authUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/auth` +
+        `?client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&kc_idp_hint=${encodeURIComponent(idpHint)}`;
+
+      window.location.href = authUrl;
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -322,6 +343,40 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
               >
                 {loading ? t("logging_in", lang) : t("login_title", lang)}
               </button>
+
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-cultured"></div>
+                <span className="flex-shrink mx-4 text-[10px] font-bold text-sonic-silver uppercase tracking-wider">
+                  {lang === "tr" ? "Veya" : "Or"}
+                </span>
+                <div className="flex-grow border-t border-cultured"></div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="w-full py-3 bg-white hover:bg-cultured text-onyx border border-cultured rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer shadow-sm flex items-center justify-center gap-2 select-none active:scale-[0.98]"
+              >
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69a5.74 5.74 0 0 1-2.48 3.77v3.13h3.99c2.34-2.16 3.68-5.32 3.68-8.75z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.99-3.13a7.18 7.18 0 0 1-10.82-3.77H1.03v3.23A11.99 11.99 0 0 0 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.15 14.19a7.23 7.23 0 0 1 0-4.38V6.58H1.03a11.99 11.99 0 0 0 0 10.84l4.12-3.23z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42A11.92 11.92 0 0 0 12 0 11.99 11.99 0 0 0 1.03 6.58l4.12 3.23c.96-2.89 3.66-5.06 6.85-5.06z"
+                  />
+                </svg>
+                <span>{t("sign_in_with_google", lang) || (lang === "tr" ? "Google ile Giriş Yap" : "Sign in with Google")}</span>
+              </button>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-4">
@@ -471,6 +526,40 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
                 className="w-full py-3 bg-eerie-black hover:bg-salmon-pink text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-md disabled:bg-spanish-gray select-none active:scale-[0.98]"
               >
                 {loading ? t("registering", lang) : t("register_title", lang)}
+              </button>
+
+              <div className="relative flex py-2 items-center">
+                <div className="flex-grow border-t border-cultured"></div>
+                <span className="flex-shrink mx-4 text-[10px] font-bold text-sonic-silver uppercase tracking-wider">
+                  {lang === "tr" ? "Veya" : "Or"}
+                </span>
+                <div className="flex-grow border-t border-cultured"></div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="w-full py-3 bg-white hover:bg-cultured text-onyx border border-cultured rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer shadow-sm flex items-center justify-center gap-2 select-none active:scale-[0.98]"
+              >
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69a5.74 5.74 0 0 1-2.48 3.77v3.13h3.99c2.34-2.16 3.68-5.32 3.68-8.75z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-3.99-3.13a7.18 7.18 0 0 1-10.82-3.77H1.03v3.23A11.99 11.99 0 0 0 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.15 14.19a7.23 7.23 0 0 1 0-4.38V6.58H1.03a11.99 11.99 0 0 0 0 10.84l4.12-3.23z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42A11.92 11.92 0 0 0 12 0 11.99 11.99 0 0 0 1.03 6.58l4.12 3.23c.96-2.89 3.66-5.06 6.85-5.06z"
+                  />
+                </svg>
+                <span>{t("sign_in_with_google", lang) || (lang === "tr" ? "Google ile Giriş Yap" : "Sign in with Google")}</span>
               </button>
             </form>
           )}

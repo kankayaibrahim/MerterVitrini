@@ -711,3 +711,145 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"success":true,"message":"Profiliniz başarıyla güncellendi."}`))
 }
+
+func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	code := r.URL.Query().Get("code")
+	redirectURI := r.URL.Query().Get("redirect_uri")
+
+	if code == "" || redirectURI == "" {
+		http.Error(w, `{"error":"Eksik veya geçersiz parametreler"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", h.Cfg.KeycloakURL, h.Cfg.KeycloakRealm)
+	
+	form := url.Values{}
+	form.Set("grant_type", "authorization_code")
+	form.Set("client_id", h.Cfg.KeycloakClientID)
+	form.Set("client_secret", h.Cfg.KeycloakClientSecret)
+	form.Set("code", code)
+	form.Set("redirect_uri", redirectURI)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		log.Printf("[GOOGLE AUTH ERROR] Failed to create Keycloak request: %v", err)
+		http.Error(w, `{"error":"İç hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[GOOGLE AUTH ERROR] Keycloak token request failed: %v", err)
+		http.Error(w, `{"error":"Kimlik sağlayıcı bağlantı hatası"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[GOOGLE AUTH ERROR] Keycloak returned status %d, body: %s", resp.StatusCode, body)
+		http.Error(w, `{"error":"Google kod doğrulaması başarısız oldu"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var tokenResp map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		log.Printf("[GOOGLE AUTH ERROR] Failed to decode token response: %v", err)
+		http.Error(w, `{"error":"Geçersiz token yanıtı"}`, http.StatusInternalServerError)
+		return
+	}
+
+	accessToken, _ := tokenResp["access_token"].(string)
+	if accessToken == "" {
+		http.Error(w, `{"error":"Erişim anahtarı alınamadı"}`, http.StatusInternalServerError)
+		return
+	}
+
+	claims, err := decodeJWTClaims(accessToken)
+	if err != nil {
+		log.Printf("[GOOGLE AUTH ERROR] Failed to decode JWT claims: %v", err)
+		http.Error(w, `{"error":"Kimlik bilgileri çözümlenemedi"}`, http.StatusInternalServerError)
+		return
+	}
+
+	userID, _ := claims["sub"].(string)
+	firstName, _ := claims["given_name"].(string)
+	lastName, _ := claims["family_name"].(string)
+	emailClaim, _ := claims["email"].(string)
+
+	if emailClaim == "" {
+		log.Printf("[GOOGLE AUTH ERROR] Email missing in Keycloak claims")
+		http.Error(w, `{"error":"Google hesabınızdan e-posta adresi alınamadı"}`, http.StatusBadRequest)
+		return
+	}
+
+	if firstName == "" {
+		name, _ := claims["name"].(string)
+		parts := strings.Fields(name)
+		if len(parts) > 0 {
+			firstName = parts[0]
+			if len(parts) > 1 {
+				lastName = strings.Join(parts[1:], " ")
+			}
+		}
+	}
+
+	role := "customer"
+	var isBlocked bool
+	var dbRole string
+	var phone string
+	
+	dbErr := db.Pool.QueryRow(ctx, "SELECT is_blocked, user_role, phone, first_name, last_name FROM identity.users WHERE id = $1 OR email = $2", userID, emailClaim).
+		Scan(&isBlocked, &dbRole, &phone, &firstName, &lastName)
+
+	if dbErr != nil {
+		// New user from Google social sign-in, save to local PostgreSQL
+		_, syncErr := db.Pool.Exec(ctx, `
+			INSERT INTO identity.users (id, first_name, last_name, email, phone, user_role, is_active, is_blocked)
+			VALUES ($1, $2, $3, $4, '', 'customer', true, false)
+			ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id
+		`, userID, firstName, lastName, emailClaim)
+		if syncErr != nil {
+			log.Printf("[GOOGLE AUTH SYNC WARNING] Failed to save Google-authenticated Keycloak user locally: %v", syncErr)
+		}
+	} else {
+		if isBlocked {
+			http.Error(w, `{"error":"Hesabınız engellenmiştir"}`, http.StatusForbidden)
+			return
+		}
+		if dbRole != "" {
+			role = dbRole
+		}
+		// Sync the sub/ID of the keycloak user back to database in case it was created without Keycloak ID first (e.g. by manual registration or migration)
+		_, syncErr := db.Pool.Exec(ctx, "UPDATE identity.users SET id = $1 WHERE email = $2 AND (id IS NULL OR id = '')", userID, emailClaim)
+		if syncErr != nil {
+			log.Printf("[GOOGLE AUTH SYNC WARNING] Failed to update keycloak ID for user %s: %v", emailClaim, syncErr)
+		}
+	}
+
+	userInfo := &UserInfo{
+		ID:        userID,
+		FirstName: firstName,
+		LastName:  lastName,
+		Email:     emailClaim,
+		Phone:     phone,
+		Role:      role,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AuthResponse{
+		Token: accessToken,
+		User:  userInfo,
+	})
+}
+

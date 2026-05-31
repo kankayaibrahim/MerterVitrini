@@ -175,12 +175,30 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
             </h3>
             <ul className="space-y-2 text-sm mb-4">
               <li>
-                <a href="#login" className="hover:text-white transition-colors duration-200">
+                <a 
+                  href="#login" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode: "login" } }));
+                    }
+                  }}
+                  className="hover:text-white transition-colors duration-200"
+                >
                   {t("login", lang)}
                 </a>
               </li>
               <li>
-                <a href="#register" className="hover:text-white transition-colors duration-200">
+                <a 
+                  href="#register" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (typeof window !== "undefined") {
+                      window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode: "register" } }));
+                    }
+                  }}
+                  className="hover:text-white transition-colors duration-200"
+                >
                   {t("register", lang)}
                 </a>
               </li>

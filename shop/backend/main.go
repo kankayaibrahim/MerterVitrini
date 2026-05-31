@@ -121,6 +121,7 @@ func main() {
 	// Storefront Authentication (Keycloak OIDC Proxy)
 	mux.HandleFunc("POST /api/v1/store/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/v1/store/auth/login", authHandler.Login)
+	mux.HandleFunc("GET /api/v1/store/auth/google-callback", authHandler.GoogleCallback)
 	mux.HandleFunc("GET /api/v1/store/profile", authHandler.GetProfile)
 	mux.HandleFunc("PUT /api/v1/store/profile", authHandler.UpdateProfile)
 

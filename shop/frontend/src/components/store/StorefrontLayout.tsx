@@ -1051,23 +1051,13 @@ export default function StorefrontLayout({
             </div>
 
             {/* Slide 2: Mobile App Promo */}
-            <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 1 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
+            <div className={`absolute inset-0 transition-opacity duration-1000 ${activeSlide === 1 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
               <img 
                 src={getLocalizedSliderBanner("app_promo")} 
                 alt={t("portal_download_app", lang)} 
-                className="absolute inset-0 w-full h-full object-cover" 
+                className="absolute inset-0 w-full h-full object-fill" 
                 onError={handleSliderImageError("app_promo")}
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
-              <div className="relative z-10 max-w-[90vw] sm:max-w-md md:max-w-lg bg-white/85 backdrop-blur-md p-5 sm:p-6 md:p-8 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
-                <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
-                <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_download_app", lang)}</h2>
-                <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_download_app_desc", lang)}</p>
-                <div className="flex gap-2 mt-2.5">
-                  <span className="px-3 py-1.5 xs:px-4 xs:py-2 bg-eerie-black text-white text-[9px] xs:text-[10px] font-extrabold rounded-[5px] border-none shadow-sm cursor-pointer select-none active:scale-[0.98] transition-transform">{t("portal_app_store", lang)}</span>
-                  <span className="px-3 py-1.5 xs:px-4 xs:py-2 bg-eerie-black text-white text-[9px] xs:text-[10px] font-extrabold rounded-[5px] border-none shadow-sm cursor-pointer select-none active:scale-[0.98] transition-transform">{t("portal_google_play", lang)}</span>
-                </div>
-              </div>
             </div>
 
             {/* Slide Indicators */}
@@ -1113,7 +1103,7 @@ export default function StorefrontLayout({
               {/* Card 1: Kadın Giyim */}
               <a 
                 href={`/${getCategoryPrefix(lang)}/kadin-giyim/`}
-                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm flex items-center p-8 select-none no-underline"
+                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
               >
                 <img 
                   src={getLocalizedCollectionBanner("kadin")} 
@@ -1121,18 +1111,12 @@ export default function StorefrontLayout({
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
                   onError={handleCollectionImageError("kadin")}
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/50 to-transparent z-0" />
-                <div className="relative z-10 max-w-[240px] flex flex-col gap-1.5">
-                  <h4 className="font-sans font-extrabold text-xl text-eerie-black">{t("portal_women_clothing", lang)}</h4>
-                  <p className="text-[11px] text-sonic-silver font-semibold">{t("portal_women_trend_desc", lang)}</p>
-                  <span className="text-xs font-extrabold text-salmon-pink uppercase tracking-wider border-b-2 border-salmon-pink pb-0.5 w-fit mt-2 group-hover:text-eerie-black group-hover:border-eerie-black transition-colors duration-300">{t("portal_start_shopping", lang)}</span>
-                </div>
               </a>
 
               {/* Card 2: Erkek Giyim */}
               <a 
                 href={`/${getCategoryPrefix(lang)}/erkek-giyim/`}
-                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm flex items-center p-8 select-none no-underline"
+                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
               >
                 <img 
                   src={getLocalizedCollectionBanner("erkek")} 
@@ -1140,18 +1124,12 @@ export default function StorefrontLayout({
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
                   onError={handleCollectionImageError("erkek")}
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/50 to-transparent z-0" />
-                <div className="relative z-10 max-w-[240px] flex flex-col gap-1.5">
-                  <h4 className="font-sans font-extrabold text-xl text-eerie-black">{t("portal_men_clothing", lang)}</h4>
-                  <p className="text-[11px] text-sonic-silver font-semibold">{t("portal_men_trend_desc", lang)}</p>
-                  <span className="text-xs font-extrabold text-salmon-pink uppercase tracking-wider border-b-2 border-salmon-pink pb-0.5 w-fit mt-2 group-hover:text-eerie-black group-hover:border-eerie-black transition-colors duration-300">{t("portal_start_shopping", lang)}</span>
-                </div>
               </a>
 
               {/* Card 3: İç Giyim */}
               <a 
                 href={`/tum-urunler?q=${lang === 'tr' ? 'tayt' : 'leggings'}`}
-                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm flex items-center p-8 select-none no-underline"
+                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
               >
                 <img 
                   src={getLocalizedCollectionBanner("ic_giyim")} 
@@ -1159,18 +1137,12 @@ export default function StorefrontLayout({
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
                   onError={handleCollectionImageError("ic_giyim")}
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/50 to-transparent z-0" />
-                <div className="relative z-10 max-w-[240px] flex flex-col gap-1.5">
-                  <h4 className="font-sans font-extrabold text-xl text-eerie-black">{t("portal_lingerie", lang)}</h4>
-                  <p className="text-[11px] text-sonic-silver font-semibold">{t("portal_lingerie_desc", lang)}</p>
-                  <span className="text-xs font-extrabold text-salmon-pink uppercase tracking-wider border-b-2 border-salmon-pink pb-0.5 w-fit mt-2 group-hover:text-eerie-black group-hover:border-eerie-black transition-colors duration-300">{t("portal_start_shopping", lang)}</span>
-                </div>
               </a>
 
               {/* Card 4: Aksesuar */}
               <a 
                 href={`/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`}
-                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm flex items-center p-8 select-none no-underline"
+                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
               >
                 <img 
                   src={getLocalizedCollectionBanner("aksesuar")} 
@@ -1178,12 +1150,6 @@ export default function StorefrontLayout({
                   className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
                   onError={handleCollectionImageError("aksesuar")}
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/50 to-transparent z-0" />
-                <div className="relative z-10 max-w-[240px] flex flex-col gap-1.5">
-                  <h4 className="font-sans font-extrabold text-xl text-eerie-black">{t("portal_accessories", lang)}</h4>
-                  <p className="text-[11px] text-sonic-silver font-semibold">{t("portal_accessories_desc", lang)}</p>
-                  <span className="text-xs font-extrabold text-salmon-pink uppercase tracking-wider border-b-2 border-salmon-pink pb-0.5 w-fit mt-2 group-hover:text-eerie-black group-hover:border-eerie-black transition-colors duration-300">{t("portal_start_shopping", lang)}</span>
-                </div>
               </a>
 
             </div>
