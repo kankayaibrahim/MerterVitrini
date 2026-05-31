@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+:root {
+  --spanish-gray: hsl(0, 0%, 60%);
+  --sonic-silver: hsl(0, 0%, 47%);
+  --eerie-black: hsl(0, 0%, 13%);
+  --salmon-pink: hsl(353, 100%, 78%);
+  --sandy-brown: hsl(29, 90%, 65%);
+  --bittersweet: hsl(0, 100%, 70%);
+  --ocean-green: hsl(152, 51%, 52%);
+  --davys-gray: hsl(0, 0%, 33%);
+  --cultured: hsl(0, 0%, 93%);
+  --white: hsl(0, 100%, 100%);
+  --onyx: hsl(0, 0%, 27%);
+
+  --bg-dark: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --border-light: hsl(0, 0%, 93%);
+  --border-focus: hsl(353, 100%, 78%);
+  
+  --text-primary: hsl(0, 0%, 13%);
+  --text-secondary: hsl(0, 0%, 33%);
+  --text-muted: hsl(0, 0%, 47%);
+  
+  --accent-gold: hsl(353, 100%, 78%);
+  --shadow-premium: 0 5px 20px rgba(0, 0, 0, 0.05);
+}
+
+@theme {
+  --color-bg-dark: var(--bg-dark);
+  --color-bg-card: var(--bg-card);
+  --color-bg-input: var(--bg-input);
+  --color-border-light: var(--border-light);
+  --color-border-focus: var(--border-focus);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-accent-gold: var(--accent-gold);
+  --shadow-premium: var(--shadow-premium);
+  
+  --color-spanish-gray: var(--spanish-gray);
+  --color-sonic-silver: var(--sonic-silver);
+  --color-eerie-black: var(--eerie-black);
+  --color-salmon-pink: var(--salmon-pink);
+  --color-sandy-brown: var(--sandy-brown);
+  --color-bittersweet: var(--bittersweet);
+  --color-ocean-green: var(--ocean-green);
+  --color-davys-gray: var(--davys-gray);
+  --color-cultured: var(--cultured);
+  --color-onyx: var(--onyx);
+
+  --font-sans: var(--font-poppins), sans-serif;
+}
+
+body {
+  background-color: var(--white);
+  color: var(--onyx);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Glassmorphic light elements */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-light);
+}
+
+/* Premium micro-animations */
+.product-card {
+  transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.product-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(184, 145, 32, 0.2);
+  box-shadow: 0 12px 30px rgba(28, 25, 23, 0.04), 0 0 20px rgba(184, 145, 32, 0.02);
+}
+
+.card-img {
+  transition: transform 0.6s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.product-card:hover .card-img {
+  transform: scale(1.05);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(28, 25, 23, 0.15);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(28, 25, 23, 0.3);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Loading Spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(184, 145, 32, 0.1);
+  border-top-color: var(--accent-gold);
+  border-radius: 50%;
+  animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* RTL Direction Fixes */
+[dir="rtl"] {
+  text-align: right;
+}

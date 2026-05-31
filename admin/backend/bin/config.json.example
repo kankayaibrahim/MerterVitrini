@@ -1,0 +1,11 @@
+{
+    "db_host": "localhost",
+    "db_port": "5432",
+    "db_user": "postgres",
+    "db_password": "your_password_here",
+    "db_name": "merterdevdb",
+    "jwt_secret": "merter-vitrini-super-secret-key-change-in-prod",
+    "server_port": "8085",
+    "disable_otp": true,
+    "log_format": "text"
+}

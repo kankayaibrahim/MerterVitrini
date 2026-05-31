@@ -1,0 +1,356 @@
+================================================================================
+FLORA GÖRSELLERİ ADVANCED OCR TARAMA VE METİN AUDİT SONUÇLARI
+================================================================================
+Tarih             : 2026-05-29 03:24:59
+Taranan Klasör    : C:\Projects\mertervitrini.com.tr\admin\backend\parsers\etika_yasakli_listesi
+Kullanılan OCR    : PYTESSERACT
+Yasaklı Kelimeler : ['etika', 'fashion', 'flora', 'atika', 'atıka', 'etıka', 'tika']
+Toplam Görsel     : 276
+Temiz Görseller   : 256 (%92.75)
+Engellenen Görsel : 20 (%7.25)
+Toplam Süre       : 50.21 saniye
+================================================================================
+
+🚫 ÜZERİNDE YASAKLI MARKA METNİ TESPİT EDİLEN AFİŞ VEYA REKLAM GÖRSELLERİ:
+--------------------------------------------------------------------------------
+  1. [DOSYA] asio-bebe-yaka-elbise-36577.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+  2. [DOSYA] aylen-straplez-elbise-42214.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+  3. [DOSYA] ery-midi-elbise-40552.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+  4. [DOSYA] fers-cicek-detay-elbise-35555.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+  5. [DOSYA] fune-baglamali-elbise-38410.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['atıka']
+     [METİN]   Görselde Okunan Ham Metin: "atıka —  N"
+--------------------------------------------------------------------------------
+  6. [DOSYA] insa-karma-dugme-detayli-takim-40554.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['atika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "atika"
+--------------------------------------------------------------------------------
+  7. [DOSYA] juvy-sal-detayli-elbise-42893.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+  8. [DOSYA] lers-cicek-detayli-elbise-36570.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['atika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "atika"
+--------------------------------------------------------------------------------
+  9. [DOSYA] ness-dugmeli-elbise-36561.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+ 10. [DOSYA] ospe-fiyonklu-elbise-35564.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+ 11. [DOSYA] ples-yirtmac-detayli-elbise-36565.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+ 12. [DOSYA] port-dantel-detay-elbise-35561.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['atika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "atika"
+--------------------------------------------------------------------------------
+ 13. [DOSYA] rel-firfir-detay-elbise-40347.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+ 14. [DOSYA] reta-capraz-omuz-elbise-35579.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['atika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "eatika"
+--------------------------------------------------------------------------------
+ 15. [DOSYA] stro-dantel-detayli-elbise-39763.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+ 16. [DOSYA] tayrox-chanel-elbise-35565.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+ 17. [DOSYA] tefs-straplez-elbise-35562.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['atıka']
+     [METİN]   Görselde Okunan Ham Metin: "oatıka"
+--------------------------------------------------------------------------------
+ 18. [DOSYA] vasa-straplez-elbise-40536.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['atika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "—  atika"
+--------------------------------------------------------------------------------
+ 19. [DOSYA] vedo-cicek-detayli-elbise-35578.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['atika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "eatika"
+--------------------------------------------------------------------------------
+ 20. [DOSYA] wino-sirt-dekolteli-elbise-42477.jpg
+     [DURUM]   Yasaklı Kelimeler Bulundu: ['etika', 'tika']
+     [METİN]   Görselde Okunan Ham Metin: "etika"
+--------------------------------------------------------------------------------
+
+
+================================================================================
+✅ TEMİZ KABUL EDİLEN (ÜZERİNDE MARKA METNİ OLMAYAN) ÜRÜN GÖRSELLERİ:
+================================================================================
+   1. Dosya: adley-tasli-ikili-takim-40727.jpg | Durum: TEMİZ
+   2. Dosya: adley-tasli-ikili-takim-40727.jpg.ocr_temp.png | Durum: TEMİZ
+   3. Dosya: adole-straplez-elbise-40155.jpg | Durum: TEMİZ
+   4. Dosya: adole-straplez-elbise-40155.jpg.ocr_temp.png | Durum: TEMİZ
+   5. Dosya: agle-balon-kol-elbise-44493.jpg | Durum: TEMİZ
+   6. Dosya: agle-balon-kol-elbise-44493.jpg.ocr_temp.png | Durum: TEMİZ
+   7. Dosya: akit-inci-detayli-elbise-35566.jpg | Durum: TEMİZ (Okunan Metin: "otıka")
+   8. Dosya: akit-inci-detayli-elbise-35566.jpg.ocr_temp.png | Durum: TEMİZ
+   9. Dosya: alros-mini-elbise-38636.jpg | Durum: TEMİZ
+  10. Dosya: alros-mini-elbise-38636.jpg.ocr_temp.png | Durum: TEMİZ
+  11. Dosya: alsace-dekolte-detayli-elbise-45345.jpg | Durum: TEMİZ
+  12. Dosya: alsace-dekolte-detayli-elbise-45345.jpg.ocr_temp.png | Durum: TEMİZ
+  13. Dosya: amra-firfirli-elbise-41407.jpg | Durum: TEMİZ
+  14. Dosya: amra-firfirli-elbise-41407.jpg.ocr_temp.png | Durum: TEMİZ
+  15. Dosya: amros-midi-elbise-40557.jpg | Durum: TEMİZ
+  16. Dosya: anat-dugme-detayli-takim-39560.jpg | Durum: TEMİZ
+  17. Dosya: apen-cep-detayli-takim-39939.jpg | Durum: TEMİZ
+  18. Dosya: arora-mini-elbise-38846.jpg | Durum: TEMİZ (Okunan Metin: "\ i} . mt ‘ 1 ' ' an ” | N ki dl oh UN Oo! ya bi . m ! . gifi Il ts AVL ee we / vi i Ul ale | y : AY an KATY MA 7 İS")
+  19. Dosya: arsel-kemerli-elbise-42475.jpg | Durum: TEMİZ
+  20. Dosya: arya-straplez-dantel-elbise-36297.jpg | Durum: TEMİZ
+  21. Dosya: arya-straplez-dantel-elbise-36298.jpg | Durum: TEMİZ
+  22. Dosya: arya-straplez-dantel-elbise-36299.jpg | Durum: TEMİZ
+  23. Dosya: arya-straplez-dantel-elbise-36300.jpg | Durum: TEMİZ
+  24. Dosya: arya-straplez-dantel-elbise-36301.jpg | Durum: TEMİZ
+  25. Dosya: arya-straplez-dantel-elbise-40543.jpg | Durum: TEMİZ
+  26. Dosya: asel-bros-detayli-elbise-45067.jpg | Durum: TEMİZ
+  27. Dosya: athena-sirt-dekolteli-elbise-35584.jpg | Durum: TEMİZ
+  28. Dosya: ayvel-straplez-elbise-35570.jpg | Durum: TEMİZ
+  29. Dosya: baret-kemer-detayli-elbise-42884.jpg | Durum: TEMİZ
+  30. Dosya: bark-transparan-elbise-45332.jpg | Durum: TEMİZ
+  31. Dosya: baxte-dugme-detayli-takim-39777.jpg | Durum: TEMİZ
+  32. Dosya: bees-tek-omuz-detayli-elbise-39545.jpg | Durum: TEMİZ
+  33. Dosya: bees-tek-omuz-detayli-elbise-41034.jpg | Durum: TEMİZ
+  34. Dosya: bekol-midi-elbise-43843.jpg | Durum: TEMİZ (Okunan Metin: "=")
+  35. Dosya: bela-midi-elbise-39937.jpg | Durum: TEMİZ
+  36. Dosya: belor-inci-detayli-elbise-43864.jpg | Durum: TEMİZ
+  37. Dosya: beox-pul-payet-elbise-42205.jpg | Durum: TEMİZ
+  38. Dosya: berl-cep-detayli-elbise-35569.jpg | Durum: TEMİZ
+  39. Dosya: bess-midi-elbise-45341.jpg | Durum: TEMİZ (Okunan Metin: "pa  © V oe.  0416  dez:  e & s.8 >a oe  -biees vida  vbanwa  çi i  .. r*")
+  40. Dosya: bloom-mini-elbise-38425.jpg | Durum: TEMİZ
+  41. Dosya: boe-inci-detayli-elbise-39926.jpg | Durum: TEMİZ
+  42. Dosya: boje-fiyonk-detayli-elbise-38628.jpg | Durum: TEMİZ
+  43. Dosya: bonen-cep-detayli-elbise-40717.jpg | Durum: TEMİZ
+  44. Dosya: boss-cut-out-elbise-44751.jpg | Durum: TEMİZ
+  45. Dosya: boxe-simli-elbise-41578.jpg | Durum: TEMİZ
+  46. Dosya: cadim-midi-elbise-40150.jpg | Durum: TEMİZ
+  47. Dosya: carlis-gul-yaka-elbise-40733.jpg | Durum: TEMİZ
+  48. Dosya: cast-dugme-detayli-elbise-39765.jpg | Durum: TEMİZ
+  49. Dosya: celero-baglamali-ceket-elbise-43837.jpg | Durum: TEMİZ (Okunan Metin: ", Aİ...")
+  50. Dosya: ceon-midi-elbise-44480.jpg | Durum: TEMİZ
+  51. Dosya: cesa-straplez-elbise-45530.jpg | Durum: TEMİZ (Okunan Metin: "la  Mi.  AR, , NU peo  tad, a on")
+  52. Dosya: ceson-straplez-elbise-44864.jpg | Durum: TEMİZ
+  53. Dosya: clara-askili-mini-elbise-44745.jpg | Durum: TEMİZ
+  54. Dosya: con-ip-askili-elbise-38838.jpg | Durum: TEMİZ
+  55. Dosya: cova-straplez-elbise-40718.jpg | Durum: TEMİZ
+  56. Dosya: cresh-midi-elbise-45537.jpg | Durum: TEMİZ
+  57. Dosya: crimson-drape-elbise-41033.jpg | Durum: TEMİZ
+  58. Dosya: dande-bros-detayli-elbise-40156.jpg | Durum: TEMİZ
+  59. Dosya: dane-ip-askili-elbise-38844.jpg | Durum: TEMİZ
+  60. Dosya: darlin-ceket-elbise-41388.jpg | Durum: TEMİZ
+  61. Dosya: dea-sirt-dekolteli-elbise-38426.jpg | Durum: TEMİZ
+  62. Dosya: dega-pul-payet-elbise-42207.jpg | Durum: TEMİZ
+  63. Dosya: delp-ikili-takim-39521.jpg | Durum: TEMİZ (Okunan Metin: "etikd")
+  64. Dosya: devru-straplez-elbise-39576.jpg | Durum: TEMİZ
+  65. Dosya: devru-straplez-elbise-40716.jpg | Durum: TEMİZ
+  66. Dosya: dida-midi-elbise-40163.jpg | Durum: TEMİZ
+  67. Dosya: dinas-fiyonk-detayli-elbise-43854.jpg | Durum: TEMİZ
+  68. Dosya: dora-cicek-detayli-elbise-38271.jpg | Durum: TEMİZ
+  69. Dosya: doren-straplez-elbise-43862.jpg | Durum: TEMİZ
+  70. Dosya: dozzy-fiyonk-detayli-takim-40962.jpg | Durum: TEMİZ (Okunan Metin: "atikn")
+  71. Dosya: elgans-omuz-baglamali-elbise-35573.jpg | Durum: TEMİZ
+  72. Dosya: elor-asimetrik-drapeli-elbise-41035.jpg | Durum: TEMİZ
+  73. Dosya: engla-midi-elbise-42218.jpg | Durum: TEMİZ
+  74. Dosya: enos-ip-askili-elbise-38631.jpg | Durum: TEMİZ
+  75. Dosya: eros-fiyonk-detayli-elbise-35582.jpg | Durum: TEMİZ
+  76. Dosya: ersax-bros-detayli-elbise-40546.jpg | Durum: TEMİZ
+  77. Dosya: ester-straplez-elbise-40165.jpg | Durum: TEMİZ
+  78. Dosya: evan-fiyonk-detayli-elbise-44862.jpg | Durum: TEMİZ
+  79. Dosya: evona-yirtmac-detayli-elbise-40960.jpg | Durum: TEMİZ (Okunan Metin: "etik")
+  80. Dosya: fari-dugme-detayli-elbise-40540.jpg | Durum: TEMİZ
+  81. Dosya: felici-dugme-detayli-takim-39924.jpg | Durum: TEMİZ
+  82. Dosya: felya-midi-elbise-39775.jpg | Durum: TEMİZ
+  83. Dosya: feris-dugme-detayli-elbise-40957.jpg | Durum: TEMİZ
+  84. Dosya: fersa-midi-elbise-45325.jpg | Durum: TEMİZ (Okunan Metin: "Dames Am ae .")
+  85. Dosya: ferya-buzgulu-elbise-41587.jpg | Durum: TEMİZ
+  86. Dosya: fiona-kusakli-elbise-35574.jpg | Durum: TEMİZ
+  87. Dosya: fira-straplez-elbise-41393.jpg | Durum: TEMİZ
+  88. Dosya: folers-cicek-desenli-elbise-35572.jpg | Durum: TEMİZ (Okunan Metin: "g “ii")
+  89. Dosya: folers-cicek-desenli-elbise-40954.jpg | Durum: TEMİZ
+  90. Dosya: fost-midi-elbise-39534.jpg | Durum: TEMİZ
+  91. Dosya: gent-ikili-takim-39932.jpg | Durum: TEMİZ (Okunan Metin: "> tıb")
+  92. Dosya: gerne-boyun-baglamali-elbise-44757.jpg | Durum: TEMİZ
+  93. Dosya: gesa-midi-elbise-38421.jpg | Durum: TEMİZ
+  94. Dosya: hare-kollari-firfir-detayli-elbise-40725.jpg | Durum: TEMİZ
+  95. Dosya: hens-bagcik-detayli-elbise-38856.jpg | Durum: TEMİZ
+  96. Dosya: heram-sal-yaka-elbise-39578.jpg | Durum: TEMİZ (Okunan Metin: "4")
+  97. Dosya: hews-dugme-detayli-takim-39539.jpg | Durum: TEMİZ
+  98. Dosya: hion-gupur-elbise-39773.jpg | Durum: TEMİZ
+  99. Dosya: hulos-sal-detayli-elbise-43551.jpg | Durum: TEMİZ
+ 100. Dosya: hulse-cep-detayli-denim-elbise-44746.jpg | Durum: TEMİZ
+ 101. Dosya: huma-fiyonk-detayli-elbise-38842.jpg | Durum: TEMİZ
+ 102. Dosya: hure-kemer-detayli-elbise-39011.jpg | Durum: TEMİZ (Okunan Metin: "YER \")
+ 103. Dosya: husa-sirt-baglamali-elbise-45337.jpg | Durum: TEMİZ
+ 104. Dosya: ivo-tasli-elbise-42224.jpg | Durum: TEMİZ
+ 105. Dosya: jadora-buyuk-yaka-dantelli-elbise-35567.jpg | Durum: TEMİZ (Okunan Metin: "otıka")
+ 106. Dosya: jales-mini-elbise-45764.jpg | Durum: TEMİZ
+ 107. Dosya: jere-sirt-dekolte-detayli-denim-elbise-44508.jpg | Durum: TEMİZ
+ 108. Dosya: junas-yaka-kusagi-detaylii-elbise-43835.jpg | Durum: TEMİZ (Okunan Metin: "—")
+ 109. Dosya: junn-ip-askili-elbise-45535.jpg | Durum: TEMİZ
+ 110. Dosya: kalf-cicek-detayli-elbise-38427.jpg | Durum: TEMİZ
+ 111. Dosya: kapuda-firfirli-elbise-38851.jpg | Durum: TEMİZ
+ 112. Dosya: keraj-cicek-detayli-elbise-44922.jpg | Durum: TEMİZ
+ 113. Dosya: kers-bebe-yaka-elbise-35553.jpg | Durum: TEMİZ
+ 114. Dosya: kessy-midi-elbise-42896.jpg | Durum: TEMİZ
+ 115. Dosya: kisha-ip-askili-elbise-41400.jpg | Durum: TEMİZ
+ 116. Dosya: kona-ip-askili-elbise-38634.jpg | Durum: TEMİZ
+ 117. Dosya: kovia-straplez-elbise-42888.jpg | Durum: TEMİZ
+ 118. Dosya: kum-midi-elbise-38414.jpg | Durum: TEMİZ
+ 119. Dosya: lea-firfirli-elbise-39005.jpg | Durum: TEMİZ
+ 120. Dosya: ledo-inci-detayli-elbise-39541.jpg | Durum: TEMİZ
+ 121. Dosya: leri-firfirli-elbise-35577.jpg | Durum: TEMİZ
+ 122. Dosya: lerte-straplez-elbise-35556.jpg | Durum: TEMİZ (Okunan Metin: "etikd")
+ 123. Dosya: lille-arkasi-baglamali-elbise-38417.jpg | Durum: TEMİZ
+ 124. Dosya: linan-midi-elbise-40343.jpg | Durum: TEMİZ
+ 125. Dosya: liona-ikili-takim-42467.jpg | Durum: TEMİZ
+ 126. Dosya: livora-gul-detay-elbise-39553.jpg | Durum: TEMİZ
+ 127. Dosya: lizz-midi-elbise-40168.jpg | Durum: TEMİZ
+ 128. Dosya: lulo-bagcik-detayli-elbise-38850.jpg | Durum: TEMİZ
+ 129. Dosya: lyro-cicek-nakisli-elbise-44853.jpg | Durum: TEMİZ
+ 130. Dosya: madel-straplez-elbise-44753.jpg | Durum: TEMİZ
+ 131. Dosya: mahi-ip-askili-elbise-38834.jpg | Durum: TEMİZ
+ 132. Dosya: major-cicek-detayli-elbise-39929.jpg | Durum: TEMİZ
+ 133. Dosya: manen-midi-elbise-44860.jpg | Durum: TEMİZ (Okunan Metin: ">.")
+ 134. Dosya: manen-sal-detayli-elbise-44462.jpg | Durum: TEMİZ
+ 135. Dosya: mansa-midi-elbise-43874.jpg | Durum: TEMİZ
+ 136. Dosya: marden-cut-out-detayli-elbise-44485.jpg | Durum: TEMİZ
+ 137. Dosya: marg-midi-elbise-39537.jpg | Durum: TEMİZ
+ 138. Dosya: marya-ceket-elbise-42216.jpg | Durum: TEMİZ
+ 139. Dosya: melon-midi-elbise-45324.jpg | Durum: TEMİZ
+ 140. Dosya: mersi-ip-askili-elbise-38632.jpg | Durum: TEMİZ
+ 141. Dosya: met-ip-askili-elbise-35583.jpg | Durum: TEMİZ
+ 142. Dosya: meuse-midi-elbise-41402.jpg | Durum: TEMİZ
+ 143. Dosya: mezen-boyun-aksesuarli-elbise-45528.jpg | Durum: TEMİZ
+ 144. Dosya: mihri-mini-elbise-39016.jpg | Durum: TEMİZ
+ 145. Dosya: mio-balon-kol-elbise-41588.jpg | Durum: TEMİZ
+ 146. Dosya: more-inci-detayli-elbise-35581.jpg | Durum: TEMİZ
+ 147. Dosya: mumu-fiyonk-detayli-elbise-45755.jpg | Durum: TEMİZ
+ 148. Dosya: muna-midi-elbise-45761.jpg | Durum: TEMİZ
+ 149. Dosya: myra-cicek-detayli-elbise-44505.jpg | Durum: TEMİZ
+ 150. Dosya: neren-midi-elbise-44504.jpg | Durum: TEMİZ
+ 151. Dosya: nessa-transparan-elbise-42465.jpg | Durum: TEMİZ
+ 152. Dosya: nico-pul-payet-elbise-41582.jpg | Durum: TEMİZ (Okunan Metin: "ot!  KO")
+ 153. Dosya: noi-inci-detayli-elbise-39533.jpg | Durum: TEMİZ
+ 154. Dosya: novia-buzgulu-elbise-41097.jpg | Durum: TEMİZ
+ 155. Dosya: nuklu-dugme-detayli-elbise-44513.jpg | Durum: TEMİZ
+ 156. Dosya: nune-mini-elbise-45333.jpg | Durum: TEMİZ
+ 157. Dosya: ofse-fiyonk-detayli-elbise-35568.jpg | Durum: TEMİZ (Okunan Metin: "atikna")
+ 158. Dosya: ogel-straplez-elbise-44463.jpg | Durum: TEMİZ
+ 159. Dosya: opi-midi-elbise-39564.jpg | Durum: TEMİZ
+ 160. Dosya: orla-dugme-detayli-elbise-39523.jpg | Durum: TEMİZ
+ 161. Dosya: orse-mini-elbise-40550.jpg | Durum: TEMİZ
+ 162. Dosya: osley-mini-elbise-43865.jpg | Durum: TEMİZ
+ 163. Dosya: overa-korsaj-detayli-elbise-40966.jpg | Durum: TEMİZ
+ 164. Dosya: oxfo-gogus-baglamali-elbise-35552.jpg | Durum: TEMİZ
+ 165. Dosya: palomi-midi-elbise-38840.jpg | Durum: TEMİZ
+ 166. Dosya: panl-ip-askili-elbise-44475.jpg | Durum: TEMİZ
+ 167. Dosya: pars-ip-askili-elbise-38430.jpg | Durum: TEMİZ
+ 168. Dosya: pedro-midi-elbise-38633.jpg | Durum: TEMİZ
+ 169. Dosya: penas-straplez-elbise-45758.jpg | Durum: TEMİZ
+ 170. Dosya: perp-fiyonk-detayli-elbise-35580.jpg | Durum: TEMİZ
+ 171. Dosya: poem-straplez-elbise-39566.jpg | Durum: TEMİZ
+ 172. Dosya: pol-firfirli-elbise-38837.jpg | Durum: TEMİZ
+ 173. Dosya: pola-sirt-korsaj-detayli-elbise-44483.jpg | Durum: TEMİZ
+ 174. Dosya: pole-ip-askili-elbise-43847.jpg | Durum: TEMİZ
+ 175. Dosya: pole-ip-askili-elbise-43848.jpg | Durum: TEMİZ
+ 176. Dosya: poles-mini-elbise-44849.jpg | Durum: TEMİZ (Okunan Metin: "va > e se")
+ 177. Dosya: poli-midi-elbise-42210.jpg | Durum: TEMİZ
+ 178. Dosya: ponie-midi-elbise-38419.jpg | Durum: TEMİZ
+ 179. Dosya: pons-sal-detayli-elbise-45531.jpg | Durum: TEMİZ
+ 180. Dosya: porter-midi-elbise-39550.jpg | Durum: TEMİZ
+ 181. Dosya: porter-midi-elbise-41581.jpg | Durum: TEMİZ
+ 182. Dosya: poses-omuz-baglamali-elbise-35576.jpg | Durum: TEMİZ
+ 183. Dosya: pou-buzgulu-elbise-38423.jpg | Durum: TEMİZ
+ 184. Dosya: pra-ikili-takim-40152.jpg | Durum: TEMİZ
+ 185. Dosya: purs-straplez-elbise-35575.jpg | Durum: TEMİZ
+ 186. Dosya: ravis-cep-detayli-elbise-41584.jpg | Durum: TEMİZ
+ 187. Dosya: rax-dugme-detayli-takim-39581.jpg | Durum: TEMİZ (Okunan Metin: "KAZ «  (/ YK  C  WIA")
+ 188. Dosya: rence-straplez-takim-39536.jpg | Durum: TEMİZ (Okunan Metin: "atık")
+ 189. Dosya: reny-mini-elbise-45072.jpg | Durum: TEMİZ
+ 190. Dosya: reny-straplez-elbise-44512.jpg | Durum: TEMİZ
+ 191. Dosya: rewe-cep-detayli-elbise-38428.jpg | Durum: TEMİZ (Okunan Metin: "ve İN")
+ 192. Dosya: rez-fiyonk-detayli-denim-elbise-44556.jpg | Durum: TEMİZ (Okunan Metin: "ror 83, ee vir te  + iye  t a is £ iq! tea ees te  meb ee e e e  vis  ii ‘ce gles ii 2  Bi  aig:  Ni  ard SN  Sk a a eae MZ  whe 130 1")
+ 193. Dosya: rim-midi-elbise-42880.jpg | Durum: TEMİZ
+ 194. Dosya: rimini-ip-detayli-elbise-42220.jpg | Durum: TEMİZ
+ 195. Dosya: rina-dugme-detayli-elbise-40336.jpg | Durum: TEMİZ (Okunan Metin: "m Lİ, yaş")
+ 196. Dosya: risa-bagcik-detyli-takim-40342.jpg | Durum: TEMİZ (Okunan Metin: "4  a i U ’ ‘ 1  ‘  1  —— ete  ee et e m e")
+ 197. Dosya: riva-bros-detayli-elbise-42208.jpg | Durum: TEMİZ
+ 198. Dosya: rossi-ip-askili-elbise-35559.jpg | Durum: TEMİZ
+ 199. Dosya: saria-midi-elbise-41580.jpg | Durum: TEMİZ
+ 200. Dosya: sassa-dugme-detayli-elbise-40170.jpg | Durum: TEMİZ (Okunan Metin: "Am.")
+ 201. Dosya: seren-midi-elbise-41095.jpg | Durum: TEMİZ
+ 202. Dosya: sernu-gul-detayli-elbise-45074.jpg | Durum: TEMİZ
+ 203. Dosya: seuss-bros-detayli-elbise-43832.jpg | Durum: TEMİZ
+ 204. Dosya: seys-mini-elbise-38853.jpg | Durum: TEMİZ
+ 205. Dosya: sezi-pul-payet-elbise-41585.jpg | Durum: TEMİZ (Okunan Metin: ", ¢  şe”")
+ 206. Dosya: sfot-straplez-elbise-44471.jpg | Durum: TEMİZ
+ 207. Dosya: siena-yirtmac-detayli-elbise-39554.jpg | Durum: TEMİZ
+ 208. Dosya: siena-yirtmac-detayli-elbise-40964.jpg | Durum: TEMİZ
+ 209. Dosya: siena-yirtmac-detayli-elbise-41583.jpg | Durum: TEMİZ
+ 210. Dosya: sims-midi-elbise-39008.jpg | Durum: TEMİZ
+ 211. Dosya: simsor-cicekli-elbise-35560.jpg | Durum: TEMİZ
+ 212. Dosya: sirva-mini-elbise-39768.jpg | Durum: TEMİZ
+ 213. Dosya: slim-mini-elbise-38635.jpg | Durum: TEMİZ
+ 214. Dosya: slupe-kemer-detayli-tulum-44468.jpg | Durum: TEMİZ
+ 215. Dosya: soni-yirtmac-detayli-elbise-38848.jpg | Durum: TEMİZ
+ 216. Dosya: stell-incili-elbise-35563.jpg | Durum: TEMİZ (Okunan Metin: "atikn")
+ 217. Dosya: suma-kase-takim-39761.jpg | Durum: TEMİZ
+ 218. Dosya: syra-straplez-elbise-41390.jpg | Durum: TEMİZ
+ 219. Dosya: tepa-fiyonk-detay-elbise-41576.jpg | Durum: TEMİZ
+ 220. Dosya: tera-tul-elbise-41396.jpg | Durum: TEMİZ
+ 221. Dosya: tiv-bagcik-dugme-detayli-elbise-40346.jpg | Durum: TEMİZ
+ 222. Dosya: tiva-midi-elbise-42481.jpg | Durum: TEMİZ
+ 223. Dosya: troyes-gecis-desenli-elbise-40724.jpg | Durum: TEMİZ
+ 224. Dosya: tupe-firfirli-elbise-35831.jpg | Durum: TEMİZ (Okunan Metin: "g “ii")
+ 225. Dosya: unre-korse-gorunumlu-elbise-43850.jpg | Durum: TEMİZ (Okunan Metin: "ed b | 9 ee VEE YENE © e@ e@© e@ VEE ME")
+ 226. Dosya: valesse-ceket-elbise-40538.jpg | Durum: TEMİZ
+ 227. Dosya: vara-pul-payet-elbise-41401.jpg | Durum: TEMİZ
+ 228. Dosya: varna-midi-elbise-41397.jpg | Durum: TEMİZ
+ 229. Dosya: vasco-drapeli-elbise-42209.jpg | Durum: TEMİZ
+ 230. Dosya: verno-kemer-detayli-elbise-42471.jpg | Durum: TEMİZ
+ 231. Dosya: vero-bebe-yaka-elbise-35554.jpg | Durum: TEMİZ (Okunan Metin: "atik")
+ 232. Dosya: vesam-midi-elbise-45533.jpg | Durum: TEMİZ
+ 233. Dosya: vesis-omuzdan-baglamali-elbise-41386.jpg | Durum: TEMİZ
+ 234. Dosya: vesso-bros-detayli-elbise-42890.jpg | Durum: TEMİZ
+ 235. Dosya: vexi-firfirli-elbise-41586.jpg | Durum: TEMİZ
+ 236. Dosya: vina-midi-elbise-45762.jpg | Durum: TEMİZ (Okunan Metin: ". a = % ad - 5")
+ 237. Dosya: vinta-mini-elbise-42204.jpg | Durum: TEMİZ
+ 238. Dosya: vinta-straplez-elbise-42206.jpg | Durum: TEMİZ
+ 239. Dosya: viva-denim-elbise-45071.jpg | Durum: TEMİZ
+ 240. Dosya: vova-straplez-elbise-40338.jpg | Durum: TEMİZ
+ 241. Dosya: vova-straplez-elbise-41403.jpg | Durum: TEMİZ
+ 242. Dosya: walf-straplez-elbise-38413.jpg | Durum: TEMİZ
+ 243. Dosya: wexe-midi-elbise-45335.jpg | Durum: TEMİZ
+ 244. Dosya: woly-kemer-detayli-elbise-44466.jpg | Durum: TEMİZ
+ 245. Dosya: woxo-ip-askili-elbise-41398.jpg | Durum: TEMİZ
+ 246. Dosya: xaes-dugme-detayli-elbise-45539.jpg | Durum: TEMİZ
+ 247. Dosya: xile-straplez-elbise-39935.jpg | Durum: TEMİZ
+ 248. Dosya: xoxa-straplez-elbise-38429.jpg | Durum: TEMİZ
+ 249. Dosya: yues-cut-out-detayli-elbise-45340.jpg | Durum: TEMİZ
+ 250. Dosya: zean-fiyonk-detayli-elbise-44856.jpg | Durum: TEMİZ
+ 251. Dosya: zeel-mini-elbise-38424.jpg | Durum: TEMİZ
+ 252. Dosya: zenoa-mini-elbise-40544.jpg | Durum: TEMİZ
+ 253. Dosya: zeu-kemer-detayli-elbise-39014.jpg | Durum: TEMİZ
+ 254. Dosya: zoen-dugme-detayli-elbise-44490.jpg | Durum: TEMİZ
+ 255. Dosya: zorya-dugme-detayli-elbise-42886.jpg | Durum: TEMİZ
+ 256. Dosya: zuzu-straplez-elbise-38630.jpg | Durum: TEMİZ

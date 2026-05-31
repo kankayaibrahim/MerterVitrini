@@ -1,0 +1,194 @@
+export interface XmlFeed {
+  id: string;
+  brand_id?: string | null;
+  name: string;
+  alias_code: string;
+  feed_url: string | null;
+  mapping_config?: Record<string, string> | null;
+  category_mapping?: Record<string, string> | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SyncRun {
+  id: string;
+  feed_id: string;
+  started_at: string;
+  completed_at: string | null;
+  status: string; // 'running', 'success', 'failed'
+  summary: {
+    items_parsed?: number;
+    items_added?: number;
+    items_updated?: number;
+    variants_aligned?: number;
+    errors_skipped?: number;
+    images_total?: number;
+    images_downloaded?: number;
+    download_speed_kbps?: number;
+    active_workers?: number;
+    percentage?: number;
+  } | null;
+}
+
+export interface CategoryNode {
+  id: string;
+  parent_id: string | null;
+  title: string;
+  slug: string;
+  node_path: string;
+  is_active: boolean;
+  children: CategoryNode[];
+}
+
+export interface Product {
+  id: string;
+  feed_id: string;
+  source_product_id: string;
+  title: string;
+  slug: string;
+  slug_id: string;
+  custom_sku: string;
+  short_description: string | null;
+  description: string | null;
+  brand_id: string | null;
+  category_id: string | null;
+  gender: string | null;
+  season: string | null;
+  kumas_fabric: string | null;
+  desi_volume: number;
+  shipping_weight_kg: number;
+  packing_ratio: string | null;
+  series_ratio: string | null;
+  minimum_order_quantity: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  brand_name?: string;
+  category_title?: string;
+  source_url?: string | null;
+  variants?: ProductVariant[];
+  images?: ProductImage[];
+  source_product_group_id?: string;
+  group_products?: GroupProductColor[];
+}
+
+export interface ProductVariant {
+  id: string;
+  product_id: string;
+  source_variant_id: string;
+  sku: string;
+  custom_sku: string;
+  barcode: string | null;
+  stock: number;
+  price: number;
+  discounted_price: number | null;
+  tax_rate: number;
+  currency: string;
+  color: string | null;
+  size: string | null;
+  is_active: boolean;
+}
+
+export interface ProductImage {
+  id: string;
+  product_id: string;
+  image_url: string;
+  sort_order: number;
+  is_cover: boolean;
+}
+
+export interface GroupProductColor {
+  id: string;
+  source_product_id: string;
+  color: string | null;
+  custom_sku: string;
+  stock: number;
+  cover_image_url: string | null;
+}
+
+export interface UserInfo {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: string;
+}
+
+export interface Brand {
+  id: string;
+  name: string;
+  slug: string;
+  alias_code: string | null;
+  website?: string | null;
+  phone?: string | null;
+  addresses?: any[] | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  feeds?: XmlFeed[];
+}
+
+export interface CountryGroup {
+  id: string;
+  code: string;
+  names: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Country {
+  id: string;
+  code: string;
+  phone_code?: number | null;
+  names: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CountryState {
+  id: string;
+  country_id: string;
+  code: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Currency {
+  id: string;
+  name: string;
+  symbol: string;
+  full_name: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Language {
+  id: string;
+  code: string;
+  label: string;
+  flag: string;
+  categoryPrefix: string;
+  dir: string;
+  isActive: boolean;
+  sortOrder: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LegalPolicy {
+  id: string;
+  type: 'cancellation_and_return' | 'terms_of_service' | 'privacy_policy';
+  version: number;
+  title: string;
+  content: string;
+  is_active: boolean;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+
+

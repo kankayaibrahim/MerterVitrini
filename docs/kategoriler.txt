@@ -1,0 +1,159 @@
+STANDARTLAŞTIRILMIŞ TOPTAN TEKSTİL ANA KATEGORİ AĞACI (MASTER CATEGORY TREE)
+=============================================================================
+Bu dosya, e-ticaret sitenizde (mertervitrini.com.tr) açmanız gereken temiz ve standart 
+kategori ağacını ve tedarikçilerden (Lustrin, Etika, Jane's, Black Fashion) gelen 
+karmaşık kategori adlarının bu ağaca nasıl eşleştirileceğini (Mapping) göstermektedir.
+
+BÖLÜM 1: STANDART ANA KATEGORİ AĞACI
+-----------------------------------------------------------------------------
+Sitenizin ön yüzünde ve yönetim panelinde açılması tavsiye edilen hiyerarşik ağaç:
+
+📂 KADIN GİYİM (Ana Kategori)
+  ├── 📂 Üst Giyim (Alt Kategori)
+  │    ├── 🔹 Bluz & Büstiyer
+  │    ├── 🔹 Gömlek
+  │    └── 🔹 Tişört & Crop
+  │
+  ├── 📂 Alt Giyim
+  │    ├── 🔹 Pantolon
+  │    ├── 🔹 Jean & Denim
+  │    ├── 🔹 Etek
+  │    ├── 🔹 Tayt
+  │    └── 🔹 Şort
+  │
+  ├── 📂 Elbise & Abiye
+  │    ├── 🔹 Günlük Elbise
+  │    ├── 🔹 Mini Elbise
+  │    ├── 🔹 Midi Elbise
+  │    ├── 🔹 Triko Elbise
+  │    └── 🔹 Abiye & Gece Elbisesi
+  │
+  ├── 📂 Triko & Hırka & Kazak
+  │    ├── 🔹 Kazak & Süveter
+  │    ├── 🔹 Hırka
+  │    ├── 🔹 Triko Body
+  │    └── 🔹 Tunik
+  │
+  ├── 📂 Dış Giyim
+  │    ├── 🔹 Ceket & Blazer
+  │    ├── 🔹 Kaban & Palto
+  │    ├── 🔹 Trençkot
+  │    └── 🔹 Yelek
+  │
+  ├── 📂 Takım & Tulum
+  │    ├── 🔹 İkili Takım
+  │    └── 🔹 Tulum & Salopet
+  │
+  └── 📂 Özel Koleksiyonlar
+       ├── 🔹 Yılbaşı Özel
+       ├── 🔹 Vintage & Retro
+       ├── 🔹 Elegant & Premium
+       └── 🔹 Yaz Koleksiyonu
+
+
+BÖLÜM 2: TEDARİKÇİ XML EŞLEŞTİRME KILAVUZU (MAPPING GUIDE)
+-----------------------------------------------------------------------------
+Tedarikçi XML dosyalarında geçen karmaşık kategori yollarının yukarıdaki standart 
+kategorilere nasıl bağlanacağını gösteren teknik eşleştirme tablosu:
+
+1. ÜST GİYİM
+   * Bluz & Büstiyer
+     - Lustrin > TOPTAN ÜST GİYİM > Toptan Bluz
+     - Jane's > Giyim > Kadın > bluz
+     - Etika > BLUZ FIRFIRLI
+     - Etika > BÜSTİYER GİPELİ
+   * Gömlek
+     - Lustrin > TOPTAN ÜST GİYİM > Toptan Gömlek
+     - Jane's > Giyim > Kadın > gomlek
+   * Tişört & Crop
+     - Lustrin > TOPTAN ÜST GİYİM > Toptan Tişört
+     - Lustrin > TOPTAN ÜST GİYİM > Toptan Tops Toptan Crop
+     - Jane's > Giyim > Kadın > t-shirt
+     - Etika > CROP
+
+2. ALT GİYİM
+   * Pantolon
+     - Lustrin > TOPTAN ALT GİYİM > Toptan Pantolon
+     - Jane's > Giyim > Kadın > pantolon
+   * Jean & Denim
+     - Lustrin > TOPTAN ÜST GİYİM > Toptan Denim
+     - Jane's > Giyim > Kadın > jean
+   * Etek
+     - Lustrin > TOPTAN ALT GİYİM > Toptan Etek
+     - Jane's > Giyim > Kadın > etek
+     - Etika > Etek
+     - Etika > KOT ETEK
+   * Tayt
+     - Jane's > Giyim > Kadın > tayt
+   * Şort
+     - Lustrin > TOPTAN ALT GİYİM > Toptan Şort
+
+3. ELBİSE & ABİYE
+   * Abiye & Gece Elbisesi
+     - Jane's > Giyim > Kadın > abiye
+   * Triko Elbise
+     - Lustrin > TOPTAN TRİKO > Toptan Triko Elbise
+   * Elbise (Genel / Günlük / Midi / Mini)
+     - Lustrin > TOPTAN ÜST GİYİM > Toptan Elbise
+     - Jane's > Giyim > Kadın > elbise
+     - Etika > ELBİSE (Alt kırılımlar: MIDI ELBİSE, MINI ELBİSE)
+     - Etika > Elbiseler (Alt kırılımlar: Midi Boy Elbiseler, Mini Boy Elbiseler)
+
+4. TRİKO & HIRKA & KAZAK
+   * Kazak & Süveter
+     - Lustrin > TOPTAN TRİKO > Toptan Kazak
+     - Lustrin > TOPTAN TRİKO > Toptan Süveter
+     - Jane's > Giyim > Kadın > kazak
+   * Hırka
+     - Lustrin > TOPTAN TRİKO > Toptan Triko Hırka
+     - Jane's > Giyim > Kadın > hirka
+   * Triko Body
+     - Lustrin > TOPTAN TRİKO > Toptan Triko Body
+     - Jane's > Giyim > Kadın > triko
+   * Tunik
+     - Lustrin > TOPTAN TRİKO > Toptan Triko Tunik
+     - Lustrin > TOPTAN ÜST GİYİM > Toptan Tunik
+
+5. DIŞ GİYİM
+   * Ceket & Blazer
+     - Lustrin > TOPTAN DIŞ GİYİM > Toptan Ceket
+     - Jane's > Giyim > Kadın > ceket
+     - Etika > Ceket
+   * Kaban & Palto
+     - Lustrin > TOPTAN DIŞ GİYİM > Toptan Kaban
+   * Trençkot
+     - Lustrin > TOPTAN DIŞ GİYİM > Toptan Trençkot
+     - Etika > KOT TRENC
+   * Yelek
+     - Lustrin > TOPTAN DIŞ GİYİM > Toptan Yelek
+     - Jane's > Giyim > Kadın > yelek
+
+6. TAKIM & TULUM
+   * İkili Takım
+     - Lustrin > TOPTAN ÜST GİYİM > Toptan İkili Takım
+     - Lustrin > TOPTAN TRİKO > Toptan Triko Takım
+     - Jane's > Giyim > Kadın > takim
+     - Etika > TAKIM
+     - Etika > Takımlar
+     - Etika > TRİKO TAKIM
+   * Tulum & Salopet
+     - Lustrin > TOPTAN ÜST GİYİM > Toptan Tulum
+     - Jane's > Giyim > Kadın > tulum
+     - Etika > Tulum
+     - Etika > KOT TULUM
+     - Etika > TULUM AYROBİN
+
+7. ÖZEL KOLEKSİYONLAR
+   * Yılbaşı Özel
+     - Etika > YILBAŞI KOLEKSİYONU
+   * Vintage & Retro
+     - Etika > Vintage
+   * Elegant & Premium
+     - Etika > Elegant
+   * Yaz Koleksiyonu
+     - Jane's > Giyim > Kadın > elbise, Yazlık
+
+8. DİĞER / INTEGRATION
+   * Kategorisiz / XML Özel
+     - Black Fashion > Uncategorized (Black Fashion XML'inde kategori bilgisi bulunmamaktadır, kendi 'custom_sku' veya ürün kodlarına göre otomatik veya manuel eşleştirilmelidir)
+     - Etika > Siyah Beyaz Aşkı (Özel Kampanya Kategorisi)

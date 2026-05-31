@@ -1,0 +1,107 @@
+# =========================================================================
+# Merter Vitrini - Global Gitignore Configuration
+# =========================================================================
+
+# --- Credentials & Sensitive Configurations ---
+# Ignore configuration file with credentials
+**/bin/config.json
+config.json
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+*.pem
+
+# Database credentials text files
+database_bilgileri.txt
+docs/database_bilgileri.txt
+*.conf
+temp_merter.conf
+
+# --- Compiled Binaries & Build Outputs ---
+# Go Build Outputs
+**/bin/config.json
+**/bin/admin-backend
+**/bin/admin-backend.exe
+**/bin/main
+**/bin/main.exe
+**/bin/logs/
+
+# Specific Compiled Executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.syso
+admin-backend
+shop-backend
+main
+
+# --- Node.js & Next.js Frontends ---
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+**/out/
+build/
+**/build/
+dist/
+**/dist/
+.vercel/
+**/.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Data, Feeds & Temp Files ---
+# Large XML product feeds
+docs/xmller/
+*.xml
+admin/backend/parsers/downloads/
+
+# --- Logs ---
+*.log
+logs/
+**/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- Python Cache ---
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env/
+venv/
+ENV/
+env/
+
+# --- IDEs & OS Files ---
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
+Thumbs.db
+admin/backend/parsers/sync_stats.txt
+
+# --- Build Archives & Deploy Packages ---
+scripts/*.tar.gz
+*.tar.gz
+
+admin/backend/parsers/sync_stats.txt
+admin/backend/parsers/failed_images.csv
+
+# Banned Images Manual Curation Folder
+admin/backend/parsers/etika_yasakli_listesi/
