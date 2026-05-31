@@ -74,6 +74,49 @@ async function fetchLanguages(): Promise<Language[]> {
   ];
 }
 
+// Generate static params at compilation time for active dynamic CMS pages
+export async function generateStaticParams() {
+  try {
+    const activeLangs = await fetchLanguages();
+    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/pages?t=" + Date.now());
+    if (response.ok) {
+      const pages = await response.json();
+      if (Array.isArray(pages) && pages.length > 0) {
+        const params: { categoryPrefix: string; slug: string }[] = [];
+        
+        // Find unique prefixes (e.g., "tr", "en", "pl", "bg", "ar", "ru", "de", "fr")
+        const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
+        
+        uniquePrefixes.forEach((prefix) => {
+          pages.forEach((page: any) => {
+            if (page.slug) {
+              params.push({
+                categoryPrefix: prefix,
+                slug: String(page.slug),
+              });
+            }
+          });
+        });
+        
+        return params;
+      }
+    }
+  } catch (err) {
+    console.error("[SEO] Dynamic pages generateStaticParams failed, using fallback:", err);
+  }
+  
+  // Return fallback pages (e.g. seeded "hakkimizda" for all fallback prefixes)
+  const prefixes = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
+  const fallbackParams: { categoryPrefix: string; slug: string }[] = [];
+  prefixes.forEach((prefix) => {
+    fallbackParams.push({
+      categoryPrefix: prefix,
+      slug: "hakkimizda",
+    });
+  });
+  return fallbackParams;
+}
+
 // Generate dynamic SEO metadata on the server side using prefix and slug
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix, slug } = await params;

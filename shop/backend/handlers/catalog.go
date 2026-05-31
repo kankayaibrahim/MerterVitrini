@@ -1033,4 +1033,81 @@ func (h *CatalogHandler) GetPageBySlug(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(page)
 }
 
+// ListPages returns all active dynamic pages for storefront
+func (h *CatalogHandler) ListPages(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT p.id, p.slug, p.is_active, p.created_at, p.updated_at,
+		       t.language_code, t.title, t.content, t.meta_title, t.meta_description
+		FROM catalog.pages p
+		LEFT JOIN catalog.page_translations t ON p.id = t.page_id
+		WHERE p.is_active = true
+		ORDER BY p.created_at DESC`
+
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		log.Printf("[STORE API ERROR] Failed to list pages: %v", err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	pagesMap := make(map[string]*models.Page)
+	var orderedPageIDs []string
+
+	for rows.Next() {
+		var (
+			pageID, pageSlug              string
+			isActive                      bool
+			createdAt, updatedAt          time.Time
+			langCode, title, content      *string
+			metaTitle, metaDescription    *string
+		)
+
+		err := rows.Scan(
+			&pageID, &pageSlug, &isActive, &createdAt, &updatedAt,
+			&langCode, &title, &content, &metaTitle, &metaDescription,
+		)
+		if err != nil {
+			log.Printf("[STORE API ERROR] Failed to scan page list row: %v", err)
+			http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		page, exists := pagesMap[pageID]
+		if !exists {
+			page = &models.Page{
+				ID:           pageID,
+				Slug:         pageSlug,
+				IsActive:     isActive,
+				Translations: make(map[string]models.PageTranslation),
+				CreatedAt:    createdAt,
+				UpdatedAt:    updatedAt,
+			}
+			pagesMap[pageID] = page
+			orderedPageIDs = append(orderedPageIDs, pageID)
+		}
+
+		if langCode != nil && title != nil && content != nil {
+			page.Translations[*langCode] = models.PageTranslation{
+				Title:           *title,
+				Content:         *content,
+				MetaTitle:       metaTitle,
+				MetaDescription: metaDescription,
+			}
+		}
+	}
+
+	pagesList := make([]*models.Page, 0, len(orderedPageIDs))
+	for _, id := range orderedPageIDs {
+		pagesList = append(pagesList, pagesMap[id])
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(pagesList)
+}
+
+
 
