@@ -64,7 +64,7 @@ export default function ProductDetailsModal({
   const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
   const rawSizes = product.packing_ratio ? product.packing_ratio.split(",") : ["Standart"];
   const ratios = product.series_ratio ? product.series_ratio.split("-") : ["1"];
-  const sizes = rawSizes.map(sz => sz.toUpperCase() === "STANDART" ? (lang === "tr" ? "Standart" : "Standard") : sz);
+  const sizes = rawSizes.map(sz => sz.toUpperCase() === "STANDART" ? t("Standart", lang) : sz);
   const weightPerUnit = product.shipping_weight_kg || 0.35;
   const totalPkgWeight = unitsPerPkg * weightPerUnit;
 
