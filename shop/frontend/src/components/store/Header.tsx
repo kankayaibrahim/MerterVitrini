@@ -361,25 +361,24 @@ export default function Header({
               onClick={handleLogoClick}
               className="flex flex-col no-underline group active:scale-[0.98] transition-transform duration-100 shrink-0"
             >
-              <span className="font-sans font-extrabold text-[20px] sm:text-[26px] tracking-tight text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
+              <span className="font-sans font-extrabold text-[18px] xs:text-[20px] sm:text-[26px] tracking-tight text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
                 {t("brand_title", lang) || "Merter Vitrini"}
               </span>
-              <span className="text-[7.5px] sm:text-[9px] uppercase tracking-[2.5px] sm:tracking-[3px] text-sonic-silver -mt-0.5 font-bold">
+              <span className="text-[7px] xs:text-[7.5px] sm:text-[9px] uppercase tracking-[2px] xs:tracking-[2.5px] sm:tracking-[3px] text-sonic-silver -mt-0.5 font-bold">
                 {t("brand_subtitle", lang) || "Toptan Showroom"}
               </span>
             </a>
 
             {/* Mobile Actions: Language Selector, Currency Selector, Wishlist, Cart */}
-            <div className="flex sm:hidden items-center gap-1.5 text-eerie-black shrink-0">
+            <div className="flex sm:hidden items-center gap-1 text-eerie-black shrink-0">
               {/* Compact Language Selector */}
               <div className="relative">
                 <button 
                   onClick={() => setIsLangOpen(!isLangOpen)}
-                  className="flex items-center gap-1.5 px-2 py-1 bg-zinc-50 border border-zinc-200/60 rounded-lg hover:text-salmon-pink font-extrabold text-[9px] transition-all cursor-pointer select-none"
+                  className="flex items-center gap-1 px-1.5 py-1 bg-zinc-50 border border-zinc-200/60 rounded-lg hover:text-salmon-pink font-extrabold text-[9px] transition-all cursor-pointer select-none shrink-0"
                 >
                   <img src={getFlagUrl(currentLangObj.code)} alt={currentLangObj.label} className="w-3.5 h-2.5 object-cover rounded shadow-sm shrink-0" />
-                  <span className="uppercase text-[9px] text-zinc-800">{currentLangObj.code}</span>
-                  <ChevronDown className={`w-2.5 h-2.5 text-zinc-500 transition-transform duration-300 ${isLangOpen ? "rotate-180" : ""}`} />
+                  <span className="uppercase text-[9px] text-zinc-800 shrink-0">{currentLangObj.code}</span>
                 </button>
                 
                 {isLangOpen && (
@@ -425,10 +424,9 @@ export default function Header({
               <div className="relative">
                 <button 
                   onClick={() => setIsCurrencyOpen(!isCurrencyOpen)}
-                  className="flex items-center gap-1 px-1.5 py-1 bg-zinc-50 border border-zinc-200/60 rounded-lg hover:text-salmon-pink font-extrabold text-[9px] transition-all cursor-pointer select-none"
+                  className="flex items-center gap-1 px-1.5 py-1 bg-zinc-50 border border-zinc-200/60 rounded-lg hover:text-salmon-pink font-extrabold text-[9px] transition-all cursor-pointer select-none shrink-0"
                 >
-                  <span className="uppercase text-[9px] text-zinc-800">{activeCurrObj.code}</span>
-                  <ChevronDown className={`w-2.5 h-2.5 text-zinc-500 transition-transform duration-300 ${isCurrencyOpen ? "rotate-180" : ""}`} />
+                  <span className="uppercase text-[9px] text-zinc-800 shrink-0">{activeCurrObj.code}</span>
                 </button>
                 
                 {isCurrencyOpen && (
@@ -461,7 +459,7 @@ export default function Header({
               </div>
 
                {/* Wishlist Heart Icon */}
-              <button className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent">
+              <button className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent shrink-0">
                 <Heart className="w-[19px] h-[19px] sm:w-[20px] sm:h-[20px]" />
                 <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[13px] h-[13px] flex items-center justify-center font-bold text-[7.5px] leading-none shadow-sm">
                   {wishlistCount}
@@ -469,7 +467,7 @@ export default function Header({
               </button>
 
               {/* User Account / Profile Mobile Action */}
-              <div className="relative flex items-center">
+              <div className="relative flex items-center shrink-0">
                 {user ? (
                   <button 
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -519,7 +517,7 @@ export default function Header({
               {/* Cart Icon */}
               <button 
                 onClick={() => setIsCartOpen(true)}
-                className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent"
+                className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
               >
                 <ShoppingBag className="w-[19px] h-[19px] sm:w-[20px] sm:h-[20px]" />
                 <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[13px] h-[13px] flex items-center justify-center font-bold text-[7.5px] leading-none shadow-sm">
@@ -700,16 +698,16 @@ export default function Header({
       </nav>
 
       {/* 4. Collapsible Mobile Category Selector Bar */}
-      <div className="relative md:hidden bg-white border-b border-cultured px-4 py-2.5 select-none">
-        <div className="flex gap-2 w-full">
+      <div className="relative md:hidden bg-white border-b border-cultured px-2.5 xs:px-4 py-2.5 select-none">
+        <div className="flex gap-1.5 xs:gap-2 w-full">
           {/* Main Toggle Button */}
           <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="flex-1 flex items-center justify-between px-4 py-2 bg-zinc-50 border border-zinc-200/60 rounded-xl hover:bg-zinc-100/80 text-xs font-bold text-onyx transition-all duration-200 cursor-pointer"
+            className="flex-1 flex items-center justify-between px-2 xs:px-4 py-2 bg-zinc-50 border border-zinc-200/60 rounded-xl hover:bg-zinc-100/80 text-xs font-bold text-onyx transition-all duration-200 cursor-pointer"
           >
-            <div className="flex items-center gap-2">
-              <Menu className="w-4 h-4 text-salmon-pink" />
-              <span>
+            <div className="flex items-center gap-1.5 xs:gap-2">
+              <Menu className="w-4 h-4 text-salmon-pink shrink-0" />
+              <span className="truncate">
                 {lang === "tr" ? "Kategori Seçin" 
                  : lang === "ru" ? "Выбрать категорию" 
                  : lang === "ar" ? "اختر فئة" 
@@ -718,7 +716,7 @@ export default function Header({
             </div>
             
             {/* Show active category badge if any */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               {activeCategoryId ? (() => {
                 const findInTree = (cats: Category[]): Category | null => {
                   for (const c of cats) {
@@ -736,17 +734,17 @@ export default function Header({
                 return (
                   <span 
                     style={{ backgroundColor: "rgba(255, 143, 155, 0.15)", color: "#e04b5c" }}
-                    className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold max-w-[120px] truncate animate-fade-in shrink-0"
+                    className="px-2 py-0.5 rounded-full text-[10px] font-extrabold max-w-[80px] xs:max-w-[120px] truncate animate-fade-in shrink-0"
                   >
                     {title}
                   </span>
                 );
               })() : (
-                <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded-full text-[10px] font-extrabold">
+                <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded-full text-[10px] font-extrabold max-w-[80px] xs:max-w-[120px] truncate">
                   {t("all_products", lang)}
                 </span>
               )}
-              <ChevronDown className={`w-3.5 h-3.5 text-zinc-500 transition-transform duration-300 ${isMobileMenuOpen ? "rotate-180" : ""}`} />
+              <ChevronDown className="w-3 h-3 text-zinc-500 transition-transform duration-300 shrink-0" />
             </div>
           </button>
           
@@ -756,7 +754,7 @@ export default function Header({
               router.push("/tum-urunler");
               setIsMobileMenuOpen(false);
             }}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all border cursor-pointer select-none ${
+            className={`px-3 xs:px-4 py-2 rounded-xl text-xs font-extrabold transition-all border cursor-pointer select-none shrink-0 ${
               activeCategoryId === ""
                 ? "bg-salmon-pink text-white border-salmon-pink shadow-sm"
                 : "bg-white text-onyx border-zinc-200/60 hover:bg-zinc-50"

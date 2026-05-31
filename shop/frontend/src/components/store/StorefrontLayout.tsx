@@ -794,7 +794,7 @@ export default function StorefrontLayout({
 
   return (
     <div 
-      className="min-h-screen flex flex-col font-sans antialiased bg-bg-dark text-text-primary" 
+      className="min-h-screen w-full flex flex-col font-sans antialiased bg-bg-dark text-text-primary overflow-x-hidden" 
       style={{ direction: lang === "ar" ? "rtl" : "ltr" }}
     >
       {/* Header Subcomponent */}
@@ -820,7 +820,7 @@ export default function StorefrontLayout({
           
           {/* Category Breadcrumbs */}
           {activeCategoryId && (
-            <nav className="flex items-center gap-1.5 text-[11px] font-bold text-sonic-silver mb-6 uppercase tracking-wider select-none">
+            <nav className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-sonic-silver mb-6 uppercase tracking-wider select-none">
               <a href="/" className="hover:text-salmon-pink flex items-center gap-1 transition-colors no-underline text-sonic-silver">
                 <Home className="w-3.5 h-3.5" />
                 <span>{t("home", lang)}</span>
