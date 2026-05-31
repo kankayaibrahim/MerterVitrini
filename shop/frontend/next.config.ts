@@ -27,7 +27,4 @@ export default withSentryConfig(nextConfig, {
 
   // Upload a larger set of source maps for prettier stack traces (increases build time)
   widenClientFileUpload: true,
-
-  // Hides source maps from visitors
-  hideSourceMaps: true,
 });
