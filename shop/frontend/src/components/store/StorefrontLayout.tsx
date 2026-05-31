@@ -130,6 +130,7 @@ export default function StorefrontLayout({
   const [facets, setFacets] = useState<any>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [portalNewArrivals, setPortalNewArrivals] = useState<Product[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   
   const [activeCategoryId, setActiveCategoryId] = useState<string>(initialCategorySlug || "");
   const [activeSlide, setActiveSlide] = useState<number>(0);
@@ -410,6 +411,7 @@ export default function StorefrontLayout({
       }
 
       setLoadingProducts(true);
+      setFetchError(null);
       const offset = (currentPage - 1) * itemsPerPage;
       let queryParams = `?limit=${itemsPerPage}&offset=${offset}&sort_by=${sortBy}&display_currency=${displayCurrency}`;
       
@@ -470,6 +472,7 @@ export default function StorefrontLayout({
         setProducts([]);
         setTotalProductsCount(0);
         setFacets(null);
+        setFetchError("API sorgusu başarısız oldu. Sunucudaki Go backend veri tabanı bağlantısı kilitlenmiş ve zaman aşımına uğramış olabilir. Lütfen veri tabanı sızıntı düzeltmesini içeren güncellemeyi (Go API) sunucuya deploy edin.");
       }
       setLoadingProducts(false);
     };
@@ -852,7 +855,7 @@ export default function StorefrontLayout({
                 
                 <div className="flex items-center gap-2 select-none shrink-0">
                   {/* Page Size Selector */}
-                  <span className="text-[10px] uppercase font-bold text-sonic-silver tracking-wider">{lang === "tr" ? "Göster:" : "Show:"}</span>
+                  <span className="text-[10px] uppercase font-bold text-sonic-silver tracking-wider">{t("Show:", lang)}</span>
                   <select
                     value={itemsPerPage}
                     onChange={(e) => {
@@ -887,7 +890,14 @@ export default function StorefrontLayout({
               </div>
 
               {/* Products Grid */}
-              {loadingProducts ? (
+              {fetchError ? (
+                <div className="flex flex-col items-center justify-center py-10 px-6 text-center border-2 border-salmon-pink/20 bg-salmon-pink/5 rounded-[15px] p-8 select-none shadow-sm gap-3">
+                  <span className="text-3xl">⚠️</span>
+                  <p className="text-sm font-bold text-salmon-pink uppercase tracking-wide">API Hata Raporu</p>
+                  <p className="text-xs font-semibold text-eerie-black/80 max-w-md leading-relaxed">{fetchError}</p>
+                  <p className="text-[10px] font-bold text-sonic-silver mt-1">Lütfen Go API düzeltmelerini sunucuya deploy edin ve tekrar deneyin.</p>
+                </div>
+              ) : loadingProducts ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <div className="spinner animate-spin" />
                   <span className="text-xs font-bold text-sonic-silver select-none">{t("loading", lang)}</span>
@@ -946,7 +956,7 @@ export default function StorefrontLayout({
                     
                     {/* Current Page Status */}
                     <span className="text-xs font-bold text-sonic-silver px-2 min-w-[70px] text-center">
-                      {lang === "tr" ? "Sayfa" : "Page"} {currentPage} / {totalPages}
+                      {t("page", lang)} {currentPage} / {totalPages}
                     </span>
                     
                     {/* Next Page Button */}

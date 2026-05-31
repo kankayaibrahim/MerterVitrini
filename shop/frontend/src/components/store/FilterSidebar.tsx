@@ -304,7 +304,7 @@ export default function FilterSidebar({
             className="flex items-center justify-between w-full text-left focus:outline-none group cursor-pointer"
           >
             <span className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px] group-hover:text-salmon-pink transition-colors">
-              {lang === "tr" ? "Fiyat Aralığı" : "Price Range"}
+              {t("Price Range", lang)}
             </span>
             <ChevronDown 
               size={14} 
@@ -320,7 +320,7 @@ export default function FilterSidebar({
                 <div className="relative flex-grow min-w-0">
                   <input
                     type="number"
-                    placeholder="Min"
+                    placeholder={t("Min", lang)}
                     value={localMinPrice}
                     onChange={(e) => setLocalMinPrice(e.target.value)}
                     className="w-full bg-white border border-cultured rounded-[5px] px-2.5 py-1.5 text-xs font-semibold text-onyx focus:outline-none focus:border-salmon-pink shadow-inner"
@@ -330,7 +330,7 @@ export default function FilterSidebar({
                 <div className="relative flex-grow min-w-0">
                   <input
                     type="number"
-                    placeholder="Max"
+                    placeholder={t("Max", lang)}
                     value={localMaxPrice}
                     onChange={(e) => setLocalMaxPrice(e.target.value)}
                     className="w-full bg-white border border-cultured rounded-[5px] px-2.5 py-1.5 text-xs font-semibold text-onyx focus:outline-none focus:border-salmon-pink shadow-inner"
@@ -345,7 +345,7 @@ export default function FilterSidebar({
                 }}
                 className="w-full py-2 bg-salmon-pink hover:bg-eerie-black text-white text-[11px] font-extrabold uppercase rounded-[5px] transition-colors border-none cursor-pointer shadow-sm active:scale-95"
               >
-                {lang === "tr" ? "Uygula" : "Apply"}
+                {t("Apply", lang)}
               </button>
             </div>
           )}
