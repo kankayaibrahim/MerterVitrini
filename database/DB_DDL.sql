@@ -25,176 +25,40 @@ CREATE EXTENSION IF NOT EXISTS ltree SCHEMA extensions;
 -- 2. IDENTITY ŞEMASI (Kullanıcı, Rol, Kimlik Doğrulama)
 -- =========================================================================
 
--- Rol Yönetimi İçin Enum Tipi
-CREATE TYPE identity.user_role AS ENUM ('super_admin', 'admin', 'editor', 'sales_manager', 'warehouse');
-COMMENT ON TYPE identity.user_role IS 'Sistemdeki kullanıcı rolleri ve yetkilendirme seviyeleri';
-
-CREATE TYPE identity.otp_purpose AS ENUM ('login_verification', 'password_reset', 'critical_action');
-COMMENT ON TYPE identity.otp_purpose IS 'Tek kullanımlık şifrelerin (OTP) oluşturulma amaçları';
-
-CREATE DOMAIN identity.email_address AS VARCHAR(150)
-CHECK (
-    VALUE ~* '^[a-zA-Z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$'
-);
-COMMENT ON DOMAIN identity.email_address IS 'RFC 5322 standartlarına uygun e-posta formatı doğrulama domaini';
-
+-- identity.users represents synced user profiles from Keycloak OIDC Provider
 CREATE TABLE identity.users (
-    id uuid DEFAULT uuidv7() PRIMARY KEY, 
-    first_name VARCHAR(50) NOT NULL,
-    last_name VARCHAR(50) NOT NULL,
-    email identity.email_address NOT NULL UNIQUE, 
-    password_hash VARCHAR(255) NOT NULL,
-    user_role identity.user_role NOT NULL DEFAULT 'editor',
+    id VARCHAR(255) PRIMARY KEY, 
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE, 
+    phone VARCHAR(50) NULL,
+    user_role VARCHAR(50) NOT NULL DEFAULT 'editor',
     is_active BOOLEAN NOT NULL DEFAULT true,
     is_blocked BOOLEAN NOT NULL DEFAULT false,
-    failed_login_attempts INT NOT NULL DEFAULT 0,
     block_reason VARCHAR(255) NULL,
-    last_login_at TIMESTAMP WITH TIME ZONE NULL,
-    last_login_ip VARCHAR(45) NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    preferred_lang VARCHAR(10) NULL,
+    preferred_currency VARCHAR(10) NULL,
+    billing_address TEXT NULL,
+    delivery_address TEXT NULL,
+    tax_no_tckn VARCHAR(50) NULL,
+    instagram_username VARCHAR(100) NULL
 );
 
 CREATE INDEX idx_users_email ON identity.users(email);
 
-COMMENT ON TABLE identity.users IS 'Sistemdeki tüm yöneticiler, editörler ve diğer personel bilgilerini tutan ana kullanıcılar tablosu';
-COMMENT ON COLUMN identity.users.id IS 'Kullanıcının benzersiz kimliği (UUIDv7 formatında, zamana göre sıralı)';
+COMMENT ON TABLE identity.users IS 'Keycloak üzerinde kimlik doğrulaması yapılan tüm yöneticiler, bayiler ve personel bilgilerini tutan senkronize kullanıcı tablosu';
+COMMENT ON COLUMN identity.users.id IS 'Keycloak OIDC tarafından üretilen kullanıcı ID değeri (örn. f:58ba9c54...)';
 COMMENT ON COLUMN identity.users.first_name IS 'Kullanıcının adı';
 COMMENT ON COLUMN identity.users.last_name IS 'Kullanıcının soyadı';
-COMMENT ON COLUMN identity.users.email IS 'Kullanıcının doğrulanmış benzersiz e-posta adresi';
-COMMENT ON COLUMN identity.users.password_hash IS 'Kullanıcının bcrypt ile hashlenmiş şifre verisi';
-COMMENT ON COLUMN identity.users.role IS 'Kullanıcının sistemdeki yetki rolü';
-COMMENT ON COLUMN identity.users.is_active IS 'Kullanıcının aktiflik durumu (aktif/pasif)';
-COMMENT ON COLUMN identity.users.is_blocked IS 'Kullanıcının hesabının engellenip engellenmediği durumu';
-COMMENT ON COLUMN identity.users.failed_login_attempts IS 'Üst üste yapılan başarısız giriş denemesi sayısı';
-COMMENT ON COLUMN identity.users.block_reason IS 'Hesap engellendiyse gerekçesi';
-COMMENT ON COLUMN identity.users.last_login_at IS 'Son başarılı giriş yapılan zaman damgası';
-COMMENT ON COLUMN identity.users.last_login_ip IS 'Son başarılı giriş yapılan IP adresi';
+COMMENT ON COLUMN identity.users.email IS 'Kullanıcının benzersiz e-posta adresi';
+COMMENT ON COLUMN identity.users.phone IS 'Kullanıcının telefon numarası';
+COMMENT ON COLUMN identity.users.user_role IS 'Kullanıcının sistemdeki yetki rolü (super_admin, admin, editor, sales_manager, warehouse vb.)';
+COMMENT ON COLUMN identity.users.is_active IS 'Kullanıcının aktiflik durumu';
+COMMENT ON COLUMN identity.users.is_blocked IS 'Hesabın engellenip engellenmediği';
+COMMENT ON COLUMN identity.users.block_reason IS 'Varsa hesap engelleme nedeni';
 
-CREATE OR REPLACE PROCEDURE identity.sp_create_user(
-    p_first_name VARCHAR(50),
-    p_last_name VARCHAR(50),
-    p_email identity.email_address,
-    p_plain_password VARCHAR(100),
-    p_role identity.user_role DEFAULT 'editor'
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    hashed_password VARCHAR(255);
-BEGIN
-    hashed_password := extensions.crypt(p_plain_password, extensions.gen_salt('bf', 10));
-
-    INSERT INTO identity.users (
-        id, first_name, last_name, email, password_hash, user_role, is_active, is_blocked, failed_login_attempts
-    ) VALUES (
-        uuidv7(), p_first_name, p_last_name, p_email, hashed_password, p_role, true, false, 0
-    );
-END;
-$$;
-
-CALL identity.sp_create_user(
-    '__SYSTEM__', 
-    'ADMIN', 
-    'system@toptantekstil.com', 
-    'Admin123!*', 
-    'super_admin'
-);
-
-CREATE TABLE identity.user_otps (
-    id uuid DEFAULT uuidv7() PRIMARY KEY, 
-    user_id uuid NOT NULL REFERENCES identity.users(id) ON DELETE CASCADE,
-    otp_code VARCHAR(6) NOT NULL,
-    purpose identity.otp_purpose NOT NULL DEFAULT 'login_verification',
-    is_used BOOLEAN NOT NULL DEFAULT false,
-    attempt_count INT NOT NULL DEFAULT 0,
-    max_attempts INT NOT NULL DEFAULT 3,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    used_at TIMESTAMP WITH TIME ZONE NULL
-);
-
-CREATE INDEX idx_user_otps_lookup ON identity.user_otps(user_id, otp_code) WHERE is_used = false;
-CREATE INDEX idx_user_otps_expiry ON identity.user_otps(expires_at) WHERE is_used = false;
-
-COMMENT ON TABLE identity.user_otps IS 'Kullanıcıların giriş ve şifre sıfırlama gibi işlemleri için tek kullanımlık şifre (OTP) kayıtları';
-
-CREATE OR REPLACE FUNCTION identity.fn_generate_otp(
-    p_user_id uuid,
-    p_purpose identity.otp_purpose DEFAULT 'login_verification'
-)
-RETURNS VARCHAR(6) 
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_generated_code VARCHAR(6);
-    v_random_value INT;
-BEGIN
-    UPDATE identity.user_otps
-    SET is_used = true, used_at = CURRENT_TIMESTAMP
-    WHERE user_id = p_user_id AND is_used = false AND purpose = p_purpose;
-
-    v_random_value := abs(('x' || encode(extensions.gen_random_bytes(4), 'hex'))::bit(32)::int);
-    v_generated_code := ((v_random_value % 900000) + 100000)::VARCHAR(6);
-
-    INSERT INTO identity.user_otps (
-        id, user_id, otp_code, purpose, is_used, attempt_count, max_attempts, expires_at
-    ) VALUES (
-        uuidv7(), p_user_id, v_generated_code, p_purpose, false, 0, 3, CURRENT_TIMESTAMP + INTERVAL '3 minutes'
-    );
-
-    RETURN v_generated_code;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION identity.fn_verify_otp(
-    p_user_id uuid,
-    p_otp_code VARCHAR(6),
-    p_purpose identity.otp_purpose DEFAULT 'login_verification'
-)
-RETURNS BOOLEAN 
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_otp_id uuid;
-    v_attempt_count INT;
-    v_max_attempts INT;
-    v_correct_code VARCHAR(6);
-BEGIN
-    SELECT id, otp_code, attempt_count, max_attempts
-    INTO v_otp_id, v_correct_code, v_attempt_count, v_max_attempts
-    FROM identity.user_otps
-    WHERE user_id = p_user_id 
-      AND purpose = p_purpose 
-      AND is_used = false 
-      AND expires_at > CURRENT_TIMESTAMP
-    ORDER BY created_at DESC
-    LIMIT 1;
-
-    IF v_otp_id IS NULL THEN
-        RETURN false;
-    END IF;
-
-    IF v_correct_code = p_otp_code THEN
-        UPDATE identity.user_otps
-        SET is_used = true, used_at = CURRENT_TIMESTAMP
-        WHERE id = v_otp_id;
-        RETURN true;
-    ELSE
-        v_attempt_count := v_attempt_count + 1;
-        IF v_attempt_count >= v_max_attempts THEN
-            UPDATE identity.user_otps
-            SET attempt_count = v_attempt_count, is_used = true, used_at = CURRENT_TIMESTAMP
-            WHERE id = v_otp_id;
-        ELSE
-            UPDATE identity.user_otps
-            SET attempt_count = v_attempt_count
-            WHERE id = v_otp_id;
-        END IF;
-        RETURN false;
-    END IF;
-END;
-$$;
 
 
 -- =========================================================================
@@ -428,7 +292,6 @@ CREATE TABLE catalog.products (
     fabric_id uuid REFERENCES catalog.fabrics(id) ON DELETE SET NULL, -- (Migration V9)
     gender VARCHAR(20) NULL,     
     season VARCHAR(50) NULL,     
-    kumas_fabric VARCHAR(100) NULL, 
     desi_volume NUMERIC(10, 2) DEFAULT 0, 
     shipping_weight_kg NUMERIC(10, 3) DEFAULT 0, 
     packing_ratio VARCHAR(100) NULL, 
@@ -440,7 +303,6 @@ CREATE TABLE catalog.products (
     discounted_price NUMERIC(15, 4) NULL, 
     currency VARCHAR(10) DEFAULT 'TRY', 
     tax_rate NUMERIC(5, 2) DEFAULT 10.00, 
-    color VARCHAR(50) NULL, 
     stock INT NOT NULL DEFAULT 0, 
     sku VARCHAR(100) NULL, 
     barcode VARCHAR(100) NULL, 
@@ -461,6 +323,10 @@ CREATE INDEX idx_products_color_id ON catalog.products(color_id); -- (Migration 
 CREATE INDEX idx_products_fabric_id ON catalog.products(fabric_id); -- (Migration V9)
 CREATE INDEX idx_products_custom_sku ON catalog.products(custom_sku);
 CREATE INDEX idx_products_meta_gin ON catalog.products USING gin(meta_attributes);
+CREATE UNIQUE INDEX idx_products_slug ON catalog.products(slug);
+CREATE INDEX idx_products_slug_id ON catalog.products(slug_id);
+CREATE INDEX idx_products_id_text ON catalog.products((id::text));
+CREATE INDEX idx_products_active_created_at ON catalog.products(created_at);
 
 CREATE OR REPLACE FUNCTION catalog.trig_product_slug()
 RETURNS TRIGGER AS $$
@@ -704,17 +570,118 @@ CREATE TABLE catalog.legal_policies (
     CONSTRAINT uq_policy_type_version UNIQUE (policy_type, policy_version)
 );
 
-CREATE TABLE identity.policy_acceptances (
+CREATE INDEX idx_legal_policies_lookup ON catalog.legal_policies(policy_type, is_active);
+
+
+-- =========================================================================
+-- 5d. DİNAMİK STATİK SAYFALAR (CMS) TABLOLARI
+-- =========================================================================
+
+CREATE TABLE catalog.pages (
     id uuid DEFAULT uuidv7() PRIMARY KEY,
-    user_id uuid NOT NULL,
-    policy_id uuid REFERENCES catalog.legal_policies(id) ON DELETE CASCADE NOT NULL,
-    accepted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    ip_address VARCHAR(45) NOT NULL,
-    user_agent VARCHAR(255) NOT NULL
+    slug VARCHAR(150) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE INDEX idx_legal_policies_lookup ON catalog.legal_policies(policy_type, is_active);
-CREATE INDEX idx_policy_acceptances_user ON identity.policy_acceptances(user_id, policy_id);
+CREATE TABLE catalog.page_translations (
+    page_id uuid REFERENCES catalog.pages(id) ON DELETE CASCADE NOT NULL,
+    language_code VARCHAR(10) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    meta_title VARCHAR(255) NULL,
+    meta_description TEXT NULL,
+    PRIMARY KEY (page_id, language_code)
+);
+
+CREATE INDEX idx_pages_is_active ON catalog.pages(is_active);
+
+
+-- =========================================================================
+-- 5e. GÜNCEL DÖVİZ KURLARI (EXCHANGE RATES) TABLOSU
+-- =========================================================================
+
+CREATE TABLE catalog.exchange_rates (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    currency_code VARCHAR(10) NOT NULL,
+    buying_rate NUMERIC NOT NULL,
+    selling_rate NUMERIC NOT NULL,
+    publication_date DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX unique_currency_date ON catalog.exchange_rates (currency_code, publication_date);
+CREATE INDEX idx_exchange_rates_currency_date ON catalog.exchange_rates (currency_code, publication_date DESC);
+
+
+-- =========================================================================
+-- 5f. AI ÜRÜN İÇERİĞİ VE SEO ÖNBELLEĞİ (PRODUCT AI CONTENT) TABLOSU
+-- =========================================================================
+
+CREATE TABLE catalog.product_ai_content (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    product_id uuid REFERENCES catalog.products(id) ON DELETE CASCADE,
+    ai_engine VARCHAR(100) NOT NULL,
+    content_hash VARCHAR(255) NOT NULL,
+    original_title VARCHAR(255) NULL,
+    original_description TEXT NULL,
+    original_fabric VARCHAR(255) NULL,
+    original_gender VARCHAR(255) NULL,
+    seo_title VARCHAR(255) NULL,
+    seo_description TEXT NULL,
+    meta_title VARCHAR(255) NULL,
+    meta_description TEXT NULL,
+    tags JSONB NULL,
+    highlights JSONB NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE UNIQUE INDEX unique_content_ai ON catalog.product_ai_content (content_hash, ai_engine);
+
+
+-- =========================================================================
+-- 5g. SİSTEM AYARLARI (SETTINGS) TABLOSU
+-- =========================================================================
+
+CREATE TABLE catalog.settings (
+    id uuid DEFAULT uuidv7() PRIMARY KEY,
+    address TEXT NOT NULL,
+    phone VARCHAR(50) NOT NULL,
+    whatsapp VARCHAR(50) NOT NULL,
+    email VARCHAR(150) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    singleton_guard BOOLEAN DEFAULT true,
+    show_single_price BOOLEAN NOT NULL DEFAULT true,
+    CONSTRAINT settings_singleton_guard_key UNIQUE (singleton_guard)
+);
+
+
+-- =========================================================================
+-- 5h. B2B SEPET VE TALEP FORMLARI (STORE INQUIRIES & ITEMS) TABLOLARI
+-- =========================================================================
+
+CREATE TABLE catalog.store_inquiries (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    full_name VARCHAR(150) NOT NULL,
+    company VARCHAR(150) NULL,
+    phone VARCHAR(50) NOT NULL,
+    email VARCHAR(150) NOT NULL,
+    message TEXT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE TABLE catalog.store_inquiry_items (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    inquiry_id uuid NOT NULL REFERENCES catalog.store_inquiries(id) ON DELETE CASCADE,
+    product_id uuid NOT NULL REFERENCES catalog.products(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    custom_sku VARCHAR(100) NOT NULL,
+    quantity INT NOT NULL,
+    price NUMERIC NOT NULL
+);
 
 
 
