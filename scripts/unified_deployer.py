@@ -352,6 +352,21 @@ WantedBy=multi-user.target
             self.log("[ARCHIVE] Packaging frontend source files (excluding build cache & node_modules)...")
             parent_dir = os.path.join(self.root_dir, os.path.dirname(cfg["path"]))
             base_dir = os.path.basename(cfg["path"]) # "frontend"
+
+            # Calculate combined MD5 hash of package.json and package-lock.json to check for changes
+            import hashlib
+            def get_file_md5(f_path):
+                if not os.path.exists(f_path):
+                    return ""
+                try:
+                    with open(f_path, "rb") as f_hash_check:
+                        return hashlib.md5(f_hash_check.read()).hexdigest()
+                except Exception:
+                    return ""
+            
+            local_pkg_json = os.path.join(parent_dir, base_dir, "package.json")
+            local_pkg_lock = os.path.join(parent_dir, base_dir, "package-lock.json")
+            combined_hash = get_file_md5(local_pkg_json) + "_" + get_file_md5(local_pkg_lock)
             
             t_tar_start = time.time()
             has_native_tar = True
@@ -430,9 +445,20 @@ WantedBy=multi-user.target
 
                 # 4. Run Build on Server
                 self.log("[REMOTE-BUILD] Running npm install & production compilation on server (first time may take 1-2 mins, cached later)...")
-                self.log("[REMOTE-BUILD] Running: npm install")
+                
+                # Check MD5 hash on server to skip npm install if package files haven't changed
+                check_cmd = f"[ -d {build_root}/frontend/node_modules ] && [ -f {build_root}/frontend/package_hash.txt ] && [ \"$(cat {build_root}/frontend/package_hash.txt)\" = \"{combined_hash}\" ] && echo \"MATCH\" || echo \"NOMATCH\""
+                check_out, _ = self._ssh_cmd(ssh, check_cmd)
+                skip_npm_install = "MATCH" in check_out
+                
                 t_rembuild_start = time.time()
-                self._ssh_cmd(ssh, f"cd {build_root}/frontend && npm install --no-audit --no-fund")
+                if skip_npm_install:
+                    self.log("[REMOTE-BUILD] package.json and package-lock.json are unchanged and node_modules exists. Skipping npm install!")
+                else:
+                    self.log("[REMOTE-BUILD] Running: npm install (dependencies changed or missing)...")
+                    self._ssh_cmd(ssh, f"cd {build_root}/frontend && npm install --no-audit --no-fund")
+                    self._ssh_cmd(ssh, f"echo \"{combined_hash}\" > {build_root}/frontend/package_hash.txt")
+                
                 self.log("[REMOTE-BUILD] Running: npm run build")
                 self._ssh_cmd(ssh, f"cd {build_root}/frontend && npm run build")
                 t_rembuild_end = time.time()

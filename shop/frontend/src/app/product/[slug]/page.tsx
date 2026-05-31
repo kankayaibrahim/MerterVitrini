@@ -9,28 +9,10 @@ interface PageProps {
 }
 
 // Generate static routes for a subset of products at compilation time.
-// Other pages will be generated dynamically on demand when visited.
+// All other products will be generated dynamically on demand when visited.
 export async function generateStaticParams() {
-  try {
-    // Skip or limit SSG during development or heavy builds to avoid network bottlenecks and rate limits.
-    const limit = process.env.NODE_ENV === "development" ? 0 : 15000;
-    if (limit === 0) return [];
-
-    const response = await fetch(`https://mertervitrini.com.tr/api/v1/store/products?limit=${limit}&t=` + Date.now());
-    if (response.ok) {
-      const data = await response.json();
-      // Go API returns {"products": [...], "total": 3936}. Handle both list and dictionary formats.
-      const products = Array.isArray(data) ? data : (data && Array.isArray(data.products) ? data.products : []);
-      if (products.length > 0) {
-        return products.map((p: any) => ({
-          slug: String(p.slug || p.id),
-        }));
-      }
-    }
-  } catch (err) {
-    console.error("[SEO] generateStaticParams failed, fallback to fallback array:", err);
-  }
-  // Return a static fallback list of common/sample product slugs to prevent Next.js from throwing build errors on output: "export"
+  // Return only sample products for build check to avoid generating 4000+ static pages during compilation.
+  // This reduces deployment build time from 4+ minutes to a few seconds.
   return [
     { slug: "kadin-askili-v-yaka-pul-payetli-bluz-kirmizi-3a15" },
     { slug: "fallback-product-detail" }

@@ -340,6 +340,7 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 		}
 		products = append(products, &p)
 	}
+	rows.Close() // Explicitly release main query connection immediately
 
 	// --- Faceted Counts Calculation ---
 	brandStats := make(map[string]int)
@@ -353,7 +354,6 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	// 1. Brand Facets
 	brandQuery := "SELECT p.brand_id, COUNT(*)" + sqlBase + " GROUP BY p.brand_id"
 	if bRows, err := db.Pool.Query(ctx, brandQuery, baseArgs...); err == nil {
-		defer bRows.Close()
 		for bRows.Next() {
 			var bID string
 			var count int
@@ -361,6 +361,7 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 				brandStats[bID] = count
 			}
 		}
+		bRows.Close() // Close explicitly immediately
 	} else {
 		log.Printf("[STORE API ERROR] Failed to query brand facets: %v", err)
 	}
@@ -368,7 +369,6 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	// 2. Gender Facets
 	genderQuery := "SELECT p.gender, COUNT(*)" + sqlBase + " GROUP BY p.gender"
 	if gRows, err := db.Pool.Query(ctx, genderQuery, baseArgs...); err == nil {
-		defer gRows.Close()
 		for gRows.Next() {
 			var gender string
 			var count int
@@ -378,6 +378,7 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		gRows.Close() // Close explicitly immediately
 	} else {
 		log.Printf("[STORE API ERROR] Failed to query gender facets: %v", err)
 	}
@@ -385,7 +386,6 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	// 3. Season Facets
 	seasonQuery := "SELECT p.season, COUNT(*)" + sqlBase + " GROUP BY p.season"
 	if sRows, err := db.Pool.Query(ctx, seasonQuery, baseArgs...); err == nil {
-		defer sRows.Close()
 		for sRows.Next() {
 			var season string
 			var count int
@@ -395,6 +395,7 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		sRows.Close() // Close explicitly immediately
 	} else {
 		log.Printf("[STORE API ERROR] Failed to query season facets: %v", err)
 	}
@@ -403,7 +404,6 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	cleanSqlBase := strings.Replace(sqlBase, "FROM catalog.products p", "FROM catalog.products p INNER JOIN catalog.product_attributes_map pam ON p.id = pam.product_id INNER JOIN catalog.attribute_values av ON pam.attribute_value_id = av.id INNER JOIN catalog.attributes a ON av.attribute_id = a.id", 1)
 	attrQuery := "SELECT a.attribute_name, av.attribute_value, COUNT(DISTINCT p.id) " + cleanSqlBase + " GROUP BY a.attribute_name, av.attribute_value"
 	if aRows, err := db.Pool.Query(ctx, attrQuery, baseArgs...); err == nil {
-		defer aRows.Close()
 		for aRows.Next() {
 			var attrName, attrVal string
 			var count int
@@ -416,6 +416,7 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		aRows.Close() // Close explicitly immediately
 	} else {
 		log.Printf("[STORE API ERROR] Failed to query attribute facets: %v", err)
 	}
