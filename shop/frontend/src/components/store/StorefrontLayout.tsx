@@ -60,62 +60,10 @@ export default function StorefrontLayout({
 
   // Premium Banners SEO localization mapping with fallback support
   const getLocalizedCollectionBanner = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => {
-    let kadin = "/banners/collection_kadin.png";
-    let erkek = "/banners/collection_erkek.png";
-    let ic_giyim = "/banners/collection_ic_giyim.png";
-    let aksesuar = "/banners/collection_aksesuar.png";
-
-    switch (lang) {
-      case "en":
-        kadin = "/banners/collection_women_en.png";
-        erkek = "/banners/collection_men_en.png";
-        ic_giyim = "/banners/collection_lingerie_en.png";
-        aksesuar = "/banners/collection_accessories_en.png";
-        break;
-      case "ar":
-        kadin = "/banners/collection_women_ar.png";
-        erkek = "/banners/collection_men_ar.png";
-        ic_giyim = "/banners/collection_lingerie_ar.png";
-        aksesuar = "/banners/collection_accessories_ar.png";
-        break;
-      case "ru":
-        kadin = "/banners/collection_women_ru.png";
-        erkek = "/banners/collection_men_ru.png";
-        ic_giyim = "/banners/collection_lingerie_ru.png";
-        aksesuar = "/banners/collection_accessories_ru.png";
-        break;
-      case "pl":
-        kadin = "/banners/collection_kobiety_pl.png";
-        erkek = "/banners/collection_mezczyzni_pl.png";
-        ic_giyim = "/banners/collection_bielizna_pl.png";
-        aksesuar = "/banners/collection_akcesoria_pl.png";
-        break;
-      case "bg":
-        kadin = "/banners/collection_zheni_bg.png";
-        erkek = "/banners/collection_muzhi_bg.png";
-        ic_giyim = "/banners/collection_belyo_bg.png";
-        aksesuar = "/banners/collection_aksesoari_bg.png";
-        break;
-      case "de":
-        kadin = "/banners/collection_damen_de.png";
-        erkek = "/banners/collection_herren_de.png";
-        ic_giyim = "/banners/collection_unterwaesche_de.png";
-        aksesuar = "/banners/collection_accessoires_de.png";
-        break;
-      case "fr":
-        kadin = "/banners/collection_femmes_fr.png";
-        erkek = "/banners/collection_hommes_fr.png";
-        ic_giyim = "/banners/collection_lingerie_fr.png";
-        aksesuar = "/banners/collection_accessoires_fr.png";
-        break;
-      default:
-        break;
-    }
-
-    if (type === "kadin") return kadin;
-    if (type === "erkek") return erkek;
-    if (type === "ic_giyim") return ic_giyim;
-    return aksesuar;
+    if (type === "kadin") return "/banners/collection_kadin.png";
+    if (type === "erkek") return "/banners/collection_erkek.png";
+    if (type === "ic_giyim") return "/banners/collection_ic_giyim.png";
+    return "/banners/collection_aksesuar.png";
   };
 
   const getLocalizedSliderBanner = (type: "opportunities" | "app_promo") => {
@@ -1044,11 +992,11 @@ export default function StorefrontLayout({
               <img 
                 src={getLocalizedSliderBanner("opportunities")} 
                 alt={t("portal_daily_opportunities", lang)} 
-                className="absolute inset-0 w-full h-full object-cover object-top" 
+                className="absolute inset-0 w-full h-full object-cover object-[35%_top]" 
                 onError={handleSliderImageError("opportunities")}
               />
               <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
-              <div className="relative z-10 max-w-[90vw] sm:max-w-md md:max-w-lg bg-white/85 backdrop-blur-md p-5 sm:p-6 md:p-8 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
+              <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white/85 backdrop-blur-md p-4 sm:p-5 md:p-6 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
                 <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_wholesale_opportunities", lang)}</span>
                 <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_daily_opportunities", lang)}</h2>
                 <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_daily_opportunities_desc", lang)}</p>
@@ -1065,7 +1013,7 @@ export default function StorefrontLayout({
                 onError={handleSliderImageError("app_promo")}
               />
               <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
-              <div className="relative z-10 max-w-[90vw] sm:max-w-md md:max-w-lg bg-white/85 backdrop-blur-md p-5 sm:p-6 md:p-8 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
+              <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white/85 backdrop-blur-md p-4 sm:p-5 md:p-6 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
                 <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
                 <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_download_app", lang)}</h2>
                 <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_download_app_desc", lang)}</p>
