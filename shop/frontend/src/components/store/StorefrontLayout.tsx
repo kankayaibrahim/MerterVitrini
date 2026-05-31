@@ -1031,7 +1031,7 @@ export default function StorefrontLayout({
               <img 
                 src={getLocalizedSliderBanner("opportunities")} 
                 alt={t("portal_daily_opportunities", lang)} 
-                className="absolute inset-0 w-full h-full object-cover" 
+                className="absolute inset-0 w-full h-full object-cover object-top" 
                 onError={handleSliderImageError("opportunities")}
               />
               <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
@@ -1044,13 +1044,33 @@ export default function StorefrontLayout({
             </div>
 
             {/* Slide 2: Mobile App Promo */}
-            <div className={`absolute inset-0 transition-opacity duration-1000 ${activeSlide === 1 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
+            <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 1 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
               <img 
                 src={getLocalizedSliderBanner("app_promo")} 
                 alt={t("portal_download_app", lang)} 
-                className="absolute inset-0 w-full h-full object-fill" 
+                className="absolute inset-0 w-full h-full object-cover" 
                 onError={handleSliderImageError("app_promo")}
               />
+              <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
+              <div className="relative z-10 max-w-[90vw] sm:max-w-md md:max-w-lg bg-white/85 backdrop-blur-md p-5 sm:p-6 md:p-8 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
+                <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
+                <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_download_app", lang)}</h2>
+                <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_download_app_desc", lang)}</p>
+                <div className="flex gap-2 mt-2">
+                  <a 
+                    href="#" 
+                    className="px-3.5 py-2 bg-eerie-black hover:bg-salmon-pink text-white text-[10px] sm:text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline flex items-center gap-1.5"
+                  >
+                    <span>🤖</span> {t("portal_google_play", lang) || "Google Play"}
+                  </a>
+                  <a 
+                    href="#" 
+                    className="px-3.5 py-2 bg-eerie-black hover:bg-salmon-pink text-white text-[10px] sm:text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline flex items-center gap-1.5"
+                  >
+                    <span>🍎</span> {t("portal_app_store", lang) || "App Store"}
+                  </a>
+                </div>
+              </div>
             </div>
 
             {/* Slide Indicators */}

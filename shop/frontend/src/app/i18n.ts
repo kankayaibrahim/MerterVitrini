@@ -311,6 +311,7 @@ export const dictionary: Record<string, Record<string, string>> = {
     email_placeholder: "ornek@email.com",
     phone_placeholder: "+90 555 123 4567",
     sign_in_with_google: "Google ile Giriş Yap",
+    sign_up_with_google: "Google ile Üye Ol",
   },
   en: {
     home: "Home",
@@ -337,6 +338,7 @@ export const dictionary: Record<string, Record<string, string>> = {
     email_placeholder: "example@email.com",
     phone_placeholder: "+1 555 123 4567",
     sign_in_with_google: "Sign in with Google",
+    sign_up_with_google: "Sign up with Google",
     "Kadın Giyim": "Women's Clothing",
     "Üst Giyim": "Tops & Top Wear",
     "Alt Giyim": "Bottoms & Bottom Wear",

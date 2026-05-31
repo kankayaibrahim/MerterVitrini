@@ -133,3 +133,10 @@ body {
 [dir="rtl"] {
   text-align: right;
 }
+
+/* Hide Google reCAPTCHA v3 badge for clean UI */
+.grecaptcha-badge {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

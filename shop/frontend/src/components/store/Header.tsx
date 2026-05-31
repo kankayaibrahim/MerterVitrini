@@ -8,6 +8,21 @@ import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/app/utils";
 import AuthModal from "./AuthModal";
 
+const getFlagUrl = (code: string): string => {
+  const mapping: Record<string, string> = {
+    tr: "tr",
+    en: "gb",
+    ar: "sa",
+    ru: "ru",
+    pl: "pl",
+    bg: "bg",
+    de: "de",
+    fr: "fr"
+  };
+  const country = mapping[code] || code;
+  return `https://flagcdn.com/w20/${country.toLowerCase()}.png`;
+};
+
 interface HeaderProps {
   lang: string;
   setLang: (lang: string) => void;
@@ -219,7 +234,7 @@ export default function Header({
                 onClick={() => setIsLangOpen(!isLangOpen)}
                 className="flex items-center gap-1.5 px-3 py-1 bg-white hover:text-salmon-pink font-semibold text-xs transition-colors cursor-pointer"
               >
-                <span>{currentLangObj.flag}</span>
+                <img src={getFlagUrl(currentLangObj.code)} alt={currentLangObj.label} className="w-4 h-3 object-cover rounded shadow-sm shrink-0" />
                 <span>{currentLangObj.label}</span>
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isLangOpen ? "rotate-180" : ""}`} />
               </button>
@@ -254,7 +269,7 @@ export default function Header({
                             : "text-onyx hover:bg-cultured hover:text-eerie-black"
                         }`}
                       >
-                        <span>{l.flag}</span>
+                        <img src={getFlagUrl(l.code)} alt={l.label} className="w-4 h-3 object-cover rounded shadow-sm shrink-0" />
                         <span>{l.label}</span>
                       </button>
                     ))}
@@ -331,8 +346,9 @@ export default function Header({
               <div className="relative">
                 <button 
                   onClick={() => setIsLangOpen(!isLangOpen)}
-                  className="flex items-center gap-1 px-1.5 py-1 bg-zinc-50 border border-zinc-200/60 rounded-lg hover:text-salmon-pink font-extrabold text-[9px] transition-all cursor-pointer select-none"
+                  className="flex items-center gap-1.5 px-2 py-1 bg-zinc-50 border border-zinc-200/60 rounded-lg hover:text-salmon-pink font-extrabold text-[9px] transition-all cursor-pointer select-none"
                 >
+                  <img src={getFlagUrl(currentLangObj.code)} alt={currentLangObj.label} className="w-3.5 h-2.5 object-cover rounded shadow-sm shrink-0" />
                   <span className="uppercase text-[9px] text-zinc-800">{currentLangObj.code}</span>
                   <ChevronDown className={`w-2.5 h-2.5 text-zinc-500 transition-transform duration-300 ${isLangOpen ? "rotate-180" : ""}`} />
                 </button>
@@ -367,7 +383,7 @@ export default function Header({
                               : "text-onyx hover:bg-cultured hover:text-eerie-black"
                           }`}
                         >
-                          <span>{l.flag}</span>
+                          <img src={getFlagUrl(l.code)} alt={l.label} className="w-4 h-3 object-cover rounded shadow-sm shrink-0" />
                           <span className="uppercase">{l.code}</span>
                         </button>
                       ))}
@@ -689,7 +705,10 @@ export default function Header({
                 const title = activeObj ? getCategoryTitle(activeObj, lang) : "";
                 if (!title) return null;
                 return (
-                  <span className="px-2 py-0.5 bg-salmon-pink/10 text-salmon-pink rounded-full text-[10px] font-extrabold max-w-[120px] truncate animate-fade-in">
+                  <span 
+                    style={{ backgroundColor: "rgba(255, 143, 155, 0.15)", color: "#e04b5c" }}
+                    className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold max-w-[120px] truncate animate-fade-in shrink-0"
+                  >
                     {title}
                   </span>
                 );

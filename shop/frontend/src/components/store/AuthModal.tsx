@@ -559,7 +559,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
                     d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42A11.92 11.92 0 0 0 12 0 11.99 11.99 0 0 0 1.03 6.58l4.12 3.23c.96-2.89 3.66-5.06 6.85-5.06z"
                   />
                 </svg>
-                <span>{t("sign_in_with_google", lang) || (lang === "tr" ? "Google ile Giriş Yap" : "Sign in with Google")}</span>
+                <span>{t("sign_up_with_google", lang) || (lang === "tr" ? "Google ile Üye Ol" : "Sign up with Google")}</span>
               </button>
             </form>
           )}
