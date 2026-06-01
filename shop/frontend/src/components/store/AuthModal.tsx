@@ -107,6 +107,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
         `&redirect_uri=${encodeURIComponent(redirectUri)}` +
         `&response_type=code` +
         `&scope=${encodeURIComponent(scope)}` +
+        `&prompt=select_account` +
         `&kc_idp_hint=${encodeURIComponent(idpHint)}`;
 
       window.location.href = authUrl;
