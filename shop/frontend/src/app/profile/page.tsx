@@ -135,9 +135,9 @@ export default function ProfilePage() {
         // Token expired or invalid
         if (response.status === 401) {
           handleLogout();
-          throw new Error("Oturum süreniz dolmuş, lütfen tekrar giriş yapın.");
+          throw new Error(t("session_expired", lang));
         }
-        throw new Error(data.error || "Profil bilgileri yüklenemedi.");
+        throw new Error(data.error || t("profile_load_failed", lang));
       }
 
       // Populate form state
@@ -189,10 +189,10 @@ export default function ProfilePage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Profil güncellenemedi.");
+        throw new Error(data.error || t("profile_update_failed", lang));
       }
 
-      setSuccess(lang === "tr" ? "Profiliniz başarıyla kaydedildi!" : "Profile successfully saved!");
+      setSuccess(t("profile_saved_success", lang));
 
       // 1. Sync updated details locally immediately
       if (typeof window !== "undefined") {
@@ -258,7 +258,7 @@ export default function ProfilePage() {
         <main className="flex-grow flex flex-col items-center justify-center py-20 gap-3">
           <div className="spinner animate-spin w-8 h-8 border-4 border-salmon-pink border-t-transparent rounded-full" />
           <span className="text-xs font-bold text-sonic-silver select-none">
-            {lang === "tr" ? "Profil yükleniyor..." : "Loading profile..."}
+            {t("loading_profile", lang)}
           </span>
         </main>
         <Footer lang={lang} />
@@ -288,12 +288,10 @@ export default function ProfilePage() {
         <main className="flex-grow flex flex-col items-center justify-center p-8 text-center select-none py-24">
           <span className="text-5xl mb-4">🔒</span>
           <h1 className="text-2xl font-extrabold text-eerie-black mb-3">
-            {lang === "tr" ? "Oturum Açmanız Gerekiyor" : "Authentication Required"}
+            {t("auth_required", lang)}
           </h1>
           <p className="text-sm font-semibold text-sonic-silver mb-8 max-w-md mx-auto leading-relaxed">
-            {lang === "tr" 
-              ? "Profil sayfanıza erişmek ve tercihlerinizi kaydetmek için lütfen giriş yapın veya kayıt olun."
-              : "Please login or register to access your profile preferences and billing details."}
+            {t("auth_required_desc", lang)}
           </p>
           <a 
             href="/" 
@@ -334,7 +332,7 @@ export default function ProfilePage() {
             <span>{t("home", lang)}</span>
           </a>
           <span className="text-spanish-gray">/</span>
-          <span className="text-salmon-pink font-extrabold">{lang === "tr" ? "Hesabım" : "My Account"}</span>
+          <span className="text-salmon-pink font-extrabold">{t("my_account", lang)}</span>
         </nav>
 
         {/* Outer Layout Grid */}
@@ -360,14 +358,14 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-2.5 w-full">
                 <div className="flex items-center gap-3 px-3 py-2.5 bg-salmon-pink/5 rounded-lg border border-salmon-pink/20 text-salmon-pink text-xs font-bold text-left">
                   <User className="w-4 h-4" />
-                  <span>{lang === "tr" ? "Profil Bilgileri" : "Profile Details"}</span>
+                  <span>{t("profile_details", lang)}</span>
                 </div>
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-3 px-3 py-2.5 text-sonic-silver hover:text-salmon-pink hover:bg-cultured transition-all rounded-lg text-xs font-bold text-left border-none bg-transparent cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>{lang === "tr" ? "Güvenli Çıkış" : "Logout"}</span>
+                  <span>{t("safe_logout", lang)}</span>
                 </button>
               </div>
             </div>
@@ -378,12 +376,10 @@ export default function ProfilePage() {
             <div className="bg-white rounded-2xl p-6 sm:p-8 border border-cultured shadow-sm">
               <h2 className="font-sans font-extrabold text-xl text-eerie-black mb-1 select-none flex items-center gap-2">
                 <Settings className="w-5 h-5 text-salmon-pink" />
-                {lang === "tr" ? "Hesap Ayarları ve Tercihler" : "Account Settings & Preferences"}
+                {t("account_settings_title", lang)}
               </h2>
               <p className="text-xs text-sonic-silver font-semibold mb-8 select-none">
-                {lang === "tr" 
-                  ? "Varsayılan dilinizi, para biriminizi ve fatura / teslimat adreslerinizi buradan yönetin."
-                  : "Manage your default storefront language, pricing currencies, and delivery details."}
+                {t("account_settings_desc", lang)}
               </p>
 
               {/* Success / Error Alerts */}
@@ -405,11 +401,11 @@ export default function ProfilePage() {
                 {/* Section 1: Personal info */}
                 <div>
                   <h4 className="text-[10px] font-extrabold uppercase text-sonic-silver tracking-wider border-b border-cultured pb-2 mb-4 select-none">
-                    {lang === "tr" ? "1. Kişisel Bilgiler" : "1. Personal Information"}
+                    {t("personal_information_header", lang)}
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{lang === "tr" ? "Ad" : "First Name"}</label>
+                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{t("first_name_field", lang)}</label>
                       <input
                         type="text"
                         required
@@ -419,7 +415,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{lang === "tr" ? "Soyad" : "Last Name"}</label>
+                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{t("last_name_field", lang)}</label>
                       <input
                         type="text"
                         required
@@ -429,7 +425,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{lang === "tr" ? "E-Posta (Değiştirilemez)" : "Email Address (Read-Only)"}</label>
+                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{t("email_readonly", lang)}</label>
                       <input
                         type="email"
                         disabled
@@ -438,7 +434,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{lang === "tr" ? "Telefon Numarası" : "Phone Number"}</label>
+                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{t("phone_number_field", lang)}</label>
                       <input
                         type="tel"
                         value={phone}
@@ -453,11 +449,11 @@ export default function ProfilePage() {
                 {/* Section 2: Storefront Preferences */}
                 <div>
                   <h4 className="text-[10px] font-extrabold uppercase text-sonic-silver tracking-wider border-b border-cultured pb-2 mb-4 select-none">
-                    {lang === "tr" ? "2. Alışveriş Tercihleri" : "2. Storefront Preferences"}
+                    {t("shopping_preferences_header", lang)}
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{lang === "tr" ? "Varsayılan Dil" : "Default Display Language"}</label>
+                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{t("default_language_field", lang)}</label>
                       <select
                         value={preferredLang}
                         onChange={(e) => setPreferredLang(e.target.value)}
@@ -474,7 +470,7 @@ export default function ProfilePage() {
                       </select>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{lang === "tr" ? "Varsayılan Para Birimi" : "Default Display Currency"}</label>
+                      <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">{t("default_currency_field", lang)}</label>
                       <select
                         value={preferredCurrency}
                         onChange={(e) => setPreferredCurrency(e.target.value)}
@@ -492,13 +488,13 @@ export default function ProfilePage() {
                 {/* Section 3: Company and Address Information */}
                 <div>
                   <h4 className="text-[10px] font-extrabold uppercase text-sonic-silver tracking-wider border-b border-cultured pb-2 mb-4 select-none">
-                    {lang === "tr" ? "3. B2B Firma ve Fatura Detayları" : "3. B2B Company & Billing details"}
+                    {t("b2b_company_billing_header", lang)}
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider flex items-center gap-1.5">
                         <Clipboard className="w-3.5 h-3.5 text-salmon-pink" />
-                        {lang === "tr" ? "Vergi No / TCKN" : "Tax ID / National ID (TCKN)"}
+                        {t("tax_id_field", lang)}
                       </label>
                       <input
                         type="text"
@@ -511,7 +507,7 @@ export default function ProfilePage() {
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider flex items-center gap-1.5">
                         <Instagram className="w-3.5 h-3.5 text-salmon-pink" />
-                        {lang === "tr" ? "Instagram Hesabı" : "Instagram Username"}
+                        {t("instagram_username_field", lang)}
                       </label>
                       <input
                         type="text"
@@ -527,7 +523,7 @@ export default function ProfilePage() {
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider flex items-center gap-1.5 select-none">
                         <MapPin className="w-3.5 h-3.5 text-salmon-pink" />
-                        {lang === "tr" ? "Fatura Adresi" : "Billing Address"}
+                        {t("billing_address_field", lang)}
                       </label>
                       <textarea
                         value={billingAddress}
@@ -539,7 +535,7 @@ export default function ProfilePage() {
                     <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider flex items-center gap-1.5 select-none">
                         <MapPin className="w-3.5 h-3.5 text-salmon-pink" />
-                        {lang === "tr" ? "Teslimat Adresi" : "Delivery Address"}
+                        {t("delivery_address_field", lang)}
                       </label>
                       <textarea
                         value={deliveryAddress}
@@ -560,7 +556,7 @@ export default function ProfilePage() {
                   {savingProfile ? (
                     <div className="spinner animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
                   ) : (
-                    lang === "tr" ? "Değişiklikleri Kaydet" : "Save Preferences"
+                    t("save_changes_btn", lang)
                   )}
                 </button>
 

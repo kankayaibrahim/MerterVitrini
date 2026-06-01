@@ -27,16 +27,6 @@ const findCategory = (tree: Category[], target: string): Category | null => {
   return null;
 };
 
-const shareTranslations: Record<string, { share: string, copied: string }> = {
-  tr: { share: "Ürünü Paylaş", copied: "Bağlantı Kopyalandı!" },
-  en: { share: "Share Product", copied: "Link Copied!" },
-  ru: { share: "Поделиться товаром", copied: "Ссылка скопирована!" },
-  ar: { share: "مشاركة المنتج", copied: "تم نسخ الرابط!" },
-  pl: { share: "Udostępnij produkt", copied: "Link skopiowany!" },
-  bg: { share: "Сподели продукта", copied: "Връзката е копирана!" },
-  de: { share: "Produkt teilen", copied: "Link kopiert!" },
-  fr: { share: "Partager le produit", copied: "Lien copié!" }
-};
 
 const EXCLUDED_ATTR_NAMES = new Set([
   // Turkish
@@ -405,7 +395,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
 
       if (!response.ok) {
         const errData = await response.json();
-        alert(`Error: ${errData.error || "Failed to submit inquiry"}`);
+        alert(`Error: ${errData.error || t("failed_submit_inquiry", lang)}`);
         setSubmittingInquiry(false);
         return;
       }
@@ -423,7 +413,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
       setShowSuccessOverlay(true);
     } catch (err) {
       console.error("Failed to submit B2B inquiry", err);
-      alert("Connection error! Failed to register your quote request.");
+      alert(t("connection_error_inquiry", lang));
     } finally {
       setSubmittingInquiry(false);
     }
@@ -439,7 +429,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     "sku": product.custom_sku || product.source_product_id,
     "brand": {
       "@type": "Brand",
-      "name": product.brand_name || "Merter Manufacturer"
+      "name": product.brand_name || t("merter_manufacturer", lang)
     },
     "offers": {
       "@type": "Offer",
@@ -549,7 +539,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
             <div className="flex flex-col gap-6">
               <div>
                 <span className="text-[11px] uppercase font-extrabold tracking-[0.5px] text-salmon-pink">
-                  {product.brand_name || "Merter Manufacturer"}
+                  {product.brand_name || t("merter_manufacturer", lang)}
                 </span>
                 <h1 className="font-sans font-extrabold text-2xl md:text-3xl text-eerie-black leading-snug mt-1">
                   {title}
@@ -603,7 +593,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                 <div className="border border-cultured rounded-[5px] p-3 bg-white flex flex-col gap-0.5 shadow-sm">
                   <span className="text-[9px] uppercase font-extrabold text-sonic-silver tracking-[0.5px]">{t("min_order_qty", lang)}</span>
                   <span className="font-bold text-eerie-black truncate">
-                    {product.minimum_order_quantity} {lang === "tr" ? "Adet" : t("piece", lang)}
+                    {product.minimum_order_quantity} {t("piece", lang)}
                   </span>
                 </div>
                 
@@ -685,7 +675,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                         return (
                           <div key={idx} className="border border-cultured bg-[#fafafa] rounded-[5px] px-3 py-2 flex items-center justify-between text-[11px] font-bold shadow-inner">
                             <span className="text-sonic-silver">{sz}</span>
-                            <span className="text-salmon-pink">{count} {lang === "tr" ? "Adet" : t("piece", lang)}</span>
+                            <span className="text-salmon-pink">{count} {t("piece", lang)}</span>
                           </div>
                         );
                       })}
@@ -759,7 +749,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
               {/* B2B Product Social Share Section */}
               <div className="border-t border-cultured pt-5 flex flex-col gap-3 mt-2">
                 <span className="text-[11px] uppercase font-extrabold text-eerie-black tracking-[0.5px] block select-none">
-                  {shareTranslations[lang]?.share || "Share Product"}
+                  {t("share_product", lang)}
                 </span>
                 
                 <div className="flex items-center gap-3">
@@ -812,7 +802,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                       }
                     }}
                     className="w-10 h-10 rounded-full bg-purple-50 hover:bg-purple-100 border border-purple-100 flex items-center justify-center text-purple-600 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm border-none"
-                    title="Copy Link"
+                    title={t("copy_link", lang)}
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
@@ -820,7 +810,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                   {/* Toast Notification */}
                   {showToast && (
                     <span className="text-[10px] font-extrabold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-[5px] border border-purple-100 animate-fade-in select-none">
-                      {shareTranslations[lang]?.copied || "Link Copied!"}
+                      {t("link_copied", lang)}
                     </span>
                   )}
                 </div>

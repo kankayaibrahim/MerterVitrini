@@ -105,7 +105,7 @@ export default function PagesClient({
             className="flex items-center gap-1 text-[11px] font-extrabold uppercase tracking-[1px] text-zinc-400 hover:text-salmon-pink transition-colors border-none bg-transparent cursor-pointer"
           >
             <ArrowLeft size={12} />
-            {t("details_back_to_catalog", lang) || "Kataloğa Dön"}
+            {t("details_back_to_catalog", lang)}
           </button>
         </div>
 
@@ -123,7 +123,7 @@ export default function PagesClient({
               
               <div className="flex items-center gap-2 text-xs font-semibold text-sonic-silver">
                 <FileText size={14} className="text-salmon-pink" />
-                <span>Statik Bilgilendirme Sayfası</span>
+                <span>{t("static_info_page", lang)}</span>
                 <span>•</span>
                 <Globe size={14} className="text-violet-500" />
                 <span className="uppercase">{lang}</span>
@@ -140,16 +140,16 @@ export default function PagesClient({
           <div className="bg-white border border-cultured rounded-[20px] shadow-sm p-12 text-center flex flex-col items-center gap-4 max-w-lg mx-auto">
             <HelpCircle size={48} className="text-zinc-300 animate-bounce" />
             <h2 className="font-sans font-extrabold text-lg text-eerie-black">
-              Sayfa Bulunamadı
+              {t("page_not_found", lang)}
             </h2>
             <p className="text-xs text-sonic-silver font-semibold leading-relaxed">
-              Aradığınız dinamik sayfa sistemde bulunamadı veya henüz aktif edilmemiş olabilir.
+              {t("page_not_found_desc", lang)}
             </p>
             <button
               onClick={handleBackToShop}
               className="mt-2 px-6 py-2.5 bg-salmon-pink hover:bg-eerie-black text-white text-[10px] font-extrabold uppercase rounded-[5px] tracking-[1px] cursor-pointer transition-all active:scale-95"
             >
-              Mağazaya Geri Dön
+              {t("back_to_shop", lang)}
             </button>
           </div>
         )}

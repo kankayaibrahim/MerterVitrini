@@ -3,6 +3,7 @@ import { Metadata } from "next";
 import { apiFetch } from "@/app/utils";
 import { Category } from "@/types/store";
 import PagesClient from "./PagesClient";
+import { t as translate } from "@/app/i18n";
 
 interface PageProps {
   params: Promise<{
@@ -135,8 +136,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   
   if (!page) {
     return {
-      title: "Sayfa Bulunamadı | Merter Vitrini Toptan B2B",
-      description: "Aradığınız sayfa bulunamadı veya deaktif edilmiş.",
+      title: translate("seo_page_not_found", lang),
+      description: translate("seo_page_not_found_desc", lang),
     };
   }
 
@@ -144,7 +145,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const t = page.translations[lang] || page.translations["tr"] || page.translations["en"] || Object.values(page.translations)[0];
   
   const title = t?.meta_title || t?.title || "Merter Vitrini";
-  const desc = t?.meta_description || "Merter Vitrini toptan B2B hazır giyim dijital showroomu.";
+  const desc = t?.meta_description || translate("seo_fallback_desc", lang);
   
   const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/pages/${slug}/`;
   

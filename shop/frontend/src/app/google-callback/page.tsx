@@ -7,6 +7,7 @@ import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import { Category, CartItem } from "@/types/store";
 import { apiFetch } from "@/app/utils";
+import { t } from "@/app/i18n";
 
 function GoogleCallbackHandler() {
   const router = useRouter();
@@ -46,7 +47,7 @@ function GoogleCallbackHandler() {
     const code = searchParams.get("code");
     
     if (!code) {
-      setError("Doğrulama kodu (code) bulunamadı. Lütfen tekrar giriş yapmayı deneyin.");
+      setError(t("google_code_missing", lang));
       return;
     }
 
@@ -65,7 +66,7 @@ function GoogleCallbackHandler() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.error || "Google yetkilendirme kod doğrulaması başarısız oldu.");
+          throw new Error(data.error || t("google_auth_failed", lang));
         }
 
         // Save token & user to localStorage
@@ -83,12 +84,12 @@ function GoogleCallbackHandler() {
         }, 1500);
 
       } catch (err: any) {
-        setError(err.message || "Google ile oturum açılırken beklenmedik bir hata oluştu.");
+        setError(err.message || t("google_unexpected_error", lang));
       }
     };
 
     exchangeCode();
-  }, [searchParams, router]);
+  }, [searchParams, router, lang]);
 
   const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
 
@@ -118,12 +119,10 @@ function GoogleCallbackHandler() {
                 <Loader2 className="w-12 h-12 text-salmon-pink animate-spin" />
               </div>
               <h2 className="text-lg font-extrabold text-eerie-black mt-2">
-                {lang === "tr" ? "Google ile Oturum Açılıyor..." : "Signing in with Google..."}
+                {t("google_signing_in", lang)}
               </h2>
               <p className="text-xs font-semibold text-sonic-silver max-w-xs leading-relaxed">
-                {lang === "tr" 
-                  ? "Kimliğiniz doğrulanıyor ve B2B hesabınız senkronize ediliyor. Lütfen bekleyin."
-                  : "Verifying your identity and synchronizing your B2B account. Please wait."}
+                {t("google_signing_in_desc", lang)}
               </p>
             </div>
           )}
@@ -132,12 +131,10 @@ function GoogleCallbackHandler() {
             <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
               <CheckCircle2 className="w-16 h-16 text-emerald-500 animate-bounce" />
               <h2 className="text-lg font-extrabold text-eerie-black mt-2">
-                {lang === "tr" ? "Giriş Başarılı!" : "Sign In Successful!"}
+                {t("login_success", lang)}
               </h2>
               <p className="text-xs font-semibold text-emerald-600 max-w-xs leading-relaxed">
-                {lang === "tr" 
-                  ? "Profilinize yönlendiriliyorsunuz. Keyifli alışverişler dileriz."
-                  : "You are being redirected to your profile. Have a nice shopping."}
+                {t("redirecting_to_profile", lang)}
               </p>
             </div>
           )}
@@ -146,7 +143,7 @@ function GoogleCallbackHandler() {
             <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
               <AlertCircle className="w-16 h-16 text-red-500 animate-shake" />
               <h2 className="text-lg font-extrabold text-eerie-black mt-2">
-                {lang === "tr" ? "Giriş Başarısız" : "Sign In Failed"}
+                {t("login_failed", lang)}
               </h2>
               <p className="text-xs font-semibold text-red-600 max-w-xs leading-relaxed">
                 {error}
@@ -159,7 +156,7 @@ function GoogleCallbackHandler() {
                 className="w-full py-3 bg-eerie-black hover:bg-salmon-pink text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-md flex items-center justify-center gap-2 no-underline"
               >
                 <Home className="w-4 h-4" />
-                <span>{lang === "tr" ? "Ana Sayfaya Dön" : "Back to Homepage"}</span>
+                <span>{t("back_to_homepage", lang)}</span>
               </a>
             </div>
           )}
