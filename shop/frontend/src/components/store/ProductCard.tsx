@@ -266,11 +266,12 @@ export default function ProductCard({
               })
             );
           }}
-          className="mt-3 w-full bg-salmon-pink hover:bg-eerie-black text-white text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-[8px] transition-all duration-300 flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm select-none border-none cursor-pointer"
+          className="mt-3 w-full bg-salmon-pink hover:bg-eerie-black text-white text-[10px] sm:text-[11px] font-extrabold uppercase py-1.5 sm:py-2.5 px-2 sm:px-4 rounded-[8px] transition-all duration-300 flex items-center justify-center gap-1 sm:gap-2 active:scale-[0.98] shadow-sm select-none border-none cursor-pointer whitespace-nowrap"
         >
-          <ShoppingBag className="w-3.5 h-3.5" />
+          <ShoppingBag className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
           <span>{btnText}</span>
         </button>
+
       </div>
     </div>
   );
