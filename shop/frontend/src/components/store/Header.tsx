@@ -145,11 +145,21 @@ export default function Header({
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("store_user_token");
-    localStorage.removeItem("store_user_info");
-    setIsUserMenuOpen(false);
-    window.dispatchEvent(new Event("auth-change"));
-    router.push("/");
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("store_user_token");
+      localStorage.removeItem("store_user_info");
+      setIsUserMenuOpen(false);
+      window.dispatchEvent(new Event("auth-change"));
+      
+      const origin = window.location.origin;
+      const keycloakUrl = "https://auth.mertervitrini.com.tr";
+      const realm = "merter";
+      const clientId = "admin-client";
+      
+      window.location.href = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout` +
+        `?client_id=${encodeURIComponent(clientId)}` +
+        `&post_logout_redirect_uri=${encodeURIComponent(origin)}`;
+    }
   };
 
   useEffect(() => {

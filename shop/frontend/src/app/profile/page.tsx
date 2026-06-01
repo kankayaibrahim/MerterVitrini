@@ -812,8 +812,16 @@ export default function ProfilePage() {
       localStorage.removeItem("store_user_token");
       localStorage.removeItem("store_user_info");
       window.dispatchEvent(new Event("auth-change"));
+      
+      const origin = window.location.origin;
+      const keycloakUrl = "https://auth.mertervitrini.com.tr";
+      const realm = "merter";
+      const clientId = "admin-client";
+      
+      window.location.href = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout` +
+        `?client_id=${encodeURIComponent(clientId)}` +
+        `&post_logout_redirect_uri=${encodeURIComponent(origin)}`;
     }
-    router.push("/");
   };
 
   const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
