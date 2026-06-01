@@ -914,7 +914,7 @@ func (h *AuthHandler) ListAddresses(w http.ResponseWriter, r *http.Request) {
 		SELECT a.id, a.user_id, a.title, a.address_type, a.first_name, a.last_name, 
 		       a.company_name, a.phone, a.country_id, a.state_id, a.address_line, 
 		       a.tax_no_tckn, a.tax_office, a.is_default, a.created_at, a.updated_at,
-		       coalesce(c.localized_names->>'tr', c.code) as country_name,
+		       coalesce(c.localized_names->>'tr_TR', c.localized_names->>'en_US', c.code) as country_name,
 		       coalesce(s.state_name, '') as state_name
 		FROM identity.user_addresses a
 		JOIN catalog.countries c ON a.country_id = c.id
@@ -1347,8 +1347,8 @@ func (h *AuthHandler) ListCountries(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := db.Pool.Query(ctx, `
 		SELECT id, code, phone_code,
-		       coalesce(localized_names->>'tr', code) as name_tr,
-		       coalesce(localized_names->>'en', code) as name_en
+		       coalesce(localized_names->>'tr_TR', localized_names->>'en_US', code) as name_tr,
+		       coalesce(localized_names->>'en_US', localized_names->>'tr_TR', code) as name_en
 		FROM catalog.countries
 		ORDER BY name_tr ASC
 	`)
