@@ -68,9 +68,12 @@ export default function StorefrontLayout({
   };
 
   const getLocalizedSliderBanner = (type: "opportunities" | "app_promo") => {
-    if (type === "opportunities") return "/banners/hero_new_opportunities.png";
+    if (type === "opportunities") {
+      return "/banners/hero_new_opportunities.png";
+    }
     return "/banners/hero_app_promo.png";
   };
+
 
   const handleCollectionImageError = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
