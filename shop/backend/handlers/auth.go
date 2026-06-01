@@ -853,3 +853,573 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UserAddress maps the relational model in identity.user_addresses joined with country and state lookups
+type UserAddress struct {
+	ID           string    `json:"id"`
+	UserID       string    `json:"user_id"`
+	Title        string    `json:"title"`
+	AddressType  string    `json:"address_type"` // 'billing' or 'shipping'
+	FirstName    string    `json:"first_name"`
+	LastName     string    `json:"last_name"`
+	CompanyName  *string   `json:"company_name"` // nullable
+	Phone        string    `json:"phone"`
+	CountryID    string    `json:"country_id"`
+	StateID      *string   `json:"state_id"`     // nullable
+	AddressLine  string    `json:"address_line"`
+	TaxNoTCKN    *string   `json:"tax_no_tckn"`  // nullable
+	TaxOffice    *string   `json:"tax_office"`   // nullable
+	IsDefault    bool      `json:"is_default"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+
+	// Joined fields for display
+	CountryName  string    `json:"country_name,omitempty"`
+	StateName    string    `json:"state_name,omitempty"`
+}
+
+type CountryLookup struct {
+	ID        string `json:"id"`
+	Code      string `json:"code"`
+	PhoneCode int    `json:"phone_code"`
+	NameTR    string `json:"name_tr"`
+	NameEN    string `json:"name_en"`
+}
+
+type StateLookup struct {
+	ID        string `json:"id"`
+	CountryID string `json:"country_id"`
+	Code      string `json:"code"`
+	StateName string `json:"state_name"`
+}
+
+// ListAddresses lists all shipping and billing addresses for the current authenticated user
+func (h *AuthHandler) ListAddresses(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, err := verifyTokenAndGetUserID(r.Header.Get("Authorization"))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Geçersiz veya oturum süresi dolmuş token"}`))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT a.id, a.user_id, a.title, a.address_type, a.first_name, a.last_name, 
+		       a.company_name, a.phone, a.country_id, a.state_id, a.address_line, 
+		       a.tax_no_tckn, a.tax_office, a.is_default, a.created_at, a.updated_at,
+		       coalesce(c.localized_names->>'tr', c.code) as country_name,
+		       coalesce(s.state_name, '') as state_name
+		FROM identity.user_addresses a
+		JOIN catalog.countries c ON a.country_id = c.id
+		LEFT JOIN catalog.country_states s ON a.state_id = s.id
+		WHERE a.user_id = $1
+		ORDER BY a.is_default DESC, a.created_at DESC
+	`, userID)
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to list addresses for user %s: %v", userID, err)
+		http.Error(w, `{"error":"Adresler listelenirken bir hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	addresses := []UserAddress{}
+	for rows.Next() {
+		var addr UserAddress
+		var company, taxNo, taxOff, stateID, stateName sql.NullString
+		err := rows.Scan(
+			&addr.ID, &addr.UserID, &addr.Title, &addr.AddressType, &addr.FirstName, &addr.LastName,
+			&company, &addr.Phone, &addr.CountryID, &stateID, &addr.AddressLine,
+			&taxNo, &taxOff, &addr.IsDefault, &addr.CreatedAt, &addr.UpdatedAt,
+			&addr.CountryName, &stateName,
+		)
+		if err != nil {
+			log.Printf("[ADDRESS ERROR] Scan error: %v", err)
+			http.Error(w, `{"error":"Adres bilgileri okunurken hata oluştu"}`, http.StatusInternalServerError)
+			return
+		}
+		if company.Valid {
+			addr.CompanyName = &company.String
+		}
+		if taxNo.Valid {
+			addr.TaxNoTCKN = &taxNo.String
+		}
+		if taxOff.Valid {
+			addr.TaxOffice = &taxOff.String
+		}
+		if stateID.Valid {
+			addr.StateID = &stateID.String
+		}
+		addr.StateName = stateName.String
+		addresses = append(addresses, addr)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(addresses)
+}
+
+// CreateAddress creates a new shipping or billing address
+func (h *AuthHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, err := verifyTokenAndGetUserID(r.Header.Get("Authorization"))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Geçersiz veya oturum süresi dolmuş token"}`))
+		return
+	}
+
+	var req struct {
+		Title       string  `json:"title"`
+		AddressType string  `json:"address_type"` // 'billing' or 'shipping'
+		FirstName   string  `json:"first_name"`
+		LastName    string  `json:"last_name"`
+		CompanyName *string `json:"company_name"`
+		Phone       string  `json:"phone"`
+		CountryID   string  `json:"country_id"`
+		StateID     *string `json:"state_id"`
+		AddressLine string  `json:"address_line"`
+		TaxNoTCKN   *string `json:"tax_no_tckn"`
+		TaxOffice   *string `json:"tax_office"`
+		IsDefault   bool    `json:"is_default"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Geçersiz istek gövdesi"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Validation
+	req.Title = strings.TrimSpace(req.Title)
+	req.AddressType = strings.TrimSpace(req.AddressType)
+	req.FirstName = strings.TrimSpace(req.FirstName)
+	req.LastName = strings.TrimSpace(req.LastName)
+	req.Phone = strings.TrimSpace(req.Phone)
+	req.AddressLine = strings.TrimSpace(req.AddressLine)
+
+	if req.Title == "" || req.AddressType == "" || req.FirstName == "" || req.LastName == "" || req.Phone == "" || req.CountryID == "" || req.AddressLine == "" {
+		http.Error(w, `{"error":"Lütfen tüm zorunlu alanları doldurun"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.AddressType != "billing" && req.AddressType != "shipping" {
+		http.Error(w, `{"error":"Geçersiz adres tipi"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.AddressLine) > 500 {
+		http.Error(w, `{"error":"Adres satırı en fazla 500 karakter olabilir"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	// Transaction to update defaults & insert
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to begin transaction: %v", err)
+		http.Error(w, `{"error":"İşlem başlatılamadı"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	// If is_default is true, set all other addresses of this type for this user to false
+	if req.IsDefault {
+		_, err = tx.Exec(ctx, `
+			UPDATE identity.user_addresses 
+			SET is_default = false 
+			WHERE user_id = $1 AND address_type = $2
+		`, userID, req.AddressType)
+		if err != nil {
+			log.Printf("[ADDRESS ERROR] Failed to clear defaults: %v", err)
+			http.Error(w, `{"error":"Varsayılan adres güncellenirken hata oluştu"}`, http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// If there are no other addresses of this type, force this one to be default
+		var count int
+		err = tx.QueryRow(ctx, `
+			SELECT count(*) FROM identity.user_addresses 
+			WHERE user_id = $1 AND address_type = $2
+		`, userID, req.AddressType).Scan(&count)
+		if err == nil && count == 0 {
+			req.IsDefault = true
+		}
+	}
+
+	var newID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO identity.user_addresses (
+			user_id, title, address_type, first_name, last_name, company_name, 
+			phone, country_id, state_id, address_line, tax_no_tckn, tax_office, is_default
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		RETURNING id
+	`, userID, req.Title, req.AddressType, req.FirstName, req.LastName, req.CompanyName,
+		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault).Scan(&newID)
+
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to insert address: %v", err)
+		http.Error(w, `{"error":"Adres kaydedilirken bir hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to commit transaction: %v", err)
+		http.Error(w, `{"error":"İşlem tamamlanamadı"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"id":      newID,
+		"message": "Adres başarıyla oluşturuldu.",
+	})
+}
+
+// UpdateAddress updates an existing address
+func (h *AuthHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, `{"error":"Adres ID gereklidir"}`, http.StatusBadRequest)
+		return
+	}
+
+	userID, err := verifyTokenAndGetUserID(r.Header.Get("Authorization"))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Geçersiz veya oturum süresi dolmuş token"}`))
+		return
+	}
+
+	var req struct {
+		Title       string  `json:"title"`
+		AddressType string  `json:"address_type"` // 'billing' or 'shipping'
+		FirstName   string  `json:"first_name"`
+		LastName    string  `json:"last_name"`
+		CompanyName *string `json:"company_name"`
+		Phone       string  `json:"phone"`
+		CountryID   string  `json:"country_id"`
+		StateID     *string `json:"state_id"`
+		AddressLine string  `json:"address_line"`
+		TaxNoTCKN   *string `json:"tax_no_tckn"`
+		TaxOffice   *string `json:"tax_office"`
+		IsDefault   bool    `json:"is_default"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Geçersiz istek gövdesi"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Validation
+	req.Title = strings.TrimSpace(req.Title)
+	req.AddressType = strings.TrimSpace(req.AddressType)
+	req.FirstName = strings.TrimSpace(req.FirstName)
+	req.LastName = strings.TrimSpace(req.LastName)
+	req.Phone = strings.TrimSpace(req.Phone)
+	req.AddressLine = strings.TrimSpace(req.AddressLine)
+
+	if req.Title == "" || req.AddressType == "" || req.FirstName == "" || req.LastName == "" || req.Phone == "" || req.CountryID == "" || req.AddressLine == "" {
+		http.Error(w, `{"error":"Lütfen tüm zorunlu alanları doldurun"}`, http.StatusBadRequest)
+		return
+	}
+
+	if req.AddressType != "billing" && req.AddressType != "shipping" {
+		http.Error(w, `{"error":"Geçersiz adres tipi"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.AddressLine) > 500 {
+		http.Error(w, `{"error":"Adres satırı en fazla 500 karakter olabilir"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	// Verify that the address belongs to this user
+	var exists bool
+	err = db.Pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM identity.user_addresses WHERE id = $1 AND user_id = $2)
+	`, id, userID).Scan(&exists)
+	if err != nil || !exists {
+		http.Error(w, `{"error":"Adres bulunamadı veya yetkiniz yok"}`, http.StatusNotFound)
+		return
+	}
+
+	// Transaction to update defaults & update address
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to begin transaction: %v", err)
+		http.Error(w, `{"error":"İşlem başlatılamadı"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	// If is_default is true, set all other addresses of this type for this user to false
+	if req.IsDefault {
+		_, err = tx.Exec(ctx, `
+			UPDATE identity.user_addresses 
+			SET is_default = false 
+			WHERE user_id = $1 AND address_type = $2 AND id != $3
+		`, userID, req.AddressType, id)
+		if err != nil {
+			log.Printf("[ADDRESS ERROR] Failed to clear defaults: %v", err)
+			http.Error(w, `{"error":"Varsayılan adres güncellenirken hata oluştu"}`, http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// If this address was default, and we are setting it to false, check if it is the only one.
+		// If it's the only one, force it to stay default. If not, we might need to set another one as default.
+		var wasDefault bool
+		err = tx.QueryRow(ctx, `
+			SELECT is_default FROM identity.user_addresses WHERE id = $1
+		`, id).Scan(&wasDefault)
+		if err == nil && wasDefault {
+			// Force it to remain default if there are no other addresses of this type
+			var otherCount int
+			err = tx.QueryRow(ctx, `
+				SELECT count(*) FROM identity.user_addresses 
+				WHERE user_id = $1 AND address_type = $2 AND id != $3
+			`, userID, req.AddressType, id).Scan(&otherCount)
+			if err == nil && otherCount == 0 {
+				req.IsDefault = true
+			}
+		}
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE identity.user_addresses SET
+			title = $1,
+			address_type = $2,
+			first_name = $3,
+			last_name = $4,
+			company_name = $5,
+			phone = $6,
+			country_id = $7,
+			state_id = $8,
+			address_line = $9,
+			tax_no_tckn = $10,
+			tax_office = $11,
+			is_default = $12,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = $13 AND user_id = $14
+	`, req.Title, req.AddressType, req.FirstName, req.LastName, req.CompanyName,
+		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault, id, userID)
+
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to update address: %v", err)
+		http.Error(w, `{"error":"Adres güncellenirken bir hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to commit transaction: %v", err)
+		http.Error(w, `{"error":"İşlem tamamlanamadı"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"message": "Adres başarıyla güncellendi.",
+	})
+}
+
+// DeleteAddress deletes an address of the authenticated user
+func (h *AuthHandler) DeleteAddress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, `{"error":"Adres ID gereklidir"}`, http.StatusBadRequest)
+		return
+	}
+
+	userID, err := verifyTokenAndGetUserID(r.Header.Get("Authorization"))
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"Geçersiz veya oturum süresi dolmuş token"}`))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	// Check if this address exists and get its default status & type
+	var isDefault bool
+	var addrType string
+	err = db.Pool.QueryRow(ctx, `
+		SELECT is_default, address_type FROM identity.user_addresses 
+		WHERE id = $1 AND user_id = $2
+	`, id, userID).Scan(&isDefault, &addrType)
+	if err != nil {
+		http.Error(w, `{"error":"Adres bulunamadı veya yetkiniz yok"}`, http.StatusNotFound)
+		return
+	}
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to begin transaction: %v", err)
+		http.Error(w, `{"error":"İşlem başlatılamadı"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	// Delete the address
+	_, err = tx.Exec(ctx, `
+		DELETE FROM identity.user_addresses WHERE id = $1 AND user_id = $2
+	`, id, userID)
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to delete address: %v", err)
+		http.Error(w, `{"error":"Adres silinirken hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// If the deleted address was the default, make the next most recent address of this type the default
+	if isDefault {
+		var nextID string
+		err = tx.QueryRow(ctx, `
+			SELECT id FROM identity.user_addresses 
+			WHERE user_id = $1 AND address_type = $2 
+			ORDER BY created_at DESC LIMIT 1
+		`, userID, addrType).Scan(&nextID)
+		if err == nil && nextID != "" {
+			_, err = tx.Exec(ctx, `
+				UPDATE identity.user_addresses SET is_default = true WHERE id = $1
+			`, nextID)
+			if err != nil {
+				log.Printf("[ADDRESS ERROR] Failed to set new default: %v", err)
+				http.Error(w, `{"error":"Yeni varsayılan adres atanırken hata oluştu"}`, http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Printf("[ADDRESS ERROR] Failed to commit transaction: %v", err)
+		http.Error(w, `{"error":"İşlem tamamlanamadı"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"message": "Adres başarıyla silindi.",
+	})
+}
+
+// ListCountries fetches all registered countries with localized names
+func (h *AuthHandler) ListCountries(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, code, phone_code,
+		       coalesce(localized_names->>'tr', code) as name_tr,
+		       coalesce(localized_names->>'en', code) as name_en
+		FROM catalog.countries
+		ORDER BY name_tr ASC
+	`)
+	if err != nil {
+		log.Printf("[LOCATION ERROR] Failed to query countries: %v", err)
+		http.Error(w, `{"error":"Ülke listesi alınırken hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	countries := []CountryLookup{}
+	for rows.Next() {
+		var c CountryLookup
+		var phoneCode sql.NullInt64
+		err := rows.Scan(&c.ID, &c.Code, &phoneCode, &c.NameTR, &c.NameEN)
+		if err != nil {
+			log.Printf("[LOCATION ERROR] Scan error: %v", err)
+			http.Error(w, `{"error":"Ülke bilgileri okunurken hata oluştu"}`, http.StatusInternalServerError)
+			return
+		}
+		c.PhoneCode = int(phoneCode.Int64)
+		countries = append(countries, c)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(countries)
+}
+
+// ListStatesByCountry fetches states / provinces for the given country
+func (h *AuthHandler) ListStatesByCountry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	countryID := r.PathValue("country_id")
+	if countryID == "" {
+		http.Error(w, `{"error":"Ülke ID gereklidir"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, country_id, code, state_name
+		FROM catalog.country_states
+		WHERE country_id = $1
+		ORDER BY state_name ASC
+	`, countryID)
+	if err != nil {
+		log.Printf("[LOCATION ERROR] Failed to query states: %v", err)
+		http.Error(w, `{"error":"İl listesi alınırken hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	states := []StateLookup{}
+	for rows.Next() {
+		var s StateLookup
+		err := rows.Scan(&s.ID, &s.CountryID, &s.Code, &s.StateName)
+		if err != nil {
+			log.Printf("[LOCATION ERROR] Scan error: %v", err)
+			http.Error(w, `{"error":"İl bilgileri okunurken hata oluştu"}`, http.StatusInternalServerError)
+			return
+		}
+		states = append(states, s)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(states)
+}
+
+

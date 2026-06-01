@@ -125,6 +125,17 @@ func main() {
 	mux.HandleFunc("GET /api/v1/store/profile", authHandler.GetProfile)
 	mux.HandleFunc("PUT /api/v1/store/profile", authHandler.UpdateProfile)
 
+	// Profile Address Book Management (Authenticated)
+	mux.HandleFunc("GET /api/v1/store/profile/addresses", authHandler.ListAddresses)
+	mux.HandleFunc("POST /api/v1/store/profile/addresses", authHandler.CreateAddress)
+	mux.HandleFunc("PUT /api/v1/store/profile/addresses/{id}", authHandler.UpdateAddress)
+	mux.HandleFunc("DELETE /api/v1/store/profile/addresses/{id}", authHandler.DeleteAddress)
+
+	// Location Lookups
+	mux.HandleFunc("GET /api/v1/store/locations/countries", authHandler.ListCountries)
+	mux.HandleFunc("GET /api/v1/store/locations/countries/{country_id}/states", authHandler.ListStatesByCountry)
+
+
 	// Catalog Storefront Endpoints (Public - v1)
 	mux.HandleFunc("GET /api/v1/store/products", catalogHandler.ListProducts)
 	mux.HandleFunc("GET /api/v1/store/products/{id}", catalogHandler.GetProductByID)
