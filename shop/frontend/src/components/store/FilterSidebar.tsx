@@ -147,14 +147,14 @@ export default function FilterSidebar({
         {hasActiveFilters && (
           <div className="flex items-center justify-between border-b border-cultured pb-4.5 mb-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
             <span className="text-[11px] font-extrabold text-onyx uppercase tracking-wider">
-              {lang === "tr" ? "Aktif Filtreler" : "Active Filters"}
+              {t("active_filters", lang)}
             </span>
             <button
               type="button"
               onClick={handleClearAllFilters}
               className="text-[10px] font-extrabold text-salmon-pink hover:text-eerie-black transition-colors duration-200 border-none bg-transparent cursor-pointer flex items-center gap-1 uppercase tracking-widest active:scale-95 transform select-none"
             >
-              ✕ {lang === "tr" ? "Temizle" : "Clear All"}
+              ✕ {t("clear_all", lang)}
             </button>
           </div>
         )}
@@ -251,7 +251,7 @@ export default function FilterSidebar({
                           onChange={() => handleSpecChange("gender", g)}
                         />
                         <span>
-                          {t(g === "Kadın" ? "women" : g === "Erkek" ? "men" : "unisex", lang)}
+                          {t(g, lang)}
                           {facets !== null && <span className="text-[10px] text-sonic-silver ml-1 font-bold">({count})</span>}
                         </span>
                       </label>
@@ -285,7 +285,7 @@ export default function FilterSidebar({
                           onChange={() => handleSpecChange("season", s)}
                         />
                         <span>
-                          {t(s === "Yazlık" ? "summer" : s === "Kışlık" ? "winter" : "midseason", lang)}
+                          {t(s, lang)}
                           {facets !== null && <span className="text-[10px] text-sonic-silver ml-1 font-bold">({count})</span>}
                         </span>
                       </label>

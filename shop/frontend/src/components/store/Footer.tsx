@@ -49,7 +49,7 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
           <div className="flex flex-col">
             <span className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
               <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-0.5 rounded text-sm font-black">
-                {lang === "ar" ? "للشركات" : "B2B"}
+                {t("b2b_tag", lang)}
               </span>
               {t("brand_title", lang)}
             </span>

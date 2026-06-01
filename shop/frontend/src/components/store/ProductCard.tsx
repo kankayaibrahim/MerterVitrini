@@ -223,11 +223,11 @@ export default function ProductCard({
             <span>{t("min_order_qty", lang)}: {product.minimum_order_quantity} {t("piece", lang)}</span>
           </div>
           {product.packing_ratio && (
-            <div className="mt-1 py-1.5 px-2.5 bg-zinc-50 border border-cultured rounded-[8px] flex items-center justify-between transition-colors duration-150 hover:bg-[#fff5f6] hover:border-salmon-pink/30 shadow-sm">
-              <span className="text-[9px] uppercase tracking-wider text-sonic-silver font-extrabold">
+            <div className="mt-1 py-1 px-2.5 bg-zinc-50/50 border border-cultured rounded-[6px] flex items-center justify-between transition-colors duration-150 hover:bg-[#fff5f6] hover:border-salmon-pink/20 shadow-sm">
+              <span className="text-[8px] uppercase tracking-wider text-sonic-silver font-bold">
                 {t("series_sizes", lang).replace(":", "").trim()}
               </span>
-              <span className="text-[12.5px] font-black text-eerie-black tracking-wide">
+              <span className="text-[10.5px] font-bold text-eerie-black tracking-wide">
                 {product.packing_ratio.toUpperCase() === "STANDART" ? (lang === "tr" ? "STANDART" : "STANDARD") : product.packing_ratio.split(",").join(" - ")}
               </span>
             </div>

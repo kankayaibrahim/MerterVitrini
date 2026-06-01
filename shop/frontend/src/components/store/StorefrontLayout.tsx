@@ -48,6 +48,7 @@ export default function StorefrontLayout({
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
   const [policyModalType, setPolicyModalType] = useState<"cancellation_and_return" | "terms_of_service" | "privacy_policy" | "">("");
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState<boolean>(false);
 
   // --- Multi-Currency States ---
   const [displayCurrency, setDisplayCurrency] = useState<string>("TRY");
@@ -67,37 +68,8 @@ export default function StorefrontLayout({
   };
 
   const getLocalizedSliderBanner = (type: "opportunities" | "app_promo") => {
-    let opportunities = "/banners/hero_new_opportunities.png";
-    let app_promo = "/banners/hero_app_promo.png";
-
-    switch (lang) {
-      case "en":
-        app_promo = "/banners/hero_app_en.png";
-        break;
-      case "ar":
-        app_promo = "/banners/hero_app_ar.png";
-        break;
-      case "ru":
-        app_promo = "/banners/hero_app_ru.png";
-        break;
-      case "pl":
-        app_promo = "/banners/hero_aplikacja_pl.png";
-        break;
-      case "bg":
-        app_promo = "/banners/hero_prilozhenie_bg.png";
-        break;
-      case "de":
-        app_promo = "/banners/hero_app_de.png";
-        break;
-      case "fr":
-        app_promo = "/banners/hero_app_fr.png";
-        break;
-      default:
-        break;
-    }
-
-    if (type === "opportunities") return opportunities;
-    return app_promo;
+    if (type === "opportunities") return "/banners/hero_new_opportunities.png";
+    return "/banners/hero_app_promo.png";
   };
 
   const handleCollectionImageError = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -513,7 +485,7 @@ export default function StorefrontLayout({
         setProducts([]);
         setTotalProductsCount(0);
         setFacets(null);
-        setFetchError("API sorgusu başarısız oldu. Sunucudaki Go backend veri tabanı bağlantısı kilitlenmiş ve zaman aşımına uğramış olabilir. Lütfen veri tabanı sızıntı düzeltmesini içeren güncellemeyi (Go API) sunucuya deploy edin.");
+        setFetchError("connection_error");
       }
       setLoadingProducts(false);
     };
@@ -663,40 +635,7 @@ export default function StorefrontLayout({
         });
       }
     }
-    
-    // B. Add single sales
-    if (singleQtys) {
-      Object.entries(singleQtys).forEach(([size, qty]) => {
-        if (qty <= 0) return;
-        
-        const singleTitle = `${getProductTitle(activeProduct, lang)} - Bed: ${size} (${lang === "tr" ? "Tekli" : "Single"})`;
-        const singleSku = `${sku}-${size}-SINGLE`;
-        
-        const duplicateIdx = updatedCart.findIndex(
-          item => item.product_id === activeProduct.id && item.color === selectedColor && item.custom_sku === singleSku
-        );
-        
-        if (duplicateIdx > -1) {
-          const item = updatedCart.at(duplicateIdx);
-          if (item) {
-            item.packages_qty += qty;
-          }
-        } else {
-          updatedCart.push({
-            product_id: activeProduct.id,
-            title: singleTitle,
-            custom_sku: singleSku,
-            color: selectedColor || activeProduct.color || "",
-            packages_qty: qty,
-            units_per_package: 1,
-            price_per_unit: unitPrice,
-            weight_per_unit: weightPerUnit,
-            image_url: coverImg,
-            currency: activeProduct.currency || "TRY",
-          });
-        }
-      });
-    }
+
     
     saveCart(updatedCart);
     setActiveProduct(null);
@@ -790,6 +729,14 @@ export default function StorefrontLayout({
     }
   };
 
+  const hasActiveFiltersCount =
+    activeBrandIds.length +
+    activeSpecs.gender.length +
+    activeSpecs.season.length +
+    (minPrice !== "" ? 1 : 0) +
+    (maxPrice !== "" ? 1 : 0) +
+    Object.values(activeAttributes).reduce((sum, values) => sum + (values ? values.length : 0), 0);
+
   const isCategorySelected = activeCategoryId !== "";
 
   return (
@@ -844,24 +791,26 @@ export default function StorefrontLayout({
             {/* Hero Banner Subcomponent */}
             <HeroBanner lang={lang} />
 
-            {/* Left Sidebar Filter Subcomponent */}
-            <FilterSidebar
-              lang={lang}
-              brands={brands}
-              activeBrandIds={activeBrandIds}
-              handleBrandChange={handleBrandChange}
-              activeSpecs={activeSpecs}
-              handleSpecChange={handleSpecChange}
-              attributes={attributes}
-              activeAttributes={activeAttributes}
-              handleAttributeChange={handleAttributeChange}
-              minPrice={minPrice}
-              maxPrice={maxPrice}
-              setMinPrice={setMinPrice}
-              setMaxPrice={setMaxPrice}
-              facets={facets}
-              handleClearAllFilters={handleClearAllFilters}
-            />
+            {/* Left Sidebar Filter Subcomponent (Desktop only) */}
+            <div className="hidden lg:block lg:col-span-1">
+              <FilterSidebar
+                lang={lang}
+                brands={brands}
+                activeBrandIds={activeBrandIds}
+                handleBrandChange={handleBrandChange}
+                activeSpecs={activeSpecs}
+                handleSpecChange={handleSpecChange}
+                attributes={attributes}
+                activeAttributes={activeAttributes}
+                handleAttributeChange={handleAttributeChange}
+                minPrice={minPrice}
+                maxPrice={maxPrice}
+                setMinPrice={setMinPrice}
+                setMaxPrice={setMaxPrice}
+                facets={facets}
+                handleClearAllFilters={handleClearAllFilters}
+              />
+            </div>
 
             {/* Right Product Listing Catalog */}
             <section className="lg:col-span-3 flex flex-col gap-6">
@@ -880,21 +829,58 @@ export default function StorefrontLayout({
                       const totalCount = activeCatObj.total_products || 0;
                       return (
                         <span className="text-[11px] font-semibold text-sonic-silver">
-                          {lang === "tr" ? "Aktif Ürün:" : "Active Products:"} <strong className="text-salmon-pink">{activeCount}</strong> • {lang === "tr" ? "Toplam Ürün:" : "Total Products:"} <strong className="text-eerie-black">{totalCount}</strong>
+                          {t("active_products_label", lang)} <strong className="text-salmon-pink">{activeCount}</strong> • {t("total_products_label", lang)} <strong className="text-eerie-black">{totalCount}</strong>
                         </span>
                       );
                     } else {
                       // Total count of all products in catalog
                       return (
                         <span className="text-[11px] font-semibold text-sonic-silver">
-                          {lang === "tr" ? "Katalogdaki Toplam Ürün:" : "Total Catalog Products:"} <strong className="text-salmon-pink">{totalProductsCount}</strong>
+                          {t("total_catalog_products_label", lang)} <strong className="text-salmon-pink">{totalProductsCount}</strong>
                         </span>
                       );
                     }
                   })()}
                 </div>
                 
-                <div className="flex items-center gap-2 select-none shrink-0">
+                {/* Mobile Filter & Sort Control Bar */}
+                <div className="flex lg:hidden items-center gap-3 w-full mt-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileFiltersOpen(true)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-white border border-cultured rounded-xl hover:bg-zinc-50 font-bold text-xs text-onyx shadow-sm transition-all cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-salmon-pink"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+                    <span>{t("Filter", lang)}</span>
+                    {hasActiveFiltersCount > 0 && (
+                      <span className="bg-salmon-pink text-white rounded-full w-4.5 h-4.5 flex items-center justify-center text-[9px] font-black leading-none shrink-0 shadow-sm animate-scale-in">
+                        {hasActiveFiltersCount}
+                      </span>
+                    )}
+                  </button>
+                  
+                  <div className="flex-1 select-none">
+                    <select 
+                      value={sortBy}
+                      onChange={(e) => {
+                        setSortBy(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full bg-white border border-cultured rounded-xl px-3 py-2.5 text-xs font-bold text-onyx focus:outline-none focus:border-salmon-pink cursor-pointer shadow-sm"
+                    >
+                      <option value="newest">{t("sort_newest", lang)}</option>
+                      <option value="price_asc">{t("sort_price_asc", lang)}</option>
+                      <option value="price_desc">{t("sort_price_desc", lang)}</option>
+                      <option value="name_asc">{t("sort_name_asc", lang)}</option>
+                      <option value="name_desc">{t("sort_name_desc", lang)}</option>
+                      <option value="sku_asc">{t("sort_sku_asc", lang)}</option>
+                      <option value="sku_desc">{t("sort_sku_desc", lang)}</option>
+                    </select>
+                  </div>
+                </div>
+                
+                {/* Desktop Filter & Sort Controls */}
+                <div className="hidden lg:flex items-center gap-2 select-none shrink-0">
                   {/* Page Size Selector */}
                   <span className="text-[10px] uppercase font-bold text-sonic-silver tracking-wider">{t("Show:", lang)}</span>
                   <select
@@ -922,10 +908,10 @@ export default function StorefrontLayout({
                     <option value="newest">{t("sort_newest", lang)}</option>
                     <option value="price_asc">{t("sort_price_asc", lang)}</option>
                     <option value="price_desc">{t("sort_price_desc", lang)}</option>
-                    <option value="name_asc">{lang === "tr" ? "Ürün Adı: A-Z" : "Product Name: A-Z"}</option>
-                    <option value="name_desc">{lang === "tr" ? "Ürün Adı: Z-A" : "Product Name: Z-A"}</option>
-                    <option value="sku_asc">{lang === "tr" ? "Ürün Kodu: A-Z" : "Product Code: A-Z"}</option>
-                    <option value="sku_desc">{lang === "tr" ? "Ürün Kodu: Z-A" : "Product Code: Z-A"}</option>
+                    <option value="name_asc">{t("sort_name_asc", lang)}</option>
+                    <option value="name_desc">{t("sort_name_desc", lang)}</option>
+                    <option value="sku_asc">{t("sort_sku_asc", lang)}</option>
+                    <option value="sku_desc">{t("sort_sku_desc", lang)}</option>
                   </select>
                 </div>
               </div>
@@ -934,9 +920,9 @@ export default function StorefrontLayout({
               {fetchError ? (
                 <div className="flex flex-col items-center justify-center py-10 px-6 text-center border-2 border-salmon-pink/20 bg-salmon-pink/5 rounded-[15px] p-8 select-none shadow-sm gap-3">
                   <span className="text-3xl">⚠️</span>
-                  <p className="text-sm font-bold text-salmon-pink uppercase tracking-wide">API Hata Raporu</p>
-                  <p className="text-xs font-semibold text-eerie-black/80 max-w-md leading-relaxed">{fetchError}</p>
-                  <p className="text-[10px] font-bold text-sonic-silver mt-1">Lütfen Go API düzeltmelerini sunucuya deploy edin ve tekrar deneyin.</p>
+                  <p className="text-sm font-bold text-salmon-pink uppercase tracking-wide">{t("connection_error_title", lang)}</p>
+                  <p className="text-xs font-semibold text-eerie-black/80 max-w-md leading-relaxed">{t("connection_error_desc", lang)}</p>
+                  <p className="text-[10px] font-bold text-sonic-silver mt-1">{t("connection_error_tip", lang)}</p>
                 </div>
               ) : loadingProducts ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -976,7 +962,7 @@ export default function StorefrontLayout({
                         setCurrentPage(1);
                         window.scrollTo({ top: 220, behavior: "smooth" });
                       }}
-                      title={lang === "tr" ? "İlk Sayfa" : "First Page"}
+                      title={t("First Page", lang)}
                       className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
                     >
                       <ChevronsLeft className="w-4 h-4" />
@@ -989,7 +975,7 @@ export default function StorefrontLayout({
                         setCurrentPage(prev => Math.max(prev - 1, 1));
                         window.scrollTo({ top: 220, behavior: "smooth" });
                       }}
-                      title={lang === "tr" ? "Önceki Sayfa" : "Previous Page"}
+                      title={t("Previous Page", lang)}
                       className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -1007,7 +993,7 @@ export default function StorefrontLayout({
                         setCurrentPage(prev => Math.min(prev + 1, totalPages));
                         window.scrollTo({ top: 220, behavior: "smooth" });
                       }}
-                      title={lang === "tr" ? "Sonraki Sayfa" : "Next Page"}
+                      title={t("Next Page", lang)}
                       className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -1020,7 +1006,7 @@ export default function StorefrontLayout({
                         setCurrentPage(totalPages);
                         window.scrollTo({ top: 220, behavior: "smooth" });
                       }}
-                      title={lang === "tr" ? "Son Sayfa" : "Last Page"}
+                      title={t("Last Page", lang)}
                       className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
                     >
                       <ChevronsRight className="w-4 h-4" />
@@ -1037,7 +1023,7 @@ export default function StorefrontLayout({
         <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
           
           {/* A. PREMIUM AUTO-SLIDING HERO CAROUSEL */}
-          <div className="relative rounded-[20px] overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9] min-h-[300px] xs:min-h-[320px] sm:min-h-[280px] bg-gradient-to-br from-[#fafafa] to-[#fff0f1] shadow-sm select-none mb-10 group">
+          <div className="w-full relative rounded-[20px] overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9] min-h-[220px] xs:min-h-[280px] sm:min-h-[280px] bg-gradient-to-br from-[#fafafa] to-[#fff0f1] shadow-sm select-none mb-10 group">
             {/* Slide 1: Opportunities Promo */}
             <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 0 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
               <img 
@@ -1350,14 +1336,80 @@ export default function StorefrontLayout({
             
             <div className="space-y-1 w-full">
               <h3 className="text-base font-extrabold text-white tracking-wide">
-                {lang === "tr" ? "Sepete Eklendi!" : centerFlash.addedText}
+                {t("Added to Cart!", lang)}
               </h3>
               <p className="text-xs font-semibold text-slate-300 line-clamp-2 max-w-[280px] mx-auto leading-normal">
                 {centerFlash.productTitle}
               </p>
               <p className="text-[11px] font-extrabold text-emerald-400 mt-2 bg-emerald-500/10 px-3 py-1 rounded-full w-fit mx-auto border border-emerald-500/20 shadow-sm">
-                {centerFlash.quantity} {lang === "tr" ? "Seri" : "Pack"} ({centerFlash.quantity * centerFlash.unitsPerPkg} {lang === "tr" ? "Adet" : "Pcs"})
+                {centerFlash.quantity} {t("package", lang)} ({centerFlash.quantity * centerFlash.unitsPerPkg} {t("piece", lang)})
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Slide-Over Filter Drawer */}
+      {isMobileFiltersOpen && (
+        <div className="fixed inset-0 z-[9999] flex justify-end lg:hidden select-none">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" 
+            onClick={() => setIsMobileFiltersOpen(false)}
+          />
+          {/* Drawer Panel */}
+          <div className="relative w-full max-w-[320px] bg-white h-full shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-300">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4.5 border-b border-cultured shrink-0">
+              <span className="font-extrabold text-sm uppercase text-eerie-black tracking-wide">
+                {t("Filter Options", lang)}
+              </span>
+              <button 
+                onClick={() => setIsMobileFiltersOpen(false)}
+                className="p-1 hover:text-salmon-pink transition-colors border-none bg-transparent cursor-pointer font-black text-lg"
+              >
+                ✕
+              </button>
+            </div>
+            {/* Scrollable Filters */}
+            <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4">
+              <FilterSidebar
+                lang={lang}
+                brands={brands}
+                activeBrandIds={activeBrandIds}
+                handleBrandChange={handleBrandChange}
+                activeSpecs={activeSpecs}
+                handleSpecChange={handleSpecChange}
+                attributes={attributes}
+                activeAttributes={activeAttributes}
+                handleAttributeChange={handleAttributeChange}
+                minPrice={minPrice}
+                maxPrice={maxPrice}
+                setMinPrice={setMinPrice}
+                setMaxPrice={setMaxPrice}
+                facets={facets}
+                handleClearAllFilters={handleClearAllFilters}
+              />
+            </div>
+            {/* Sticky Footer */}
+            <div className="p-4 border-t border-cultured shrink-0 bg-zinc-50 flex gap-2">
+              {hasActiveFiltersCount > 0 && (
+                <button
+                  onClick={() => {
+                    handleClearAllFilters();
+                    setIsMobileFiltersOpen(false);
+                  }}
+                  className="flex-1 py-3 border border-zinc-200 hover:bg-zinc-100 text-onyx text-xs font-bold uppercase rounded-xl transition-all cursor-pointer text-center bg-white"
+                >
+                  {t("Clear", lang)}
+                </button>
+              )}
+              <button
+                onClick={() => setIsMobileFiltersOpen(false)}
+                className="flex-2 py-3 bg-salmon-pink hover:bg-eerie-black text-white text-xs font-extrabold uppercase rounded-xl transition-all cursor-pointer text-center border-none shadow-md flex-1"
+              >
+                {t("Apply", lang)}
+              </button>
             </div>
           </div>
         </div>

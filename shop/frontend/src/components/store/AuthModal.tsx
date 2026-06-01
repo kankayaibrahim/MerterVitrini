@@ -130,14 +130,14 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.");
+        throw new Error(data.error || t("login_failed_credentials", lang));
       }
 
       // Save to localStorage
       localStorage.setItem("store_user_token", data.token);
       localStorage.setItem("store_user_info", JSON.stringify(data.user));
 
-      setSuccess("Başarıyla giriş yapıldı! Yönlendiriliyorsunuz...");
+      setSuccess(t("login_success_redirecting", lang));
       
       // Dispatch custom event to let other components know
       window.dispatchEvent(new Event("auth-change"));
@@ -157,7 +157,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
     setError(null);
 
     if (password !== confirmPassword) {
-      setError("Şifreler uyuşmuyor.");
+      setError(t("passwords_dont_match", lang));
       return;
     }
 
@@ -183,17 +183,17 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Kayıt işlemi gerçekleştirilemedi.");
+        throw new Error(data.error || t("register_failed", lang));
       }
 
       // Save user if auto-logged in
       if (data.token && data.user) {
         localStorage.setItem("store_user_token", data.token);
         localStorage.setItem("store_user_info", JSON.stringify(data.user));
-        setSuccess("Kayıt başarıyla oluşturuldu ve giriş yapıldı!");
+        setSuccess(t("register_success_autologin", lang));
         window.dispatchEvent(new Event("auth-change"));
       } else {
-        setSuccess("Kayıt başarıyla oluşturuldu! Şimdi giriş yapabilirsiniz.");
+        setSuccess(t("register_success_login_now", lang));
         setMode("login");
       }
 
@@ -233,7 +233,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
                   : "text-sonic-silver hover:text-eerie-black"
               }`}
             >
-              {t("login_title", lang) || "Giriş Yap"}
+              {t("login_title", lang)}
             </button>
             <button
               onClick={() => {
@@ -247,7 +247,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
                   : "text-sonic-silver hover:text-eerie-black"
               }`}
             >
-              {t("register_title", lang) || "Üye Ol"}
+              {t("register_title", lang)}
             </button>
           </div>
           <button 
@@ -290,7 +290,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
 
               <div>
                 <label className="block text-xs font-bold text-eerie-black uppercase tracking-wider mb-2">
-                  {t("email_label", lang) || "E-Posta Adresi"}
+                  {t("email_label", lang)}
                 </label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-spanish-gray">
@@ -347,7 +347,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
               <div className="relative flex py-2 items-center">
                 <div className="flex-grow border-t border-cultured"></div>
                 <span className="flex-shrink mx-4 text-[10px] font-bold text-sonic-silver uppercase tracking-wider">
-                  {lang === "tr" ? "Veya" : "Or"}
+                  {t("or", lang)}
                 </span>
                 <div className="flex-grow border-t border-cultured"></div>
               </div>
@@ -375,7 +375,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
                     d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42A11.92 11.92 0 0 0 12 0 11.99 11.99 0 0 0 1.03 6.58l4.12 3.23c.96-2.89 3.66-5.06 6.85-5.06z"
                   />
                 </svg>
-                <span>{t("sign_in_with_google", lang) || (lang === "tr" ? "Google ile Giriş Yap" : "Sign in with Google")}</span>
+                <span>{t("sign_in_with_google", lang)}</span>
               </button>
             </form>
           ) : (
@@ -531,7 +531,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
               <div className="relative flex py-2 items-center">
                 <div className="flex-grow border-t border-cultured"></div>
                 <span className="flex-shrink mx-4 text-[10px] font-bold text-sonic-silver uppercase tracking-wider">
-                  {lang === "tr" ? "Veya" : "Or"}
+                  {t("or", lang)}
                 </span>
                 <div className="flex-grow border-t border-cultured"></div>
               </div>
@@ -559,7 +559,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
                     d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42A11.92 11.92 0 0 0 12 0 11.99 11.99 0 0 0 1.03 6.58l4.12 3.23c.96-2.89 3.66-5.06 6.85-5.06z"
                   />
                 </svg>
-                <span>{t("sign_up_with_google", lang) || (lang === "tr" ? "Google ile Üye Ol" : "Sign up with Google")}</span>
+                <span>{t("sign_up_with_google", lang)}</span>
               </button>
             </form>
           )}

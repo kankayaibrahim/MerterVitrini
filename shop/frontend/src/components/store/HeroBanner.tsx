@@ -10,7 +10,7 @@ interface HeroBannerProps {
 
 export default function HeroBanner({ lang }: HeroBannerProps) {
   return (
-    <div className="lg:col-span-4 rounded-[15px] overflow-hidden border border-cultured bg-gradient-to-r from-[#fafafa] to-[#fff0f1] p-8 md:p-12 relative flex flex-col justify-center min-h-[260px] select-none shadow-sm">
+    <div className="hidden lg:flex lg:col-span-4 rounded-[15px] overflow-hidden border border-cultured bg-gradient-to-r from-[#fafafa] to-[#fff0f1] p-8 md:p-12 relative flex-col justify-center min-h-[260px] select-none shadow-sm">
       <div className="absolute right-8 top-1/2 -translate-y-1/2 w-64 h-64 bg-radial from-salmon-pink/10 to-transparent pointer-events-none rounded-full hidden lg:block animate-pulse" />
       
       <div className="text-salmon-pink font-bold text-xs sm:text-sm uppercase tracking-[2px] mb-2 flex items-center gap-1.5">

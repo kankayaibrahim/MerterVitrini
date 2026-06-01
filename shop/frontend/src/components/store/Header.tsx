@@ -708,10 +708,7 @@ export default function Header({
             <div className="flex items-center gap-1.5 xs:gap-2">
               <Menu className="w-4 h-4 text-salmon-pink shrink-0" />
               <span className="truncate">
-                {lang === "tr" ? "Kategori Seçin" 
-                 : lang === "ru" ? "Выбрать категорию" 
-                 : lang === "ar" ? "اختر فئة" 
-                 : "Select Category"}
+                {t("select_category", lang)}
               </span>
             </div>
             
@@ -760,10 +757,7 @@ export default function Header({
                 : "bg-white text-onyx border-zinc-200/60 hover:bg-zinc-50"
             }`}
           >
-            {lang === "tr" ? "Tümü" 
-             : lang === "ru" ? "Все" 
-             : lang === "ar" ? "الكل" 
-             : "All"}
+            {t("all_btn", lang)}
           </button>
         </div>
 
