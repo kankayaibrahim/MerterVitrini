@@ -429,7 +429,7 @@ export default function StorefrontLayout({
       const offset = (currentPage - 1) * itemsPerPage;
       let queryParams = `?limit=${itemsPerPage}&offset=${offset}&sort_by=${sortBy}&display_currency=${displayCurrency}`;
       
-      if (activeCategoryId) {
+      if (activeCategoryId && activeCategoryId !== "tum-urunler") {
         queryParams += `&category_id=${activeCategoryId}`;
       }
       
