@@ -7,6 +7,7 @@ import { Category } from "@/types/store";
 import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/app/utils";
 import AuthModal from "./AuthModal";
+import WishlistDrawer from "./WishlistDrawer";
 
 const getFlagUrl = (code: string): string => {
   const mapping: Record<string, string> = {
@@ -65,6 +66,7 @@ export default function Header({
   
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
   const [wishlistCount, setWishlistCount] = useState(0);
+  const [isWishlistOpen, setIsWishlistOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -146,6 +148,7 @@ export default function Header({
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
+      const token = localStorage.getItem("store_user_token");
       localStorage.removeItem("store_user_token");
       localStorage.removeItem("store_user_info");
       setIsUserMenuOpen(false);
@@ -156,9 +159,15 @@ export default function Header({
       const realm = "merter";
       const clientId = "admin-client";
       
-      window.location.href = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout` +
+      let logoutUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout` +
         `?client_id=${encodeURIComponent(clientId)}` +
         `&post_logout_redirect_uri=${encodeURIComponent(origin)}`;
+      
+      if (token) {
+        logoutUrl += `&id_token_hint=${encodeURIComponent(token)}`;
+      }
+      
+      window.location.href = logoutUrl;
     }
   };
 
@@ -469,12 +478,15 @@ export default function Header({
               </div>
 
                {/* Wishlist Heart Icon */}
-              <button className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent shrink-0">
-                <Heart className="w-[19px] h-[19px] sm:w-[20px] sm:h-[20px]" />
-                <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[13px] h-[13px] flex items-center justify-center font-bold text-[7.5px] leading-none shadow-sm">
-                  {wishlistCount}
-                </span>
-              </button>
+               <button 
+                 onClick={() => setIsWishlistOpen(true)}
+                 className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
+               >
+                 <Heart className="w-[19px] h-[19px] sm:w-[20px] sm:h-[20px]" />
+                 <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[13px] h-[13px] flex items-center justify-center font-bold text-[7.5px] leading-none shadow-sm">
+                   {wishlistCount}
+                 </span>
+               </button>
 
               {/* User Account / Profile Mobile Action */}
               <div className="relative flex items-center shrink-0">
@@ -608,12 +620,15 @@ export default function Header({
             </div>
 
             {/* Wishlist Heart Icon */}
-            <button className="p-2 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent">
-              <Heart className="w-[22px] h-[22px]" />
-              <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[17px] h-[17px] flex items-center justify-center font-bold text-[10px] leading-none shadow-sm">
-                {wishlistCount}
-              </span>
-            </button>
+             <button 
+               onClick={() => setIsWishlistOpen(true)}
+               className="p-2 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent"
+             >
+               <Heart className="w-[22px] h-[22px]" />
+               <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[17px] h-[17px] flex items-center justify-center font-bold text-[10px] leading-none shadow-sm">
+                 {wishlistCount}
+               </span>
+             </button>
 
             {/* Cart Icon */}
             <button 
@@ -910,6 +925,14 @@ export default function Header({
         lang={lang} 
         initialMode={authMode} 
       />
+
+      {isWishlistOpen && (
+        <WishlistDrawer
+          lang={lang}
+          onClose={() => setIsWishlistOpen(false)}
+          displayCurrency={displayCurrency}
+        />
+      )}
     </header>
   );
 }

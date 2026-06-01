@@ -925,6 +925,7 @@ export default function ProfilePage() {
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
+      const token = localStorage.getItem("store_user_token");
       localStorage.removeItem("store_user_token");
       localStorage.removeItem("store_user_info");
       window.dispatchEvent(new Event("auth-change"));
@@ -934,9 +935,15 @@ export default function ProfilePage() {
       const realm = "merter";
       const clientId = "admin-client";
       
-      window.location.href = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout` +
+      let logoutUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout` +
         `?client_id=${encodeURIComponent(clientId)}` +
         `&post_logout_redirect_uri=${encodeURIComponent(origin)}`;
+      
+      if (token) {
+        logoutUrl += `&id_token_hint=${encodeURIComponent(token)}`;
+      }
+      
+      window.location.href = logoutUrl;
     }
   };
 
