@@ -65,6 +65,10 @@ const addressTranslations: Record<string, Record<string, string>> = {
     postal_code_label: "Posta Kodu *",
     postal_code_placeholder: "Örn: 34000",
     postal_code_required_error: "Posta kodu alanı zorunludur.",
+    phone_invalid_error: "Telefon numarası geçersizdir.",
+    phone_tr_length_error: "Türkiye telefon numaraları 10 haneli olmalıdır (Örn: 5051234567).",
+    phone_intl_length_error: "Telefon numarası 6 ile 15 hane arasında olmalıdır.",
+    country_required_error: "Lütfen önce bir ülke seçiniz.",
   },
   en: {
     address_book_header: "4. MY ADDRESS BOOK",
@@ -100,6 +104,10 @@ const addressTranslations: Record<string, Record<string, string>> = {
     postal_code_label: "Postal Code *",
     postal_code_placeholder: "e.g., 90210",
     postal_code_required_error: "Postal code is required.",
+    phone_invalid_error: "Invalid phone number.",
+    phone_tr_length_error: "Turkish phone numbers must be 10 digits (e.g., 5051234567).",
+    phone_intl_length_error: "Phone number must be between 6 and 15 digits.",
+    country_required_error: "Please select a country first.",
   },
   ar: {
     address_book_header: "4. دفتر العناوين الخاص بي",
@@ -135,6 +143,10 @@ const addressTranslations: Record<string, Record<string, string>> = {
     postal_code_label: "الرمز البريدي *",
     postal_code_placeholder: "مثال: 12345",
     postal_code_required_error: "الرمز البريدي مطلوب.",
+    phone_invalid_error: "رقم الهاتف غير صالحة.",
+    phone_tr_length_error: "يجب أن يتكون رقم الهاتف التركي من 10 أرقام (مثال: 5051234567).",
+    phone_intl_length_error: "يجب أن يتكون رقم الهاتف من 6 إلى 15 رقمًا.",
+    country_required_error: "يرجى تحديد البلد أولاً.",
   },
   ru: {
     address_book_header: "4. МОЯ АДРЕСНАЯ КНИГА",
@@ -170,6 +182,10 @@ const addressTranslations: Record<string, Record<string, string>> = {
     postal_code_label: "Почтовый индекс *",
     postal_code_placeholder: "например, 101000",
     postal_code_required_error: "Почтовый индекс обязателен для заполнения.",
+    phone_invalid_error: "Неверный номер телефона.",
+    phone_tr_length_error: "Турецкие телефонные номера должны состоять из 10 цифр (например, 5051234567).",
+    phone_intl_length_error: "Номер телефона должен содержать от 6 до 15 цифр.",
+    country_required_error: "Пожалуйста, сначала выберите страну.",
   },
   pl: {
     address_book_header: "4. MOJA KSIĄŻKA ADRESOWA",
@@ -205,6 +221,10 @@ const addressTranslations: Record<string, Record<string, string>> = {
     postal_code_label: "Kod pocztowy *",
     postal_code_placeholder: "np. 00-001",
     postal_code_required_error: "Kod pocztowy jest wymagany.",
+    phone_invalid_error: "Niepoprawny numer telefonu.",
+    phone_tr_length_error: "Tureckie numery telefonów muszą mieć 10 cyfr (np. 5051234567).",
+    phone_intl_length_error: "Numer telefonu musi zawierać od 6 do 15 cyfr.",
+    country_required_error: "Wybierz najpierw kraj.",
   },
   bg: {
     address_book_header: "4. МОЯТ АДРЕСЕН УКАЗАТЕЛ",
@@ -240,6 +260,10 @@ const addressTranslations: Record<string, Record<string, string>> = {
     postal_code_label: "Пощенски код *",
     postal_code_placeholder: "напр. 1000",
     postal_code_required_error: "Пощенският код е задължителен.",
+    phone_invalid_error: "Невалиден телефонен номер.",
+    phone_tr_length_error: "Турските телефонни номера трябва да са точно 10 цифри (напр. 5051234567).",
+    phone_intl_length_error: "Телефонният номер трябва да бъде между 6 и 15 цифри.",
+    country_required_error: "Моля, първо изберете държава.",
   },
   de: {
     address_book_header: "4. MEIN ADRESSBUCH",
@@ -275,6 +299,10 @@ const addressTranslations: Record<string, Record<string, string>> = {
     postal_code_label: "Postleitzahl *",
     postal_code_placeholder: "z.B. 10115",
     postal_code_required_error: "Die Postleitzahl ist erforderlich.",
+    phone_invalid_error: "Ungültige Telefonnummer.",
+    phone_tr_length_error: "Türkische Telefonnummern müssen 10-stellig sein (z.B. 5051234567).",
+    phone_intl_length_error: "Die Telefonnummer muss zwischen 6 und 15 Ziffern lang sein.",
+    country_required_error: "Bitte wählen Sie zuerst ein Land aus.",
   },
   fr: {
     address_book_header: "4. MON CARNET D'ADRESSES",
@@ -301,15 +329,19 @@ const addressTranslations: Record<string, Record<string, string>> = {
     last_name_label: "Nom du destinataire",
     phone_label: "Téléphone du destinataire",
     save_address_btn: "Enregistrer l'adresse",
+    postal_code_label: "Code postal *",
+    postal_code_placeholder: "ex. 75001",
+    postal_code_required_error: "Le code postal est requis.",
+    phone_invalid_error: "Numéro de téléphone invalide.",
+    phone_tr_length_error: "Les numéros de téléphone turcs doivent comporter 10 chiffres (ex. 5051234567).",
+    phone_intl_length_error: "Le numéro de téléphone doit comporter entre 6 et 15 chiffres.",
+    country_required_error: "Veuillez d'abord sélectionner un pays.",
     cancel_btn: "Annuler",
     loading_addresses: "Chargement des adresses...",
     migration_success: "Vos anciennes adresses ont été importées avec succès !",
     default_badge: "Par défaut",
     address_line_placeholder: "Nom de rue, numéro de bâtiment, appartement, étage, et autres précisions...",
     tax_office_placeholder: "ex. Centre des Impôts Paris 1er",
-    postal_code_label: "Code postal *",
-    postal_code_placeholder: "ex. 75001",
-    postal_code_required_error: "Le code postal est requis.",
   }
 };
 
@@ -399,6 +431,7 @@ export default function ProfilePage() {
   const [formLastName, setFormLastName] = useState("");
   const [formCompany, setFormCompany] = useState("");
   const [formPhone, setFormPhone] = useState("");
+  const [formPhoneOnly, setFormPhoneOnly] = useState("");
   const [formCountryID, setFormCountryID] = useState("");
   const [formStateID, setFormStateID] = useState("");
   const [formAddressLine, setFormAddressLine] = useState("");
@@ -590,6 +623,19 @@ export default function ProfilePage() {
       setFormTaxNo(address.tax_no_tckn || "");
       setFormTaxOffice(address.tax_office || "");
       setFormIsDefault(address.is_default);
+
+      // Parse phone code prefix based on selected country
+      const matchedCountry = countries.find(c => c.id === address.country_id);
+      const matchedPhoneCode = matchedCountry ? matchedCountry.phone_code : 90;
+      let cleanP = (address.phone || "").trim().replace(/\D/g, "");
+      const pCodeStr = String(matchedPhoneCode);
+      if (cleanP.startsWith(pCodeStr)) {
+        cleanP = cleanP.substring(pCodeStr.length);
+      }
+      if (cleanP.startsWith("0")) {
+        cleanP = cleanP.substring(1);
+      }
+      setFormPhoneOnly(cleanP);
       
       fetchStates(address.country_id).then(() => {
         setFormStateID(address.state_id || "");
@@ -604,12 +650,24 @@ export default function ProfilePage() {
       setFormPhone(phone || "");
       
       const trCountry = countries.find(c => c.code === "TR");
-      if (trCountry) {
-        setFormCountryID(trCountry.id);
-        fetchStates(trCountry.id);
-      } else if (countries.length > 0) {
-        setFormCountryID(countries[0].id);
-        fetchStates(countries[0].id);
+      const defaultCountryID = trCountry ? trCountry.id : (countries.length > 0 ? countries[0].id : "");
+      setFormCountryID(defaultCountryID);
+      
+      // Parse profile phone number prefix based on default country
+      const matchedCountry = trCountry || (countries.length > 0 ? countries[0] : null);
+      const matchedPhoneCode = matchedCountry ? matchedCountry.phone_code : 90;
+      let cleanP = (phone || "").trim().replace(/\D/g, "");
+      const pCodeStr = String(matchedPhoneCode);
+      if (cleanP.startsWith(pCodeStr)) {
+        cleanP = cleanP.substring(pCodeStr.length);
+      }
+      if (cleanP.startsWith("0")) {
+        cleanP = cleanP.substring(1);
+      }
+      setFormPhoneOnly(cleanP);
+
+      if (defaultCountryID) {
+        fetchStates(defaultCountryID);
       }
       setFormStateID("");
       setFormAddressLine("");
@@ -631,6 +689,27 @@ export default function ProfilePage() {
       return;
     }
 
+    const selectedCountry = countries.find(c => c.id === formCountryID);
+    if (!selectedCountry) {
+      setAddressError(getAddressT("country_required_error"));
+      return;
+    }
+
+    const cleanPhone = formPhoneOnly.trim().replace(/\D/g, "");
+    if (selectedCountry.code === "TR") {
+      if (cleanPhone.length !== 10) {
+        setAddressError(getAddressT("phone_tr_length_error"));
+        return;
+      }
+    } else {
+      if (cleanPhone.length < 6 || cleanPhone.length > 15) {
+        setAddressError(getAddressT("phone_intl_length_error"));
+        return;
+      }
+    }
+
+    const fullPhone = `+${selectedCountry.phone_code}${cleanPhone}`;
+
     setSavingAddress(true);
 
     const payload = {
@@ -639,7 +718,7 @@ export default function ProfilePage() {
       first_name: formFirstName,
       last_name: formLastName,
       company_name: formCompany || null,
-      phone: formPhone,
+      phone: fullPhone,
       country_id: formCountryID,
       state_id: formStateID || null,
       address_line: formAddressLine,
@@ -1416,63 +1495,6 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* First Name & Last Name */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                    {getAddressT("first_name_label")} *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formFirstName}
-                    onChange={(e) => setFormFirstName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                    {getAddressT("last_name_label")} *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formLastName}
-                    onChange={(e) => setFormLastName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
-                  />
-                </div>
-              </div>
-
-              {/* Company & Phone */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                    {getAddressT("company_name_label")}
-                  </label>
-                  <input
-                    type="text"
-                    value={formCompany}
-                    onChange={(e) => setFormCompany(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
-                    placeholder={t("placeholder_company_name", lang)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                    {getAddressT("phone_label")} *
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
-                    placeholder={t("placeholder_phone", lang)}
-                  />
-                </div>
-              </div>
-
               {/* Country & State */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
@@ -1526,6 +1548,68 @@ export default function ProfilePage() {
                   className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
                   placeholder={getAddressT("postal_code_placeholder")}
                 />
+              </div>
+
+              {/* First Name & Last Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                    {getAddressT("first_name_label")} *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formFirstName}
+                    onChange={(e) => setFormFirstName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                    {getAddressT("last_name_label")} *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formLastName}
+                    onChange={(e) => setFormLastName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
+                  />
+                </div>
+              </div>
+
+              {/* Company & Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                    {getAddressT("company_name_label")}
+                  </label>
+                  <input
+                    type="text"
+                    value={formCompany}
+                    onChange={(e) => setFormCompany(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
+                    placeholder={t("placeholder_company_name", lang)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                    {getAddressT("phone_label")} *
+                  </label>
+                  <div className="flex items-center">
+                    <span className="inline-flex items-center px-3.5 py-2.5 rounded-l-lg border border-r-0 border-cultured bg-[#f5f5f5] text-xs font-bold text-sonic-silver select-none">
+                      +{countries.find(c => c.id === formCountryID)?.phone_code || "..."}
+                    </span>
+                    <input
+                      type="tel"
+                      required
+                      value={formPhoneOnly}
+                      onChange={(e) => setFormPhoneOnly(e.target.value.replace(/\D/g, ""))}
+                      className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-r-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
+                      placeholder="505 123 45 67"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Address Line */}
