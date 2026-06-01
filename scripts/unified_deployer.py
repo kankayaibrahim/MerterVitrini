@@ -429,11 +429,6 @@ WantedBy=multi-user.target
                 build_root = f"/var/www/build/{proj_key}"
                 self._ssh_cmd(ssh, f"mkdir -p {build_root}")
 
-                # Stop running frontend service in SSR mode if exists to release locks
-                if self.ssr_mode:
-                    self.log("[SYSTEMD] Stopping active shop-frontend service before deployment...")
-                    self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
-
                 # 2. Upload Sources (Pipelined)
                 sftp = ssh.open_sftp()
                 remote_archive = f"{build_root}/{archive_name}"
@@ -490,6 +485,8 @@ WantedBy=multi-user.target
                 t_sync_start = time.time()
                 self._ssh_cmd(ssh, f"mkdir -p {cfg['remote_dir']}")
                 if self.ssr_mode:
+                    self.log("[SYSTEMD] Stopping active shop-frontend service for final swap...")
+                    self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
                     deploy_cmd = (
                         f"rsync -a --delete --exclude='uploads' --exclude='.git' {build_root}/frontend/ {cfg['remote_dir']}/"
                     )
@@ -780,11 +777,6 @@ server {{
             # 1. Ensure directory
             self._ssh_cmd(ssh, f"mkdir -p {cfg['remote_dir']}")
 
-            # Stop running frontend service in SSR mode if exists to release locks
-            if self.ssr_mode:
-                self.log("[SYSTEMD] Stopping active shop-frontend service before deployment...")
-                self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
-
             # 2. Upload with high-performance pipelined stream
             sftp = ssh.open_sftp()
             remote_archive = f"{cfg['remote_dir']}/{cfg['archive_name']}"
@@ -807,6 +799,9 @@ server {{
             # 3. Extract remotely
             self.log("[EXTRACT] Extracting frontend assets on production server...")
             t_extract_start = time.time()
+            if self.ssr_mode:
+                self.log("[SYSTEMD] Stopping active shop-frontend service for final swap...")
+                self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
             self._ssh_cmd(ssh, f"tar -xzf {remote_archive} -C {cfg['remote_dir']} --strip-components=1")
             self._ssh_cmd(ssh, f"rm -f {remote_archive}")
             t_extract_end = time.time()
