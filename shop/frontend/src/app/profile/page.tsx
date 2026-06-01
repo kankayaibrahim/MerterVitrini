@@ -388,7 +388,7 @@ export default function ProfilePage() {
 
   const getAddressT = (key: string): string => {
     const safeLang = addressTranslations[lang] ? lang : "tr";
-    return addressTranslations[safeLang][key] || addressTranslations["tr"][key] || key;
+    return addressTranslations[safeLang][key] || addressTranslations["tr"][key] || t(key, lang);
   };
 
   // Synchronize dynamic HTML lang attribute
