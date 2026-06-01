@@ -1120,12 +1120,12 @@ def run_parser():
             cur.execute("SELECT brand_id FROM integration.xml_feeds WHERE id = %s", (FEED_ID,))
             row = cur.fetchone()
             if row and row[0]:
-                BRAND_ID = row[0]
+                BRAND_ID = str(row[0])
             else:
                 cur.execute("SELECT id FROM catalog.brands WHERE alias_code = 'NOIR'")
                 row = cur.fetchone()
                 if row and row[0]:
-                    BRAND_ID = row[0]
+                    BRAND_ID = str(row[0])
                     
         if not BRAND_ID:
             raise ValueError("Critical Error: 'NOIR' alias_code is not registered in catalog.brands. Please check DB seed!")
@@ -1245,11 +1245,11 @@ def run_parser():
 
             cur.execute("SELECT id, fabric_name FROM catalog.fabrics")
             for fid, name in cur.fetchall():
-                fabrics_cache[name] = fid
+                fabrics_cache[name] = str(fid)
 
             cur.execute("SELECT id, parent_id, slug FROM catalog.categories")
             cats = cur.fetchall()
-            cat_map = {cid: (pid, slug) for cid, pid, slug in cats}
+            cat_map = {str(cid): (str(pid) if pid else None, slug) for cid, pid, slug in cats}
             
             def get_full_path(cid):
                 pid, slug = cat_map[cid]
@@ -1263,7 +1263,7 @@ def run_parser():
 
             cur.execute("SELECT id, source_product_id, slug FROM catalog.products WHERE feed_id = %s", (FEED_ID,))
             for pid, source_pid, slug in cur.fetchall():
-                products_cache[source_pid] = (pid, slug)
+                products_cache[source_pid] = (str(pid), slug)
                 
             cur.execute(
                 """
@@ -1274,7 +1274,7 @@ def run_parser():
                 (FEED_ID,)
             )
             for vid, pid, source_vid in cur.fetchall():
-                variants_cache[(pid, source_vid)] = vid
+                variants_cache[(str(pid), source_vid)] = str(vid)
         timings["2. Cache Loading"] = time.time() - t_start
         print(f"Loaded {len(products_cache)} products, {len(variants_cache)} variants, {len(colors_cache)} colors, and {len(fabrics_cache)} fabrics (took {timings['2. Cache Loading']:.2f}s).")
     except Exception as e:

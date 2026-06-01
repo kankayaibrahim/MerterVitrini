@@ -1105,12 +1105,12 @@ def run_parser():
             cur.execute("SELECT brand_id FROM integration.xml_feeds WHERE id = %s", (FEED_ID,))
             row = cur.fetchone()
             if row and row[0]:
-                BRAND_ID = row[0]
+                BRAND_ID = str(row[0])
             else:
                 cur.execute("SELECT id FROM catalog.brands WHERE alias_code = 'EDUSA'")
                 row = cur.fetchone()
                 if row and row[0]:
-                    BRAND_ID = row[0]
+                    BRAND_ID = str(row[0])
                     
         if not BRAND_ID:
             BRAND_ID = "019e620f-2ca6-774c-9450-6c69015045a4" # fallback
@@ -1243,15 +1243,15 @@ def run_parser():
         with conn.cursor() as cur:
             cur.execute("SELECT id, color_name FROM catalog.colors")
             for cid, name in cur.fetchall():
-                colors_cache[name] = cid
+                colors_cache[name] = str(cid)
 
             cur.execute("SELECT id, fabric_name FROM catalog.fabrics")
             for fid, name in cur.fetchall():
-                fabrics_cache[name] = fid
+                fabrics_cache[name] = str(fid)
 
             cur.execute("SELECT id, source_product_id, slug FROM catalog.products WHERE feed_id = %s", (FEED_ID,))
             for pid, source_pid, slug in cur.fetchall():
-                products_cache[source_pid] = (pid, slug)
+                products_cache[source_pid] = (str(pid), slug)
                 
             cur.execute(
                 """
@@ -1262,7 +1262,7 @@ def run_parser():
                 (FEED_ID,)
             )
             for vid, pid, source_vid in cur.fetchall():
-                variants_cache[(pid, source_vid)] = vid
+                variants_cache[(str(pid), source_vid)] = str(vid)
         timings["2. Cache Loading"] = time.time() - t_start
         print(f"Loaded {len(products_cache)} products, {len(variants_cache)} variants, {len(colors_cache)} colors, and {len(fabrics_cache)} fabrics from database to memory (took {timings['2. Cache Loading']:.2f}s).")
     except Exception as e:
