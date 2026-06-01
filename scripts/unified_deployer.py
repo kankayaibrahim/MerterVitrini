@@ -569,6 +569,7 @@ WantedBy=multi-user.target
     }}"""
 
                 nginx_root = f"{cfg['remote_dir']}/public" if self.ssr_mode else cfg['remote_dir']
+                alias_path = f"{cfg['remote_dir']}/.next/static/" if self.ssr_mode else f"{cfg['remote_dir']}/_next/static/"
                 nginx_conf = f"""# 1. Main Storefront Server Block (HTTPS)
 server {{
     listen 443 ssl;
@@ -590,7 +591,7 @@ server {{
 
     # Cache Next.js built chunks (highly optimized for browser caching)
     location ^~ /_next/static/ {{
-        alias {cfg['remote_dir']}/.next/static/;
+        alias {alias_path};
         access_log off;
         expires 365d;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
