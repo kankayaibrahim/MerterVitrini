@@ -62,6 +62,9 @@ const addressTranslations: Record<string, Record<string, string>> = {
     default_badge: "Varsayılan",
     address_line_placeholder: "Mahalle, sokak, bina numarası, daire, kat ve diğer detaylar...",
     tax_office_placeholder: "Örn: Merter Vergi Dairesi",
+    postal_code_label: "Posta Kodu *",
+    postal_code_placeholder: "Örn: 34000",
+    postal_code_required_error: "Posta kodu alanı zorunludur.",
   },
   en: {
     address_book_header: "4. MY ADDRESS BOOK",
@@ -94,6 +97,9 @@ const addressTranslations: Record<string, Record<string, string>> = {
     default_badge: "Default",
     address_line_placeholder: "Street address, building name, apartment, unit, floor and other details...",
     tax_office_placeholder: "e.g., London Central Tax Office",
+    postal_code_label: "Postal Code *",
+    postal_code_placeholder: "e.g., 90210",
+    postal_code_required_error: "Postal code is required.",
   },
   ar: {
     address_book_header: "4. دفتر العناوين الخاص بي",
@@ -126,6 +132,9 @@ const addressTranslations: Record<string, Record<string, string>> = {
     default_badge: "افتراضي",
     address_line_placeholder: "عنوان الشارع، اسم المبنى، الشقة، الوحدة، الطابق وتفاصيل أخرى...",
     tax_office_placeholder: "مثال: مكتب ضرائب دبي المركزي",
+    postal_code_label: "الرمز البريدي *",
+    postal_code_placeholder: "مثال: 12345",
+    postal_code_required_error: "الرمز البريدي مطلوب.",
   },
   ru: {
     address_book_header: "4. МОЯ АДРЕСНАЯ КНИГА",
@@ -158,6 +167,9 @@ const addressTranslations: Record<string, Record<string, string>> = {
     default_badge: "По умолчанию",
     address_line_placeholder: "Улица, название дома, квартира, номер офиса, этаж и другие детали...",
     tax_office_placeholder: "например, Налоговая инспекция №4",
+    postal_code_label: "Почтовый индекс *",
+    postal_code_placeholder: "например, 101000",
+    postal_code_required_error: "Почтовый индекс обязателен для заполнения.",
   },
   pl: {
     address_book_header: "4. MOJA KSIĄŻKA ADRESOWA",
@@ -190,6 +202,9 @@ const addressTranslations: Record<string, Record<string, string>> = {
     default_badge: "Domyślny",
     address_line_placeholder: "Ulica, numer budynku, mieszkania, kod, piętro i inne szczegóły...",
     tax_office_placeholder: "np. Urząd Skarbowy Warszawa Śródmieście",
+    postal_code_label: "Kod pocztowy *",
+    postal_code_placeholder: "np. 00-001",
+    postal_code_required_error: "Kod pocztowy jest wymagany.",
   },
   bg: {
     address_book_header: "4. МОЯТ АДРЕСЕН УКАЗАТЕЛ",
@@ -222,6 +237,9 @@ const addressTranslations: Record<string, Record<string, string>> = {
     default_badge: "По подразбиране",
     address_line_placeholder: "Улица, номер на сграда, апартамент, вход, етаж и други детайли...",
     tax_office_placeholder: "напр. НАП София-Изток",
+    postal_code_label: "Пощенски код *",
+    postal_code_placeholder: "напр. 1000",
+    postal_code_required_error: "Пощенският код е задължителен.",
   },
   de: {
     address_book_header: "4. MEIN ADRESSBUCH",
@@ -254,6 +272,9 @@ const addressTranslations: Record<string, Record<string, string>> = {
     default_badge: "Standard",
     address_line_placeholder: "Straße, Hausnummer, Apartment, Stockwerk, Wohneinheit und weitere Details...",
     tax_office_placeholder: "z. B. Finanzamt Berlin-Mitte",
+    postal_code_label: "Postleitzahl *",
+    postal_code_placeholder: "z.B. 10115",
+    postal_code_required_error: "Die Postleitzahl ist erforderlich.",
   },
   fr: {
     address_book_header: "4. MON CARNET D'ADRESSES",
@@ -286,6 +307,9 @@ const addressTranslations: Record<string, Record<string, string>> = {
     default_badge: "Par défaut",
     address_line_placeholder: "Nom de rue, numéro de bâtiment, appartement, étage, et autres précisions...",
     tax_office_placeholder: "ex. Centre des Impôts Paris 1er",
+    postal_code_label: "Code postal *",
+    postal_code_placeholder: "ex. 75001",
+    postal_code_required_error: "Le code postal est requis.",
   }
 };
 
@@ -306,6 +330,7 @@ interface UserAddress {
   is_default: boolean;
   country_name?: string;
   state_name?: string;
+  postal_code: string;
 }
 
 interface CountryLookup {
@@ -377,6 +402,7 @@ export default function ProfilePage() {
   const [formCountryID, setFormCountryID] = useState("");
   const [formStateID, setFormStateID] = useState("");
   const [formAddressLine, setFormAddressLine] = useState("");
+  const [formPostalCode, setFormPostalCode] = useState("");
   const [formTaxNo, setFormTaxNo] = useState("");
   const [formTaxOffice, setFormTaxOffice] = useState("");
   const [formIsDefault, setFormIsDefault] = useState(false);
@@ -560,6 +586,7 @@ export default function ProfilePage() {
       setFormPhone(address.phone);
       setFormCountryID(address.country_id);
       setFormAddressLine(address.address_line);
+      setFormPostalCode(address.postal_code || "");
       setFormTaxNo(address.tax_no_tckn || "");
       setFormTaxOffice(address.tax_office || "");
       setFormIsDefault(address.is_default);
@@ -586,6 +613,7 @@ export default function ProfilePage() {
       }
       setFormStateID("");
       setFormAddressLine("");
+      setFormPostalCode("");
       setFormTaxNo(taxNoTCKN || "");
       setFormTaxOffice("");
       setFormIsDefault(addresses.length === 0);
@@ -597,6 +625,12 @@ export default function ProfilePage() {
     e.preventDefault();
     setAddressError(null);
     setAddressSuccess(null);
+
+    if (!formPostalCode.trim()) {
+      setAddressError(getAddressT("postal_code_required_error"));
+      return;
+    }
+
     setSavingAddress(true);
 
     const payload = {
@@ -609,6 +643,7 @@ export default function ProfilePage() {
       country_id: formCountryID,
       state_id: formStateID || null,
       address_line: formAddressLine,
+      postal_code: formPostalCode,
       tax_no_tckn: formType === "billing" ? (formTaxNo || null) : null,
       tax_office: formType === "billing" ? (formTaxOffice || null) : null,
       is_default: formIsDefault
@@ -698,6 +733,7 @@ export default function ProfilePage() {
             phone: phone || "905000000000",
             country_id: trCountry.id,
             address_line: billingAddress.substring(0, 500),
+            postal_code: "34000",
             tax_no_tckn: taxNoTCKN || null,
             is_default: true
           })
@@ -723,6 +759,7 @@ export default function ProfilePage() {
             phone: phone || "905000000000",
             country_id: trCountry.id,
             address_line: deliveryAddress.substring(0, 500),
+            postal_code: "34000",
             is_default: true
           })
         });
@@ -1237,6 +1274,7 @@ export default function ProfilePage() {
                             <div className="text-[10px] font-extrabold text-eerie-black flex items-center gap-1.5 mt-0.5">
                               <Globe className="w-3.5 h-3.5 text-spanish-gray" />
                               <span>
+                                {addr.postal_code ? `${addr.postal_code} ` : ""}
                                 {addr.state_name ? `${addr.state_name}, ` : ""}
                                 {addr.country_name}
                               </span>
@@ -1473,6 +1511,21 @@ export default function ProfilePage() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Postal Code */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                  {getAddressT("postal_code_label")}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formPostalCode}
+                  onChange={(e) => setFormPostalCode(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
+                  placeholder={getAddressT("postal_code_placeholder")}
+                />
               </div>
 
               {/* Address Line */}

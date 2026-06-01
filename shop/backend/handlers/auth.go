@@ -866,6 +866,7 @@ type UserAddress struct {
 	CountryID    string    `json:"country_id"`
 	StateID      *string   `json:"state_id"`     // nullable
 	AddressLine  string    `json:"address_line"`
+	PostalCode   string    `json:"postal_code"`
 	TaxNoTCKN    *string   `json:"tax_no_tckn"`  // nullable
 	TaxOffice    *string   `json:"tax_office"`   // nullable
 	IsDefault    bool      `json:"is_default"`
@@ -915,7 +916,7 @@ func (h *AuthHandler) ListAddresses(w http.ResponseWriter, r *http.Request) {
 		       a.company_name, a.phone, a.country_id, a.state_id, a.address_line, 
 		       a.tax_no_tckn, a.tax_office, a.is_default, a.created_at, a.updated_at,
 		       coalesce(c.localized_names->>'tr_TR', c.localized_names->>'en_US', c.code) as country_name,
-		       coalesce(s.state_name, '') as state_name
+		       coalesce(s.state_name, '') as state_name, a.postal_code
 		FROM identity.user_addresses a
 		JOIN catalog.countries c ON a.country_id = c.id
 		LEFT JOIN catalog.country_states s ON a.state_id = s.id
@@ -937,7 +938,7 @@ func (h *AuthHandler) ListAddresses(w http.ResponseWriter, r *http.Request) {
 			&addr.ID, &addr.UserID, &addr.Title, &addr.AddressType, &addr.FirstName, &addr.LastName,
 			&company, &addr.Phone, &addr.CountryID, &stateID, &addr.AddressLine,
 			&taxNo, &taxOff, &addr.IsDefault, &addr.CreatedAt, &addr.UpdatedAt,
-			&addr.CountryName, &stateName,
+			&addr.CountryName, &stateName, &addr.PostalCode,
 		)
 		if err != nil {
 			log.Printf("[ADDRESS ERROR] Scan error: %v", err)
@@ -989,6 +990,7 @@ func (h *AuthHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 		CountryID   string  `json:"country_id"`
 		StateID     *string `json:"state_id"`
 		AddressLine string  `json:"address_line"`
+		PostalCode  string  `json:"postal_code"`
 		TaxNoTCKN   *string `json:"tax_no_tckn"`
 		TaxOffice   *string `json:"tax_office"`
 		IsDefault   bool    `json:"is_default"`
@@ -1006,8 +1008,9 @@ func (h *AuthHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 	req.LastName = strings.TrimSpace(req.LastName)
 	req.Phone = strings.TrimSpace(req.Phone)
 	req.AddressLine = strings.TrimSpace(req.AddressLine)
+	req.PostalCode = strings.TrimSpace(req.PostalCode)
 
-	if req.Title == "" || req.AddressType == "" || req.FirstName == "" || req.LastName == "" || req.Phone == "" || req.CountryID == "" || req.AddressLine == "" {
+	if req.Title == "" || req.AddressType == "" || req.FirstName == "" || req.LastName == "" || req.Phone == "" || req.CountryID == "" || req.AddressLine == "" || req.PostalCode == "" {
 		http.Error(w, `{"error":"Lütfen tüm zorunlu alanları doldurun"}`, http.StatusBadRequest)
 		return
 	}
@@ -1062,11 +1065,11 @@ func (h *AuthHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(ctx, `
 		INSERT INTO identity.user_addresses (
 			user_id, title, address_type, first_name, last_name, company_name, 
-			phone, country_id, state_id, address_line, tax_no_tckn, tax_office, is_default
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			phone, country_id, state_id, address_line, tax_no_tckn, tax_office, is_default, postal_code
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id
 	`, userID, req.Title, req.AddressType, req.FirstName, req.LastName, req.CompanyName,
-		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault).Scan(&newID)
+		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault, req.PostalCode).Scan(&newID)
 
 	if err != nil {
 		log.Printf("[ADDRESS ERROR] Failed to insert address: %v", err)
@@ -1121,6 +1124,7 @@ func (h *AuthHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 		CountryID   string  `json:"country_id"`
 		StateID     *string `json:"state_id"`
 		AddressLine string  `json:"address_line"`
+		PostalCode  string  `json:"postal_code"`
 		TaxNoTCKN   *string `json:"tax_no_tckn"`
 		TaxOffice   *string `json:"tax_office"`
 		IsDefault   bool    `json:"is_default"`
@@ -1138,8 +1142,9 @@ func (h *AuthHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 	req.LastName = strings.TrimSpace(req.LastName)
 	req.Phone = strings.TrimSpace(req.Phone)
 	req.AddressLine = strings.TrimSpace(req.AddressLine)
+	req.PostalCode = strings.TrimSpace(req.PostalCode)
 
-	if req.Title == "" || req.AddressType == "" || req.FirstName == "" || req.LastName == "" || req.Phone == "" || req.CountryID == "" || req.AddressLine == "" {
+	if req.Title == "" || req.AddressType == "" || req.FirstName == "" || req.LastName == "" || req.Phone == "" || req.CountryID == "" || req.AddressLine == "" || req.PostalCode == "" {
 		http.Error(w, `{"error":"Lütfen tüm zorunlu alanları doldurun"}`, http.StatusBadRequest)
 		return
 	}
@@ -1222,10 +1227,11 @@ func (h *AuthHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 			tax_no_tckn = $10,
 			tax_office = $11,
 			is_default = $12,
+			postal_code = $13,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $13 AND user_id = $14
+		WHERE id = $14 AND user_id = $15
 	`, req.Title, req.AddressType, req.FirstName, req.LastName, req.CompanyName,
-		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault, id, userID)
+		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault, req.PostalCode, id, userID)
 
 	if err != nil {
 		log.Printf("[ADDRESS ERROR] Failed to update address: %v", err)
