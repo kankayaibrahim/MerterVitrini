@@ -18,7 +18,8 @@ import {
   Globe,
   FileText,
   Languages,
-  User
+  User,
+  Image as ImageIcon
 } from "lucide-react";
 
 // Types
@@ -207,6 +208,77 @@ export default function Home() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsError, setSettingsError] = useState("");
   const [settingsSuccess, setSettingsSuccess] = useState(false);
+
+  // Storefront Image Cache States
+  interface BulkStatus {
+    is_running: boolean;
+    total_jobs: number;
+    completed: number;
+    failed: number;
+    elapsed_time: string;
+  }
+  const [bulkStatus, setBulkStatus] = useState<BulkStatus | null>(null);
+  const [triggeringBulk, setTriggeringBulk] = useState(false);
+
+  const getStorefrontApiUrl = () => {
+    if (typeof window !== "undefined") {
+      if (window.location.hostname === "admin.mertervitrini.com.tr") {
+        return "https://api.mertervitrini.com.tr";
+      }
+    }
+    return "http://localhost:8081";
+  };
+
+  const loadBulkStatus = useCallback(async () => {
+    try {
+      const storeApiUrl = getStorefrontApiUrl();
+      const res = await fetch(`${storeApiUrl}/api/v1/store/images/bulk-status`);
+      if (res.ok) {
+        const data = await res.json();
+        setBulkStatus(data);
+      }
+    } catch (err) {
+      console.error("Failed to load bulk status:", err);
+    }
+  }, []);
+
+  const handleStartBulkResize = async () => {
+    setTriggeringBulk(true);
+    try {
+      const storeApiUrl = getStorefrontApiUrl();
+      const res = await fetch(`${storeApiUrl}/api/v1/store/images/bulk-resize`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        loadBulkStatus();
+      }
+    } catch (err) {
+      console.error("Failed to start bulk resize:", err);
+    } finally {
+      setTriggeringBulk(false);
+    }
+  };
+
+  // Poll image cache generation status
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (bulkStatus?.is_running) {
+      interval = setInterval(() => {
+        loadBulkStatus();
+      }, 2000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [bulkStatus?.is_running, loadBulkStatus]);
+
+  // Load bulk status on settings tab load
+  useEffect(() => {
+    if (activeTab === "settings") {
+      loadBulkStatus();
+    }
+  }, [activeTab, loadBulkStatus]);
+
   const [apiUrl, setApiUrl] = useState(() => {
     if (typeof window !== "undefined") {
       if (window.location.hostname === "admin.mertervitrini.com.tr") {
@@ -1190,109 +1262,204 @@ export default function Home() {
 
           {/* Tab 4: Site Settings */}
           {activeTab === "settings" && (
-            <div className="max-w-3xl mx-auto w-full bg-white rounded-2xl border border-zinc-200/80 p-8 shadow-sm flex flex-col gap-6 animate-in fade-in duration-200">
-              <div>
-                <h2 className="text-xl font-bold text-zinc-950 flex items-center gap-2">
-                  <SettingsIcon size={20} className="text-violet-600 animate-spin-slow" />
-                  {LABELS.SETTINGS_TITLE}
-                </h2>
-                <p className="text-xs text-zinc-500 mt-1 font-medium">
-                  {LABELS.SETTINGS_SUBTITLE}
-                </p>
+            <div className="max-w-3xl mx-auto w-full flex flex-col gap-8 animate-in fade-in duration-200">
+              
+              {/* Site Settings Form Card */}
+              <div className="bg-white rounded-2xl border border-zinc-200/80 p-8 shadow-sm flex flex-col gap-6">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-950 flex items-center gap-2">
+                    <SettingsIcon size={20} className="text-violet-600 animate-spin-slow" />
+                    {LABELS.SETTINGS_TITLE}
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-1 font-medium">
+                    {LABELS.SETTINGS_SUBTITLE}
+                  </p>
+                </div>
+
+                {loadingSettings ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3">
+                    <Loader2 size={32} className="text-violet-600 animate-spin" />
+                    <span className="text-xs font-semibold text-zinc-400">{LABELS.SETTINGS_LOADING}</span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleUpdateSettings} className="space-y-6">
+                    {settingsError && (
+                      <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-600 leading-relaxed">
+                        ⚠️ {settingsError}
+                      </div>
+                    )}
+
+                    {settingsSuccess && (
+                      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-700 leading-relaxed flex items-center gap-2 animate-bounce">
+                        {LABELS.SETTINGS_SUCCESS}
+                      </div>
+                    )}
+
+                    <div className="space-y-4">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                          {LABELS.SETTINGS_ADDRESS}
+                        </label>
+                        <textarea
+                          value={storeSettings.address}
+                          onChange={(e) => setStoreSettings(prev => ({ ...prev, address: e.target.value }))}
+                          rows={3}
+                          className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 leading-relaxed"
+                          placeholder="Showroom adresini buraya girin..."
+                          required
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                            {LABELS.SETTINGS_PHONE}
+                          </label>
+                          <input
+                            type="text"
+                            value={storeSettings.phone}
+                            onChange={(e) => setStoreSettings(prev => ({ ...prev, phone: e.target.value }))}
+                            className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+                            placeholder="+90 533 703 08 83"
+                            required
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                            {LABELS.SETTINGS_WHATSAPP}
+                          </label>
+                          <input
+                            type="text"
+                            value={storeSettings.whatsapp}
+                            onChange={(e) => setStoreSettings(prev => ({ ...prev, whatsapp: e.target.value }))}
+                            className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+                            placeholder="+90 533 703 08 83"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                          {LABELS.SETTINGS_EMAIL}
+                        </label>
+                        <input
+                          type="email"
+                          value={storeSettings.email}
+                          onChange={(e) => setStoreSettings(prev => ({ ...prev, email: e.target.value }))}
+                          className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+                          placeholder="info@toptanmoda.net"
+                          required
+                        />
+                      </div>
+
+                    </div>
+
+                    <div className="flex justify-end pt-4 border-t border-zinc-100">
+                      <button
+                        type="submit"
+                        disabled={savingSettings}
+                        className="inline-flex items-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white rounded-xl text-sm font-semibold shadow-md shadow-violet-500/10 hover:shadow-violet-500/20 active:scale-[0.98] transition-all cursor-pointer"
+                      >
+                        {savingSettings && <Loader2 size={16} className="animate-spin" />}
+                        {savingSettings ? LABELS.SETTINGS_SAVING : LABELS.SETTINGS_SAVE}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
 
-              {loadingSettings ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <Loader2 size={32} className="text-violet-600 animate-spin" />
-                  <span className="text-xs font-semibold text-zinc-400">{LABELS.SETTINGS_LOADING}</span>
+              {/* Image Cache Management Card */}
+              <div className="bg-white rounded-2xl border border-zinc-200/80 p-8 shadow-sm flex flex-col gap-6">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-950 flex items-center gap-2">
+                    <ImageIcon size={20} className="text-violet-600" />
+                    Görsel Önbellek Yönetimi (Image Cache Manager)
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-1 font-medium leading-relaxed">
+                    Storefront üzerindeki ürün ve kategori görsellerinin hızlı yüklenmesi için optimize boyutlarını önbelleğe (cache) alır. Eksik olan resimleri tespit edip arka planda işleyebilirsiniz.
+                  </p>
                 </div>
-              ) : (
-                <form onSubmit={handleUpdateSettings} className="space-y-6">
-                  {settingsError && (
-                    <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-600 leading-relaxed">
-                      ⚠️ {settingsError}
-                    </div>
-                  )}
 
-                  {settingsSuccess && (
-                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-700 leading-relaxed flex items-center gap-2 animate-bounce">
-                      {LABELS.SETTINGS_SUCCESS}
+                <div className="border-t border-zinc-100 pt-4 flex flex-col gap-4">
+                  {bulkStatus === null ? (
+                    <div className="flex justify-between items-center bg-zinc-50 rounded-xl p-4 border border-zinc-100">
+                      <span className="text-xs font-semibold text-zinc-500">Önbellek durumu henüz sorgulanmadı.</span>
+                      <button
+                        onClick={loadBulkStatus}
+                        className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-lg cursor-pointer transition-all"
+                      >
+                        Durumu Kontrol Et
+                      </button>
                     </div>
-                  )}
-
-                  <div className="space-y-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        {LABELS.SETTINGS_ADDRESS}
-                      </label>
-                      <textarea
-                        value={storeSettings.address}
-                        onChange={(e) => setStoreSettings(prev => ({ ...prev, address: e.target.value }))}
-                        rows={3}
-                        className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 leading-relaxed"
-                        placeholder="Showroom adresini buraya girin..."
-                        required
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          {LABELS.SETTINGS_PHONE}
-                        </label>
-                        <input
-                          type="text"
-                          value={storeSettings.phone}
-                          onChange={(e) => setStoreSettings(prev => ({ ...prev, phone: e.target.value }))}
-                          className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
-                          placeholder="+90 533 703 08 83"
-                          required
-                        />
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      {/* Status Info Row */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-zinc-50 border border-zinc-200/60 rounded-xl p-3 text-center">
+                          <span className="block text-[10px] uppercase font-bold text-zinc-400">Durum</span>
+                          <span className={`text-xs font-extrabold block mt-1 ${bulkStatus.is_running ? 'text-amber-600 animate-pulse' : 'text-zinc-600'}`}>
+                            {bulkStatus.is_running ? 'Çalışıyor (4 Thread)' : 'Boşta / Tamamlandı'}
+                          </span>
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200/60 rounded-xl p-3 text-center">
+                          <span className="block text-[10px] uppercase font-bold text-zinc-400">Kuyruktaki Görsel</span>
+                          <span className="text-xs font-extrabold text-zinc-700 block mt-1">{bulkStatus.total_jobs}</span>
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200/60 rounded-xl p-3 text-center">
+                          <span className="block text-[10px] uppercase font-bold text-zinc-400">Tamamlanan</span>
+                          <span className="text-xs font-extrabold text-emerald-600 block mt-1">{bulkStatus.completed}</span>
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200/60 rounded-xl p-3 text-center">
+                          <span className="block text-[10px] uppercase font-bold text-zinc-400">Süre</span>
+                          <span className="text-xs font-extrabold text-zinc-700 block mt-1">{bulkStatus.elapsed_time || '-'}</span>
+                        </div>
                       </div>
 
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          {LABELS.SETTINGS_WHATSAPP}
-                        </label>
-                        <input
-                          type="text"
-                          value={storeSettings.whatsapp}
-                          onChange={(e) => setStoreSettings(prev => ({ ...prev, whatsapp: e.target.value }))}
-                          className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
-                          placeholder="+90 533 703 08 83"
-                          required
-                        />
+                      {/* Progress Bar for Active Jobs */}
+                      {bulkStatus.is_running && (
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-[11px] font-bold text-zinc-500">
+                            <span>Önbellek görselleri üretiliyor...</span>
+                            <span>{Math.round((bulkStatus.completed / (bulkStatus.total_jobs || 1)) * 100)}%</span>
+                          </div>
+                          <div className="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/40">
+                            <div 
+                              className="h-full bg-violet-600 transition-all duration-500 rounded-full" 
+                              style={{ width: `${(bulkStatus.completed / (bulkStatus.total_jobs || 1)) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Info & Action Trigger */}
+                      <div className="flex justify-between items-center pt-2 border-t border-zinc-100 mt-2">
+                        <span className="text-xs text-zinc-400 font-medium">
+                          {!bulkStatus.is_running && bulkStatus.total_jobs > 0 && bulkStatus.completed >= bulkStatus.total_jobs ? (
+                            <span className="text-emerald-600 font-bold">✓ Tüm görseller başarıyla önbelleğe alındı.</span>
+                          ) : !bulkStatus.is_running ? (
+                            'Sistemdeki tüm eksik resimleri taratıp kuyruğu başlatabilirsiniz.'
+                          ) : (
+                            'Oluşturma işlemi arka planda devam ediyor.'
+                          )}
+                        </span>
+
+                        <button
+                          onClick={handleStartBulkResize}
+                          disabled={bulkStatus.is_running || triggeringBulk}
+                          className="inline-flex items-center gap-2 px-5 py-2 bg-violet-600 hover:bg-violet-700 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-bold rounded-lg cursor-pointer active:scale-95 transition-all shadow-md shadow-violet-600/10"
+                        >
+                          {triggeringBulk && <Loader2 size={12} className="animate-spin" />}
+                          {bulkStatus.is_running ? 'İşleniyor...' : 'Önbelleği Oluştur / Güncelle'}
+                        </button>
                       </div>
+
                     </div>
+                  )}
+                </div>
+              </div>
 
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        {LABELS.SETTINGS_EMAIL}
-                      </label>
-                      <input
-                        type="email"
-                        value={storeSettings.email}
-                        onChange={(e) => setStoreSettings(prev => ({ ...prev, email: e.target.value }))}
-                        className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
-                        placeholder="info@toptanmoda.net"
-                        required
-                      />
-                    </div>
-
-                  </div>
-
-                  <div className="flex justify-end pt-4 border-t border-zinc-100">
-                    <button
-                      type="submit"
-                      disabled={savingSettings}
-                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white rounded-xl text-sm font-semibold shadow-md shadow-violet-500/10 hover:shadow-violet-500/20 active:scale-[0.98] transition-all cursor-pointer"
-                    >
-                      {savingSettings && <Loader2 size={16} className="animate-spin" />}
-                      {savingSettings ? LABELS.SETTINGS_SAVING : LABELS.SETTINGS_SAVE}
-                    </button>
-                  </div>
-                </form>
-              )}
             </div>
           )}
 
