@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -21,6 +22,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr" className={`${poppins.variable} h-full antialiased`}>
+      <head>
+        {/* Google tag (gtag.js) */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-CNMNCL62Q2"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-CNMNCL62Q2');
+          `}
+        </Script>
+      </head>
       <body className="min-h-full flex flex-col bg-white font-sans antialiased text-onyx">
         {children}
       </body>
