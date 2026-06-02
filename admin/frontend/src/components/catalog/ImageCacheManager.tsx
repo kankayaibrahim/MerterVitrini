@@ -11,7 +11,8 @@ import {
   Clock, 
   Check, 
   Info,
-  Search
+  Search,
+  Ban
 } from "lucide-react";
 
 interface ImageCacheManagerProps {
@@ -33,6 +34,7 @@ const LABELS = {
   BTN_START: "Eksik Görselleri Taramaya & Üretmeye Başla",
   BTN_REFRESH: "Durumu Yenile",
   BTN_SCAN: "Eksik Görselleri Tara",
+  BTN_STOP: "İşlemi Durdur",
   STATUS_RUNNING: "Kuyruk İşleniyor",
   STATUS_IDLE: "Beklemede / Tamamlandı",
   STAT_COMPLETED: "Tamamlanan",
@@ -59,6 +61,7 @@ export default function ImageCacheManager({ apiUrl, token }: ImageCacheManagerPr
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scannedMissingCount, setScannedMissingCount] = useState<number | null>(null);
+  const [isStopping, setIsStopping] = useState<boolean>(false);
 
   // API Request Helper
   const apiRequest = async (path: string, method: string, body?: any) => {
@@ -129,6 +132,21 @@ export default function ImageCacheManager({ apiUrl, token }: ImageCacheManagerPr
     }
   };
 
+  // Stop Bulk Resize
+  const handleStopResize = async () => {
+    setErrorMessage(null);
+    setIsStopping(true);
+    try {
+      const data = await apiRequest("/api/v1/store/images/bulk-stop", "POST");
+      showToast(data.message || "Görsel boyutlandırma işlemi durduruldu.");
+      await getStatus();
+    } catch (err: any) {
+      setErrorMessage(err.message || "İşlem durdurulamadı.");
+    } finally {
+      setIsStopping(false);
+    }
+  };
+
   const handleRefresh = () => {
     startTransition(async () => {
       await getStatus();
@@ -173,7 +191,7 @@ export default function ImageCacheManager({ apiUrl, token }: ImageCacheManagerPr
         <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
           <button
             onClick={handleRefresh}
-            disabled={isPending || isScanning}
+            disabled={isPending || isScanning || isStopping}
             className="p-2.5 border border-zinc-200 rounded-xl hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm flex items-center justify-center gap-1.5 text-sm font-semibold cursor-pointer"
             type="button"
           >
@@ -183,7 +201,7 @@ export default function ImageCacheManager({ apiUrl, token }: ImageCacheManagerPr
 
           <button
             onClick={handleScan}
-            disabled={isPending || isScanning || status.is_running}
+            disabled={isPending || isScanning || isStopping || status.is_running}
             className="p-2.5 border border-zinc-200 rounded-xl hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm flex items-center justify-center gap-1.5 text-sm font-semibold cursor-pointer"
             type="button"
           >
@@ -195,19 +213,27 @@ export default function ImageCacheManager({ apiUrl, token }: ImageCacheManagerPr
             {LABELS.BTN_SCAN}
           </button>
 
-          <button
-            onClick={handleStartResize}
-            disabled={isPending || isScanning || status.is_running}
-            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm shadow-md transition-all cursor-pointer ${
-              status.is_running 
-                ? "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed shadow-none" 
-                : "bg-violet-600 hover:bg-violet-700 text-white hover:shadow-lg hover:shadow-violet-600/10"
-            }`}
-            type="button"
-          >
-            {isPending ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-            {LABELS.BTN_START}
-          </button>
+          {status.is_running ? (
+            <button
+              onClick={handleStopResize}
+              disabled={isPending || isStopping}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm shadow-md bg-red-600 hover:bg-red-700 text-white hover:shadow-lg hover:shadow-red-600/10 transition-all cursor-pointer"
+              type="button"
+            >
+              {isStopping ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}
+              {LABELS.BTN_STOP}
+            </button>
+          ) : (
+            <button
+              onClick={handleStartResize}
+              disabled={isPending || isScanning}
+              className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm shadow-md bg-violet-600 hover:bg-violet-700 text-white hover:shadow-lg hover:shadow-violet-600/10 transition-all cursor-pointer"
+              type="button"
+            >
+              {isPending ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+              {LABELS.BTN_START}
+            </button>
+          )}
         </div>
       </div>
 

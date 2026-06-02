@@ -199,6 +199,13 @@ func startWorkerPool() {
 		for i := 0; i < 4; i++ {
 			go func(workerID int) {
 				for job := range jobQueue {
+					bulkStatus.Lock()
+					running := bulkStatus.IsRunning
+					bulkStatus.Unlock()
+					if !running {
+						continue
+					}
+
 					// Check if already processed
 					if _, err := os.Stat(job.CachePath); err == nil {
 						bulkStatus.Lock()
@@ -210,6 +217,10 @@ func startWorkerPool() {
 					// Process
 					err := resizeAndSaveImage(job.OriginalPath, job.CachePath, job.Width, job.Height)
 					bulkStatus.Lock()
+					if !bulkStatus.IsRunning {
+						bulkStatus.Unlock()
+						continue
+					}
 					if err != nil {
 						bulkStatus.Failed++
 					} else {
@@ -332,6 +343,12 @@ func (h *ImageHandler) StartBulkResize(w http.ResponseWriter, r *http.Request) {
 		bulkStatus.Unlock()
 
 		for _, job := range jobs {
+			bulkStatus.Lock()
+			running := bulkStatus.IsRunning
+			bulkStatus.Unlock()
+			if !running {
+				break
+			}
 			jobQueue <- job
 		}
 
@@ -424,5 +441,40 @@ func (h *ImageHandler) ScanMissingImages(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(fmt.Sprintf(`{"missing_count":%d}`, missingCount)))
+}
+
+// StopBulkResize stops the active bulk resizing job and drains the job queue
+func (h *ImageHandler) StopBulkResize(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	bulkStatus.Lock()
+	if !bulkStatus.IsRunning {
+		bulkStatus.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"not_running","message":"No bulk resize job is currently running"}`))
+		return
+	}
+
+	// Mark as stopped
+	bulkStatus.IsRunning = false
+	bulkStatus.Unlock()
+
+	// Drain current queue
+	drainedCount := 0
+	for len(jobQueue) > 0 {
+		select {
+		case <-jobQueue:
+			drainedCount++
+		default:
+		}
+	}
+
+	log.Printf("[BULK IMAGE] Stopped bulk resizing. Drained %d queued jobs.", drainedCount)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"stopped","message":"Bulk resize task stopped successfully"}`))
 }
 
