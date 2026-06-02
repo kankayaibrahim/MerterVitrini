@@ -39,6 +39,7 @@ export interface CategoryNode {
   node_path: string;
   is_active: boolean;
   children: CategoryNode[];
+  translations?: Record<string, Record<string, any>>;
 }
 
 export interface Product {

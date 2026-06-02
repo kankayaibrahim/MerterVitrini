@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { 
   Folder, 
   FolderOpen, 
@@ -14,7 +14,8 @@ import {
   FolderPlus,
   CheckCircle,
   AlertTriangle,
-  X
+  X,
+  Sparkles
 } from "lucide-react";
 import { CategoryNode } from "../../types/integration";
 import { getFlatCategoriesList } from "../../utils/formatters";
@@ -55,6 +56,17 @@ const LABELS = {
   DELETE_WARNING_DESC: "Silinen kategorideki tüm ürünler kategorisiz kalacaktır. Bu işlem geri alınamaz!"
 };
 
+const LANGUAGES = [
+  { code: "tr", label: "TR", name: "Türkçe" },
+  { code: "en", label: "EN", name: "English" },
+  { code: "pl", label: "PL", name: "Polski" },
+  { code: "bg", label: "BG", name: "Български" },
+  { code: "ar", label: "AR", name: "العربية" },
+  { code: "ru", label: "RU", name: "Русский" },
+  { code: "de", label: "DE", name: "Deutsch" },
+  { code: "fr", label: "FR", name: "Français" },
+];
+
 interface CategoryTreeEditorProps {
   categories: CategoryNode[];
   onRefresh: () => Promise<void>;
@@ -81,6 +93,10 @@ export default function CategoryTreeEditor({
   const [formParentId, setFormParentId] = useState<string>("");
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Multilingual state
+  const [translations, setTranslations] = useState<Record<string, { title: string; seo_description: string }>>({});
+  const [activeLangTab, setActiveLangTab] = useState("tr");
 
   // Flat list helper for parent selection dropdowns
   const flatCategories = getFlatCategoriesList(categories);
@@ -126,6 +142,15 @@ export default function CategoryTreeEditor({
     setFormParentId(parent ? parent.id : "");
     setSelectedNode(parent);
     setFormError(null);
+
+    // Initialize translations
+    const initialTrans: any = {};
+    LANGUAGES.forEach(l => {
+      initialTrans[l.code] = { title: "", seo_description: "" };
+    });
+    setTranslations(initialTrans);
+    setActiveLangTab("tr");
+
     setActiveModal("create");
   };
 
@@ -136,6 +161,19 @@ export default function CategoryTreeEditor({
     setFormIsActive(node.is_active);
     setFormParentId(node.parent_id || "");
     setFormError(null);
+
+    // Populate translations
+    const editTrans: any = {};
+    LANGUAGES.forEach(l => {
+      const existing = node.translations?.[l.code];
+      editTrans[l.code] = {
+        title: existing?.title || (l.code === "tr" ? node.title : ""),
+        seo_description: existing?.seo_description || "",
+      };
+    });
+    setTranslations(editTrans);
+    setActiveLangTab("tr");
+
     setActiveModal("edit");
   };
 
@@ -144,6 +182,17 @@ export default function CategoryTreeEditor({
     setSelectedNode(node);
     setFormError(null);
     setActiveModal("delete");
+  };
+
+  // Update translation field helper
+  const handleTranslationChange = (langCode: string, field: "title" | "seo_description", val: string) => {
+    setTranslations(prev => ({
+      ...prev,
+      [langCode]: {
+        ...prev[langCode],
+        [field]: val
+      }
+    }));
   };
 
   // Handle Save (Create/Update/Delete)
@@ -164,15 +213,17 @@ export default function CategoryTreeEditor({
       return;
     }
 
-    if (!formTitle.trim()) {
+    const trTitle = translations["tr"]?.title || formTitle;
+    if (!trTitle.trim()) {
       setFormError(LABELS.REQUIRED_FIELD);
       return;
     }
 
     const payload = {
       parent_id: formParentId === "" ? null : formParentId,
-      title: formTitle.trim(),
-      is_active: formIsActive
+      title: trTitle.trim(),
+      is_active: formIsActive,
+      translations: translations
     };
 
     startTransition(async () => {
@@ -271,7 +322,7 @@ export default function CategoryTreeEditor({
             {/* Add child */}
             <button
               onClick={() => openCreateModal(node)}
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-violet-600 hover:bg-violet-50 transition-all"
+              className="p-1.5 rounded-lg text-zinc-500 hover:text-violet-600 hover:bg-violet-50 transition-all cursor-pointer"
               title={LABELS.ADD_CHILD}
               type="button"
             >
@@ -281,7 +332,7 @@ export default function CategoryTreeEditor({
             {/* Edit / Rename */}
             <button
               onClick={() => openEditModal(node)}
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-blue-600 hover:bg-blue-50 transition-all"
+              className="p-1.5 rounded-lg text-zinc-500 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer"
               title={LABELS.EDIT}
               type="button"
             >
@@ -291,7 +342,7 @@ export default function CategoryTreeEditor({
             {/* Delete */}
             <button
               onClick={() => openDeleteModal(node)}
-              className="p-1.5 rounded-lg text-zinc-500 hover:text-red-600 hover:bg-red-50 transition-all"
+              className="p-1.5 rounded-lg text-zinc-500 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
               title={LABELS.DELETE}
               type="button"
             >
@@ -340,7 +391,7 @@ export default function CategoryTreeEditor({
               });
             }}
             disabled={isPending}
-            className="p-2.5 border border-zinc-200 rounded-xl hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm flex items-center justify-center gap-1.5 text-sm font-semibold"
+            className="p-2.5 border border-zinc-200 rounded-xl hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm flex items-center justify-center gap-1.5 text-sm font-semibold cursor-pointer"
             type="button"
           >
             <RefreshCw size={15} className={isPending ? "animate-spin" : ""} />
@@ -350,7 +401,7 @@ export default function CategoryTreeEditor({
           {/* Add top level Category */}
           <button
             onClick={() => openCreateModal(null)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg hover:shadow-violet-600/10 transition-all"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-semibold text-sm shadow-md hover:shadow-lg hover:shadow-violet-600/10 transition-all cursor-pointer border-none"
             type="button"
           >
             <FolderPlus size={16} />
@@ -379,7 +430,7 @@ export default function CategoryTreeEditor({
             <p className="text-zinc-500 text-sm max-w-xs">{LABELS.NO_CATEGORIES}</p>
             <button
               onClick={() => openCreateModal(null)}
-              className="mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg shadow transition-colors"
+              className="mt-4 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg shadow transition-colors cursor-pointer border-none"
               type="button"
             >
               {LABELS.ADD_ROOT}
@@ -405,7 +456,7 @@ export default function CategoryTreeEditor({
               </h3>
               <button 
                 onClick={() => setActiveModal(null)}
-                className="p-1.5 rounded-lg hover:bg-zinc-200/50 text-zinc-400 hover:text-zinc-600 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-zinc-200/50 text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer border-none"
                 type="button"
               >
                 <X size={18} />
@@ -416,7 +467,7 @@ export default function CategoryTreeEditor({
             <form onSubmit={handleSave} className="flex flex-col">
               
               {/* Modal Body */}
-              <div className="p-6 flex flex-col gap-5">
+              <div className="p-6 flex flex-col gap-5 max-h-[70vh] overflow-y-auto">
                 
                 {/* General Alerts / Error Display */}
                 {formError && (
@@ -441,71 +492,132 @@ export default function CategoryTreeEditor({
                 ) : (
                   /* Create / Edit Form UI */
                   <div className="flex flex-col gap-4">
-                    {/* Category Title Input */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.NAME}</label>
-                      <input 
-                        type="text"
-                        value={formTitle}
-                        onChange={(e) => setFormTitle(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
-                        placeholder="Örn: Kadın Giyim, Tişört, Bluz..."
-                        required
-                        disabled={isPending}
-                      />
-                    </div>
-
-                    {/* Parent Selector Selector (To move or set structure) */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.PARENT}</label>
-                      <select 
-                        value={formParentId}
-                        onChange={(e) => setFormParentId(e.target.value)}
-                        className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 hover:bg-zinc-100/50 focus:outline-none focus:border-violet-500 focus:bg-white text-sm font-semibold transition-all cursor-pointer text-zinc-700"
-                        disabled={isPending}
-                      >
-                        <option value="">{LABELS.ROOT_LEVEL}</option>
-                        {getEligibleParents().map(cat => (
-                          <option key={cat.id} value={cat.id}>
-                            {"\u00A0".repeat(cat.depth * 2)} {cat.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Active Checkbox toggle */}
-                    <div className="flex items-center justify-between border border-zinc-100 rounded-2xl p-4 bg-zinc-50/40 mt-1">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm font-bold text-zinc-800">{LABELS.STATUS}</span>
-                        <span className="text-xs text-zinc-400">Ürün hiyerarşisinde görünürlüğü belirler</span>
+                    
+                    {/* General Settings */}
+                    <div className="grid grid-cols-1 gap-4">
+                      {/* Parent Selector Selector (To move or set structure) */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.PARENT}</label>
+                        <select 
+                          value={formParentId}
+                          onChange={(e) => setFormParentId(e.target.value)}
+                          className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 hover:bg-zinc-100/50 focus:outline-none focus:border-violet-500 focus:bg-white text-sm font-semibold transition-all cursor-pointer text-zinc-700"
+                          disabled={isPending}
+                        >
+                          <option value="">{LABELS.ROOT_LEVEL}</option>
+                          {getEligibleParents().map(cat => (
+                            <option key={cat.id} value={cat.id}>
+                              {"\u00A0".repeat(cat.depth * 2)} {cat.title}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      
-                      <button
-                        type="button"
-                        onClick={() => setFormIsActive(!formIsActive)}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          formIsActive ? "bg-violet-600" : "bg-zinc-200"
-                        }`}
-                        disabled={isPending}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            formIsActive ? "translate-x-5" : "translate-x-0"
+
+                      {/* Active Checkbox toggle */}
+                      <div className="flex items-center justify-between border border-zinc-100 rounded-2xl p-4 bg-zinc-50/40 mt-1">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-sm font-bold text-zinc-800">{LABELS.STATUS}</span>
+                          <span className="text-xs text-zinc-400">Ürün hiyerarşisinde görünürlüğü belirler</span>
+                        </div>
+                        
+                        <button
+                          type="button"
+                          onClick={() => setFormIsActive(!formIsActive)}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none border-none ${
+                            formIsActive ? "bg-violet-600" : "bg-zinc-200"
                           }`}
-                        />
-                      </button>
+                          disabled={isPending}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              formIsActive ? "translate-x-5" : "translate-x-0"
+                            }`}
+                          />
+                        </button>
+                      </div>
                     </div>
+
+                    <div className="h-px bg-zinc-100 my-2" />
+
+                    {/* Multilingual Editor Area */}
+                    <div className="flex flex-col gap-3">
+                      <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-violet-600" />
+                        Çok Dilli Başlık ve SEO Açıklamaları
+                      </span>
+
+                      {/* Lang Tab buttons */}
+                      <div className="flex flex-wrap border-b border-zinc-200 gap-1 pb-1">
+                        {LANGUAGES.map(l => (
+                          <button
+                            key={l.code}
+                            type="button"
+                            onClick={() => setActiveLangTab(l.code)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-none cursor-pointer ${
+                              activeLangTab === l.code
+                                ? "bg-violet-50 text-violet-600 font-extrabold"
+                                : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
+                            }`}
+                          >
+                            {l.name}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Selected language fields */}
+                      {LANGUAGES.map(l => {
+                        if (l.code !== activeLangTab) return null;
+                        const trans = translations[l.code] || { title: "", seo_description: "" };
+
+                        return (
+                          <div key={l.code} className="space-y-4 animate-in fade-in duration-200 mt-2">
+                            {/* Localized Name */}
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">
+                                {l.name} Kategori Adı
+                              </label>
+                              <input
+                                type="text"
+                                value={trans.title}
+                                onChange={(e) => handleTranslationChange(l.code, "title", e.target.value)}
+                                className="w-full px-4 py-2 border border-zinc-200 rounded-xl focus:outline-none focus:border-violet-500 text-xs font-bold transition-all"
+                                placeholder={`${l.name} başlığı...`}
+                                disabled={isPending}
+                                required={l.code === "tr"}
+                              />
+                            </div>
+
+                            {/* Localized SEO Description */}
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider flex items-center justify-between">
+                                <span>{l.name} SEO Açıklama Yazısı</span>
+                                <span className="text-[9px] text-zinc-400 lowercase font-medium italic">sayfa en altında gösterilir (300-400 kelime önerilir)</span>
+                              </label>
+                              <textarea
+                                value={trans.seo_description}
+                                onChange={(e) => handleTranslationChange(l.code, "seo_description", e.target.value)}
+                                rows={6}
+                                className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl focus:outline-none focus:border-violet-500 text-xs font-bold transition-all leading-relaxed resize-y"
+                                placeholder={`${l.name} dilinde detaylı SEO metni girin...`}
+                                disabled={isPending}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
                   </div>
                 )}
 
               </div>
 
               {/* Modal Footer */}
-              <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50/50 flex items-center justify-end gap-3">
+              <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50/50 flex items-center justify-end gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveModal(null)}
-                  className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm font-semibold hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm"
+                  className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm font-semibold hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm cursor-pointer"
                   disabled={isPending}
                 >
                   {LABELS.CANCEL}
@@ -513,7 +625,7 @@ export default function CategoryTreeEditor({
                 
                 <button
                   type="submit"
-                  className={`px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition-all ${
+                  className={`px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition-all cursor-pointer border-none ${
                     activeModal === "delete" 
                       ? "bg-red-600 hover:bg-red-700 shadow-red-600/10 hover:shadow-lg hover:shadow-red-600/20" 
                       : "bg-violet-600 hover:bg-violet-700 shadow-violet-600/10 hover:shadow-lg hover:shadow-violet-600/20"

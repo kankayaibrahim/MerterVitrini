@@ -699,14 +699,15 @@ func (h *CatalogHandler) ListCategories(w http.ResponseWriter, r *http.Request) 
 
 	// Fetch category translations dynamically from the database
 	transQuery := `
-		SELECT category_id, language_code, title 
+		SELECT category_id, language_code, title, seo_description 
 		FROM catalog.category_translations`
 	transRows, err := db.Pool.Query(ctx, transQuery)
 	if err == nil {
 		defer transRows.Close()
 		for transRows.Next() {
 			var catID, langCode, transTitle string
-			if scanErr := transRows.Scan(&catID, &langCode, &transTitle); scanErr == nil {
+			var seoDesc *string
+			if scanErr := transRows.Scan(&catID, &langCode, &transTitle, &seoDesc); scanErr == nil {
 				if node, exists := nodesMap[catID]; exists {
 					if node.Translations == nil {
 						node.Translations = make(map[string]map[string]any)
@@ -715,6 +716,11 @@ func (h *CatalogHandler) ListCategories(w http.ResponseWriter, r *http.Request) 
 						node.Translations[langCode] = make(map[string]any)
 					}
 					node.Translations[langCode]["title"] = transTitle
+					if seoDesc != nil {
+						node.Translations[langCode]["seo_description"] = *seoDesc
+					} else {
+						node.Translations[langCode]["seo_description"] = ""
+					}
 				}
 			}
 		}

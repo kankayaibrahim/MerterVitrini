@@ -83,6 +83,7 @@ export interface Brand {
 
 export interface CategoryTranslation {
   title?: string;
+  seo_description?: string;
 }
 
 export interface CategoryTranslations {

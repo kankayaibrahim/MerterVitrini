@@ -49,24 +49,26 @@ type UserOtp struct {
 // --- Catalog Domain Models ---
 
 type Category struct {
-	ID        string    `json:"id"`
-	ParentID  *string   `json:"parent_id,omitempty"`
-	Title     string    `json:"title"`
-	Slug      string    `json:"slug"`
-	NodePath  string    `json:"node_path"`
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           string                         `json:"id"`
+	ParentID     *string                        `json:"parent_id,omitempty"`
+	Title        string                         `json:"title"`
+	Slug         string                         `json:"slug"`
+	NodePath     string                         `json:"node_path"`
+	IsActive     bool                           `json:"is_active"`
+	Translations map[string]CategoryTranslation `json:"translations,omitempty"`
+	CreatedAt    time.Time                      `json:"created_at"`
+	UpdatedAt    time.Time                      `json:"updated_at"`
 }
 
 type CategoryNode struct {
-	ID       string          `json:"id"`
-	ParentID *string         `json:"parent_id,omitempty"`
-	Title    string          `json:"title"`
-	Slug     string          `json:"slug"`
-	NodePath string          `json:"node_path"`
-	IsActive bool            `json:"is_active"`
-	Children []*CategoryNode `json:"children"`
+	ID           string                         `json:"id"`
+	ParentID     *string                        `json:"parent_id,omitempty"`
+	Title        string                         `json:"title"`
+	Slug         string                         `json:"slug"`
+	NodePath     string                         `json:"node_path"`
+	IsActive     bool                           `json:"is_active"`
+	Translations map[string]CategoryTranslation `json:"translations,omitempty"`
+	Children     []*CategoryNode                `json:"children"`
 }
 
 type Brand struct {
@@ -207,9 +209,10 @@ type UserInfo struct {
 }
 
 type CategoryTranslation struct {
-	CategoryID   string `json:"category_id"`
-	LanguageCode string `json:"language_code"`
-	Title        string `json:"title"`
+	CategoryID     string  `json:"category_id"`
+	LanguageCode   string  `json:"language_code"`
+	Title          string  `json:"title"`
+	SeoDescription *string `json:"seo_description,omitempty"`
 }
 
 type ProductTranslation struct {

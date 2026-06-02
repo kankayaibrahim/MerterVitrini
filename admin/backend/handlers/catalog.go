@@ -35,9 +35,14 @@ func (h *CatalogHandler) ListCategories(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 
 	query := `
-		SELECT id, parent_id, title, slug, node_path, is_active, created_at, updated_at 
-		FROM catalog.categories 
-		ORDER BY node_path::text`
+		SELECT c.id, c.parent_id, c.title, c.slug, c.node_path, c.is_active, c.created_at, c.updated_at,
+		       COALESCE(
+		           (SELECT json_object_agg(ct.language_code, json_build_object('category_id', ct.category_id, 'language_code', ct.language_code, 'title', ct.title, 'seo_description', ct.seo_description))
+		            FROM catalog.category_translations ct
+		            WHERE ct.category_id = c.id), '{}'::json
+		       ) as translations_json
+		FROM catalog.categories c 
+		ORDER BY c.node_path::text`
 
 	rows, err := db.Pool.Query(ctx, query)
 	if err != nil {
@@ -50,11 +55,15 @@ func (h *CatalogHandler) ListCategories(w http.ResponseWriter, r *http.Request) 
 	var categories []*models.Category
 	for rows.Next() {
 		var c models.Category
-		err := rows.Scan(&c.ID, &c.ParentID, &c.Title, &c.Slug, &c.NodePath, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
+		var transBytes []byte
+		err := rows.Scan(&c.ID, &c.ParentID, &c.Title, &c.Slug, &c.NodePath, &c.IsActive, &c.CreatedAt, &c.UpdatedAt, &transBytes)
 		if err != nil {
 			log.Printf("Failed to scan category: %v", err)
 			http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
 			return
+		}
+		if len(transBytes) > 0 {
+			json.Unmarshal(transBytes, &c.Translations)
 		}
 		categories = append(categories, &c)
 	}
@@ -73,9 +82,10 @@ func (h *CatalogHandler) CreateCategory(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		ParentID *string `json:"parent_id"`
-		Title    string  `json:"title"`
-		IsActive bool    `json:"is_active"`
+		ParentID     *string                                `json:"parent_id"`
+		Title        string                                 `json:"title"`
+		IsActive     bool                                   `json:"is_active"`
+		Translations map[string]models.CategoryTranslation `json:"translations"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -88,8 +98,16 @@ func (h *CatalogHandler) CreateCategory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("Failed to begin transaction: %v", err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
 
 	query := `
 		INSERT INTO catalog.categories (parent_id, title, slug, is_active) 
@@ -97,13 +115,51 @@ func (h *CatalogHandler) CreateCategory(w http.ResponseWriter, r *http.Request) 
 		RETURNING id, parent_id, title, slug, node_path, is_active, created_at, updated_at`
 
 	var c models.Category
-	err := db.Pool.QueryRow(ctx, query, req.ParentID, req.Title, req.Title, req.IsActive).Scan(
+	err = tx.QueryRow(ctx, query, req.ParentID, req.Title, req.Title, req.IsActive).Scan(
 		&c.ID, &c.ParentID, &c.Title, &c.Slug, &c.NodePath, &c.IsActive, &c.CreatedAt, &c.UpdatedAt,
 	)
-
 	if err != nil {
 		log.Printf("Failed to create category: %v", err)
 		http.Error(w, `{"error":"Failed to create category"}`, http.StatusInternalServerError)
+		return
+	}
+
+	c.Translations = make(map[string]models.CategoryTranslation)
+
+	insertTranslationQuery := `
+		INSERT INTO catalog.category_translations (category_id, language_code, title, seo_description)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (category_id, language_code) DO UPDATE SET title = EXCLUDED.title, seo_description = EXCLUDED.seo_description`
+
+	for lang, t := range req.Translations {
+		title := strings.TrimSpace(t.Title)
+		if title == "" {
+			title = req.Title
+		}
+		var seoDesc *string
+		if t.SeoDescription != nil && strings.TrimSpace(*t.SeoDescription) != "" {
+			trimmed := strings.TrimSpace(*t.SeoDescription)
+			seoDesc = &trimmed
+		}
+
+		_, err = tx.Exec(ctx, insertTranslationQuery, c.ID, lang, title, seoDesc)
+		if err != nil {
+			log.Printf("Failed to insert category translation for %s: %v", lang, err)
+			http.Error(w, `{"error":"Failed to save category translations"}`, http.StatusInternalServerError)
+			return
+		}
+
+		c.Translations[lang] = models.CategoryTranslation{
+			CategoryID:     c.ID,
+			LanguageCode:   lang,
+			Title:          title,
+			SeoDescription: seoDesc,
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("Failed to commit transaction: %v", err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -126,9 +182,10 @@ func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		ParentID *string `json:"parent_id"`
-		Title    string  `json:"title"`
-		IsActive bool    `json:"is_active"`
+		ParentID     *string                                `json:"parent_id"`
+		Title        string                                 `json:"title"`
+		IsActive     bool                                   `json:"is_active"`
+		Translations map[string]models.CategoryTranslation `json:"translations"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -141,7 +198,7 @@ func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
 	// Check if parent_id is the same as category ID to prevent self-referencing hierarchy loops
@@ -150,6 +207,14 @@ func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("Failed to begin transaction: %v", err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
 	query := `
 		UPDATE catalog.categories 
 		SET parent_id = $1, title = $2, slug = catalog.fn_slugify($3), is_active = $4, updated_at = CURRENT_TIMESTAMP
@@ -157,10 +222,9 @@ func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) 
 		RETURNING id, parent_id, title, slug, node_path, is_active, created_at, updated_at`
 
 	var c models.Category
-	err := db.Pool.QueryRow(ctx, query, req.ParentID, req.Title, req.Title, req.IsActive, id).Scan(
+	err = tx.QueryRow(ctx, query, req.ParentID, req.Title, req.Title, req.IsActive, id).Scan(
 		&c.ID, &c.ParentID, &c.Title, &c.Slug, &c.NodePath, &c.IsActive, &c.CreatedAt, &c.UpdatedAt,
 	)
-
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, `{"error":"Category not found"}`, http.StatusNotFound)
@@ -168,6 +232,52 @@ func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) 
 		}
 		log.Printf("Failed to update category %s: %v", id, err)
 		http.Error(w, `{"error":"Failed to update category"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Delete old translations
+	_, err = tx.Exec(ctx, "DELETE FROM catalog.category_translations WHERE category_id = $1", id)
+	if err != nil {
+		log.Printf("Failed to clear old category translations: %v", err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	c.Translations = make(map[string]models.CategoryTranslation)
+
+	insertTranslationQuery := `
+		INSERT INTO catalog.category_translations (category_id, language_code, title, seo_description)
+		VALUES ($1, $2, $3, $4)`
+
+	for lang, t := range req.Translations {
+		title := strings.TrimSpace(t.Title)
+		if title == "" {
+			title = req.Title
+		}
+		var seoDesc *string
+		if t.SeoDescription != nil && strings.TrimSpace(*t.SeoDescription) != "" {
+			trimmed := strings.TrimSpace(*t.SeoDescription)
+			seoDesc = &trimmed
+		}
+
+		_, err = tx.Exec(ctx, insertTranslationQuery, c.ID, lang, title, seoDesc)
+		if err != nil {
+			log.Printf("Failed to insert category translation for %s: %v", lang, err)
+			http.Error(w, `{"error":"Failed to save category translations"}`, http.StatusInternalServerError)
+			return
+		}
+
+		c.Translations[lang] = models.CategoryTranslation{
+			CategoryID:     c.ID,
+			LanguageCode:   lang,
+			Title:          title,
+			SeoDescription: seoDesc,
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("Failed to commit transaction: %v", err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
 		return
 	}
 
@@ -215,13 +325,14 @@ func buildCategoryTree(flat []*models.Category) []*models.CategoryNode {
 	// First pass: Instantiate nodes
 	for _, c := range flat {
 		nodesMap[c.ID] = &models.CategoryNode{
-			ID:       c.ID,
-			ParentID: c.ParentID,
-			Title:    c.Title,
-			Slug:     c.Slug,
-			NodePath: c.NodePath,
-			IsActive: c.IsActive,
-			Children: make([]*models.CategoryNode, 0),
+			ID:           c.ID,
+			ParentID:     c.ParentID,
+			Title:        c.Title,
+			Slug:         c.Slug,
+			NodePath:     c.NodePath,
+			IsActive:     c.IsActive,
+			Translations: c.Translations,
+			Children:     make([]*models.CategoryNode, 0),
 		}
 	}
 

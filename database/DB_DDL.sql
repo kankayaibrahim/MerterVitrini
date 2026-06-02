@@ -233,6 +233,7 @@ CREATE TABLE catalog.category_translations (
     category_id uuid NOT NULL REFERENCES catalog.categories(id) ON DELETE CASCADE,
     language_code VARCHAR(10) NOT NULL, 
     title VARCHAR(100) NOT NULL,
+    seo_description TEXT NULL,
     PRIMARY KEY (category_id, language_code)
 );
 
