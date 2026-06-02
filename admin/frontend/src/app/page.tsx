@@ -46,6 +46,7 @@ import TranslationManager from "../components/translate/TranslationManager";
 import CustomersManager from "../components/customers/CustomersManager";
 import PagesManager from "../components/pages/PagesManager";
 import ImageCacheManager from "../components/catalog/ImageCacheManager";
+import BlogManager from "../components/catalog/BlogManager";
 
 const LABELS = {
   SUB_TAB_PRODUCTS: "Ürün Listesi",
@@ -75,6 +76,7 @@ const LABELS = {
   SIDEBAR_CATALOG_PRODUCTS: "Ürün Listesi",
   SIDEBAR_CATALOG_CATEGORIES: "Kategori Ağacı",
   SIDEBAR_CATALOG_IMAGES: "Görsel Önbelleği",
+  SIDEBAR_CATALOG_BLOG: "Blog Yazıları",
   SIDEBAR_SETTINGS_HEADER: "Sistem Ayarları",
   SIDEBAR_SETTINGS_FOOTER: "Footer & İletişim",
   SIDEBAR_GEOGRAPHY_HEADER: "Coğrafi Tanımlar",
@@ -96,7 +98,7 @@ export default function Home() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog">("dashboard");
   const [catalogSubTab, setCatalogSubTab] = useState<"products" | "categories">("products");
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -111,7 +113,7 @@ export default function Home() {
     pages: true
   });
 
-  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache", subtab?: "products" | "categories") => {
+  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog", subtab?: "products" | "categories") => {
     setActiveTab(tab);
     if (subtab) {
       setCatalogSubTab(subtab);
@@ -146,10 +148,10 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | null;
+      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | null;
       const urlSubTab = params.get("subtab") as "products" | "categories" | null;
       
-      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache"].includes(urlTab)) {
+      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog"].includes(urlTab)) {
         setActiveTab(urlTab);
       }
       if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -163,10 +165,10 @@ export default function Home() {
     const handlePopState = () => {
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
-        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | null;
+        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | null;
         const urlSubTab = params.get("subtab") as "products" | "categories" | null;
         
-        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache"].includes(urlTab)) {
+        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog"].includes(urlTab)) {
           setActiveTab(urlTab);
         }
         if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -860,6 +862,19 @@ export default function Home() {
                   >
                     {LABELS.SIDEBAR_CATALOG_IMAGES}
                   </button>
+                  <button
+                    onClick={() => {
+                      updateNavigation("blog");
+                      setSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === "blog"
+                        ? "bg-violet-500/10 text-violet-400 font-extrabold border-l-2 border-violet-500 pl-3"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    {LABELS.SIDEBAR_CATALOG_BLOG}
+                  </button>
                 </div>
               )}
             </div>
@@ -1323,6 +1338,11 @@ export default function Home() {
           {/* Tab 10: Görsel Önbellek & Boyutlandırma Yönetimi */}
           {activeTab === "image-cache" && (
             <ImageCacheManager apiUrl={apiUrl} token={token} />
+          )}
+
+          {/* Tab 11: Çok Dilli Blog Yazıları Yönetimi */}
+          {activeTab === "blog" && (
+            <BlogManager apiUrl={apiUrl} token={token} />
           )}
 
           {/* Tab 5: Coğrafi Tanımlar (Ülkeler & Şehirler) */}

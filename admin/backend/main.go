@@ -140,6 +140,7 @@ func main() {
 	policiesHandler := handlers.NewPoliciesHandler()
 	translateHandler := handlers.NewTranslateHandler()
 	pagesHandler := handlers.NewPagesHandler()
+	blogHandler := handlers.NewBlogHandler()
 
 
 	// 6. Register HTTP Router using Go 1.22+ enhanced ServeMux pattern
@@ -247,6 +248,14 @@ func main() {
 	mux.Handle("PUT /api/v1/pages/{id}", authMiddleware(http.HandlerFunc(pagesHandler.UpdatePage)))
 	mux.Handle("DELETE /api/v1/pages/{id}", authMiddleware(http.HandlerFunc(pagesHandler.DeletePage)))
 	mux.Handle("GET /api/v1/pages/check-slug", authMiddleware(http.HandlerFunc(pagesHandler.CheckSlugUniqueness)))
+
+	// Multilingual Blog API routes (Secure Admin)
+	mux.Handle("GET /api/v1/blog", authMiddleware(http.HandlerFunc(blogHandler.ListBlogPosts)))
+	mux.Handle("GET /api/v1/blog/{id}", authMiddleware(http.HandlerFunc(blogHandler.GetBlogPostByID)))
+	mux.Handle("POST /api/v1/blog", authMiddleware(http.HandlerFunc(blogHandler.CreateBlogPost)))
+	mux.Handle("PUT /api/v1/blog/{id}", authMiddleware(http.HandlerFunc(blogHandler.UpdateBlogPost)))
+	mux.Handle("DELETE /api/v1/blog/{id}", authMiddleware(http.HandlerFunc(blogHandler.DeleteBlogPost)))
+	mux.Handle("GET /api/v1/blog/check-slug", authMiddleware(http.HandlerFunc(blogHandler.CheckSlugUniqueness)))
 
 	// Auto-Translation Engine API routes
 	mux.Handle("GET /api/v1/translate/stats", authMiddleware(http.HandlerFunc(translateHandler.ListStats)))

@@ -150,6 +150,10 @@ func main() {
 	mux.HandleFunc("GET /api/v1/store/pages/{slug}", catalogHandler.GetPageBySlug)
 	mux.HandleFunc("GET /api/v1/store/pages", catalogHandler.ListPages)
 
+	// Multilingual Blog Storefront endpoints
+	mux.HandleFunc("GET /api/v1/store/blog", catalogHandler.ListBlogPosts)
+	mux.HandleFunc("GET /api/v1/store/blog/{slug}", catalogHandler.GetBlogPostBySlug)
+
 	// B2B Cart Quote Inquiries (Public - v1)
 	mux.HandleFunc("POST /api/v1/store/inquiries", inquiryHandler.SubmitInquiry)
 

@@ -318,5 +318,23 @@ type PolicyAcceptance struct {
 	UserAgent  string    `json:"user_agent"`
 }
 
+type BlogPostTranslation struct {
+	Title           string  `json:"title"`
+	Summary         *string `json:"summary,omitempty"`
+	Content         string  `json:"content"`
+	MetaTitle       *string `json:"meta_title,omitempty"`
+	MetaDescription *string `json:"meta_description,omitempty"`
+}
+
+type BlogPost struct {
+	ID           string                         `json:"id"`
+	Slug         string                         `json:"slug"`
+	CoverImage   *string                        `json:"cover_image,omitempty"`
+	IsActive     bool                           `json:"is_active"`
+	Translations map[string]BlogPostTranslation `json:"translations"`
+	CreatedAt    time.Time                      `json:"created_at"`
+	UpdatedAt    time.Time                      `json:"updated_at"`
+}
+
 
 

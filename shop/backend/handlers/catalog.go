@@ -1096,5 +1096,174 @@ func (h *CatalogHandler) ListPages(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(pagesList)
 }
 
+// ListBlogPosts returns active blog posts for storefront
+func (h *CatalogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT b.id, b.slug, b.cover_image, b.is_active, b.created_at, b.updated_at,
+		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description
+		FROM catalog.blog_posts b
+		LEFT JOIN catalog.blog_post_translations t ON b.id = t.post_id
+		WHERE b.is_active = true
+		ORDER BY b.created_at DESC`
+
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		log.Printf("[STORE API ERROR] Failed to list blog posts: %v", err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	blogMap := make(map[string]*models.BlogPost)
+	var orderedBlogIDs []string
+
+	for rows.Next() {
+		var (
+			postID, slug                  string
+			coverImage                    *string
+			isActive                      bool
+			createdAt, updatedAt          time.Time
+			langCode, title, summary      *string
+			content, metaTitle, metaDesc *string
+		)
+
+		err := rows.Scan(
+			&postID, &slug, &coverImage, &isActive, &createdAt, &updatedAt,
+			&langCode, &title, &summary, &content, &metaTitle, &metaDesc,
+		)
+		if err != nil {
+			log.Printf("[STORE API ERROR] Failed to scan blog post row: %v", err)
+			http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		post, exists := blogMap[postID]
+		if !exists {
+			post = &models.BlogPost{
+				ID:           postID,
+				Slug:         slug,
+				CoverImage:   coverImage,
+				IsActive:     isActive,
+				Translations: make(map[string]models.BlogPostTranslation),
+				CreatedAt:    createdAt,
+				UpdatedAt:    updatedAt,
+			}
+			blogMap[postID] = post
+			orderedBlogIDs = append(orderedBlogIDs, postID)
+		}
+
+		if langCode != nil && title != nil && content != nil {
+			post.Translations[*langCode] = models.BlogPostTranslation{
+				Title:           *title,
+				Summary:         summary,
+				Content:         *content,
+				MetaTitle:       metaTitle,
+				MetaDescription: metaDesc,
+			}
+		}
+	}
+
+	blogList := make([]*models.BlogPost, 0, len(orderedBlogIDs))
+	for _, id := range orderedBlogIDs {
+		blogList = append(blogList, blogMap[id])
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(blogList)
+}
+
+// GetBlogPostBySlug returns a single active blog post by its slug
+func (h *CatalogHandler) GetBlogPostBySlug(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	slug := r.PathValue("slug")
+	if slug == "" {
+		http.Error(w, `{"error":"Slug is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT b.id, b.slug, b.cover_image, b.is_active, b.created_at, b.updated_at,
+		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description
+		FROM catalog.blog_posts b
+		LEFT JOIN catalog.blog_post_translations t ON b.id = t.post_id
+		WHERE b.slug = $1 AND b.is_active = true`
+
+	rows, err := db.Pool.Query(ctx, query, slug)
+	if err != nil {
+		log.Printf("[STORE API ERROR] Failed to fetch blog post by slug %s: %v", slug, err)
+		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var post *models.BlogPost
+
+	for rows.Next() {
+		var (
+			postID, postSlug              string
+			coverImage                    *string
+			isActive                      bool
+			createdAt, updatedAt          time.Time
+			langCode, title, summary      *string
+			content, metaTitle, metaDesc *string
+		)
+
+		err := rows.Scan(
+			&postID, &postSlug, &isActive, &createdAt, &updatedAt,
+			&langCode, &title, &summary, &content, &metaTitle, &metaDesc,
+		)
+		if err != nil {
+			log.Printf("[STORE API ERROR] Failed to scan blog post row: %v", err)
+			http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		if post == nil {
+			post = &models.BlogPost{
+				ID:           postID,
+				Slug:         postSlug,
+				CoverImage:   coverImage,
+				IsActive:     isActive,
+				Translations: make(map[string]models.BlogPostTranslation),
+				CreatedAt:    createdAt,
+				UpdatedAt:    updatedAt,
+			}
+		}
+
+		if langCode != nil && title != nil && content != nil {
+			post.Translations[*langCode] = models.BlogPostTranslation{
+				Title:           *title,
+				Summary:         summary,
+				Content:         *content,
+				MetaTitle:       metaTitle,
+				MetaDescription: metaDesc,
+			}
+		}
+	}
+
+	if post == nil {
+		http.Error(w, `{"error":"Blog post not found"}`, http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(post)
+}
+
 
 
