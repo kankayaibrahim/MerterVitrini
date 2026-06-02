@@ -1,0 +1,672 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+/* ==============================================================================
+   1. RESET & GLOBAL STYLES
+   ============================================================================== */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  background: radial-gradient(circle at 10% 10%, #1e1b4b 0%, #0f172a 45%, #020617 100%) !important;
+  background-attachment: fixed !important;
+  color: #f1f5f9 !important;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ==============================================================================
+   2. HIDE DEFAULT HEADERS & BRAND REPLACEMENT
+   ============================================================================== */
+#kc-header, #kc-header-wrapper, .login-pf-page-header {
+  display: none !important;
+}
+
+/* Main wrapper spacing */
+.login-pf-page, .pf-c-login {
+  background: transparent !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  min-height: 100vh !important;
+  padding: 2rem 1rem !important;
+  box-sizing: border-box !important;
+}
+
+/* Prepend custom brand header dynamically */
+.login-pf-page::before, .pf-c-login::before {
+  content: "Merter Vitrini" !important;
+  display: block !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 800 !important;
+  font-size: 32px !important;
+  letter-spacing: -0.04em !important;
+  color: #ffffff !important;
+  text-shadow: 0 0 40px rgba(244, 63, 94, 0.4) !important;
+  margin-bottom: 2px !important;
+  text-align: center !important;
+  animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.login-pf-page::after {
+  content: "TOPTAN SHOWROOM" !important;
+  display: block !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 10px !important;
+  letter-spacing: 0.35em !important;
+  color: #94a3b8 !important;
+  margin-bottom: 2.5rem !important;
+  text-align: center !important;
+  opacity: 0.8;
+  animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+
+/* ==============================================================================
+   3. GLASSMORPHIC CARD OVERHAUL
+   ============================================================================== */
+#kc-card-wrapper, .card-pf, .login-pf-page .card-pf, .pf-c-card, .pf-c-login__main {
+  background: rgba(15, 23, 42, 0.55) !important;
+  backdrop-filter: blur(20px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 24px !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), 0 0 1px rgba(255, 255, 255, 0.1) inset !important;
+  padding: 3rem 2.5rem !important;
+  max-width: 460px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin: 0 auto !important;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+#kc-card-wrapper:hover, .card-pf:hover, .pf-c-card:hover {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 1px rgba(255, 255, 255, 0.15) inset !important;
+}
+
+/* Page titles */
+h1, #kc-page-title, .pf-c-title, .login-pf-page .card-pf h1 {
+  font-family: 'Outfit', sans-serif !important;
+  font-size: 1.6rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  text-align: center !important;
+  margin-top: 0 !important;
+  margin-bottom: 2rem !important;
+  letter-spacing: -0.02em !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* ==============================================================================
+   4. FORM ELEMENTS & INTERACTIVE GLOW EFFECTS
+   ============================================================================== */
+.form-group, .pf-c-form__group {
+  margin-bottom: 1.5rem !important;
+  position: relative !important;
+}
+
+label, .pf-c-form__label, .control-label {
+  color: #cbd5e1 !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  margin-bottom: 8px !important;
+  display: inline-block !important;
+  letter-spacing: 0.02em !important;
+  font-family: 'Outfit', sans-serif !important;
+}
+
+.pf-c-form-control, .form-control, input[type="text"], input[type="password"], input[type="email"] {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  color: #f8fafc !important;
+  padding: 14px 16px !important;
+  font-size: 0.95rem !important;
+  font-family: 'Inter', sans-serif !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.pf-c-form-control:hover, .form-control:hover, input[type="text"]:hover, input[type="password"]:hover {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.pf-c-form-control:focus, .form-control:focus, input[type="text"]:focus, input[type="password"]:focus {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: #f43f5e !important;
+  box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.18) !important;
+  color: #ffffff !important;
+}
+
+/* Autofill fixes */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px #1e293b inset !important;
+  transition: background-color 5000s ease-in-out 0s !important;
+}
+
+/* ==============================================================================
+   5. PREMIUM GRADIENT SUBMIT BUTTON
+   ============================================================================== */
+.btn-primary, #kc-login, .pf-c-button.pf-m-primary {
+  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  color: #ffffff !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 0.95rem !important;
+  padding: 14px 24px !important;
+  width: 100% !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 18px rgba(244, 63, 94, 0.35) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  text-transform: none !important;
+  display: block !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+  margin-top: 1.5rem !important;
+}
+
+.btn-primary:hover, #kc-login:hover, .pf-c-button.pf-m-primary:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(244, 63, 94, 0.5) !important;
+  filter: brightness(1.08) !important;
+}
+
+.btn-primary:active, #kc-login:active, .pf-c-button.pf-m-primary:active {
+  transform: translateY(0.5px) !important;
+  box-shadow: 0 3px 12px rgba(244, 63, 94, 0.3) !important;
+  filter: brightness(0.95) !important;
+}
+
+/* ==============================================================================
+   6. STANDARDIZED WHITE GOOGLE SSO BUTTON
+   ============================================================================== */
+#kc-social-providers, .pf-c-login__main-footer-links, .login-pf-social-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  margin-top: 2rem !important;
+  padding-top: 1.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+#kc-social-providers h4, .pf-c-login__main-footer-band-title {
+  color: #94a3b8 !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  text-align: center !important;
+  margin-bottom: 0.8rem !important;
+}
+
+.zocial.google, .zocial-google, .pf-c-login__main-footer-links-item-link, [id^="social-google"], .login-pf-social-link {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  color: #1e293b !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 0.95rem !important;
+  padding: 13px 16px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  text-decoration: none !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer !important;
+}
+
+.zocial.google:hover, .pf-c-login__main-footer-links-item-link:hover, [id^="social-google"]:hover, .login-pf-social-link:hover {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14) !important;
+  transform: translateY(-2px) !important;
+  color: #0f172a !important;
+}
+
+.zocial.google:active, .pf-c-login__main-footer-links-item-link:active, [id^="social-google"]:active, .login-pf-social-link:active {
+  transform: translateY(0.5px) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Embed beautiful Google SVG vector logo dynamically */
+.zocial.google::before, .zocial.google:before,
+.zocial-google::before, .zocial-google:before,
+[id^="social-google"]::before, [id^="social-google"]:before,
+.login-pf-social-link::before, .login-pf-social-link:before {
+  content: "" !important;
+  display: inline-block !important;
+  width: 18px !important;
+  height: 18px !important;
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="%23EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="%234285F4" d="M46.5 24c0-1.61-.15-3.16-.42-4.69H24v8.87h12.66c-.55 2.94-2.19 5.42-4.69 7.09l7.25 5.62C43.46 36.5 46.5 30.79 46.5 24z"/><path fill="%23FBBC05" d="M10.54 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.98-6.19z"/><path fill="%2334A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.25-5.62c-2.03 1.37-4.63 2.19-8.64 2.19-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>') no-repeat center !important;
+  background-size: contain !important;
+  margin-right: 8px !important;
+  font-size: 0 !important;
+  color: transparent !important;
+}
+
+/* Remove default Keycloak provider icons and duplicate styling tags inside the link button */
+.zocial.google span, .zocial-google span, .login-pf-social-link span {
+  font-size: 0.95rem !important;
+  font-weight: 600 !important;
+}
+
+.zocial.google i, .zocial-google i, [id^="social-google"] i,
+.zocial.google svg, .zocial-google svg, [id^="social-google"] svg,
+.zocial.google .pf-c-login__main-footer-links-item-link-icon,
+[id^="social-google"] .pf-c-login__main-footer-links-item-link-icon,
+.zocial.google .kc-social-provider-icon,
+[id^="social-google"] .kc-social-provider-icon {
+  display: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* ==============================================================================
+   7. LINKS & HELPER FOOTERS
+   ============================================================================== */
+a, .pf-c-button.pf-m-link {
+  color: #94a3b8 !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  text-decoration: none !important;
+}
+
+a:hover, .pf-c-button.pf-m-link:hover {
+  color: #f43f5e !important;
+  text-decoration: underline !important;
+}
+
+#kc-registration, .login-pf-signup {
+  margin-top: 1.5rem !important;
+  text-align: center !important;
+  color: #94a3b8 !important;
+  font-size: 0.85rem !important;
+}
+
+#kc-registration a, .login-pf-signup a {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  margin-left: 5px !important;
+}
+
+#kc-registration a:hover, .login-pf-signup a:hover {
+  color: #f43f5e !important;
+}
+
+/* Helper layout for links underneath input fields */
+.login-pf-settings, .pf-c-login__main-body-helper {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-top: 1rem !important;
+  font-size: 0.85rem !important;
+}
+
+/* Custom Checkboxes */
+input[type="checkbox"] {
+  accent-color: #f43f5e !important;
+  margin-right: 6px !important;
+  cursor: pointer !important;
+}
+
+/* ==============================================================================
+   8. ERROR, ALERT & INFO MESSAGES
+   ============================================================================== */
+.alert, .pf-c-alert, .kc-feedback-text {
+  border-radius: 12px !important;
+  padding: 12px 16px !important;
+  margin-bottom: 1.5rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+.alert-error, .pf-c-alert.pf-m-danger, .alert-danger {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+  color: #fca5a5 !important;
+}
+
+.alert-success, .pf-c-alert.pf-m-success {
+  background: rgba(34, 197, 94, 0.12) !important;
+  border-color: rgba(34, 197, 94, 0.25) !important;
+  color: #86efac !important;
+}
+
+.alert-warning, .pf-c-alert.pf-m-warning {
+  background: rgba(234, 179, 8, 0.12) !important;
+  border-color: rgba(234, 179, 8, 0.25) !important;
+  color: #fef08a !important;
+}
+
+.alert-info, .pf-c-alert.pf-m-info {
+  background: rgba(59, 130, 246, 0.12) !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+  color: #93c5fd !important;
+}
+
+/* Remove ugly warning/danger default icons */
+.pf-c-alert__icon, .alert .pficon {
+  display: none !important;
+}
+
+/* ==============================================================================
+   9. CSS KEYFRAME ANIMATIONS
+   ============================================================================== */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ==============================================================================
+   10. RESPONSIVE MEDIA QUERIES
+   ============================================================================== */
+@media (max-width: 480px) {
+  #kc-card-wrapper, .card-pf, .pf-c-card {
+    padding: 2rem 1.5rem !important;
+    border-radius: 16px !important;
+  }
+  
+  .login-pf-page::before, .pf-c-login::before {
+    font-size: 26px !important;
+  }
+}
+
+/* ==============================================================================
+   11. LOCALE SELECTOR & LOGOUT COMPONENT OVERHAUL
+   ============================================================================== */
+#kc-card-wrapper, .card-pf, .pf-c-card, .pf-c-login__main {
+  position: relative !important;
+}
+
+#kc-locale, #kc-locale-wrapper {
+  position: fixed !important;
+  top: 1.5rem !important;
+  right: 1.5rem !important;
+  z-index: 99999 !important;
+}
+
+#kc-locale-dropdown {
+  position: relative !important;
+  display: inline-block !important;
+}
+
+/* Force custom variables inside the locale section to fully override Patternfly defaults */
+#kc-locale, #kc-locale-wrapper, #kc-locale-dropdown, .pf-c-dropdown {
+  --pf-c-dropdown__menu--BackgroundColor: rgba(15, 23, 42, 0.95) !important;
+  --pf-c-dropdown__menu--BorderWidth: 1px !important;
+  --pf-c-dropdown__menu--BorderColor: rgba(255, 255, 255, 0.1) !important;
+  --pf-c-dropdown__menu--BoxShadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+  --pf-c-dropdown__menu--PaddingTop: 8px !important;
+  --pf-c-dropdown__menu--PaddingBottom: 8px !important;
+  
+  --pf-c-dropdown__menu-item--Color: #cbd5e1 !important;
+  --pf-c-dropdown__menu-item--hover--Color: #ffffff !important;
+  --pf-c-dropdown__menu-item--hover--BackgroundColor: rgba(244, 63, 94, 0.15) !important;
+  
+  --pf-c-dropdown__toggle--BackgroundColor: rgba(255, 255, 255, 0.05) !important;
+  --pf-c-dropdown__toggle--Color: #cbd5e1 !important;
+  --pf-c-dropdown__toggle--BorderColor: rgba(255, 255, 255, 0.08) !important;
+  --pf-c-dropdown__toggle--hover--BackgroundColor: rgba(255, 255, 255, 0.1) !important;
+  --pf-c-dropdown__toggle--hover--Color: #ffffff !important;
+  --pf-c-dropdown__toggle--focus--BackgroundColor: rgba(255, 255, 255, 0.1) !important;
+  --pf-c-dropdown__toggle--focus--Color: #ffffff !important;
+  --pf-c-dropdown__toggle--active--BackgroundColor: rgba(255, 255, 255, 0.1) !important;
+  --pf-c-dropdown__toggle--active--Color: #ffffff !important;
+}
+
+/* Locale toggle button styling (Bulletproof direct button & layout targeting) */
+#kc-locale-dropdown button, 
+#kc-current-locale-link, 
+.kc-dropdown-toggle, 
+#kc-locale-wrapper a {
+  background: rgba(255, 255, 255, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 8px !important;
+  color: #cbd5e1 !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  padding: 6px 12px !important;
+  text-decoration: none !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  outline: none !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+#kc-locale-dropdown button:hover, 
+#kc-current-locale-link:hover, 
+.kc-dropdown-toggle:hover, 
+#kc-locale-wrapper a:hover,
+#kc-locale-dropdown button:focus,
+#kc-current-locale-link:focus {
+  background: rgba(255, 255, 255, 0.1) !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Locale dropdown list menu box (Glassmorphic dark design) */
+#kc-locale-wrapper ul, 
+.kc-dropdown-menu, 
+.pf-c-dropdown__menu, 
+.pf-v5-c-dropdown__menu,
+ul#language-switch1,
+#kc-locale ul,
+[class*="dropdown"] ul,
+[class*="dropdown"]__menu {
+  position: absolute !important;
+  top: 100% !important;
+  left: auto !important;
+  right: 0 !important;
+  background: #0f172a !important;
+  background-color: #0f172a !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6) !important;
+  padding: 8px !important;
+  margin: 6px 0 0 0 !important;
+  list-style: none !important;
+  width: 180px !important;
+  min-width: 180px !important;
+  max-width: 180px !important;
+  z-index: 10000 !important;
+  animation: fadeIn 0.2s ease both;
+  box-sizing: border-box !important;
+}
+
+/* Dropdown list item */
+#kc-locale-wrapper ul li, 
+.kc-dropdown-menu li, 
+.pf-c-dropdown__menu li,
+.pf-v5-c-dropdown__menu li,
+#kc-locale ul li,
+[class*="dropdown"] li {
+  margin: 2px 0 !important;
+  padding: 0 !important;
+  list-style-type: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Dropdown item links */
+#kc-locale-wrapper ul li a, 
+.kc-dropdown-menu li a, 
+.pf-c-dropdown__menu__item, 
+.pf-c-dropdown__menu-item,
+.pf-v5-c-dropdown__menu-item,
+#kc-locale ul li a,
+[class*="dropdown"]__menu__item,
+[class*="dropdown"]__menu-item,
+[class*="dropdown"] li a,
+[class*="dropdown"] a {
+  display: block !important;
+  padding: 8px 12px !important;
+  color: #cbd5e1 !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+  transition: all 0.15s ease !important;
+  text-decoration: none !important;
+  text-align: left !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+}
+
+#kc-locale-wrapper ul li a:hover, 
+.kc-dropdown-menu li a:hover, 
+.pf-c-dropdown__menu__item:hover, 
+.pf-c-dropdown__menu-item:hover,
+.pf-v5-c-dropdown__menu-item:hover,
+#kc-locale ul li a:hover,
+[class*="dropdown"]__menu__item:hover,
+[class*="dropdown"]__menu-item:hover,
+[class*="dropdown"] li a:hover,
+[class*="dropdown"] a:hover {
+  background: rgba(244, 63, 94, 0.2) !important;
+  background-color: rgba(244, 63, 94, 0.2) !important;
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+
+/* Typography, instruction & description text visibility */
+p, .instruction, .subtitle, .pf-c-empty-state__body, .kc-feedback-text {
+  color: #cbd5e1 !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 0.95rem !important;
+  line-height: 1.6 !important;
+  text-align: center !important;
+  margin-bottom: 1.5rem !important;
+}
+
+/* Logout submit button gradient styling */
+#kc-logout {
+  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  color: #ffffff !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 0.95rem !important;
+  padding: 14px 24px !important;
+  width: 100% !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 18px rgba(244, 63, 94, 0.35) !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  text-transform: none !important;
+  display: block !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+  margin-top: 1.5rem !important;
+}
+
+#kc-logout:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px rgba(244, 63, 94, 0.5) !important;
+  filter: brightness(1.08) !important;
+}
+
+#kc-logout:active {
+  transform: translateY(0.5px) !important;
+  box-shadow: 0 3px 12px rgba(244, 63, 94, 0.3) !important;
+  filter: brightness(0.95) !important;
+}
+
+/* Secondary Button Overrides (OIDC Back/Cancel button) */
+.btn-secondary, #kc-cancel, .pf-c-button.pf-m-secondary {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  color: #f1f5f9 !important;
+  font-family: 'Outfit', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 0.95rem !important;
+  padding: 14px 24px !important;
+  width: 100% !important;
+  cursor: pointer !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-sizing: border-box !important;
+  text-align: center !important;
+  display: block !important;
+  margin-top: 1rem !important;
+}
+
+.btn-secondary:hover, #kc-cancel:hover, .pf-c-button.pf-m-secondary:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #ffffff !important;
+}
+
+/* Quick fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

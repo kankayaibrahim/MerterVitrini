@@ -925,25 +925,12 @@ export default function ProfilePage() {
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("store_user_token");
       localStorage.removeItem("store_user_token");
       localStorage.removeItem("store_user_info");
       window.dispatchEvent(new Event("auth-change"));
       
       const origin = window.location.origin;
-      const keycloakUrl = "https://auth.mertervitrini.com.tr";
-      const realm = "merter";
-      const clientId = "admin-client";
-      
-      let logoutUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/logout` +
-        `?client_id=${encodeURIComponent(clientId)}` +
-        `&post_logout_redirect_uri=${encodeURIComponent(origin)}`;
-      
-      if (token) {
-        logoutUrl += `&id_token_hint=${encodeURIComponent(token)}`;
-      }
-      
-      window.location.href = logoutUrl;
+      window.location.href = origin + "/";
     }
   };
 
