@@ -608,6 +608,27 @@ server {{
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
     }}
 
+    # Cache and serve dynamically resized images
+    location ^~ /uploads/cache/ {{
+        alias {cfg['remote_dir']}/uploads/cache/;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, no-transform" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+        try_files $uri @resize;
+    }}
+
+    # Redirect cache misses to the Go backend resizer
+    location @resize {{
+        rewrite ^/uploads/cache/(\d+)x(\d+)/(.*)$ /api/v1/store/images/resize?w=$1&h=$2&path=$3 break;
+        proxy_pass http://127.0.0.1:8081;
+    }}
+
     # Cache static uploads (product cover/variant images) with strict security
     location ^~ /uploads/ {{
         alias {cfg['remote_dir']}/uploads/;

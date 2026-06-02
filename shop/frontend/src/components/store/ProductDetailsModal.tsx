@@ -4,7 +4,7 @@ import React from "react";
 import { X, ShoppingBag, Plus, Minus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Product } from "@/types/store";
 import { t, getProductTitle, getProductDescription, getProductAttributes, translateColor } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, convertPrice } from "@/app/utils";
+import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl } from "@/app/utils";
 
 interface ProductDetailsModalProps {
   product: Product;
@@ -169,7 +169,7 @@ export default function ProductDetailsModal({
                 className="aspect-[4/5] rounded-[10px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group"
               >
                 <img 
-                  src={modalMainImg} 
+                  src={getResizedImageUrl(modalMainImg, 600, 800)} 
                   alt={title}
                   className="w-full h-full object-contain transition-all duration-300 group-hover:scale-105"
                 />
@@ -187,7 +187,7 @@ export default function ProductDetailsModal({
                           : "border-transparent opacity-60 hover:opacity-100"
                       }`}
                     >
-                      <img src={img.image_url} alt="thumb" className="w-full h-full object-cover" />
+                      <img src={getResizedImageUrl(img.image_url, 80, 106)} alt="thumb" className="w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>
@@ -277,7 +277,7 @@ export default function ProductDetailsModal({
                   >
                     <div className="w-12 h-14 rounded-[5px] overflow-hidden bg-[#f0f0f0] border border-cultured relative">
                       <img 
-                        src={product.images?.find(img => img.is_cover)?.image_url || product.images?.[0]?.image_url || "/placeholder.png"} 
+                        src={getResizedImageUrl(product.images?.find(img => img.is_cover)?.image_url || product.images?.[0]?.image_url || "/placeholder.png", 80, 106)} 
                         alt={product.color || "Standart"} 
                         className="w-full h-full object-cover"
                       />
@@ -299,7 +299,7 @@ export default function ProductDetailsModal({
                     >
                       <div className="w-12 h-14 rounded-[5px] overflow-hidden bg-[#f0f0f0] border border-cultured">
                         <img 
-                          src={sib.image_url || "/placeholder.png"} 
+                          src={getResizedImageUrl(sib.image_url || "/placeholder.png", 80, 106)} 
                           alt={sib.color} 
                           className="w-full h-full object-cover"
                         />

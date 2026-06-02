@@ -4,7 +4,7 @@ import React from "react";
 import { X, ShoppingBag } from "lucide-react";
 import { CartItem } from "@/types/store";
 import { t } from "@/app/i18n";
-import { convertPrice } from "@/app/utils";
+import { convertPrice, getResizedImageUrl } from "@/app/utils";
 
 interface CartDrawerProps {
   lang: string;
@@ -124,7 +124,7 @@ export default function CartDrawer({
                     <div key={idx} className="border border-cultured bg-[#fafafa] rounded-[5px] p-3 flex gap-3 relative shadow-inner">
                       
                       <img 
-                        src={item.image_url} 
+                        src={getResizedImageUrl(item.image_url, 80, 106)} 
                         alt={item.title} 
                         className="w-14 h-18 object-cover rounded-[5px] bg-white border border-cultured"
                       />

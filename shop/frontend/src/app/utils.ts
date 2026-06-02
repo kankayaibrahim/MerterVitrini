@@ -67,3 +67,12 @@ export function convertPrice(
   return price;
 }
 
+export function getResizedImageUrl(url?: string, width: number = 288, height: number = 385): string {
+  if (!url) return "/placeholder.png";
+  if (url.startsWith("/uploads/") && !url.includes("/uploads/cache/")) {
+    return url.replace("/uploads/", `/uploads/cache/${width}x${height}/`);
+  }
+  return url;
+}
+
+

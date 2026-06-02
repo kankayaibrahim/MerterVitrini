@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Product } from "@/types/store";
 import { getProductTitle, t } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, convertPrice } from "@/app/utils";
+import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl } from "@/app/utils";
 import { Heart, ShoppingBag, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -80,12 +80,12 @@ export default function ProductCard({
   let coverImg = "/placeholder.png";
   if (product.images && product.images.length > 0) {
     const coverObj = product.images.find((img) => img.is_cover) || product.images[0];
-    coverImg = coverObj.image_url;
+    coverImg = getResizedImageUrl(coverObj.image_url, 288, 385);
   }
 
   let hoverImg = "";
   if (product.images && product.images.length > 1) {
-    hoverImg = product.images.at(1)?.image_url || "";
+    hoverImg = getResizedImageUrl(product.images.at(1)?.image_url, 288, 385);
   }
   
   const units = getUnitsFromSeriesRatio(product.series_ratio);

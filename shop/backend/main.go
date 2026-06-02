@@ -108,6 +108,7 @@ func main() {
 	inquiryHandler := handlers.NewInquiryHandler()
 	policiesHandler := handlers.NewPoliciesHandler()
 	authHandler := handlers.NewAuthHandler(cfg)
+	imageHandler := handlers.NewImageHandler()
 
 	// 6. Register HTTP Router using Go ServeMux
 	mux := http.NewServeMux()
@@ -151,6 +152,11 @@ func main() {
 
 	// B2B Cart Quote Inquiries (Public - v1)
 	mux.HandleFunc("POST /api/v1/store/inquiries", inquiryHandler.SubmitInquiry)
+
+	// Image Resizing & Bulk Pre-generation
+	mux.HandleFunc("GET /api/v1/store/images/resize", imageHandler.ResizeImage)
+	mux.HandleFunc("POST /api/v1/store/images/bulk-resize", imageHandler.StartBulkResize)
+	mux.HandleFunc("GET /api/v1/store/images/bulk-status", imageHandler.GetBulkStatus)
 
 	// 7. Wrap global middlewares (CORS, Rate Limiting & Logging)
 	var handler http.Handler = mux

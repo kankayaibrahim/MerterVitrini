@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { X, Heart, Eye } from "lucide-react";
 import { Product } from "@/types/store";
 import { t, getProductTitle } from "@/app/i18n";
-import { convertPrice } from "@/app/utils";
+import { convertPrice, getResizedImageUrl } from "@/app/utils";
 import { useRouter } from "next/navigation";
 
 interface WishlistDrawerProps {
@@ -151,7 +151,7 @@ export default function WishlistDrawer({
                 let coverImg = "/placeholder.png";
                 if (product.images && product.images.length > 0) {
                   const coverObj = product.images.find((img: any) => img.is_cover) || product.images[0];
-                  coverImg = coverObj.image_url;
+                  coverImg = getResizedImageUrl(coverObj.image_url, 80, 106);
                 }
 
                 // Pricing calculations
