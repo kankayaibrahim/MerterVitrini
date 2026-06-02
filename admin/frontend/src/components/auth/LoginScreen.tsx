@@ -49,7 +49,7 @@ export default function LoginScreen({}: LoginScreenProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-radial from-zinc-900 via-zinc-950 to-black p-4 font-sans text-zinc-100 antialiased overflow-hidden relative">
+    <main className="min-h-screen flex items-center justify-center bg-radial from-zinc-900 via-zinc-950 to-black p-4 font-sans text-zinc-100 antialiased overflow-hidden relative">
       
       {/* Decorative Blur Orbs */}
       <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-violet-600/10 blur-[120px] pointer-events-none" />
@@ -117,6 +117,6 @@ export default function LoginScreen({}: LoginScreenProps) {
         </div>
 
       </div>
-    </div>
+    </main>
   );
 }

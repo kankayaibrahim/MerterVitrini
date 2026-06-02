@@ -704,9 +704,9 @@ export default function Home() {
   // 1. Loading State during initialization
   if (!isInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+      <main className="min-h-screen flex items-center justify-center bg-zinc-950">
         <Loader2 size={36} className="text-violet-500 animate-spin" />
-      </div>
+      </main>
     );
   }
 
