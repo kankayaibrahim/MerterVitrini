@@ -104,7 +104,7 @@ h1, #kc-page-title, .pf-c-title, .login-pf-page .card-pf h1 {
   margin-bottom: 2rem !important;
   letter-spacing: -0.02em !important;
   border: none !important;
-  padding: 0 !important;
+  padding: 0 45px !important;
 }
 
 /* ==============================================================================
@@ -159,6 +159,66 @@ input:-webkit-autofill:focus {
   -webkit-text-fill-color: #ffffff !important;
   -webkit-box-shadow: 0 0 0px 1000px #1e293b inset !important;
   transition: background-color 5000s ease-in-out 0s !important;
+}
+
+/* Password input group wrapper (removes white border around password + eye toggle) */
+.pf-c-input-group {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: flex !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+.pf-c-input-group .pf-c-form-control {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-right: none !important;
+  flex: 1 !important;
+}
+
+/* Eye toggle button inside password field */
+.pf-c-button.pf-m-control,
+.pf-c-input-group button[data-password-toggle] {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-left: none !important;
+  border-top-right-radius: 12px !important;
+  border-bottom-right-radius: 12px !important;
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  color: #94a3b8 !important;
+  padding: 14px 14px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.pf-c-button.pf-m-control:hover,
+.pf-c-input-group button[data-password-toggle]:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.pf-c-button.pf-m-control:focus,
+.pf-c-input-group button[data-password-toggle]:focus {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: #f43f5e !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.18) !important;
+}
+
+/* When password input is focused, extend the glow to the eye button */
+.pf-c-input-group:focus-within .pf-c-form-control {
+  border-color: #f43f5e !important;
+  box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.18) !important;
+}
+
+.pf-c-input-group:focus-within .pf-c-button.pf-m-control {
+  border-color: #f43f5e !important;
+  box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.18) !important;
 }
 
 /* ==============================================================================
@@ -427,11 +487,16 @@ input[type="checkbox"] {
   position: relative !important;
 }
 
-#kc-locale, #kc-locale-wrapper {
-  position: fixed !important;
-  top: 1.5rem !important;
-  right: 1.5rem !important;
+#kc-locale {
+  position: absolute !important;
+  top: 1rem !important;
+  right: 1rem !important;
   z-index: 99999 !important;
+}
+
+#kc-locale-wrapper {
+  position: relative !important;
+  display: inline-block !important;
 }
 
 #kc-locale-dropdown {
@@ -500,19 +565,37 @@ input[type="checkbox"] {
   border-color: rgba(255, 255, 255, 0.15) !important;
 }
 
-/* Locale dropdown list menu box (Glassmorphic dark design) */
-#kc-locale-wrapper ul, 
-.kc-dropdown-menu, 
-.pf-c-dropdown__menu, 
-.pf-v5-c-dropdown__menu,
+/* Hide language dropdown menu by default - using ID for maximum specificity */
 ul#language-switch1,
-#kc-locale ul,
-[class*="dropdown"] ul,
-[class*="dropdown"]__menu {
+#kc-locale .pf-c-dropdown__menu {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Show ONLY when Keycloak JS adds .pf-m-expanded class (click-based toggle) */
+.pf-c-dropdown.pf-m-expanded > #kc-locale-wrapper ul#language-switch1,
+.pf-c-dropdown.pf-m-expanded #kc-locale-dropdown > ul#language-switch1,
+#kc-locale.pf-m-expanded ul#language-switch1,
+#kc-locale-dropdown:focus-within > ul#language-switch1 {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Locale dropdown list menu box (Glassmorphic dark design) */
+ul#language-switch1,
+#kc-locale-dropdown ul,
+.menu-button-links ul {
   position: absolute !important;
   top: 100% !important;
+  bottom: auto !important;
   left: auto !important;
   right: 0 !important;
+  margin-top: 6px !important;
+  margin-bottom: 0 !important;
   background: #0f172a !important;
   background-color: #0f172a !important;
   backdrop-filter: blur(20px) !important;
@@ -521,23 +604,20 @@ ul#language-switch1,
   border-radius: 12px !important;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6) !important;
   padding: 8px !important;
-  margin: 6px 0 0 0 !important;
   list-style: none !important;
-  width: 180px !important;
-  min-width: 180px !important;
-  max-width: 180px !important;
+  width: 200px !important;
+  min-width: 200px !important;
+  max-width: 200px !important;
   z-index: 10000 !important;
   animation: fadeIn 0.2s ease both;
   box-sizing: border-box !important;
 }
 
 /* Dropdown list item */
-#kc-locale-wrapper ul li, 
-.kc-dropdown-menu li, 
-.pf-c-dropdown__menu li,
-.pf-v5-c-dropdown__menu li,
-#kc-locale ul li,
-[class*="dropdown"] li {
+ul#language-switch1 li,
+#kc-locale-dropdown ul li,
+.menu-button-links ul li,
+#kc-locale .pf-c-dropdown__menu li {
   margin: 2px 0 !important;
   padding: 0 !important;
   list-style-type: none !important;
@@ -546,23 +626,17 @@ ul#language-switch1,
 }
 
 /* Dropdown item links */
-#kc-locale-wrapper ul li a, 
-.kc-dropdown-menu li a, 
-.pf-c-dropdown__menu__item, 
-.pf-c-dropdown__menu-item,
-.pf-v5-c-dropdown__menu-item,
-#kc-locale ul li a,
-[class*="dropdown"]__menu__item,
-[class*="dropdown"]__menu-item,
-[class*="dropdown"] li a,
-[class*="dropdown"] a {
+ul#language-switch1 li a,
+#kc-locale-dropdown ul li a,
+.menu-button-links ul li a,
+#kc-locale .pf-c-dropdown__menu-item {
   display: block !important;
-  padding: 8px 12px !important;
-  color: #cbd5e1 !important;
+  padding: 10px 14px !important;
+  color: #e2e8f0 !important;
   font-family: 'Outfit', sans-serif !important;
-  font-size: 0.8rem !important;
+  font-size: 0.85rem !important;
   font-weight: 500 !important;
-  border-radius: 6px !important;
+  border-radius: 8px !important;
   transition: all 0.15s ease !important;
   text-decoration: none !important;
   text-align: left !important;
@@ -574,18 +648,12 @@ ul#language-switch1,
   cursor: pointer !important;
 }
 
-#kc-locale-wrapper ul li a:hover, 
-.kc-dropdown-menu li a:hover, 
-.pf-c-dropdown__menu__item:hover, 
-.pf-c-dropdown__menu-item:hover,
-.pf-v5-c-dropdown__menu-item:hover,
-#kc-locale ul li a:hover,
-[class*="dropdown"]__menu__item:hover,
-[class*="dropdown"]__menu-item:hover,
-[class*="dropdown"] li a:hover,
-[class*="dropdown"] a:hover {
-  background: rgba(244, 63, 94, 0.2) !important;
-  background-color: rgba(244, 63, 94, 0.2) !important;
+ul#language-switch1 li a:hover,
+#kc-locale-dropdown ul li a:hover,
+.menu-button-links ul li a:hover,
+#kc-locale .pf-c-dropdown__menu-item:hover {
+  background: rgba(244, 63, 94, 0.15) !important;
+  background-color: rgba(244, 63, 94, 0.15) !important;
   color: #ffffff !important;
   text-decoration: none !important;
 }
