@@ -142,7 +142,7 @@ func main() {
 	pagesHandler := handlers.NewPagesHandler()
 	blogHandler := handlers.NewBlogHandler()
 	indexNowHandler := handlers.NewIndexNowHandler()
-
+	imageHandler := handlers.NewImageHandler()
 
 	// 6. Register HTTP Router using Go 1.22+ enhanced ServeMux pattern
 	mux := http.NewServeMux()
@@ -185,6 +185,10 @@ func main() {
 	mux.Handle("POST /api/v1/products/refresh-cache", authMiddleware(http.HandlerFunc(catalogHandler.RefreshProductCache)))
 	mux.Handle("GET /api/v1/settings", authMiddleware(http.HandlerFunc(catalogHandler.GetSettings)))
 	mux.Handle("PUT /api/v1/settings", authMiddleware(http.HandlerFunc(catalogHandler.UpdateSettings)))
+
+	// Image Cache Management Endpoints (Protected - v1 Versioned)
+	mux.Handle("POST /api/v1/store/images/bulk-resize", authMiddleware(http.HandlerFunc(imageHandler.StartBulkResize)))
+	mux.Handle("GET /api/v1/store/images/bulk-status", authMiddleware(http.HandlerFunc(imageHandler.GetBulkStatus)))
 
 	// Integration/XML Sync Endpoints (Protected - v1 Versioned)
 	mux.Handle("GET /api/v1/feeds", authMiddleware(http.HandlerFunc(integrationHandler.ListFeeds)))

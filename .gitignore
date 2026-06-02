@@ -105,3 +105,4 @@ admin/backend/parsers/failed_images.csv
 
 # Banned Images Manual Curation Folder
 admin/backend/parsers/etika_yasakli_listesi/
+admin/backend/bin/backend

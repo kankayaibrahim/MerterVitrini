@@ -282,7 +282,7 @@ func (h *ImageHandler) StartBulkResize(w http.ResponseWriter, r *http.Request) {
 		}
 
 		mediaRoot := getMediaDir()
-		var queuedCount int
+		var jobs []ResizeJob
 
 		// Target dimensions to generate
 		targets := []struct {
@@ -312,25 +312,30 @@ func (h *ImageHandler) StartBulkResize(w http.ResponseWriter, r *http.Request) {
 			for _, target := range targets {
 				cachePath := filepath.Join(mediaRoot, "cache", target.key, relPath)
 				if _, err := os.Stat(cachePath); os.IsNotExist(err) {
-					jobQueue <- ResizeJob{
+					jobs = append(jobs, ResizeJob{
 						OriginalPath: originalPath,
 						CachePath:    cachePath,
 						Width:        target.width,
 						Height:       target.height,
-					}
-					queuedCount++
+					})
 				}
 			}
 		}
 
 		bulkStatus.Lock()
-		bulkStatus.TotalJobs = queuedCount
-		if queuedCount == 0 {
+		bulkStatus.TotalJobs = len(jobs)
+		if len(jobs) == 0 {
 			bulkStatus.IsRunning = false
+			bulkStatus.Unlock()
+			return
 		}
 		bulkStatus.Unlock()
 
-		log.Printf("[BULK IMAGE] Enqueued %d resizing jobs", queuedCount)
+		for _, job := range jobs {
+			jobQueue <- job
+		}
+
+		log.Printf("[BULK IMAGE] Enqueued %d resizing jobs", len(jobs))
 	}()
 
 	w.Header().Set("Content-Type", "application/json")

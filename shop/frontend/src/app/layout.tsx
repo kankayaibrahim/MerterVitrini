@@ -23,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="tr" className={`${poppins.variable} h-full antialiased`}>
       <head>
+        <meta name="yandex-verification" content="77562ce72d424a2f" />
         {/* Google tag (gtag.js) */}
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-CNMNCL62Q2"
