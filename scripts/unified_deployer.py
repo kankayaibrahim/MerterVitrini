@@ -548,8 +548,98 @@ WantedBy=multi-user.target
 
                 # Dynamic Nginx Configuration rewrite
                 self.log("[NGINX] Dynamic Virtual Host configuration update...")
-                location_block = ""
-                if self.ssr_mode:
+                dest_conf = f"/etc/nginx/conf.d/{proj_key}.mertervitrini.com.tr.conf" if proj_key == "admin" else "/etc/nginx/conf.d/mertervitrini.com.tr.conf"
+                
+                if proj_key == "admin":
+                    nginx_conf = f"""# 1. Frontend Server Block (HTTPS)
+server {{
+    listen 443 ssl;
+    server_name admin.mertervitrini.com.tr;
+
+    root {cfg['remote_dir']};
+    index index.html index.htm;
+
+    # Security Headers
+    server_tokens off;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-src 'self' https://www.google.com/ https://recaptcha.net/ https://www.gstatic.com/; frame-ancestors 'self';" always;
+
+    location / {{
+        try_files $uri $uri/ /index.html =404;
+    }}
+
+    # Serve product uploads / media directly
+    location ^~ /uploads/ {{
+        alias /var/www/media/;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, no-transform" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    }}
+
+    ssl_certificate /etc/letsencrypt/live/admin.mertervitrini.com.tr/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.mertervitrini.com.tr/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}}
+
+# 2. Backend API Server Block (HTTPS)
+server {{
+    listen 443 ssl;
+    server_name adminapi.mertervitrini.com.tr;
+
+    # Security Headers
+    server_tokens off;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-src 'self' https://www.google.com/ https://recaptcha.net/ https://www.gstatic.com/; frame-ancestors 'self';" always;
+
+    location / {{
+        proxy_pass http://127.0.0.1:8085;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+
+    ssl_certificate /etc/letsencrypt/live/admin.mertervitrini.com.tr/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.mertervitrini.com.tr/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}}
+
+# 3. HTTP redirect block (Port 80)
+server {{
+    listen 80;
+    server_name admin.mertervitrini.com.tr adminapi.mertervitrini.com.tr;
+
+    # Let Certbot challenges bypass HTTPS redirect
+    location /.well-known/acme-challenge/ {{
+        root {cfg['remote_dir']};
+        try_files $uri =404;
+    }}
+
+    location / {{
+        return 301 https://$host$request_uri;
+    }}
+}}"""
+                else:
                     location_block = f"""    # Support Next.js Dynamic SSR / ISR Reverse Proxy to Port 3000
     location / {{
         proxy_pass http://127.0.0.1:3000;
@@ -561,9 +651,7 @@ WantedBy=multi-user.target
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-    }}"""
-                else:
-                    location_block = f"""    # Support Next.js App Router static exports with clean URLs
+    }}""" if self.ssr_mode else f"""    # Support Next.js App Router static exports with clean URLs
     location / {{
         try_files $uri $uri/ $uri.html /index.html =404;
     }}
@@ -573,9 +661,9 @@ WantedBy=multi-user.target
         try_files /index.html =404;
     }}"""
 
-                nginx_root = f"{cfg['remote_dir']}/public" if self.ssr_mode else cfg['remote_dir']
-                alias_path = f"{cfg['remote_dir']}/.next/static/" if self.ssr_mode else f"{cfg['remote_dir']}/_next/static/"
-                nginx_conf = f"""# 1. Main Storefront Server Block (HTTPS)
+                    nginx_root = f"{cfg['remote_dir']}/public" if self.ssr_mode else cfg['remote_dir']
+                    alias_path = f"{cfg['remote_dir']}/.next/static/" if self.ssr_mode else f"{cfg['remote_dir']}/_next/static/"
+                    nginx_conf = f"""# 1. Main Storefront Server Block (HTTPS)
 server {{
     listen 443 ssl;
     server_name 213.202.255.80 mertervitrini.com.tr www.mertervitrini.com.tr;
@@ -726,7 +814,7 @@ server {{
                     tmp_path = tmp.name
                 try:
                     sftp = ssh.open_sftp()
-                    sftp.put(tmp_path, "/etc/nginx/conf.d/mertervitrini.com.tr.conf")
+                    sftp.put(tmp_path, dest_conf)
                     sftp.close()
                 finally:
                     os.remove(tmp_path)
@@ -888,13 +976,68 @@ WantedBy=multi-user.target
                 self._ssh_cmd(ssh, "rm -f /etc/systemd/system/shop-frontend.service")
                 self._ssh_cmd(ssh, "systemctl daemon-reload")
 
-            # Dynamic Nginx Configuration rewrite
+        # Dynamic Nginx Configuration rewrite
             self.log("[NGINX] Dynamic Virtual Host configuration update...")
-            location_block = ""
-            if self.ssr_mode:
-                location_block = f"""    # Support Next.js Dynamic SSR / ISR Reverse Proxy to Port 3000
+            dest_conf = f"/etc/nginx/conf.d/{proj_key}.mertervitrini.com.tr.conf" if proj_key == "admin" else "/etc/nginx/conf.d/mertervitrini.com.tr.conf"
+            
+            if proj_key == "admin":
+                nginx_conf = f"""# 1. Frontend Server Block (HTTPS)
+server {{
+    listen 443 ssl;
+    server_name admin.mertervitrini.com.tr;
+
+    root {cfg['remote_dir']};
+    index index.html index.htm;
+
+    # Security Headers
+    server_tokens off;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-src 'self' https://www.google.com/ https://recaptcha.net/ https://www.gstatic.com/; frame-ancestors 'self';" always;
+
     location / {{
-        proxy_pass http://127.0.0.1:3000;
+        try_files $uri $uri/ /index.html =404;
+    }}
+
+    # Serve product uploads / media directly
+    location ^~ /uploads/ {{
+        alias /var/www/media/;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, no-transform" always;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    }}
+
+    ssl_certificate /etc/letsencrypt/live/admin.mertervitrini.com.tr/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.mertervitrini.com.tr/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}}
+
+# 2. Backend API Server Block (HTTPS)
+server {{
+    listen 443 ssl;
+    server_name adminapi.mertervitrini.com.tr;
+
+    # Security Headers
+    server_tokens off;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-src 'self' https://www.google.com/ https://recaptcha.net/ https://www.gstatic.com/; frame-ancestors 'self';" always;
+
+    location / {{
+        proxy_pass http://127.0.0.1:8085;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -903,14 +1046,36 @@ WantedBy=multi-user.target
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-    }}"""
+    }}
+
+    ssl_certificate /etc/letsencrypt/live/admin.mertervitrini.com.tr/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/admin.mertervitrini.com.tr/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+}}
+
+# 3. HTTP redirect block (Port 80)
+server {{
+    listen 80;
+    server_name admin.mertervitrini.com.tr adminapi.mertervitrini.com.tr;
+
+    # Let Certbot challenges bypass HTTPS redirect
+    location /.well-known/acme-challenge/ {{
+        root {cfg['remote_dir']};
+        try_files $uri =404;
+    }}
+
+    location / {{
+        return 301 https://$host$request_uri;
+    }}
+}}"""
             else:
                 location_block = f"""    # Support Next.js App Router static exports with clean URLs
     location / {{
         try_files $uri $uri/ $uri.html /index.html =404;
     }}"""
 
-            nginx_conf = f"""# 1. Main Storefront Server Block (HTTPS)
+                nginx_conf = f"""# 1. Main Storefront Server Block (HTTPS)
 server {{
     listen 443 ssl;
     server_name 213.202.255.80 mertervitrini.com.tr www.mertervitrini.com.tr;
@@ -930,7 +1095,7 @@ server {{
 {location_block}
 
     # Cache Next.js built chunks (highly optimized for browser caching)
-    location /_next/static/ {{
+    location ^~ /_next/static/ {{
         alias /var/www/mertervitrini.com.tr/frontend/_next/static/;
         access_log off;
         expires 365d;
@@ -944,8 +1109,8 @@ server {{
     }}
 
     # Cache static uploads (product cover/variant images) with strict security
-    location /uploads/ {{
-        alias /var/www/admin.mertervitrini.com.tr/frontend/uploads/;
+    location ^~ /uploads/ {{
+        alias {cfg['remote_dir']}/uploads/;
         access_log off;
         expires 30d;
         add_header Cache-Control "public, max-age=2592000, no-transform" always;
@@ -954,11 +1119,11 @@ server {{
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
     }}
 
     # Cache other static file extensions with security headers
-    location ~* \\.(?:ico|css|js|gif|jpe?g|png|svg|webp|avif|woff2?|eot|ttf|otf)$ {{
+    location ~* \.(?:ico|css|js|gif|jpe?g|png|svg|webp|avif|woff2?|eot|ttf|otf)$ {{
         access_log off;
         expires 30d;
         add_header Cache-Control "public, max-age=2592000, no-transform" always;
@@ -1040,12 +1205,10 @@ server {{
                 tmp_path = tmp.name
             try:
                 sftp = ssh.open_sftp()
-                sftp.put(tmp_path, "/etc/nginx/conf.d/mertervitrini.com.tr.conf")
+                sftp.put(tmp_path, dest_conf)
                 sftp.close()
             finally:
                 os.remove(tmp_path)
-
-            # Nginx Reload
             t_nginx_start = time.time()
             self._ssh_cmd(ssh, "systemctl restart nginx || true")
             t_nginx_end = time.time()
