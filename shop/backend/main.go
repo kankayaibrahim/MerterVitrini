@@ -161,6 +161,7 @@ func main() {
 	mux.HandleFunc("GET /api/v1/store/images/resize", imageHandler.ResizeImage)
 	mux.HandleFunc("POST /api/v1/store/images/bulk-resize", imageHandler.StartBulkResize)
 	mux.HandleFunc("GET /api/v1/store/images/bulk-status", imageHandler.GetBulkStatus)
+	mux.HandleFunc("GET /api/v1/store/images/scan-missing", imageHandler.ScanMissingImages)
 
 	// 7. Wrap global middlewares (CORS, Rate Limiting & Logging)
 	var handler http.Handler = mux

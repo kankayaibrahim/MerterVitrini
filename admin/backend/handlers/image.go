@@ -362,3 +362,67 @@ func (h *ImageHandler) GetBulkStatus(w http.ResponseWriter, r *http.Request) {
 	))
 	w.Write(jsonBytes)
 }
+
+// ScanMissingImages scans the database catalog and checks the file system for missing cached WebP images
+func (h *ImageHandler) ScanMissingImages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	// Fetch all image URLs from catalog
+	query := `SELECT DISTINCT image_url FROM catalog.product_images`
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		log.Printf("[BULK IMAGE ERROR] Failed to fetch image list for scanning: %v", err)
+		http.Error(w, `{"error":"Failed to fetch image list"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var urls []string
+	for rows.Next() {
+		var url string
+		if err := rows.Scan(&url); err == nil {
+			urls = append(urls, url)
+		}
+	}
+
+	mediaRoot := getMediaDir()
+	missingCount := 0
+
+	// Target dimensions to check
+	targets := []string{
+		"288x385",
+		"80x106",
+		"600x800",
+	}
+
+	for _, urlPath := range urls {
+		if !strings.HasPrefix(urlPath, "/uploads/") {
+			continue
+		}
+		relPath := strings.TrimPrefix(urlPath, "/uploads/")
+		originalPath := filepath.Join(mediaRoot, relPath)
+
+		// Verify original exists
+		if _, err := os.Stat(originalPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// Check if resized WebP files exist for each target dimension
+		for _, target := range targets {
+			cachePath := filepath.Join(mediaRoot, "cache", target, relPath)
+			if _, err := os.Stat(cachePath); os.IsNotExist(err) {
+				missingCount++
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(fmt.Sprintf(`{"missing_count":%d}`, missingCount)))
+}
+

@@ -189,6 +189,7 @@ func main() {
 	// Image Cache Management Endpoints (Protected - v1 Versioned)
 	mux.Handle("POST /api/v1/store/images/bulk-resize", authMiddleware(http.HandlerFunc(imageHandler.StartBulkResize)))
 	mux.Handle("GET /api/v1/store/images/bulk-status", authMiddleware(http.HandlerFunc(imageHandler.GetBulkStatus)))
+	mux.Handle("GET /api/v1/store/images/scan-missing", authMiddleware(http.HandlerFunc(imageHandler.ScanMissingImages)))
 
 	// Integration/XML Sync Endpoints (Protected - v1 Versioned)
 	mux.Handle("GET /api/v1/feeds", authMiddleware(http.HandlerFunc(integrationHandler.ListFeeds)))
