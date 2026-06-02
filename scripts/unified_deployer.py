@@ -625,7 +625,7 @@ server {{
 
     # Redirect cache misses to the Go backend resizer
     location @resize {{
-        rewrite ^/uploads/cache/(\d+)x(\d+)/(.*)$ /api/v1/store/images/resize?w=$1&h=$2&path=$3 break;
+        rewrite ^/uploads/cache/(\\d+)x(\\d+)/(.*)$ /api/v1/store/images/resize?w=$1&h=$2&path=$3 break;
         proxy_pass http://127.0.0.1:8081;
     }}
 
