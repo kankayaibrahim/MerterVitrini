@@ -566,6 +566,11 @@ WantedBy=multi-user.target
                     location_block = f"""    # Support Next.js App Router static exports with clean URLs
     location / {{
         try_files $uri $uri/ $uri.html /index.html =404;
+    }}
+
+    # Serve index.html for language roots to prevent 403 directory listing errors in static export
+    location ~ ^/(tr|en|pl|bg|ar|ru|de|fr)/$ {{
+        try_files /index.html =404;
     }}"""
 
                 nginx_root = f"{cfg['remote_dir']}/public" if self.ssr_mode else cfg['remote_dir']
