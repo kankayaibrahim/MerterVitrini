@@ -318,6 +318,15 @@ func (h *PagesHandler) CreatePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if page.IsActive {
+		prefixes := []string{"tr", "en", "pl", "bg", "ar", "ru", "de", "fr"}
+		var urls []string
+		for _, prefix := range prefixes {
+			urls = append(urls, "https://mertervitrini.com.tr/"+prefix+"/pages/"+page.Slug)
+		}
+		NotifyIndexNow(urls)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(page)
@@ -459,6 +468,15 @@ func (h *PagesHandler) UpdatePage(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to commit transaction: %v", err)
 		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
 		return
+	}
+
+	if page.IsActive {
+		prefixes := []string{"tr", "en", "pl", "bg", "ar", "ru", "de", "fr"}
+		var urls []string
+		for _, prefix := range prefixes {
+			urls = append(urls, "https://mertervitrini.com.tr/"+prefix+"/pages/"+page.Slug)
+		}
+		NotifyIndexNow(urls)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

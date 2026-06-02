@@ -322,6 +322,15 @@ func (h *BlogHandler) CreateBlogPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if post.IsActive {
+		prefixes := []string{"tr", "en", "pl", "bg", "ar", "ru", "de", "fr"}
+		var urls []string
+		for _, prefix := range prefixes {
+			urls = append(urls, "https://mertervitrini.com.tr/"+prefix+"/blog/"+post.Slug)
+		}
+		NotifyIndexNow(urls)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(post)
@@ -463,6 +472,15 @@ func (h *BlogHandler) UpdateBlogPost(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to commit transaction: %v", err)
 		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
 		return
+	}
+
+	if post.IsActive {
+		prefixes := []string{"tr", "en", "pl", "bg", "ar", "ru", "de", "fr"}
+		var urls []string
+		for _, prefix := range prefixes {
+			urls = append(urls, "https://mertervitrini.com.tr/"+prefix+"/blog/"+post.Slug)
+		}
+		NotifyIndexNow(urls)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

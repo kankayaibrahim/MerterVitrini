@@ -108,6 +108,15 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     }
   }, []);
 
+  // Dynamic browser title synchronization when language changes
+  useEffect(() => {
+    if (product) {
+      const localizedTitle = getProductTitle(product, lang);
+      const brandName = product.brand_name || "Merter Manufacturer";
+      document.title = `${localizedTitle} - ${brandName} | Merter Vitrini Toptan B2B`;
+    }
+  }, [lang, product]);
+
   // Initial mount loaders
   useEffect(() => {
     const loadCategories = async () => {

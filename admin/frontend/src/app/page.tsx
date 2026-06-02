@@ -47,6 +47,7 @@ import CustomersManager from "../components/customers/CustomersManager";
 import PagesManager from "../components/pages/PagesManager";
 import ImageCacheManager from "../components/catalog/ImageCacheManager";
 import BlogManager from "../components/catalog/BlogManager";
+import IndexNowManager from "../components/catalog/IndexNowManager";
 
 const LABELS = {
   SUB_TAB_PRODUCTS: "Ürün Listesi",
@@ -98,7 +99,7 @@ export default function Home() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow">("dashboard");
   const [catalogSubTab, setCatalogSubTab] = useState<"products" | "categories">("products");
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -113,7 +114,7 @@ export default function Home() {
     pages: true
   });
 
-  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog", subtab?: "products" | "categories") => {
+  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow", subtab?: "products" | "categories") => {
     setActiveTab(tab);
     if (subtab) {
       setCatalogSubTab(subtab);
@@ -148,10 +149,10 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | null;
+      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | null;
       const urlSubTab = params.get("subtab") as "products" | "categories" | null;
       
-      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog"].includes(urlTab)) {
+      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow"].includes(urlTab)) {
         setActiveTab(urlTab);
       }
       if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -165,10 +166,10 @@ export default function Home() {
     const handlePopState = () => {
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
-        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | null;
+        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | null;
         const urlSubTab = params.get("subtab") as "products" | "categories" | null;
         
-        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog"].includes(urlTab)) {
+        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow"].includes(urlTab)) {
           setActiveTab(urlTab);
         }
         if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -907,6 +908,19 @@ export default function Home() {
                   >
                     {LABELS.SIDEBAR_SETTINGS_FOOTER}
                   </button>
+                  <button
+                    onClick={() => {
+                      updateNavigation("indexnow");
+                      setSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === "indexnow"
+                        ? "bg-violet-500/10 text-violet-400 font-extrabold border-l-2 border-violet-500 pl-3"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    IndexNow Gönderimi
+                  </button>
                 </div>
               )}
             </div>
@@ -1343,6 +1357,11 @@ export default function Home() {
           {/* Tab 11: Çok Dilli Blog Yazıları Yönetimi */}
           {activeTab === "blog" && (
             <BlogManager apiUrl={apiUrl} token={token} />
+          )}
+
+          {/* Tab 12: IndexNow Manuel URL İndeksleme Paneli */}
+          {activeTab === "indexnow" && (
+            <IndexNowManager apiUrl={apiUrl} token={token} />
           )}
 
           {/* Tab 5: Coğrafi Tanımlar (Ülkeler & Şehirler) */}
