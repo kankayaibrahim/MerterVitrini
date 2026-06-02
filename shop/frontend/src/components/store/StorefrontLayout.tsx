@@ -1,6 +1,47 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+
+// Sub-component to safely read search parameters under Suspense
+function QueryParamSyncer({ 
+  mode,
+  setSearchQuery, 
+  setActiveCategoryId 
+}: { 
+  mode: string;
+  setSearchQuery: (q: string) => void;
+  setActiveCategoryId: (cat: string) => void;
+}) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (mode === "catalog") {
+      const catParam = searchParams.get("category");
+      const qParam = searchParams.get("q") || "";
+
+      console.log(`[Search Log] QueryParamSyncer triggered. qParam: "${qParam}"`);
+
+      if (catParam) {
+        setActiveCategoryId(catParam);
+      }
+      
+      setSearchQuery(qParam);
+
+      // Safely sync both desktop & mobile input box values in UI
+      const searchInput = document.getElementById("searchInputDesktop") as HTMLInputElement;
+      if (searchInput) {
+        searchInput.value = qParam;
+      }
+      const searchInputMobile = document.getElementById("searchInputMobile") as HTMLInputElement;
+      if (searchInputMobile) {
+        searchInputMobile.value = qParam;
+      }
+    }
+  }, [mode, searchParams, setSearchQuery, setActiveCategoryId]);
+
+  return null;
+}
 import { ChevronLeft, ChevronRight, Home, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Product, Brand, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getCategoryPrefix, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
@@ -376,36 +417,7 @@ export default function StorefrontLayout({
   }, [lang]);
 
 
-  // --- Dynamic URL Query Param Filter Syncer ---
-  useEffect(() => {
-    if (typeof window !== "undefined" && mode === "catalog") {
-      const params = new URLSearchParams(window.location.search);
-      const catParam = params.get("category");
-      const qParam = params.get("q") || "";
-
-      console.log(`[Search Log] URL Syncer triggered. window.location.search: "${window.location.search}". qParam from URL: "${qParam}"`);
-
-      if (catParam) {
-        setActiveCategoryId(catParam);
-      }
-      
-      setSearchQuery(qParam);
-
-      // Safely sync both desktop & mobile input box values
-      setTimeout(() => {
-        const searchInput = document.getElementById("searchInputDesktop") as HTMLInputElement;
-        if (searchInput) {
-          searchInput.value = qParam;
-          console.log(`[Search Log] Synced desktop input box value to: "${qParam}"`);
-        }
-        const searchInputMobile = document.getElementById("searchInputMobile") as HTMLInputElement;
-        if (searchInputMobile) {
-          searchInputMobile.value = qParam;
-          console.log(`[Search Log] Synced mobile input box value to: "${qParam}"`);
-        }
-      }, 100);
-    }
-  }, [mode, typeof window !== "undefined" ? window.location.search : ""]);
+  // --- Dynamic URL Query Param Filter Syncer handled by QueryParamSyncer component ---
 
   // --- Products Catalog Loader ---
   useEffect(() => {
@@ -748,6 +760,13 @@ export default function StorefrontLayout({
       className="min-h-screen w-full flex flex-col font-sans antialiased bg-bg-dark text-text-primary overflow-x-hidden" 
       style={{ direction: lang === "ar" ? "rtl" : "ltr" }}
     >
+      <Suspense fallback={null}>
+        <QueryParamSyncer 
+          mode={mode} 
+          setSearchQuery={setSearchQuery} 
+          setActiveCategoryId={setActiveCategoryId} 
+        />
+      </Suspense>
       {/* Preload critical LCP hero image as high priority */}
       <link rel="preload" href="/banners/hero_new_opportunities.webp" as="image" type="image/webp" fetchPriority="high" />
 
