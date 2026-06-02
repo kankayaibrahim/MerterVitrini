@@ -4,7 +4,7 @@
   --spanish-gray: hsl(0, 0%, 60%);
   --sonic-silver: hsl(0, 0%, 47%);
   --eerie-black: hsl(0, 0%, 13%);
-  --salmon-pink: hsl(353, 100%, 78%);
+  --salmon-pink: hsl(353, 75%, 48%);
   --sandy-brown: hsl(29, 90%, 65%);
   --bittersweet: hsl(0, 100%, 70%);
   --ocean-green: hsl(152, 51%, 52%);
@@ -17,13 +17,13 @@
   --bg-card: #ffffff;
   --bg-input: #ffffff;
   --border-light: hsl(0, 0%, 93%);
-  --border-focus: hsl(353, 100%, 78%);
+  --border-focus: hsl(353, 75%, 48%);
   
   --text-primary: hsl(0, 0%, 13%);
   --text-secondary: hsl(0, 0%, 33%);
   --text-muted: hsl(0, 0%, 47%);
   
-  --accent-gold: hsl(353, 100%, 78%);
+  --accent-gold: hsl(353, 75%, 48%);
   --shadow-premium: 0 5px 20px rgba(0, 0, 0, 0.05);
 }
 

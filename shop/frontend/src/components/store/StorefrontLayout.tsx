@@ -61,26 +61,26 @@ export default function StorefrontLayout({
 
   // Premium Banners SEO localization mapping with fallback support
   const getLocalizedCollectionBanner = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => {
-    if (type === "kadin") return "/banners/collection_kadin.png";
-    if (type === "erkek") return "/banners/collection_erkek.png";
-    if (type === "ic_giyim") return "/banners/collection_ic_giyim.png";
-    return "/banners/collection_aksesuar.png";
+    if (type === "kadin") return "/banners/collection_kadin.webp";
+    if (type === "erkek") return "/banners/collection_erkek.webp";
+    if (type === "ic_giyim") return "/banners/collection_ic_giyim.webp";
+    return "/banners/collection_aksesuar.webp";
   };
 
   const getLocalizedSliderBanner = (type: "opportunities" | "app_promo") => {
     if (type === "opportunities") {
-      return "/banners/hero_new_opportunities.png";
+      return "/banners/hero_new_opportunities.webp";
     }
-    return "/banners/hero_app_promo.png";
+    return "/banners/hero_app_promo.webp";
   };
 
 
   const handleCollectionImageError = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
-    let fallback = "/banners/collection_kadin.png";
-    if (type === "erkek") fallback = "/banners/collection_erkek.png";
-    else if (type === "ic_giyim") fallback = "/banners/collection_ic_giyim.png";
-    else if (type === "aksesuar") fallback = "/banners/collection_aksesuar.png";
+    let fallback = "/banners/collection_kadin.webp";
+    if (type === "erkek") fallback = "/banners/collection_erkek.webp";
+    else if (type === "ic_giyim") fallback = "/banners/collection_ic_giyim.webp";
+    else if (type === "aksesuar") fallback = "/banners/collection_aksesuar.webp";
 
     if (!img.src.endsWith(fallback)) {
       img.src = fallback;
@@ -89,8 +89,8 @@ export default function StorefrontLayout({
 
   const handleSliderImageError = (type: "opportunities" | "app_promo") => (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
-    let fallback = "/banners/hero_new_opportunities.png";
-    if (type === "app_promo") fallback = "/banners/hero_app_promo.png";
+    let fallback = "/banners/hero_new_opportunities.webp";
+    if (type === "app_promo") fallback = "/banners/hero_app_promo.webp";
 
     if (!img.src.endsWith(fallback)) {
       img.src = fallback;
@@ -747,6 +747,9 @@ export default function StorefrontLayout({
       className="min-h-screen w-full flex flex-col font-sans antialiased bg-bg-dark text-text-primary overflow-x-hidden" 
       style={{ direction: lang === "ar" ? "rtl" : "ltr" }}
     >
+      {/* Preload critical LCP hero image as high priority */}
+      <link rel="preload" href="/banners/hero_new_opportunities.webp" as="image" type="image/webp" fetchPriority="high" />
+
       {/* Header Subcomponent */}
       <Header
         lang={lang}
@@ -1034,6 +1037,8 @@ export default function StorefrontLayout({
                 alt={t("portal_daily_opportunities", lang)} 
                 className="absolute inset-0 w-full h-full object-cover object-[35%_top]" 
                 onError={handleSliderImageError("opportunities")}
+                fetchPriority="high"
+                loading="eager"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
               <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white/85 backdrop-blur-md p-4 sm:p-5 md:p-6 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
@@ -1075,9 +1080,21 @@ export default function StorefrontLayout({
             </div>
 
             {/* Slide Indicators */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-              <button onClick={() => setActiveSlide(0)} className={`w-2.5 h-2.5 rounded-full transition-all border-none cursor-pointer ${activeSlide === 0 ? "bg-salmon-pink scale-110" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
-              <button onClick={() => setActiveSlide(1)} className={`w-2.5 h-2.5 rounded-full transition-all border-none cursor-pointer ${activeSlide === 1 ? "bg-salmon-pink scale-110" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
+            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex items-center gap-0 z-20">
+              <button 
+                onClick={() => setActiveSlide(0)} 
+                aria-label={lang === "tr" ? "Slayt 1" : "Slide 1"}
+                className="w-12 h-12 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all hover:scale-110 active:scale-95"
+              >
+                <span className={`w-2.5 h-2.5 rounded-full transition-all ${activeSlide === 0 ? "bg-salmon-pink scale-110" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
+              </button>
+              <button 
+                onClick={() => setActiveSlide(1)} 
+                aria-label={lang === "tr" ? "Slayt 2" : "Slide 2"}
+                className="w-12 h-12 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all hover:scale-110 active:scale-95"
+              >
+                <span className={`w-2.5 h-2.5 rounded-full transition-all ${activeSlide === 1 ? "bg-salmon-pink scale-110" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
+              </button>
             </div>
           </div>
 
