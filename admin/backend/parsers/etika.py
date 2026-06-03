@@ -1,7 +1,10 @@
 from lxml import etree as ET
 import sys
 import os
-import ujson as json
+try:
+    import ujson as json
+except ImportError:
+    import json
 import urllib.request
 import re
 import hashlib
@@ -1767,6 +1770,37 @@ def run_parser():
             # E. Product Variants Bulk Write
             if variants_to_upsert:
                 t_db_start = time.time()
+
+                # Delete obsolete variants for processed products to avoid duplicate custom_sku key conflicts
+                # when barcodes/source_variant_ids change.
+                processed_product_uuids = [p[0] for p in products_to_upsert.values()]
+                if processed_product_uuids:
+                    cur.execute(
+                        "SELECT product_id, source_variant_id FROM catalog.product_variants WHERE product_id = ANY(%s::uuid[])",
+                        (processed_product_uuids,)
+                    )
+                    existing_variants = cur.fetchall()
+                    obsolete_variants = []
+                    for pid_uuid, sv_id in existing_variants:
+                        pid_str = str(pid_uuid)
+                        if (pid_str, sv_id) not in variants_to_upsert:
+                            obsolete_variants.append((pid_uuid, sv_id))
+                            
+                    if obsolete_variants:
+                        print(f"-> Deleting {len(obsolete_variants)} obsolete product variants to prevent unique SKU conflicts...")
+                        sys.stdout.flush()
+                        chunk_size = 500
+                        for i in range(0, len(obsolete_variants), chunk_size):
+                            chunk = obsolete_variants[i:i+chunk_size]
+                            placeholders = ", ".join(["(%s, %s)"] * len(chunk))
+                            flat_params = []
+                            for pid, svid in chunk:
+                                flat_params.extend([pid, svid])
+                            cur.execute(
+                                f"DELETE FROM catalog.product_variants WHERE (product_id, source_variant_id) IN ({placeholders})",
+                                flat_params
+                            )
+
                 upsert_vars_query = """
                 INSERT INTO catalog.product_variants (
                     id, product_id, variant_size, barcode, stock, is_single, source_variant_id, last_sync_run_id, is_active
