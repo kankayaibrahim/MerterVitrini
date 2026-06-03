@@ -106,20 +106,39 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 		for _, word := range words {
 			if trimmed := strings.TrimSpace(word); trimmed != "" {
 				sqlBase += fmt.Sprintf(` AND (
-					p.title ILIKE $%d 
-					OR p.custom_sku ILIKE $%d 
-					OR p.description ILIKE $%d 
-					OR p.category_title ILIKE $%d 
-					OR p.brand_name ILIKE $%d 
-					OR p.color ILIKE $%d
-					OR p.kumas_fabric ILIKE $%d
+					p.title ILIKE $%[1]d 
+					OR p.custom_sku ILIKE $%[1]d 
+					OR p.description ILIKE $%[1]d 
+					OR p.category_title ILIKE $%[1]d 
+					OR p.brand_name ILIKE $%[1]d 
+					OR p.color ILIKE $%[1]d
+					OR p.kumas_fabric ILIKE $%[1]d
+					OR EXISTS (
+						SELECT 1 FROM catalog.product_translations pt
+						WHERE pt.product_id = p.id AND (pt.title ILIKE $%[1]d OR pt.description ILIKE $%[1]d OR pt.short_description ILIKE $%[1]d)
+					)
+					OR EXISTS (
+						SELECT 1 FROM catalog.products prod
+						JOIN catalog.color_translations ct ON prod.color_id = ct.color_id
+						WHERE prod.id = p.id AND ct.color_name ILIKE $%[1]d
+					)
+					OR EXISTS (
+						SELECT 1 FROM catalog.products prod
+						JOIN catalog.fabric_translations ft ON prod.fabric_id = ft.fabric_id
+						WHERE prod.id = p.id AND ft.fabric_name ILIKE $%[1]d
+					)
+					OR EXISTS (
+						SELECT 1 FROM catalog.category_translations cat_trans
+						WHERE cat_trans.category_id = p.category_id AND cat_trans.title ILIKE $%[1]d
+					)
 					OR EXISTS (
 						SELECT 1 
 						FROM catalog.product_attributes_map pam 
 						JOIN catalog.attribute_values av ON pam.attribute_value_id = av.id 
-						WHERE pam.product_id = p.id AND av.attribute_value ILIKE $%d
+						LEFT JOIN catalog.attribute_value_translations avt ON av.id = avt.attribute_value_id
+						WHERE pam.product_id = p.id AND (av.attribute_value ILIKE $%[1]d OR avt.attribute_value ILIKE $%[1]d)
 					)
-				)`, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex, argIndex)
+				)`, argIndex)
 				args = append(args, "%"+trimmed+"%")
 				argIndex++
 			}
