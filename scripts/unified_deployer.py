@@ -1123,7 +1123,7 @@ server {{
     }}
 
     # Cache other static file extensions with security headers
-    location ~* \.(?:ico|css|js|gif|jpe?g|png|svg|webp|avif|woff2?|eot|ttf|otf)$ {{
+    location ~* \\.(?:ico|css|js|gif|jpe?g|png|svg|webp|avif|woff2?|eot|ttf|otf)$ {{
         access_log off;
         expires 30d;
         add_header Cache-Control "public, max-age=2592000, no-transform" always;
