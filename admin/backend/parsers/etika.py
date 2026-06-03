@@ -1498,12 +1498,28 @@ def run_parser():
                     
                     # Dynamic title-based category self-correction / override
                     title_lower = title_tr_cleaned.lower()
-                    if "elbise" in title_lower:
+                    if "pareo" in title_lower:
+                        category_path = "kadin-giyim/pareo"
+                    elif "elbise" in title_lower and not any(k in title_lower for k in ["takım", "takim", "tulum"]):
                         category_path = "kadin-giyim/elbise-abiye/elbise"
                     elif "takım" in title_lower or "takim" in title_lower:
                         category_path = "kadin-giyim/takim-tulum/ikili-takim"
                     elif "tulum" in title_lower:
                         category_path = "kadin-giyim/takim-tulum/tulum-salopet"
+                    elif "etek" in title_lower:
+                        category_path = "kadin-giyim/alt-giyim/etek"
+                    elif any(k in title_lower for k in ["pantolon", "jean", "kot"]):
+                        category_path = "kadin-giyim/alt-giyim/pantolon"
+                    elif "tayt" in title_lower:
+                        category_path = "kadin-giyim/alt-giyim/tayt"
+                    elif any(k in title_lower for k in ["şort", "sort"]):
+                        category_path = "kadin-giyim/alt-giyim/sort"
+                    elif any(k in title_lower for k in ["kazak", "süveter", "suveter", "sweatshirt", "sweat"]):
+                        category_path = "kadin-giyim/triko-hirka-kazak/kazak-suveter"
+                    elif any(k in title_lower for k in ["hırka", "hirka"]):
+                        category_path = "kadin-giyim/triko-hirka-kazak/hirka"
+                    elif "tunik" in title_lower:
+                        category_path = "kadin-giyim/triko-hirka-kazak/tunik"
                         
                     category_id = category_path_to_id.get(category_path, diger_category_id)
                     

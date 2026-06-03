@@ -140,6 +140,16 @@ HARDCODED_CATEGORY_MAPPING = {
     "Giyim/Kadın/elbise": "019e61ef-28a9-7f3c-a35f-8c4ccb8d4232",    # Elbise
     "Giyim/Kadın/pantolon": "019e61ed-ee84-7592-9a0a-877da842fd6e",  # Pantolon
     "Giyim/Kadın/tulum": "019e61f2-6059-7b0d-a860-811a70e1df5a",     # Tulum & Salopet
+    "Giyim/Kadın/etek": "019e61ee-1ca1-7a44-a1f6-f530217dcc0a",      # Etek
+    "Giyim/Kadın/jean": "019e61ed-ee84-7592-9a0a-877da842fd6e",      # Pantolon
+    "Giyim/Kadın/tayt": "019e61ee-3f25-77bd-9f16-41c8ff61f4cb",      # Tayt
+    "Giyim/Kadın/sort": "019e61ee-60a5-7822-82ad-319420c5be5f",      # Şort
+    "Giyim/Kadın/şort": "019e61ee-60a5-7822-82ad-319420c5be5f",      # Şort
+    "Giyim/Kadın/kazak": "019e61f0-308b-711f-9879-00510c0f6c99",     # Kazak & Süveter
+    "Giyim/Kadın/hirka": "019e61f0-58e0-7b16-bddc-b29569781aca",     # Hırka
+    "Giyim/Kadın/hırka": "019e61f0-58e0-7b16-bddc-b29569781aca",     # Hırka
+    "Giyim/Kadın/tunik": "019e61f0-a49b-71e4-8d0d-b11e6f42dbae",     # Tunik
+    "Giyim/Kadın/triko": "019e61f0-0503-7fe2-8ded-0c9a350a1128",     # Triko, Hırka & Kazak
 }
 
 # Safe .env loader function
@@ -1242,8 +1252,15 @@ def run_parser():
     variants_cache = {} # (product_uuid, source_variant_id) -> variant_uuid
     colors_cache = {} # name -> color_uuid
     fabrics_cache = {} # name -> fabric_uuid
+    pareo_category_id = None
     try:
         with conn.cursor() as cur:
+            # Query Pareo category ID dynamically
+            cur.execute("SELECT id FROM catalog.categories WHERE slug = 'pareo' LIMIT 1")
+            row = cur.fetchone()
+            if row:
+                pareo_category_id = str(row[0])
+
             cur.execute("SELECT id, color_name FROM catalog.colors")
             for cid, name in cur.fetchall():
                 colors_cache[name] = str(cid)
@@ -1359,18 +1376,49 @@ def run_parser():
                 
                 # Resolve category_id
                 category_id = None
-                if is_erkek:
-                    if category_tag == "Giyim/Kadın/bluz":
-                        category_id = "9f216fd1-ece0-467c-afa8-5d5cca50b1a2" # Erkek Bluz & Triko
-                    elif category_tag == "Giyim/Kadın/t-shirt":
-                        category_id = "2eab834d-5287-491d-8da6-24a2535efaee" # Erkek T-Shirt
-                    elif category_tag == "Giyim/Kadın/takim":
-                        category_id = "a40f68e0-45b6-4da8-825a-607a950b68a0" # Erkek Takım
+                
+                # Check title for "pareo" to assign to Pareo category
+                if parent_title and "pareo" in parent_title.lower():
+                    category_id = pareo_category_id
+                
+                # Check title for other categories to self-correct
+                if not category_id and parent_title:
+                    title_lower = parent_title.lower()
+                    if "elbise" in title_lower and not any(k in title_lower for k in ["takım", "takim", "tulum"]):
+                        category_id = "019e61ef-28a9-7f3c-a35f-8c4ccb8d4232" # Elbise
+                    elif any(k in title_lower for k in ["takım", "takim"]):
+                        category_id = "019e61f2-2dd6-7d16-8454-8d1e4609e98e" # İkili Takım
+                    elif "tulum" in title_lower:
+                        category_id = "019e61f2-6059-7b0d-a860-811a70e1df5a" # Tulum & Salopet
+                    elif "etek" in title_lower:
+                        category_id = "019e61ee-1ca1-7a44-a1f6-f530217dcc0a" # Etek
+                    elif any(k in title_lower for k in ["pantolon", "jean", "kot"]):
+                        category_id = "019e61ed-ee84-7592-9a0a-877da842fd6e" # Pantolon
+                    elif "tayt" in title_lower:
+                        category_id = "019e61ee-3f25-77bd-9f16-41c8ff61f4cb" # Tayt
+                    elif any(k in title_lower for k in ["şort", "sort"]):
+                        category_id = "019e61ee-60a5-7822-82ad-319420c5be5f" # Şort
+                    elif any(k in title_lower for k in ["kazak", "süveter", "suveter", "sweatshirt", "sweat"]):
+                        category_id = "019e61f0-308b-711f-9879-00510c0f6c99" # Kazak & Süveter
+                    elif any(k in title_lower for k in ["hırka", "hirka"]):
+                        category_id = "019e61f0-58e0-7b16-bddc-b29569781aca" # Hırka
+                    elif "tunik" in title_lower:
+                        category_id = "019e61f0-a49b-71e4-8d0d-b11e6f42dbae" # Tunik
+                
+                if not category_id:
+                    if is_erkek:
+                        if category_tag == "Giyim/Kadın/bluz":
+                            category_id = "9f216fd1-ece0-467c-afa8-5d5cca50b1a2" # Erkek Bluz & Triko
+                        elif category_tag == "Giyim/Kadın/t-shirt":
+                            category_id = "2eab834d-5287-491d-8da6-24a2535efaee" # Erkek T-Shirt
+                        elif category_tag == "Giyim/Kadın/takim":
+                            category_id = "a40f68e0-45b6-4da8-825a-607a950b68a0" # Erkek Takım
+                        else:
+                            category_id = "019e65f2-7d68-7a86-8155-fd60fcacd359" # Erkek Giyim (root fallback)
                     else:
-                        category_id = "019e65f2-7d68-7a86-8155-fd60fcacd359" # Erkek Giyim (root fallback)
-                else:
-                    if category_tag and category_tag in category_mapping:
-                        category_id = category_mapping[category_tag]
+                        if category_tag and category_tag in category_mapping:
+                            category_id = category_mapping[category_tag]
+                
                 if not category_id:
                     category_id = diger_category_id
                     

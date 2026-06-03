@@ -1432,7 +1432,10 @@ def run_parser():
         
         # Category Resolution
         cat_word = extract_category_from_title(title_raw)
-        if gender == "Erkek":
+        title_lower = title_tr_cleaned.lower()
+        if "pareo" in title_lower:
+            category_path = "kadin-giyim/pareo"
+        elif gender == "Erkek":
             if cat_word in ["Tişört", "T-shirt"]:
                 category_path = "erkek-giyim/erkek-t-shirt"
             elif cat_word in ["Bluz", "Triko", "Kazak", "Hırka", "Süveter"]:
@@ -1441,6 +1444,23 @@ def run_parser():
                 category_path = "erkek-giyim/erkek-takim"
             else:
                 category_path = "erkek-giyim"
+        elif not any(k in title_lower for k in ["elbise", "takım", "takim", "tulum"]):
+            if "etek" in title_lower:
+                category_path = "kadin-giyim/alt-giyim/etek"
+            elif any(k in title_lower for k in ["pantolon", "jean", "kot"]):
+                category_path = "kadin-giyim/alt-giyim/pantolon"
+            elif "tayt" in title_lower:
+                category_path = "kadin-giyim/alt-giyim/tayt"
+            elif any(k in title_lower for k in ["şort", "sort"]):
+                category_path = "kadin-giyim/alt-giyim/sort"
+            elif any(k in title_lower for k in ["kazak", "süveter", "suveter", "sweatshirt", "sweat"]):
+                category_path = "kadin-giyim/triko-hirka-kazak/kazak-suveter"
+            elif any(k in title_lower for k in ["hırka", "hirka"]):
+                category_path = "kadin-giyim/triko-hirka-kazak/hirka"
+            elif "tunik" in title_lower:
+                category_path = "kadin-giyim/triko-hirka-kazak/tunik"
+            else:
+                category_path = category_mapping.get(cat_word, "kadin-giyim/diger")
         else:
             category_path = category_mapping.get(cat_word, "kadin-giyim/diger")
             
