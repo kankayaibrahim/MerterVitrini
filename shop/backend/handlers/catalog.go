@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"log"
@@ -1288,6 +1289,227 @@ func (h *CatalogHandler) GetBlogPostBySlug(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(post)
+}
+
+type gItem struct {
+	ID                    string   `xml:"g:id"`
+	Title                 string   `xml:"g:title"`
+	Description           string   `xml:"g:description"`
+	Link                  string   `xml:"g:link"`
+	ImageLink             string   `xml:"g:image_link"`
+	AdditionalImageLinks  []string `xml:"g:additional_image_link,omitempty"`
+	Availability          string   `xml:"g:availability"`
+	Price                 string   `xml:"g:price"`
+	SalePrice             string   `xml:"g:sale_price,omitempty"`
+	Brand                 string   `xml:"g:brand,omitempty"`
+	GoogleProductCategory string   `xml:"g:google_product_category,omitempty"`
+	Condition             string   `xml:"g:condition"`
+	Gender                string   `xml:"g:gender,omitempty"`
+	ItemGroupID           string   `xml:"g:item_group_id,omitempty"`
+}
+
+type gChannel struct {
+	Title       string   `xml:"title"`
+	Link        string   `xml:"link"`
+	Description string   `xml:"description"`
+	Items       []gItem  `xml:"item"`
+}
+
+type gRSS struct {
+	XMLName xml.Name `xml:"rss"`
+	Version string   `xml:"version,attr"`
+	GNS     string   `xml:"xmlns:g,attr"`
+	Channel gChannel `xml:"channel"`
+}
+
+// GoogleMerchantFeed returns all active products in Google Merchant Center RSS 2.0 XML format
+func (h *CatalogHandler) GoogleMerchantFeed(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT p.id, p.title, p.description, p.custom_sku, p.slug, 
+		       p.gender, p.price, p.discounted_price, p.currency, p.stock, 
+		       p.brand_name, p.category_title, p.images_json, p.source_product_group_id
+		FROM catalog.mv_products p
+		WHERE p.is_active = true`
+
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		log.Printf("[STORE API ERROR] Failed to query products for Google Merchant Feed: %v", err)
+		http.Error(w, `{"error":"Failed to query products"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var xmlItems []gItem
+
+	for rows.Next() {
+		var (
+			id, title, slug string
+			description, customSku, gender, brandName, categoryTitle *string
+			sourceProductGroupID *string
+			price float64
+			discountedPrice *float64
+			currency string
+			stock int
+			imagesBytes []byte
+		)
+
+		err := rows.Scan(
+			&id, &title, &description, &customSku, &slug,
+			&gender, &price, &discountedPrice, &currency, &stock,
+			&brandName, &categoryTitle, &imagesBytes, &sourceProductGroupID,
+		)
+		if err != nil {
+			log.Printf("[STORE API ERROR] Failed to scan product row for Google Merchant Feed: %v", err)
+			continue
+		}
+
+		// Normalize link
+		productURL := fmt.Sprintf("https://mertervitrini.com.tr/product/%s", slug)
+
+		// Normalize description
+		descStr := title
+		if description != nil && *description != "" {
+			descStr = *description
+		}
+
+		// Normalize images
+		var imgs []struct {
+			ImageUrl string `json:"image_url"`
+			IsCover  bool   `json:"is_cover"`
+		}
+		if len(imagesBytes) > 0 {
+			json.Unmarshal(imagesBytes, &imgs)
+		}
+
+		var mainImage string
+		var additionalImages []string
+		for _, img := range imgs {
+			imgURL := img.ImageUrl
+			if !strings.HasPrefix(imgURL, "http://") && !strings.HasPrefix(imgURL, "https://") {
+				imgURL = "https://mertervitrini.com.tr" + imgURL
+			}
+
+			if img.IsCover && mainImage == "" {
+				mainImage = imgURL
+			} else {
+				additionalImages = append(additionalImages, imgURL)
+			}
+		}
+
+		// If no cover image found, pick first one or a placeholder
+		if mainImage == "" {
+			if len(imgs) > 0 {
+				imgURL := imgs[0].ImageUrl
+				if !strings.HasPrefix(imgURL, "http://") && !strings.HasPrefix(imgURL, "https://") {
+					imgURL = "https://mertervitrini.com.tr" + imgURL
+				}
+				mainImage = imgURL
+				if len(additionalImages) > 0 {
+					additionalImages = additionalImages[1:]
+				}
+			} else {
+				mainImage = "https://mertervitrini.com.tr/placeholder.png"
+			}
+		}
+
+		// Limit additional images to 10
+		if len(additionalImages) > 10 {
+			additionalImages = additionalImages[:10]
+		}
+
+		// Availability
+		availability := "out_of_stock"
+		if stock > 0 {
+			availability = "in_stock"
+		}
+
+		// Prices
+		priceStr := fmt.Sprintf("%.2f %s", price, currency)
+		var salePriceStr string
+		if discountedPrice != nil && *discountedPrice > 0 {
+			salePriceStr = fmt.Sprintf("%.2f %s", *discountedPrice, currency)
+		}
+
+		// Brand
+		brand := "Merter Vitrini"
+		if brandName != nil && *brandName != "" {
+			brand = *brandName
+		}
+
+		// Google Product Category
+		googleCategory := "Apparel & Accessories > Clothing"
+		if categoryTitle != nil && *categoryTitle != "" {
+			googleCategory = *categoryTitle
+		}
+
+		// Gender normalization
+		gNormalized := "unisex"
+		if gender != nil {
+			gLower := strings.ToLower(*gender)
+			if strings.Contains(gLower, "kad") || strings.Contains(gLower, "wom") || strings.Contains(gLower, "bayan") {
+				gNormalized = "female"
+			} else if strings.Contains(gLower, "erk") || strings.Contains(gLower, "men") || strings.Contains(gLower, "bay") {
+				gNormalized = "male"
+			}
+		}
+
+		// Item ID
+		itemID := id
+		if customSku != nil && *customSku != "" {
+			itemID = *customSku
+		}
+
+		itemGroupID := ""
+		if sourceProductGroupID != nil {
+			itemGroupID = *sourceProductGroupID
+		}
+
+		xmlItems = append(xmlItems, gItem{
+			ID:                    itemID,
+			Title:                 title,
+			Description:           descStr,
+			Link:                  productURL,
+			ImageLink:             mainImage,
+			AdditionalImageLinks:  additionalImages,
+			Availability:          availability,
+			Price:                 priceStr,
+			SalePrice:             salePriceStr,
+			Brand:                 brand,
+			GoogleProductCategory: googleCategory,
+			Condition:             "new",
+			Gender:                gNormalized,
+			ItemGroupID:           itemGroupID,
+		})
+	}
+
+	rssFeed := gRSS{
+		Version: "2.0",
+		GNS:     "http://base.google.com/ns/1.0",
+		Channel: gChannel{
+			Title:       "Merter Vitrini",
+			Link:        "https://mertervitrini.com.tr",
+			Description: "Merter Toptan B2B Tekstil E-Ticaret",
+			Items:       xmlItems,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(xml.Header))
+	
+	encoder := xml.NewEncoder(w)
+	encoder.Indent("", "  ")
+	if err := encoder.Encode(rssFeed); err != nil {
+		log.Printf("[STORE API ERROR] Failed to encode Google Merchant XML: %v", err)
+	}
 }
 
 

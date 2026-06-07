@@ -154,6 +154,9 @@ func main() {
 	mux.HandleFunc("GET /api/v1/store/blog", catalogHandler.ListBlogPosts)
 	mux.HandleFunc("GET /api/v1/store/blog/{slug}", catalogHandler.GetBlogPostBySlug)
 
+	// Google Merchant Product XML Feed
+	mux.HandleFunc("GET /api/v1/store/feeds/google-merchant.xml", catalogHandler.GoogleMerchantFeed)
+
 	// B2B Cart Quote Inquiries (Public - v1)
 	mux.HandleFunc("POST /api/v1/store/inquiries", inquiryHandler.SubmitInquiry)
 
