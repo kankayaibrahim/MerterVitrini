@@ -274,9 +274,10 @@ func main() {
 	mux.Handle("POST /api/v1/translate/pause", authMiddleware(http.HandlerFunc(translateHandler.PauseJob)))
 
 	// Customer Management API routes
-	customersHandler := handlers.NewCustomersHandler()
+	customersHandler := handlers.NewCustomersHandler(cfg)
 	mux.Handle("GET /api/v1/customers", authMiddleware(http.HandlerFunc(customersHandler.ListCustomers)))
 	mux.Handle("PUT /api/v1/customers/{id}/block", authMiddleware(http.HandlerFunc(customersHandler.ToggleBlockCustomer)))
+	mux.Handle("DELETE /api/v1/customers/{id}", authMiddleware(http.HandlerFunc(customersHandler.DeleteCustomer)))
 
 
 

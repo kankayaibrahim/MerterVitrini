@@ -1,19 +1,26 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
+	"mertervitrini/admin/backend/config"
 	"mertervitrini/admin/backend/db"
 )
 
-type CustomersHandler struct{}
+type CustomersHandler struct {
+	Cfg *config.Config
+}
 
-func NewCustomersHandler() *CustomersHandler {
-	return &CustomersHandler{}
+func NewCustomersHandler(cfg *config.Config) *CustomersHandler {
+	return &CustomersHandler{Cfg: cfg}
 }
 
 type CustomerResponse struct {
@@ -131,4 +138,111 @@ func (h *CustomersHandler) ToggleBlockCustomer(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"success":true,"message":"Müşteri durumu başarıyla güncellendi"}`))
+}
+
+func (h *CustomersHandler) getAdminAccessToken(ctx context.Context) (string, error) {
+	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", h.Cfg.KeycloakURL, h.Cfg.KeycloakRealm)
+	
+	form := url.Values{}
+	form.Set("grant_type", "client_credentials")
+	form.Set("client_id", h.Cfg.KeycloakClientID)
+	form.Set("client_secret", h.Cfg.KeycloakClientSecret)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to get admin token: status %d, body: %s", resp.StatusCode, body)
+	}
+
+	var tokenResp map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", err
+	}
+
+	accessToken, _ := tokenResp["access_token"].(string)
+	if accessToken == "" {
+		return "", fmt.Errorf("access_token not found in response")
+	}
+
+	return accessToken, nil
+}
+
+func (h *CustomersHandler) DeleteCustomer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	customerID := r.PathValue("id")
+	if customerID == "" {
+		http.Error(w, `{"error":"Müşteri ID bulunamadı"}`, http.StatusBadRequest)
+		return
+	}
+
+	// 1. Get Keycloak Admin Access Token
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	accessToken, err := h.getAdminAccessToken(ctx)
+	if err != nil {
+		log.Printf("[ADMIN CUSTOMERS ERROR] Failed to get admin access token: %v", err)
+		http.Error(w, `{"error":"Keycloak yetkilendirme hatası"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Delete User from Keycloak
+	deleteURL := fmt.Sprintf("%s/admin/realms/%s/users/%s", h.Cfg.KeycloakURL, h.Cfg.KeycloakRealm, customerID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteURL, nil)
+	if err != nil {
+		log.Printf("[ADMIN CUSTOMERS ERROR] Failed to construct Keycloak delete request: %v", err)
+		http.Error(w, `{"error":"İstek oluşturulurken hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[ADMIN CUSTOMERS ERROR] Failed to execute Keycloak delete request: %v", err)
+		http.Error(w, `{"error":"Keycloak sunucusuna erişilemedi"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[ADMIN CUSTOMERS ERROR] Keycloak delete user returned status %d: %s", resp.StatusCode, body)
+		http.Error(w, fmt.Sprintf(`{"error":"Keycloak üzerinde kullanıcı silinemedi: %s"}`, body), resp.StatusCode)
+		return
+	}
+
+	// 3. Delete user from local database
+	res, err := db.Pool.Exec(ctx, `
+		DELETE FROM identity.users
+		WHERE id = $1 AND user_role = 'customer'
+	`, customerID)
+	if err != nil {
+		log.Printf("[ADMIN CUSTOMERS ERROR] Failed to delete customer from database: %v", err)
+		http.Error(w, `{"error":"Müşteri veri tabanından silinirken hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if res.RowsAffected() == 0 {
+		log.Printf("[ADMIN CUSTOMERS WARNING] Customer ID %s deleted from Keycloak (or not found) but local DB delete affected 0 rows", customerID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true,"message":"Müşteri başarıyla silindi"}`))
 }

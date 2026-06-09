@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { User, ShieldAlert, ShieldCheck, Search, Loader2, RefreshCw, Info, X } from "lucide-react";
+import { User, ShieldAlert, ShieldCheck, Search, Loader2, RefreshCw, Info, X, Trash2 } from "lucide-react";
 
 interface CustomersManagerProps {
   apiUrl: string;
@@ -56,7 +56,11 @@ const LABELS = {
   ID_LABEL: "ID: ",
   REASON_LABEL: "Neden: ",
   ERROR_PREFIX: "⚠️ Hata: ",
-  BLOCK_PLACEHOLDER: "Örn: B2B kurallarına aykırı davranış..."
+  BLOCK_PLACEHOLDER: "Örn: B2B kurallarına aykırı davranış...",
+  DELETE_TITLE: "Müşteriyi Sil",
+  DELETE_DESC: "isimli müşteriyi kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz, müşterinin Keycloak hesabı ve veri tabanındaki kaydı silinecektir.",
+  DELETE_BTN: "Sil",
+  DELETING: "Siliniyor..."
 };
 
 export default function CustomersManager({ apiUrl, token }: CustomersManagerProps) {
@@ -73,6 +77,9 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
 
   // Detailed customer modal state
   const [detailedCustomer, setDetailedCustomer] = useState<Customer | null>(null);
+
+  // Delete modal state
+  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
 
   const fetchCustomers = async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -168,6 +175,32 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
       fetchCustomers();
     } catch (err: any) {
       alert(err.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!deletingCustomer) return;
+
+    setUpdating(true);
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/customers/${deletingCustomer.id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Müşteri silinemedi.");
+      }
+
+      setDeletingCustomer(null);
+      fetchCustomers();
+    } catch (err: any) {
+      alert(err.message || "Bir hata oluştu.");
     } finally {
       setUpdating(false);
     }
@@ -322,6 +355,14 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
                             </>
                           )}
                         </button>
+                        <button
+                          onClick={() => setDeletingCustomer(c)}
+                          disabled={updating}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-[0.98]"
+                        >
+                          <Trash2 size={14} />
+                          {LABELS.DELETE_BTN}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -378,6 +419,42 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm transition-opacity duration-300"
+            onClick={() => setDeletingCustomer(null)}
+          />
+          <div className="relative w-full max-w-md bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden z-10 p-6 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-base font-bold text-zinc-950 flex items-center gap-2 mb-2">
+              <Trash2 className="text-rose-600" size={18} />
+              {LABELS.DELETE_TITLE}
+            </h3>
+            <p className="text-xs text-zinc-500 font-semibold mb-6 leading-relaxed">
+              <strong className="text-zinc-800">{`${deletingCustomer.first_name} ${deletingCustomer.last_name}`}</strong> {LABELS.DELETE_DESC}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeletingCustomer(null)}
+                className="px-4 py-2 border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 rounded-xl transition-all cursor-pointer bg-white"
+              >
+                {LABELS.CANCEL}
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteCustomer}
+                disabled={updating}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-500/10 hover:shadow-rose-500/20 transition-all cursor-pointer active:scale-[0.98]"
+              >
+                {updating ? LABELS.DELETING : LABELS.DELETE_BTN}
+              </button>
+            </div>
           </div>
         </div>
       )}
