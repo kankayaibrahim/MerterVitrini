@@ -1,10 +1,7 @@
 from lxml import etree as ET
 import sys
 import os
-try:
-    import ujson as json
-except ImportError:
-    import json
+import json
 import urllib.request
 import re
 import hashlib

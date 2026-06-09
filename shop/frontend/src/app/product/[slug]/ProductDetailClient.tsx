@@ -513,15 +513,15 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             
             {/* Left Column - Image Gallery */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 md:max-w-[550px] w-full md:mx-auto">
               <div 
                 onClick={handleOpenLightbox}
-                className="aspect-[4/5] rounded-[12px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group"
+                className="aspect-[4/5] max-h-[460px] md:max-h-[680px] rounded-[12px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group flex items-center justify-center"
               >
                 <img 
                   src={getResizedImageUrl(mainImg, 600, 800)} 
                   alt={title}
-                  className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
+                  className="max-w-full max-h-full object-contain transition-all duration-300 group-hover:scale-105"
                 />
               </div>
               

@@ -1,10 +1,7 @@
 from lxml import etree as ET
 import sys
 import os
-try:
-    import ujson as json
-except ImportError:
-    import json
+import json
 import urllib.request
 import re
 import hashlib
@@ -19,7 +16,7 @@ import time
 from PIL import Image
 import PIL.Image
 import redis
-
+import re
 
 # ==============================================================================
 # CONFIGURATION BLOCK
@@ -39,7 +36,7 @@ def sort_packing_ratio(ratio_str):
         "3XS": 10, "XXXS": 10, "2XS": 20, "XXS": 20
     }
     
-    import re
+    
     
     def parse_single_size_weight(s):
         s = s.strip().upper()
