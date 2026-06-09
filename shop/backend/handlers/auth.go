@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -341,17 +342,19 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(location, "/")
 	keycloakUserID := parts[len(parts)-1]
 
+	ip := getClientIP(r)
 	_, dbErr := db.Pool.Exec(ctx, `
-		INSERT INTO identity.users (id, first_name, last_name, email, phone, user_role, is_active, is_blocked)
-		VALUES ($1, $2, $3, $4, $5, 'customer', true, false)
+		INSERT INTO identity.users (id, first_name, last_name, email, phone, user_role, is_active, is_blocked, registration_ip)
+		VALUES ($1, $2, $3, $4, $5, 'customer', true, false, $6)
 		ON CONFLICT (email) DO UPDATE SET
 			id = EXCLUDED.id,
 			first_name = EXCLUDED.first_name,
 			last_name = EXCLUDED.last_name,
 			phone = EXCLUDED.phone,
 			user_role = 'customer',
+			registration_ip = COALESCE(identity.users.registration_ip, EXCLUDED.registration_ip),
 			updated_at = CURRENT_TIMESTAMP
-	`, keycloakUserID, req.FirstName, req.LastName, req.Email, req.Phone)
+	`, keycloakUserID, req.FirstName, req.LastName, req.Email, req.Phone, ip)
 
 	if dbErr != nil {
 		log.Printf("[AUTH DB ERROR] Failed to save user to local postgres: %v", dbErr)
@@ -1426,6 +1429,21 @@ func (h *AuthHandler) ListStatesByCountry(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(states)
+}
+
+func getClientIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if rip := r.Header.Get("X-Real-IP"); rip != "" {
+		return rip
+	}
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
 }
 
 

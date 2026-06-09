@@ -43,7 +43,8 @@ CREATE TABLE identity.users (
     billing_address TEXT NULL,
     delivery_address TEXT NULL,
     tax_no_tckn VARCHAR(50) NULL,
-    instagram_username VARCHAR(100) NULL
+    instagram_username VARCHAR(100) NULL,
+    registration_ip VARCHAR(50) NULL
 );
 
 CREATE INDEX idx_users_email ON identity.users(email);

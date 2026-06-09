@@ -17,17 +17,24 @@ func NewCustomersHandler() *CustomersHandler {
 }
 
 type CustomerResponse struct {
-	ID          string  `json:"id"`
-	FirstName   string  `json:"first_name"`
-	LastName    string  `json:"last_name"`
-	Email       string  `json:"email"`
-	Phone       string  `json:"phone"`
-	Role        string  `json:"role"`
-	IsActive    bool    `json:"is_active"`
-	IsBlocked   bool    `json:"is_blocked"`
-	BlockReason *string `json:"block_reason"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	ID                string  `json:"id"`
+	FirstName         string  `json:"first_name"`
+	LastName          string  `json:"last_name"`
+	Email             string  `json:"email"`
+	Phone             string  `json:"phone"`
+	Role              string  `json:"role"`
+	IsActive          bool    `json:"is_active"`
+	IsBlocked         bool    `json:"is_blocked"`
+	BlockReason       *string `json:"block_reason"`
+	CreatedAt         string  `json:"created_at"`
+	UpdatedAt         string  `json:"updated_at"`
+	RegistrationIP    *string `json:"registration_ip"`
+	BillingAddress    *string `json:"billing_address"`
+	DeliveryAddress   *string `json:"delivery_address"`
+	TaxNoTCKN         *string `json:"tax_no_tckn"`
+	InstagramUsername *string `json:"instagram_username"`
+	PreferredLang     *string `json:"preferred_lang"`
+	PreferredCurrency *string `json:"preferred_currency"`
 }
 
 type ToggleBlockRequest struct {
@@ -44,7 +51,8 @@ func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request)
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 
 	query := `
-		SELECT id, first_name, last_name, email, COALESCE(phone, ''), user_role, is_active, is_blocked, block_reason, created_at, updated_at
+		SELECT id, first_name, last_name, email, COALESCE(phone, ''), user_role, is_active, is_blocked, block_reason, created_at, updated_at,
+		       registration_ip, billing_address, delivery_address, tax_no_tckn, instagram_username, preferred_lang, preferred_currency
 		FROM identity.users
 		WHERE user_role = 'customer'
 	`
@@ -67,7 +75,10 @@ func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request)
 	for rows.Next() {
 		var c CustomerResponse
 		var createdAt, updatedAt time.Time
-		if err := rows.Scan(&c.ID, &c.FirstName, &c.LastName, &c.Email, &c.Phone, &c.Role, &c.IsActive, &c.IsBlocked, &c.BlockReason, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(
+			&c.ID, &c.FirstName, &c.LastName, &c.Email, &c.Phone, &c.Role, &c.IsActive, &c.IsBlocked, &c.BlockReason, &createdAt, &updatedAt,
+			&c.RegistrationIP, &c.BillingAddress, &c.DeliveryAddress, &c.TaxNoTCKN, &c.InstagramUsername, &c.PreferredLang, &c.PreferredCurrency,
+		); err != nil {
 			log.Printf("[ADMIN CUSTOMERS ERROR] Failed to scan customer: %v", err)
 			continue
 		}

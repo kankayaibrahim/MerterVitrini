@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { User, ShieldAlert, ShieldCheck, Search, Loader2, RefreshCw } from "lucide-react";
+import { User, ShieldAlert, ShieldCheck, Search, Loader2, RefreshCw, Info, X } from "lucide-react";
 
 interface CustomersManagerProps {
   apiUrl: string;
@@ -20,6 +20,13 @@ interface Customer {
   block_reason: string | null;
   created_at: string;
   updated_at: string;
+  registration_ip?: string | null;
+  billing_address?: string | null;
+  delivery_address?: string | null;
+  tax_no_tckn?: string | null;
+  instagram_username?: string | null;
+  preferred_lang?: string | null;
+  preferred_currency?: string | null;
 }
 
 const LABELS = {
@@ -63,6 +70,9 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [blockReason, setBlockReason] = useState("");
   const [updating, setUpdating] = useState(false);
+
+  // Detailed customer modal state
+  const [detailedCustomer, setDetailedCustomer] = useState<Customer | null>(null);
 
   const fetchCustomers = async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -283,27 +293,36 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => handleToggleBlock(c)}
-                        disabled={updating}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-[0.98] ${
-                          c.is_blocked
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/10"
-                            : "bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 shadow-rose-500/5"
-                        }`}
-                      >
-                        {c.is_blocked ? (
-                          <>
-                            <ShieldCheck size={14} />
-                            {LABELS.UNBLOCK}
-                          </>
-                        ) : (
-                          <>
-                            <ShieldAlert size={14} />
-                            {LABELS.BLOCK}
-                          </>
-                        )}
-                      </button>
+                      <div className="flex justify-end items-center gap-2">
+                        <button
+                          onClick={() => setDetailedCustomer(c)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+                        >
+                          <Info size={14} />
+                          Detaylar
+                        </button>
+                        <button
+                          onClick={() => handleToggleBlock(c)}
+                          disabled={updating}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-[0.98] ${
+                            c.is_blocked
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/10"
+                              : "bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 shadow-rose-500/5"
+                          }`}
+                        >
+                          {c.is_blocked ? (
+                            <>
+                              <ShieldCheck size={14} />
+                              {LABELS.UNBLOCK}
+                            </>
+                          ) : (
+                            <>
+                              <ShieldAlert size={14} />
+                              {LABELS.BLOCK}
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -359,6 +378,139 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Details Modal */}
+      {detailedCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm transition-opacity duration-300"
+            onClick={() => setDetailedCustomer(null)}
+          />
+          <div className="relative w-full max-w-2xl bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden z-10 p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start border-b border-zinc-100 pb-4 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-violet-100 border border-violet-200 text-violet-700 flex items-center justify-center font-bold text-sm">
+                  {detailedCustomer.first_name?.[0] || ""}{detailedCustomer.last_name?.[0] || ""}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-950">
+                    {`${detailedCustomer.first_name} ${detailedCustomer.last_name}`}
+                  </h3>
+                  <span className="text-[10px] font-semibold text-zinc-400 block tracking-wider uppercase">
+                    Kullanıcı ID: {detailedCustomer.id}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailedCustomer(null)}
+                className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+              {/* Left Column: Personal and System Info */}
+              <div className="space-y-4">
+                <div className="bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3">
+                  <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
+                    Kişisel Bilgiler
+                  </h4>
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-zinc-400 font-semibold">E-Posta:</span>
+                    <span className="col-span-2 text-zinc-700 font-bold break-all">{detailedCustomer.email}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-zinc-400 font-semibold">Telefon:</span>
+                    <span className="col-span-2 text-zinc-700 font-bold">{detailedCustomer.phone || "-"}</span>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3">
+                  <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
+                    Sistem Bilgileri
+                  </h4>
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-zinc-400 font-semibold">Kayıt Tarihi:</span>
+                    <span className="col-span-2 text-zinc-700 font-bold">
+                      {new Date(detailedCustomer.created_at).toLocaleString("tr-TR")}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-zinc-400 font-semibold">Kayıt IP:</span>
+                    <span className="col-span-2 text-zinc-700 font-bold">
+                      {detailedCustomer.registration_ip || "Bilinmiyor"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-zinc-400 font-semibold">Tercih Edilen Dil:</span>
+                    <span className="col-span-2 text-zinc-700 font-bold uppercase">
+                      {detailedCustomer.preferred_lang || "-"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-zinc-400 font-semibold">Para Birimi:</span>
+                    <span className="col-span-2 text-zinc-700 font-bold">
+                      {detailedCustomer.preferred_currency || "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Address and Extra Info */}
+              <div className="space-y-4">
+                <div className="bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3">
+                  <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
+                    Adres Tanımları
+                  </h4>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-zinc-400 font-semibold block mb-1">Fatura Adresi:</span>
+                      <p className="text-zinc-700 font-bold bg-white p-2.5 rounded-lg border border-zinc-200/60 whitespace-pre-wrap min-h-[50px]">
+                        {detailedCustomer.billing_address || "Tanımlanmamış"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-zinc-400 font-semibold block mb-1">Teslimat Adresi:</span>
+                      <p className="text-zinc-700 font-bold bg-white p-2.5 rounded-lg border border-zinc-200/60 whitespace-pre-wrap min-h-[50px]">
+                        {detailedCustomer.delivery_address || "Tanımlanmamış"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3">
+                  <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
+                    Diğer Bilgiler
+                  </h4>
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-zinc-400 font-semibold">Vergi No / TCKN:</span>
+                    <span className="col-span-2 text-zinc-700 font-bold">
+                      {detailedCustomer.tax_no_tckn || "-"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-zinc-400 font-semibold">Instagram:</span>
+                    <span className="col-span-2 text-zinc-700 font-bold">
+                      {detailedCustomer.instagram_username ? `@${detailedCustomer.instagram_username}` : "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t border-zinc-100 mt-6">
+              <button
+                type="button"
+                onClick={() => setDetailedCustomer(null)}
+                className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-[0.98]"
+              >
+                Kapat
+              </button>
+            </div>
           </div>
         </div>
       )}

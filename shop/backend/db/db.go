@@ -82,6 +82,7 @@ func ConnectDB(cfg *config.Config) (*pgxpool.Pool, error) {
 			phone = EXCLUDED.phone,
 			whatsapp = EXCLUDED.whatsapp,
 			email = EXCLUDED.email`,
+		`ALTER TABLE identity.users ADD COLUMN IF NOT EXISTS registration_ip VARCHAR(50) NULL`,
 	}
 
 	for _, ddl := range ddlQueries {
