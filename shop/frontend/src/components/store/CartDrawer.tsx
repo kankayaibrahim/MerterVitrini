@@ -538,17 +538,17 @@ export default function CartDrawer({
                         <div className="flex flex-col gap-1.5 font-semibold text-[11px]">
                           <div>
                             <span className="font-bold text-blue-900">Ziraat Bankası:</span>
-                            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">TR98 0001 2009 3847 5612 9901 02</div>
+                            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
                             <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
                           </div>
                           <div>
                             <span className="font-bold text-blue-900">Garanti BBVA:</span>
-                            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">TR12 0006 2000 1289 4756 1234 56</div>
+                            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
                             <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
                           </div>
                           <div>
                             <span className="font-bold text-blue-900">VakıfBank:</span>
-                            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">TR45 0001 5001 5800 7362 9999 88</div>
+                            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
                             <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
                           </div>
                         </div>
