@@ -19,7 +19,8 @@ import {
   FileText,
   Languages,
   User,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Clipboard
 } from "lucide-react";
 
 // Types
@@ -48,6 +49,7 @@ import PagesManager from "../components/pages/PagesManager";
 import ImageCacheManager from "../components/catalog/ImageCacheManager";
 import BlogManager from "../components/catalog/BlogManager";
 import IndexNowManager from "../components/catalog/IndexNowManager";
+import OrdersManager from "../components/orders/OrdersManager";
 
 const LABELS = {
   SUB_TAB_PRODUCTS: "Ürün Listesi",
@@ -99,7 +101,7 @@ export default function Home() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders">("dashboard");
   const [catalogSubTab, setCatalogSubTab] = useState<"products" | "categories">("products");
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -111,10 +113,11 @@ export default function Home() {
     policies: true,
     translate: true,
     customers: true,
-    pages: true
+    pages: true,
+    orders: true
   });
 
-  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow", subtab?: "products" | "categories") => {
+  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders", subtab?: "products" | "categories") => {
     setActiveTab(tab);
     if (subtab) {
       setCatalogSubTab(subtab);
@@ -149,10 +152,10 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | null;
+      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders" | null;
       const urlSubTab = params.get("subtab") as "products" | "categories" | null;
       
-      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow"].includes(urlTab)) {
+      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow", "orders"].includes(urlTab)) {
         setActiveTab(urlTab);
       }
       if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -166,10 +169,10 @@ export default function Home() {
     const handlePopState = () => {
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
-        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | null;
+        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders" | null;
         const urlSubTab = params.get("subtab") as "products" | "categories" | null;
         
-        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow"].includes(urlTab)) {
+        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow", "orders"].includes(urlTab)) {
           setActiveTab(urlTab);
         }
         if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -197,6 +200,8 @@ export default function Home() {
       setExpandedGroups(prev => ({ ...prev, translate: !prev.translate }));
     } else if (group === "pages") {
       setExpandedGroups(prev => ({ ...prev, pages: !prev.pages }));
+    } else if (group === "orders") {
+      setExpandedGroups(prev => ({ ...prev, orders: !prev.orders }));
     }
   };
 
@@ -1085,6 +1090,40 @@ export default function Home() {
               )}
             </div>
 
+            {/* Accordion Group 9: Sipariş Yönetimi */}
+            <div className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => toggleGroup("orders")}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <Clipboard size={16} />
+                  Sipariş Yönetimi
+                </div>
+                {expandedGroups.orders ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+
+              {expandedGroups.orders && (
+                <div className="pl-6 pr-2 py-1 flex flex-col gap-1 border-l border-zinc-800 ml-5 mt-1 animate-in slide-in-from-top-2 duration-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateNavigation("orders");
+                      setSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === "orders"
+                        ? "bg-violet-500/10 text-violet-400 font-extrabold border-l-2 border-violet-500 pl-3"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    B2B Siparişleri
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
         </nav>
 
@@ -1387,6 +1426,11 @@ export default function Home() {
           {/* Tab 9: Dinamik Sayfa Yönetimi (CMS) */}
           {activeTab === "pages" && (
             <PagesManager apiUrl={apiUrl} token={token} />
+          )}
+
+          {/* Tab 13: B2B Sipariş Yönetimi */}
+          {activeTab === "orders" && (
+            <OrdersManager apiUrl={apiUrl} token={token} />
           )}
 
         </main>

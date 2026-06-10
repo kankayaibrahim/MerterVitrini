@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { User, Settings, MapPin, Clipboard, Check, AlertCircle, Home, LogOut, Plus, Trash2, Edit3, Globe, Briefcase } from "lucide-react";
+import { User, Settings, MapPin, Clipboard, Check, AlertCircle, Home, LogOut, Plus, Trash2, Edit3, Globe, Briefcase, ChevronDown, ChevronUp, Download, CreditCard, XCircle, RotateCcw } from "lucide-react";
 import { t } from "@/app/i18n";
 import { Category, CartItem } from "@/types/store";
 import { apiFetch } from "@/app/utils";
@@ -345,6 +345,148 @@ const addressTranslations: Record<string, Record<string, string>> = {
   }
 };
 
+const orderTranslations: Record<string, Record<string, string>> = {
+  tr: {
+    orders_tab: "Sipariş Geçmişim",
+    profile_tab: "Profil Detayları",
+    orders_header: "SİPARİŞ GEÇMİŞİM",
+    orders_desc: "Geçmişte verdiğiniz siparişleri takip edebilir, faturalarınızı indirebilir veya ödeme bildiriminde bulunabilirsiniz.",
+    order_number: "Sipariş No",
+    order_date: "Tarih",
+    total_amount: "Toplam Tutar",
+    status: "Durum",
+    actions: "İşlemler",
+    view_details: "Detayları Göster",
+    hide_details: "Detayları Gizle",
+    download_excel: "Fatura Excel İndir",
+    download_images: "Görselleri İndir (ZIP)",
+    cancel_order: "Siparişi İptal Et",
+    pay_notification: "Ödeme Bildirimi Yap",
+    request_refund: "İade Talebi Oluştur",
+    no_orders_found: "Henüz bir siparişiniz bulunmamaktadır.",
+    status_pending_payment: "Ödeme Bekliyor",
+    status_approved: "Onaylandı / Hazırlanıyor",
+    status_shipping: "Kargoya Verildi",
+    status_completed: "Tamamlandı",
+    status_cancelled: "İptal Edildi",
+    status_refunded: "İade Edildi",
+    status_partially_refunded: "Kısmi İade Edildi",
+    bank_name: "Banka Adı",
+    sender_name: "Gönderen Adı Soyadı",
+    amount: "Tutar",
+    notes: "Açıklama / Notlar",
+    submit_notification: "Bildirimi Gönder",
+    refund_type: "İade Tipi",
+    refund_reason: "İade Nedeni",
+    full_refund: "Tüm Siparişi İade Et",
+    partial_refund: "Kısmi Ürün İadesi",
+    refund_items_selection: "İade edilecek ürünleri seçin",
+    quantity: "Adet",
+    price: "Birim Fiyat",
+    total: "Toplam",
+    cancel_confirm: "Bu siparişi iptal etmek istediğinize emin misiniz?",
+    payment_notification_submitted: "Ödeme bildiriminiz başarıyla gönderildi.",
+    refund_requested: "İade talebiniz başarıyla oluşturuldu.",
+    payment_modal_title: "Ödeme Bildirimi Gönder",
+    refund_modal_title: "İade Talebi Oluştur",
+    address_delivery: "Teslimat Adresi",
+    address_billing: "Fatura Adresi",
+  },
+  en: {
+    orders_tab: "Order History",
+    profile_tab: "Profile Details",
+    orders_header: "MY ORDER HISTORY",
+    orders_desc: "You can track your past orders, download invoices, or submit payment notifications.",
+    order_number: "Order No",
+    order_date: "Date",
+    total_amount: "Total Amount",
+    status: "Status",
+    actions: "Actions",
+    view_details: "Show Details",
+    hide_details: "Hide Details",
+    download_excel: "Download Invoice Excel",
+    download_images: "Download Images (ZIP)",
+    cancel_order: "Cancel Order",
+    pay_notification: "Notify Payment",
+    request_refund: "Request Refund",
+    no_orders_found: "You have no orders yet.",
+    status_pending_payment: "Pending Payment",
+    status_approved: "Approved / Processing",
+    status_shipping: "Shipped",
+    status_completed: "Completed",
+    status_cancelled: "Cancelled",
+    status_refunded: "Refunded",
+    status_partially_refunded: "Partially Refunded",
+    bank_name: "Bank Name",
+    sender_name: "Sender Full Name",
+    amount: "Amount",
+    notes: "Notes / Details",
+    submit_notification: "Submit Notification",
+    refund_type: "Refund Type",
+    refund_reason: "Refund Reason",
+    full_refund: "Refund Entire Order",
+    partial_refund: "Refund Selected Items",
+    refund_items_selection: "Select items to refund",
+    quantity: "Qty",
+    price: "Unit Price",
+    total: "Total",
+    cancel_confirm: "Are you sure you want to cancel this order?",
+    payment_notification_submitted: "Your payment notification was submitted successfully.",
+    refund_requested: "Your refund request was created successfully.",
+    payment_modal_title: "Submit Payment Notification",
+    refund_modal_title: "Create Refund Request",
+    address_delivery: "Delivery Address",
+    address_billing: "Billing Address",
+  },
+  ru: {
+    orders_tab: "История заказов",
+    profile_tab: "Детали профиля",
+    orders_header: "МОЯ ИСТОРИЯ ЗАКАЗОВ",
+    orders_desc: "Вы можете отслеживать свои прошлые заказы, скачивать счета или отправлять уведомления об оплате.",
+    order_number: "Заказ №",
+    order_date: "Дата",
+    total_amount: "Итого",
+    status: "Статус",
+    actions: "Действия",
+    view_details: "Показать детали",
+    hide_details: "Скрыть детали",
+    download_excel: "Скачать счет Excel",
+    download_images: "Скачать изображения (ZIP)",
+    cancel_order: "Отменить заказ",
+    pay_notification: "Сообщить об оплате",
+    request_refund: "Запросить возврат",
+    no_orders_found: "У вас еще нет заказов.",
+    status_pending_payment: "Ожидает оплаты",
+    status_approved: "Одобрено / В обработке",
+    status_shipping: "Отправлено",
+    status_completed: "Завершено",
+    status_cancelled: "Отменено",
+    status_refunded: "Возвращено",
+    status_partially_refunded: "Частично возвращено",
+    bank_name: "Название банка",
+    sender_name: "ФИО отправителя",
+    amount: "Сумма",
+    notes: "Примечания",
+    submit_notification: "Отправить уведомление",
+    refund_type: "Тип возврата",
+    refund_reason: "Причина возврата",
+    full_refund: "Возврат всего заказа",
+    partial_refund: "Возврат выбранных товаров",
+    refund_items_selection: "Выберите товары для возврата",
+    quantity: "Кол-во",
+    price: "Цена за ед.",
+    total: "Всего",
+    cancel_confirm: "Вы уверены, что хотите отменить этот заказ?",
+    payment_notification_submitted: "Уведомление об оплате успешно отправлено.",
+    refund_requested: "Запрос на возврат успешно создан.",
+    payment_modal_title: "Отправить уведомление об оплате",
+    refund_modal_title: "Создать запрос на возврат",
+    address_delivery: "Адрес доставки",
+    address_billing: "Адрес плательщика",
+  }
+};
+
+
 interface UserAddress {
   id?: string;
   user_id?: string;
@@ -414,6 +556,34 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // --- Section state ---
+  const [activeSection, setActiveSection] = useState<"profile" | "orders">("profile");
+
+  // --- Orders states ---
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState<boolean>(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
+
+  // --- Payment Notification Form States ---
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
+  const [paymentOrderID, setPaymentOrderID] = useState<string>("");
+  const [payBankName, setPayBankName] = useState<string>("");
+  const [paySenderName, setPaySenderName] = useState<string>("");
+  const [payAmount, setPayAmount] = useState<string>("");
+  const [payNotes, setPayNotes] = useState<string>("");
+  const [submittingPayment, setSubmittingPayment] = useState<boolean>(false);
+
+  // --- Refund Form States ---
+  const [isRefundModalOpen, setIsRefundModalOpen] = useState<boolean>(false);
+  const [refundOrderID, setRefundOrderID] = useState<string>("");
+  const [refundOrderItems, setRefundOrderItems] = useState<any[]>([]);
+  const [refundType, setRefundType] = useState<"FULL" | "PARTIAL">("FULL");
+  const [refundReason, setRefundReason] = useState<string>("");
+  const [refundQuantities, setRefundQuantities] = useState<Record<string, number>>({});
+  const [refundSelectedItems, setRefundSelectedItems] = useState<Record<string, boolean>>({});
+  const [submittingRefund, setSubmittingRefund] = useState<boolean>(false);
+
   // --- Address Book States ---
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [countries, setCountries] = useState<CountryLookup[]>([]);
@@ -450,6 +620,11 @@ export default function ProfilePage() {
     return addressTranslations[safeLang][key] || addressTranslations["tr"][key] || t(key, lang);
   };
 
+  const getOrderT = (key: string): string => {
+    const safeLang = orderTranslations[lang] ? lang : "tr";
+    return orderTranslations[safeLang][key] || orderTranslations["tr"][key] || key;
+  };
+
   // Synchronize dynamic HTML lang attribute
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -473,6 +648,12 @@ export default function ProfilePage() {
         } catch (e) {
           console.error(e);
         }
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const tab = urlParams.get("tab");
+      if (tab === "orders") {
+        setActiveSection("orders");
       }
     }
 
@@ -498,10 +679,200 @@ export default function ProfilePage() {
         fetchUserProfile(savedToken);
         fetchAddresses(savedToken);
         fetchCountries();
+        fetchOrders(savedToken);
       } else {
         setCheckingAuth(false);
         setLoadingProfile(false);
       }
+    }
+  };
+
+  const fetchOrders = async (authToken: string) => {
+    setLoadingOrders(true);
+    setOrdersError(null);
+    try {
+      const response = await fetch("/api/v1/store/orders", {
+        headers: {
+          "Authorization": `Bearer ${authToken}`,
+          "Content-Type": "application/json"
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Siparişler yüklenemedi");
+      }
+      setOrders(data || []);
+    } catch (err: any) {
+      setOrdersError(err.message);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  const handleDownloadFile = async (url: string, filename: string) => {
+    if (!token) return;
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Dosya indirilemedi");
+      }
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err: any) {
+      alert("Hata: " + err.message);
+    }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    if (!window.confirm(getOrderT("cancel_confirm"))) return;
+    try {
+      const response = await fetch(`/api/v1/store/orders/${orderId}/cancel`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Sipariş iptal edilemedi");
+      }
+      alert(getOrderT("order_cancelled"));
+      if (token) fetchOrders(token);
+    } catch (err: any) {
+      alert("Hata: " + err.message);
+    }
+  };
+
+  const openPaymentModal = (order: any) => {
+    setPaymentOrderID(order.id);
+    setPayBankName("");
+    setPaySenderName(`${firstName} ${lastName}`);
+    setPayAmount(order.total_amount.toString());
+    setPayNotes("");
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleSubmitPaymentNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmittingPayment(true);
+    try {
+      const response = await fetch(`/api/v1/store/orders/${paymentOrderID}/payment-notification`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          bank_name: payBankName,
+          sender_name: paySenderName,
+          amount: parseFloat(payAmount),
+          notes: payNotes
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Ödeme bildirimi iletilemedi");
+      }
+      alert(getOrderT("payment_notification_submitted"));
+      setIsPaymentModalOpen(false);
+      if (token) fetchOrders(token);
+    } catch (err: any) {
+      alert("Hata: " + err.message);
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
+
+  const openRefundModal = (order: any) => {
+    setRefundOrderID(order.id);
+    setRefundOrderItems(order.items || []);
+    setRefundType("FULL");
+    setRefundReason("");
+    
+    const initialQty: Record<string, number> = {};
+    const initialSel: Record<string, boolean> = {};
+    (order.items || []).forEach((item: any) => {
+      initialQty[item.id] = item.quantity;
+      initialSel[item.id] = false;
+    });
+    setRefundQuantities(initialQty);
+    setRefundSelectedItems(initialSel);
+    
+    setIsRefundModalOpen(true);
+  };
+
+  const handleRefundQtyChange = (itemId: string, val: number, max: number) => {
+    const cleanVal = Math.max(1, Math.min(max, val));
+    setRefundQuantities(prev => ({
+      ...prev,
+      [itemId]: cleanVal
+    }));
+  };
+
+  const handleToggleRefundItem = (itemId: string) => {
+    setRefundSelectedItems(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
+
+  const handleSubmitRefund = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    let itemsPayload: any[] = [];
+    if (refundType === "PARTIAL") {
+      itemsPayload = refundOrderItems
+        .filter(item => refundSelectedItems[item.id])
+        .map(item => ({
+          order_item_id: item.id,
+          quantity: refundQuantities[item.id]
+        }));
+      
+      if (itemsPayload.length === 0) {
+        alert(getOrderT("refund_items_selection"));
+        return;
+      }
+    }
+    
+    setSubmittingRefund(true);
+    try {
+      const response = await fetch(`/api/v1/store/orders/${refundOrderID}/refund`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          refund_type: refundType,
+          reason: refundReason,
+          items: itemsPayload
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "İade talebi oluşturulamadı");
+      }
+      alert(getOrderT("refund_requested"));
+      setIsRefundModalOpen(false);
+      if (token) fetchOrders(token);
+    } catch (err: any) {
+      alert("Hata: " + err.message);
+    } finally {
+      setSubmittingRefund(false);
     }
   };
 
@@ -1056,13 +1427,34 @@ export default function ProfilePage() {
               <div className="w-full border-t border-cultured my-6" />
 
               <div className="flex flex-col gap-2.5 w-full">
-                <div className="flex items-center gap-3 px-3 py-2.5 bg-salmon-pink/5 rounded-lg border border-salmon-pink/20 text-salmon-pink text-xs font-bold text-left">
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("profile")}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-bold text-left cursor-pointer w-full transition-all ${
+                    activeSection === "profile"
+                      ? "bg-salmon-pink/5 border-salmon-pink/20 text-salmon-pink"
+                      : "bg-transparent border-transparent text-sonic-silver hover:text-salmon-pink hover:bg-cultured"
+                  }`}
+                >
                   <User className="w-4 h-4" />
                   <span>{t("profile_details", lang)}</span>
-                </div>
+                </button>
                 <button
+                  type="button"
+                  onClick={() => setActiveSection("orders")}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-bold text-left cursor-pointer w-full transition-all ${
+                    activeSection === "orders"
+                      ? "bg-salmon-pink/5 border-salmon-pink/20 text-salmon-pink"
+                      : "bg-transparent border-transparent text-sonic-silver hover:text-salmon-pink hover:bg-cultured"
+                  }`}
+                >
+                  <Clipboard className="w-4 h-4" />
+                  <span>{getOrderT("orders_tab")}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-3 px-3 py-2.5 text-sonic-silver hover:text-salmon-pink hover:bg-cultured transition-all rounded-lg text-xs font-bold text-left border-none bg-transparent cursor-pointer"
+                  className="flex items-center gap-3 px-3 py-2.5 text-sonic-silver hover:text-salmon-pink hover:bg-cultured transition-all rounded-lg text-xs font-bold text-left border border-transparent bg-transparent cursor-pointer w-full"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>{t("safe_logout", lang)}</span>
@@ -1073,7 +1465,8 @@ export default function ProfilePage() {
 
           {/* Right Column: Profile Edit Form Dashboard */}
           <div className="lg:col-span-3">
-            <div className="bg-white rounded-2xl p-6 sm:p-8 border border-cultured shadow-sm">
+            {activeSection === "profile" ? (
+              <div className="bg-white rounded-2xl p-6 sm:p-8 border border-cultured shadow-sm">
               <h2 className="font-sans font-extrabold text-xl text-eerie-black mb-1 select-none flex items-center gap-2">
                 <Settings className="w-5 h-5 text-salmon-pink" />
                 {t("account_settings_title", lang)}
@@ -1418,6 +1811,229 @@ export default function ProfilePage() {
               </form>
 
             </div>
+            ) : (
+              <div className="bg-white rounded-2xl p-6 sm:p-8 border border-cultured shadow-sm animate-in fade-in duration-200">
+                <h2 className="font-sans font-extrabold text-xl text-eerie-black mb-1 select-none flex items-center gap-2">
+                  <Clipboard className="w-5 h-5 text-salmon-pink" />
+                  {getOrderT("orders_header")}
+                </h2>
+                <p className="text-xs text-sonic-silver font-semibold mb-8 select-none">
+                  {getOrderT("orders_desc")}
+                </p>
+
+                {loadingOrders ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <div className="spinner animate-spin w-8 h-8 border-4 border-salmon-pink border-t-transparent rounded-full" />
+                    <span className="text-xs font-bold text-sonic-silver select-none">
+                      Yükleniyor...
+                    </span>
+                  </div>
+                ) : ordersError ? (
+                  <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold flex items-center gap-2 select-none">
+                    <AlertCircle className="w-4 h-4 text-red-500" />
+                    <span>{ordersError}</span>
+                  </div>
+                ) : orders.length === 0 ? (
+                  <div className="border-2 border-dashed border-cultured rounded-2xl p-12 text-center select-none">
+                    <Clipboard className="w-12 h-12 text-spanish-gray mx-auto mb-3" />
+                    <p className="text-sm font-bold text-sonic-silver">
+                      {getOrderT("no_orders_found")}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-6">
+                    {orders.map((order) => {
+                      const isExpanded = !!expandedOrders[order.id];
+                      return (
+                        <div
+                          key={order.id}
+                          className="border border-cultured rounded-2xl overflow-hidden shadow-sm bg-white hover:border-salmon-pink/30 transition-colors"
+                        >
+                          {/* Order Card Header */}
+                          <div className="bg-cultured/40 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-cultured">
+                            <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-6 gap-y-2 text-xs font-bold text-sonic-silver">
+                              <div>
+                                <div className="text-[10px] uppercase text-spanish-gray tracking-wider mb-0.5">
+                                  {getOrderT("order_number")}
+                                </div>
+                                <div className="text-eerie-black font-extrabold">{order.order_number}</div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] uppercase text-spanish-gray tracking-wider mb-0.5">
+                                  {getOrderT("order_date")}
+                                </div>
+                                <div className="text-eerie-black">
+                                  {new Date(order.created_at).toLocaleDateString(lang === "tr" ? "tr-TR" : "en-US", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric"
+                                  })}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] uppercase text-spanish-gray tracking-wider mb-0.5">
+                                  {getOrderT("total_amount")}
+                                </div>
+                                <div className="text-salmon-pink font-extrabold">
+                                  {new Intl.NumberFormat(lang === "tr" ? "tr-TR" : "en-US", {
+                                    style: "currency",
+                                    currency: "TRY"
+                                  }).format(order.total_amount)}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3 self-end sm:self-center">
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
+                                order.order_status === "PENDING_PAYMENT"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : order.order_status === "APPROVED"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : order.order_status === "SHIPPING"
+                                  ? "bg-purple-50 text-purple-700 border-purple-200"
+                                  : order.order_status === "COMPLETED"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : order.order_status === "CANCELLED"
+                                  ? "bg-rose-50 text-rose-700 border-rose-200"
+                                  : "bg-slate-50 text-slate-700 border-slate-200"
+                              }`}>
+                                {getOrderT(`status_${order.order_status.toLowerCase()}`)}
+                              </span>
+
+                              <button
+                                type="button"
+                                onClick={() => setExpandedOrders(prev => ({ ...prev, [order.id]: !prev[order.id] }))}
+                                className="p-1.5 hover:bg-cultured rounded-lg transition-colors border border-cultured bg-white cursor-pointer text-sonic-silver hover:text-salmon-pink flex items-center justify-center"
+                              >
+                                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Expanded Details */}
+                          {isExpanded && (
+                            <div className="p-4 sm:p-6 border-t border-cultured bg-white animate-in slide-in-from-top duration-200">
+                              <div className="flex flex-col gap-6">
+                                
+                                <div>
+                                  <h4 className="text-[10px] font-extrabold uppercase text-sonic-silver tracking-wider border-b border-cultured pb-2 mb-4">
+                                    Ürünler
+                                  </h4>
+                                  <div className="flex flex-col gap-4">
+                                    {(order.items || []).map((item: any) => {
+                                      const coverImg = `/api/v1/store/images/resize?url=${encodeURIComponent(item.image_url_at_purchase)}&width=80&height=80`;
+                                      return (
+                                        <div key={item.id} className="flex items-center gap-4 text-xs font-bold">
+                                          <img
+                                            src={coverImg}
+                                            alt={item.product_name}
+                                            className="w-16 h-16 object-cover rounded-lg border border-cultured"
+                                            onError={(e) => {
+                                              (e.target as HTMLImageElement).src = "/placeholder.png";
+                                            }}
+                                          />
+                                          <div className="flex-grow min-w-0">
+                                            <div className="text-eerie-black font-extrabold truncate">
+                                              {item.product_name}
+                                            </div>
+                                            <div className="text-[10px] text-sonic-silver mt-0.5">
+                                              SKU: {item.product_sku}
+                                            </div>
+                                            <div className="text-[10px] text-sonic-silver mt-0.5">
+                                              {item.quantity} {getOrderT("quantity")} x {new Intl.NumberFormat(lang === "tr" ? "tr-TR" : "en-US", { style: "currency", currency: "TRY" }).format(item.price_at_purchase)}
+                                            </div>
+                                          </div>
+                                          <div className="text-eerie-black font-extrabold shrink-0">
+                                            {new Intl.NumberFormat(lang === "tr" ? "tr-TR" : "en-US", { style: "currency", currency: "TRY" }).format(item.price_at_purchase * item.quantity)}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-cultured">
+                                  <div>
+                                    <h4 className="text-[10px] font-extrabold uppercase text-sonic-silver tracking-wider border-b border-cultured pb-2 mb-2.5">
+                                      {getOrderT("address_delivery")}
+                                    </h4>
+                                    <p className="text-xs font-medium text-sonic-silver leading-relaxed whitespace-pre-line">
+                                      {order.delivery_address}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <h4 className="text-[10px] font-extrabold uppercase text-sonic-silver tracking-wider border-b border-cultured pb-2 mb-2.5">
+                                      {getOrderT("address_billing")}
+                                    </h4>
+                                    <p className="text-xs font-medium text-sonic-silver leading-relaxed whitespace-pre-line">
+                                      {order.billing_address}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-cultured mt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadFile(`/api/v1/store/orders/${order.id}/excel`, `fatura-${order.order_number}.xls`)}
+                                    className="px-4 py-2 bg-cultured hover:bg-[#e2e8f0] text-eerie-black hover:text-salmon-pink rounded-lg font-extrabold text-[10px] uppercase tracking-[0.5px] border border-cultured transition-colors flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                    <span>{getOrderT("download_excel")}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadFile(`/api/v1/store/orders/${order.id}/images`, `gorseller-${order.order_number}.zip`)}
+                                    className="px-4 py-2 bg-cultured hover:bg-[#e2e8f0] text-eerie-black hover:text-salmon-pink rounded-lg font-extrabold text-[10px] uppercase tracking-[0.5px] border border-cultured transition-colors flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                    <span>{getOrderT("download_images")}</span>
+                                  </button>
+
+                                  {order.order_status === "PENDING_PAYMENT" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openPaymentModal(order)}
+                                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-extrabold text-[10px] uppercase tracking-[0.5px] border-none shadow transition-colors flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      <CreditCard className="w-3.5 h-3.5" />
+                                      <span>{getOrderT("pay_notification")}</span>
+                                    </button>
+                                  )}
+
+                                  {(order.order_status === "APPROVED" || order.order_status === "COMPLETED") && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openRefundModal(order)}
+                                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-extrabold text-[10px] uppercase tracking-[0.5px] border-none shadow transition-colors flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5" />
+                                      <span>{getOrderT("request_refund")}</span>
+                                    </button>
+                                  )}
+
+                                  {(order.order_status === "PENDING_PAYMENT" || order.order_status === "APPROVED") && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCancelOrder(order.id)}
+                                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-extrabold text-[10px] uppercase tracking-[0.5px] border-none shadow transition-colors flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                      <span>{getOrderT("cancel_order")}</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
@@ -1693,6 +2309,214 @@ export default function ProfilePage() {
                 </button>
               </div>
 
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Notification Modal */}
+      {isPaymentModalOpen && (
+        <div className="fixed inset-0 bg-[#0c0d10]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl animate-in scale-in duration-200 border border-cultured flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-cultured flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-eerie-black uppercase tracking-wider flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-salmon-pink" />
+                {getOrderT("payment_modal_title")}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsPaymentModalOpen(false)}
+                className="w-8 h-8 rounded-full border border-cultured text-sonic-silver hover:text-salmon-pink hover:bg-cultured transition-all bg-transparent flex items-center justify-center text-lg font-bold cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+            
+            <form onSubmit={handleSubmitPaymentNotification} className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                  {getOrderT("bank_name")} *
+                </label>
+                <select
+                  required
+                  value={payBankName}
+                  onChange={(e) => setPayBankName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-bold focus:outline-none focus:border-salmon-pink text-onyx cursor-pointer shadow-sm"
+                >
+                  <option value="">-- Banka Seçin --</option>
+                  <option value="VakıfBank">VakıfBank</option>
+                  <option value="Ziraat Bankası">Ziraat Bankası</option>
+                  <option value="Garanti BBVA">Garanti BBVA</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                  {getOrderT("sender_name")} *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={paySenderName}
+                  onChange={(e) => setPaySenderName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black shadow-inner"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                  {getOrderT("amount")} (TRY) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black shadow-inner"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                  {getOrderT("notes")}
+                </label>
+                <textarea
+                  value={payNotes}
+                  onChange={(e) => setPayNotes(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black shadow-inner h-20 resize-none"
+                  placeholder="Ek açıklama varsa yazabilirsiniz..."
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-cultured mt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  className="px-5 py-2.5 bg-cultured hover:bg-spanish-gray/20 text-sonic-silver rounded-lg font-extrabold text-xs uppercase tracking-[0.5px] border-none cursor-pointer transition-colors"
+                >
+                  {getAddressT("cancel_btn")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingPayment}
+                  className="px-5 py-2.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-lg font-extrabold text-xs uppercase tracking-[0.5px] border-none shadow-md cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  {submittingPayment ? "Gönderiliyor..." : getOrderT("submit_notification")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Request Modal */}
+      {isRefundModalOpen && (
+        <div className="fixed inset-0 bg-[#0c0d10]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl animate-in scale-in duration-200 border border-cultured flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-cultured flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-eerie-black uppercase tracking-wider flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-salmon-pink" />
+                {getOrderT("refund_modal_title")}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsRefundModalOpen(false)}
+                className="w-8 h-8 rounded-full border border-cultured text-sonic-silver hover:text-salmon-pink hover:bg-cultured transition-all bg-transparent flex items-center justify-center text-lg font-bold cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+            
+            <form onSubmit={handleSubmitRefund} className="flex-grow overflow-y-auto p-6 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                  {getOrderT("refund_type")} *
+                </label>
+                <select
+                  required
+                  value={refundType}
+                  onChange={(e) => setRefundType(e.target.value as "FULL" | "PARTIAL")}
+                  className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-bold focus:outline-none focus:border-salmon-pink text-onyx cursor-pointer shadow-sm"
+                >
+                  <option value="FULL">{getOrderT("full_refund")}</option>
+                  <option value="PARTIAL">{getOrderT("partial_refund")}</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                  {getOrderT("refund_reason")} *
+                </label>
+                <textarea
+                  required
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black shadow-inner h-20 resize-none"
+                  placeholder="İade talep nedeninizi açıklayınız..."
+                />
+              </div>
+
+              {/* Partial Refund Items Selection */}
+              {refundType === "PARTIAL" && (
+                <div className="flex flex-col gap-3 border-t border-cultured pt-4">
+                  <label className="text-[10px] font-extrabold uppercase text-sonic-silver tracking-wider">
+                    {getOrderT("refund_items_selection")}
+                  </label>
+                  
+                  <div className="flex flex-col gap-3 max-h-48 overflow-y-auto pr-1">
+                    {refundOrderItems.map((item) => {
+                      const isSelected = !!refundSelectedItems[item.id];
+                      return (
+                        <div key={item.id} className="flex items-center gap-3 p-2 bg-[#fbfbfb] rounded-lg border border-cultured text-xs font-bold text-eerie-black">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleRefundItem(item.id)}
+                            className="rounded text-salmon-pink focus:ring-salmon-pink cursor-pointer w-4 h-4"
+                          />
+                          <div className="flex-grow min-w-0">
+                            <div className="truncate">{item.product_name}</div>
+                            <div className="text-[10px] text-sonic-silver">SKU: {item.product_sku}</div>
+                          </div>
+                          
+                          {isSelected && (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] text-sonic-silver font-semibold">{getOrderT("quantity")}:</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={item.quantity}
+                                value={refundQuantities[item.id] || 1}
+                                onChange={(e) => handleRefundQtyChange(item.id, parseInt(e.target.value) || 1, item.quantity)}
+                                className="w-16 px-1.5 py-1 bg-white border border-cultured rounded text-center text-xs font-bold text-eerie-black focus:outline-none focus:border-salmon-pink"
+                              />
+                              <span className="text-[10px] text-sonic-silver font-semibold">/ {item.quantity}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-cultured mt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsRefundModalOpen(false)}
+                  className="px-5 py-2.5 bg-cultured hover:bg-spanish-gray/20 text-sonic-silver rounded-lg font-extrabold text-xs uppercase tracking-[0.5px] border-none cursor-pointer transition-colors"
+                >
+                  {getAddressT("cancel_btn")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingRefund}
+                  className="px-5 py-2.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-lg font-extrabold text-xs uppercase tracking-[0.5px] border-none shadow-md cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  {submittingRefund ? "Gönderiliyor..." : getOrderT("request_refund")}
+                </button>
+              </div>
             </form>
           </div>
         </div>

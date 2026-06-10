@@ -57,6 +57,119 @@ export default function CartDrawer({
   displayCurrency = "TRY",
   exchangeRates = [],
 }: CartDrawerProps) {
+  const [isCheckout, setIsCheckout] = React.useState(false);
+  const [forceShowInquiry, setForceShowInquiry] = React.useState(false);
+  const [addresses, setAddresses] = React.useState<any[]>([]);
+  const [billingAddr, setBillingAddr] = React.useState("");
+  const [deliveryAddr, setDeliveryAddr] = React.useState("");
+  const [customBillingAddr, setCustomBillingAddr] = React.useState("");
+  const [customDeliveryAddr, setCustomDeliveryAddr] = React.useState("");
+  const [submittingOrder, setSubmittingOrder] = React.useState(false);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("store_user_token") : null;
+
+  React.useEffect(() => {
+    if (token && isCheckout) {
+      fetch("/api/v1/store/profile/addresses", {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAddresses(data);
+          const defaultBill = data.find((a: any) => a.address_type === "billing" && a.is_default);
+          const defaultDel = data.find((a: any) => a.address_type === "shipping" && a.is_default);
+          
+          if (defaultBill) {
+            setBillingAddr(defaultBill.id);
+          } else {
+            const firstBill = data.find((a: any) => a.address_type === "billing");
+            if (firstBill) setBillingAddr(firstBill.id);
+            else if (data.length > 0) setBillingAddr(data[0].id);
+          }
+
+          if (defaultDel) {
+            setDeliveryAddr(defaultDel.id);
+          } else {
+            const firstDel = data.find((a: any) => a.address_type === "shipping");
+            if (firstDel) setDeliveryAddr(firstDel.id);
+            else if (data.length > 0) setDeliveryAddr(data[0].id);
+          }
+        }
+      })
+      .catch(err => console.error("Error fetching addresses:", err));
+    }
+  }, [token, isCheckout]);
+
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+
+    let finalBilling = "";
+    if (billingAddr === "custom" || addresses.length === 0) {
+      finalBilling = customBillingAddr.trim();
+    } else {
+      const addr = addresses.find(a => a.id === billingAddr);
+      if (addr) {
+        finalBilling = `${addr.first_name} ${addr.last_name} - ${addr.company_name || ""}\n${addr.address_line}\n${addr.state_name || ""}/${addr.country_name || ""}\nTel: ${addr.phone}`;
+      }
+    }
+
+    let finalDelivery = "";
+    if (deliveryAddr === "custom" || addresses.length === 0) {
+      finalDelivery = customDeliveryAddr.trim();
+    } else {
+      const addr = addresses.find(a => a.id === deliveryAddr);
+      if (addr) {
+        finalDelivery = `${addr.first_name} ${addr.last_name} - ${addr.company_name || ""}\n${addr.address_line}\n${addr.state_name || ""}/${addr.country_name || ""}\nTel: ${addr.phone}`;
+      }
+    }
+
+    if (!finalBilling || !finalDelivery) {
+      alert(lang === "tr" ? "Lütfen fatura ve teslimat adreslerini doldurunuz." : "Please select or enter billing and delivery addresses.");
+      return;
+    }
+
+    setSubmittingOrder(true);
+    try {
+      const res = await fetch("/api/v1/store/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          billing_address: finalBilling,
+          delivery_address: finalDelivery,
+          payment_method: "BANK_TRANSFER"
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(lang === "tr" 
+          ? `Siparişiniz başarıyla alındı! Sipariş No: ${data.order_number}\nLütfen sipariş numaranızı belirterek belirtilen IBAN adreslerine banka havalesi gerçekleştiriniz.` 
+          : `Your order has been received successfully! Order No: ${data.order_number}\nPlease transfer the amount to the provided IBANs mentioning your order number.`
+        );
+        
+        localStorage.removeItem("merter_b2b_cart");
+        window.dispatchEvent(new Event("merter-cart-update"));
+        onClose();
+        // Redirect to profile orders tab
+        window.location.href = `/${lang}/profile?tab=orders`;
+      } else {
+        alert(data.error || (lang === "tr" ? "Sipariş verilirken bir hata oluştu." : "Failed to place order."));
+      }
+    } catch (err) {
+      console.error(err);
+      alert(lang === "tr" ? "Bir ağ hatası oluştu." : "A network error occurred.");
+    } finally {
+      setSubmittingOrder(false);
+    }
+  };
+
   // Calculate grand total in TRY and converted active display currency
   const grandTotalInTRY = cart.reduce((sum, item) => {
     const itemTotalUnits = item.packages_qty * item.units_per_package;
@@ -301,78 +414,273 @@ export default function CartDrawer({
                   );
                 })()}
 
-                {/* Inquiry Request Form */}
-                <form onSubmit={onSubmit} className="flex flex-col gap-3.5 pt-4 border-t border-cultured mt-2">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("full_name", lang)}</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
-                      placeholder={t("placeholder_full_name", lang)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("company_name", lang)}</label>
-                    <input 
-                      type="text" 
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
-                      placeholder={t("placeholder_company_name", lang)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("phone", lang)}</label>
-                    <input 
-                      type="tel" 
-                      required 
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
-                      placeholder={t("placeholder_phone", lang)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("email", lang)}</label>
-                    <input 
-                      type="email" 
-                      required 
-                      value={emailAddress}
-                      onChange={(e) => setEmailAddress(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
-                      placeholder={t("placeholder_email", lang)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("message", lang)}</label>
-                    <textarea 
-                      value={customerMessage}
-                      onChange={(e) => setCustomerMessage(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm resize-none h-14 text-eerie-black"
-                      placeholder={t("placeholder_message", lang)}
-                    />
-                  </div>
+                {/* Inquiry or Checkout Flow Toggles */}
+                {token ? (
+                  !isCheckout ? (
+                    <div className="flex flex-col gap-3 pt-4 border-t border-cultured mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsCheckout(true)}
+                        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.99] transition-colors duration-300"
+                      >
+                        💳 {lang === "tr" ? "Banka Havalesi ile Sipariş Ver" : "Order via Bank Transfer"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Allow logged-in users to still request a quote if they prefer
+                          setFullName(fullName || (typeof window !== "undefined" ? JSON.parse(localStorage.getItem("store_user_info") || "{}").first_name + " " + JSON.parse(localStorage.getItem("store_user_info") || "{}").last_name : ""));
+                          setEmailAddress(emailAddress || (typeof window !== "undefined" ? JSON.parse(localStorage.getItem("store_user_info") || "{}").email : ""));
+                          setPhoneNumber(phoneNumber || (typeof window !== "undefined" ? JSON.parse(localStorage.getItem("store_user_info") || "{}").phone : ""));
+                          setIsCheckout(false);
+                          // We'll show the inquiry form below by toggling a local state
+                          setForceShowInquiry(true);
+                        }}
+                        className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-[5px] font-bold text-xs uppercase border-none flex items-center justify-center gap-2 cursor-pointer select-none transition-colors"
+                      >
+                        📄 {lang === "tr" ? "Sadece Fiyat Teklifi İste (Proforma)" : "Request Price Quote Only"}
+                      </button>
+                    </div>
+                  ) : (
+                    // Checkout Address Selection & Bank Transfer Details Form
+                    <form onSubmit={handleCheckoutSubmit} className="flex flex-col gap-4 pt-4 border-t border-cultured mt-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs uppercase font-extrabold text-salmon-pink tracking-[0.5px]">
+                          {lang === "tr" ? "Adres ve Ödeme Bilgileri" : "Address & Payment Info"}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCheckout(false);
+                            setForceShowInquiry(false);
+                          }}
+                          className="text-xs font-bold text-sonic-silver hover:text-salmon-pink bg-transparent border-none cursor-pointer"
+                        >
+                          &larr; {lang === "tr" ? "Sepete Dön" : "Back to Cart"}
+                        </button>
+                      </div>
 
-                  <button
-                    type="submit"
-                    disabled={submittingInquiry}
-                    className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed mt-3 active:scale-[0.99] transition-colors duration-300"
-                  >
-                    {submittingInquiry ? (
-                      <div className="spinner w-4 h-4 border-2" />
-                    ) : (
-                      "🚀 " + t("submit_inquiry", lang)
-                    )}
-                  </button>
-                </form>
+                      {/* Delivery Address Selector */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">
+                          🚚 {lang === "tr" ? "Teslimat Adresi" : "Delivery Address"}
+                        </label>
+                        {addresses.length > 0 ? (
+                          <select
+                            value={deliveryAddr}
+                            onChange={(e) => setDeliveryAddr(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black"
+                          >
+                            {addresses.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.title} ({a.address_line.substring(0, 30)}...)
+                              </option>
+                            ))}
+                            <option value="custom">{lang === "tr" ? "+ Yeni Adres Girişi" : "+ Enter Custom Address"}</option>
+                          </select>
+                        ) : (
+                          <div className="text-[10px] text-sonic-silver font-medium italic">
+                            {lang === "tr" ? "Profilinizde kayıtlı teslimat adresi bulunamadı." : "No saved shipping addresses found."}
+                          </div>
+                        )}
+                        {(deliveryAddr === "custom" || addresses.length === 0) && (
+                          <textarea
+                            required
+                            value={customDeliveryAddr}
+                            onChange={(e) => setCustomDeliveryAddr(e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2.5 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black resize-none mt-1"
+                            placeholder={lang === "tr" ? "Teslimat adresini yazınız..." : "Type delivery address..."}
+                          />
+                        )}
+                      </div>
+
+                      {/* Billing Address Selector */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[11px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">
+                          📄 {lang === "tr" ? "Fatura Adresi" : "Billing Address"}
+                        </label>
+                        {addresses.length > 0 ? (
+                          <select
+                            value={billingAddr}
+                            onChange={(e) => setBillingAddr(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black"
+                          >
+                            {addresses.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.title} ({a.address_line.substring(0, 30)}...)
+                              </option>
+                            ))}
+                            <option value="custom">{lang === "tr" ? "+ Yeni Fatura Adresi Girişi" : "+ Enter Custom Billing Address"}</option>
+                          </select>
+                        ) : (
+                          <div className="text-[10px] text-sonic-silver font-medium italic">
+                            {lang === "tr" ? "Profilinizde kayıtlı fatura adresi bulunamadı." : "No saved billing addresses found."}
+                          </div>
+                        )}
+                        {(billingAddr === "custom" || addresses.length === 0) && (
+                          <textarea
+                            required
+                            value={customBillingAddr}
+                            onChange={(e) => setCustomBillingAddr(e.target.value)}
+                            rows={3}
+                            className="w-full px-3 py-2.5 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black resize-none mt-1"
+                            placeholder={lang === "tr" ? "Fatura adresini yazınız..." : "Type billing address..."}
+                          />
+                        )}
+                      </div>
+
+                      {/* Bank Transfer details card */}
+                      <div className="bg-[#eff6ff] border border-blue-100 rounded-lg p-3 flex flex-col gap-2.5 text-xs text-blue-900 shadow-sm leading-normal">
+                        <div className="font-extrabold uppercase tracking-[0.5px] border-b border-blue-200/50 pb-1 text-[11px] text-blue-800">
+                          🏦 {lang === "tr" ? "Banka Havale/EFT Hesapları" : "Bank Transfer IBAN Accounts"}
+                        </div>
+                        <div className="flex flex-col gap-1.5 font-semibold text-[11px]">
+                          <div>
+                            <span className="font-bold text-blue-900">Ziraat Bankası:</span>
+                            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">TR98 0001 2009 3847 5612 9901 02</div>
+                            <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-blue-900">Garanti BBVA:</span>
+                            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">TR12 0006 2000 1289 4756 1234 56</div>
+                            <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
+                          </div>
+                          <div>
+                            <span className="font-bold text-blue-900">VakıfBank:</span>
+                            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">TR45 0001 5001 5800 7362 9999 88</div>
+                            <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
+                          </div>
+                        </div>
+                        <div className="text-[9px] font-bold text-blue-800 italic mt-1 border-t border-blue-200/30 pt-1.5 leading-snug">
+                          {lang === "tr" 
+                            ? "* Lütfen transfere sipariş numaranızı açıklama olarak ekleyiniz. Ödeme sonrası profilinizden bildirim yapmayı unutmayınız." 
+                            : "* Please add your order number as payment explanation. Submit notification from profile after transfer."}
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={submittingOrder}
+                        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed mt-2 active:scale-[0.99] transition-colors duration-300"
+                      >
+                        {submittingOrder ? (
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                        ) : (
+                          "✔️ " + (lang === "tr" ? "Siparişi Onayla" : "Confirm B2B Order")
+                        )}
+                      </button>
+                    </form>
+                  )
+                ) : null}
+
+                {/* Guest Inquiry Request Form or Logged-in explicit Quote Form */}
+                {(!token || forceShowInquiry) && (
+                  <form onSubmit={onSubmit} className="flex flex-col gap-3.5 pt-4 border-t border-cultured mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">
+                        {lang === "tr" ? "Fiyat Teklifi Talep Formu" : "Request Quote Form"}
+                      </span>
+                      {token && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForceShowInquiry(false);
+                            setIsCheckout(false);
+                          }}
+                          className="text-[10px] font-bold text-salmon-pink bg-transparent border-none cursor-pointer"
+                        >
+                          &larr; {lang === "tr" ? "Checkout'a Git" : "Go to Checkout"}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("full_name", lang)}</label>
+                      <input 
+                        type="text" 
+                        required 
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
+                        placeholder={t("placeholder_full_name", lang)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("company_name", lang)}</label>
+                      <input 
+                        type="text" 
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
+                        placeholder={t("placeholder_company_name", lang)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("phone", lang)}</label>
+                      <input 
+                        type="tel" 
+                        required 
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
+                        placeholder={t("placeholder_phone", lang)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("email", lang)}</label>
+                      <input 
+                        type="email" 
+                        required 
+                        value={emailAddress}
+                        onChange={(e) => setEmailAddress(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm text-eerie-black"
+                        placeholder={t("placeholder_email", lang)}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("message", lang)}</label>
+                      <textarea 
+                        value={customerMessage}
+                        onChange={(e) => setCustomerMessage(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-[5px] text-sm font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-sm resize-none h-14 text-eerie-black"
+                        placeholder={t("placeholder_message", lang)}
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={submittingInquiry}
+                      className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed mt-3 active:scale-[0.99] transition-colors duration-300"
+                    >
+                      {submittingInquiry ? (
+                        <div className="spinner w-4 h-4 border-2" />
+                      ) : (
+                        "🚀 " + t("submit_inquiry", lang)
+                      )}
+                    </button>
+                  </form>
+                )}
+
+                {/* Login hint for guest orders */}
+                {!token && (
+                  <div className="mt-4 p-3 bg-zinc-50 border border-zinc-200/60 rounded-lg text-center text-xs font-semibold text-zinc-600 select-none">
+                    {lang === "tr" ? "Kayıtlı bayimiz misiniz?" : "Are you our registered dealer?"}{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode: "login" } }));
+                      }}
+                      className="text-salmon-pink font-extrabold hover:underline bg-transparent border-none cursor-pointer"
+                    >
+                      {lang === "tr" ? "Giriş Yapın" : "Sign In"}
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           )}
         </div>
-
       </div>
     </div>
   );

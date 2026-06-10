@@ -143,6 +143,7 @@ func main() {
 	blogHandler := handlers.NewBlogHandler()
 	indexNowHandler := handlers.NewIndexNowHandler()
 	imageHandler := handlers.NewImageHandler()
+	adminOrdersHandler := handlers.NewAdminOrdersHandler(cfg)
 
 	// 6. Register HTTP Router using Go 1.22+ enhanced ServeMux pattern
 	mux := http.NewServeMux()
@@ -247,6 +248,13 @@ func main() {
 	mux.Handle("POST /api/v1/policies", authMiddleware(http.HandlerFunc(policiesHandler.CreatePolicyVersion)))
 	mux.Handle("POST /api/v1/policies/{id}/activate", authMiddleware(http.HandlerFunc(policiesHandler.ActivatePolicyVersion)))
 	mux.HandleFunc("GET /api/v1/store/policies/{type}/active", policiesHandler.GetActivePolicyByType)
+
+	// B2B Admin Order Management Routes (Protected - v1 Versioned)
+	mux.Handle("GET /api/v1/orders", authMiddleware(http.HandlerFunc(adminOrdersHandler.ListOrders)))
+	mux.Handle("GET /api/v1/orders/{id}", authMiddleware(http.HandlerFunc(adminOrdersHandler.GetOrder)))
+	mux.Handle("PUT /api/v1/orders/{id}/status", authMiddleware(http.HandlerFunc(adminOrdersHandler.UpdateOrderStatus)))
+	mux.Handle("PUT /api/v1/orders/payment-notifications/{id}", authMiddleware(http.HandlerFunc(adminOrdersHandler.VerifyPaymentNotification)))
+	mux.Handle("PUT /api/v1/orders/refunds/{id}", authMiddleware(http.HandlerFunc(adminOrdersHandler.VerifyRefund)))
 
 	// Custom Pages CMS API routes (Secure Admin)
 	mux.Handle("GET /api/v1/pages", authMiddleware(http.HandlerFunc(pagesHandler.ListPages)))

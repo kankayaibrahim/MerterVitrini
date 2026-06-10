@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -464,72 +462,18 @@ func (h *SuppliersHandler) DeleteSupplierProducts(w http.ResponseWriter, r *http
 		}
 	}
 
-	// Deletion of catalog.products cascades to product_variants and product_images automatically due to ON DELETE CASCADE
+	// Soft-delete: update is_active to false and deleted_at to current timestamp
 	query := `
-		DELETE FROM catalog.products 
+		UPDATE catalog.products 
+		SET is_active = false, deleted_at = CURRENT_TIMESTAMP
 		WHERE brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1)`
 	cmdTag, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {
-		log.Printf("Failed to delete products for supplier %s: %v", id, err)
+		log.Printf("Failed to soft-delete products for supplier %s: %v", id, err)
 		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
 		return
 	}
 
-	if deleteImages && len(imageURLs) > 0 {
-		// Run physical image files cleanup in background goroutine to prevent request timeouts
-		go func(urls []string) {
-			log.Printf("[IMAGE-CLEANUP] Starting background physical image files deletion for %d images...", len(urls))
-			
-			// Potential base paths for both production (Linux) and dev (Windows) environments
-			bases := []string{
-				"/var/www/admin.mertervitrini.com.tr/frontend",
-				"../frontend",
-				"./frontend",
-				"admin/frontend",
-				"c:\\Projects\\mertervitrini.com.tr\\admin\\frontend",
-			}
-			
-			deletedCount := 0
-			for _, imgURL := range urls {
-				if imgURL == "" {
-					continue
-				}
-				cleanURL := strings.TrimPrefix(imgURL, "/")
-				
-				// Clean URL if it's dynamic relative prefix e.g. "./downloads/products/edusa"
-				if strings.HasPrefix(cleanURL, "downloads/") {
-					cleanURL = "parsers/" + cleanURL // Relative to admin/backend
-				}
-				
-				for _, base := range bases {
-					fullPath := filepath.Join(base, cleanURL)
-					fullPath = filepath.Clean(fullPath)
-					
-					if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
-						if err := os.Remove(fullPath); err == nil {
-							deletedCount++
-						} else {
-							log.Printf("[IMAGE-CLEANUP] Failed to delete file %s: %v", fullPath, err)
-						}
-						break
-					}
-				}
-				
-				// Also handle standard Windows relative paths
-				if strings.HasPrefix(imgURL, "./downloads/") {
-					// Local development downloads folder relative to backend/parsers
-					localPath := filepath.Clean(filepath.Join("parsers", imgURL))
-					if info, err := os.Stat(localPath); err == nil && !info.IsDir() {
-						if err := os.Remove(localPath); err == nil {
-							deletedCount++
-						}
-					}
-				}
-			}
-			log.Printf("[IMAGE-CLEANUP] Background task completed. Deleted %d physical files from disk.", deletedCount)
-		}(imageURLs)
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(fmt.Sprintf(`{"success":true,"message":"Deleted %d products and all associated variants/images successfully"}`, cmdTag.RowsAffected())))
+	w.Write([]byte(fmt.Sprintf(`{"success":true,"message":"Soft-deleted %d products successfully"}`, cmdTag.RowsAffected())))
 }

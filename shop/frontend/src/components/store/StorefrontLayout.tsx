@@ -293,6 +293,23 @@ export default function StorefrontLayout({
     loadAttributes();
   }, []);
 
+  useEffect(() => {
+    const handleCartUpdate = () => {
+      const savedCart = localStorage.getItem("merter_b2b_cart");
+      if (savedCart) {
+        try {
+          setCart(JSON.parse(savedCart));
+        } catch {
+          setCart([]);
+        }
+      } else {
+        setCart([]);
+      }
+    };
+    window.addEventListener("merter-cart-update", handleCartUpdate);
+    return () => window.removeEventListener("merter-cart-update", handleCartUpdate);
+  }, []);
+
   // --- Direct Add to Cart Listener ---
   useEffect(() => {
     const addedToCartTranslations: Record<string, string> = {

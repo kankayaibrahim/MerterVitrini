@@ -109,9 +109,28 @@ func main() {
 	policiesHandler := handlers.NewPoliciesHandler()
 	authHandler := handlers.NewAuthHandler(cfg)
 	imageHandler := handlers.NewImageHandler()
+	cartHandler := handlers.NewCartHandler()
+	ordersHandler := handlers.NewOrdersHandler()
 
 	// 6. Register HTTP Router using Go ServeMux
 	mux := http.NewServeMux()
+
+	// Shopping Cart Routes (Authenticated)
+	mux.HandleFunc("GET /api/v1/store/cart", cartHandler.GetCart)
+	mux.HandleFunc("POST /api/v1/store/cart", cartHandler.AddToCart)
+	mux.HandleFunc("PUT /api/v1/store/cart/items/{item_id}", cartHandler.UpdateCartItem)
+	mux.HandleFunc("DELETE /api/v1/store/cart/items/{item_id}", cartHandler.DeleteCartItem)
+	mux.HandleFunc("DELETE /api/v1/store/cart", cartHandler.ClearCart)
+
+	// B2B Order Management Routes (Authenticated)
+	mux.HandleFunc("GET /api/v1/store/orders", ordersHandler.ListOrders)
+	mux.HandleFunc("GET /api/v1/store/orders/{id}", ordersHandler.GetOrder)
+	mux.HandleFunc("POST /api/v1/store/orders", ordersHandler.CreateOrder)
+	mux.HandleFunc("POST /api/v1/store/orders/{id}/cancel", ordersHandler.CancelOrder)
+	mux.HandleFunc("POST /api/v1/store/orders/{id}/payment-notification", ordersHandler.SubmitPaymentNotification)
+	mux.HandleFunc("POST /api/v1/store/orders/{id}/refund", ordersHandler.RequestRefund)
+	mux.HandleFunc("GET /api/v1/store/orders/{id}/excel", ordersHandler.ExportExcel)
+	mux.HandleFunc("GET /api/v1/store/orders/{id}/images", ordersHandler.DownloadImagesZip)
 
 	// Health Check (Public)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
