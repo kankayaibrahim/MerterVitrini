@@ -253,7 +253,7 @@ export default function OrdersManager({ apiUrl, token }: OrdersManagerProps) {
     if (!orderDetail) return;
     setUpdating(true);
     try {
-      const response = await fetch(`${apiUrl}/api/v1/orders/payment-notifications/${notifId}`, {
+      const response = await fetch(`${apiUrl}/api/v1/payment-notifications/${notifId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -281,7 +281,7 @@ export default function OrdersManager({ apiUrl, token }: OrdersManagerProps) {
     if (!orderDetail) return;
     setUpdating(true);
     try {
-      const response = await fetch(`${apiUrl}/api/v1/orders/refunds/${refundId}`, {
+      const response = await fetch(`${apiUrl}/api/v1/refunds/${refundId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

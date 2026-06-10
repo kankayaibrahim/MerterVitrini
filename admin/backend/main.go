@@ -253,8 +253,8 @@ func main() {
 	mux.Handle("GET /api/v1/orders", authMiddleware(http.HandlerFunc(adminOrdersHandler.ListOrders)))
 	mux.Handle("GET /api/v1/orders/{id}", authMiddleware(http.HandlerFunc(adminOrdersHandler.GetOrder)))
 	mux.Handle("PUT /api/v1/orders/{id}/status", authMiddleware(http.HandlerFunc(adminOrdersHandler.UpdateOrderStatus)))
-	mux.Handle("PUT /api/v1/orders/payment-notifications/{id}", authMiddleware(http.HandlerFunc(adminOrdersHandler.VerifyPaymentNotification)))
-	mux.Handle("PUT /api/v1/orders/refunds/{id}", authMiddleware(http.HandlerFunc(adminOrdersHandler.VerifyRefund)))
+	mux.Handle("PUT /api/v1/payment-notifications/{id}", authMiddleware(http.HandlerFunc(adminOrdersHandler.VerifyPaymentNotification)))
+	mux.Handle("PUT /api/v1/refunds/{id}", authMiddleware(http.HandlerFunc(adminOrdersHandler.VerifyRefund)))
 
 	// Custom Pages CMS API routes (Secure Admin)
 	mux.Handle("GET /api/v1/pages", authMiddleware(http.HandlerFunc(pagesHandler.ListPages)))
