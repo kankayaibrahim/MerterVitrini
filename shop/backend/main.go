@@ -118,6 +118,7 @@ func main() {
 	// Shopping Cart Routes (Authenticated)
 	mux.HandleFunc("GET /api/v1/store/cart", cartHandler.GetCart)
 	mux.HandleFunc("POST /api/v1/store/cart", cartHandler.AddToCart)
+	mux.HandleFunc("POST /api/v1/store/cart/sync", cartHandler.SyncCart)
 	mux.HandleFunc("PUT /api/v1/store/cart/items/{item_id}", cartHandler.UpdateCartItem)
 	mux.HandleFunc("DELETE /api/v1/store/cart/items/{item_id}", cartHandler.DeleteCartItem)
 	mux.HandleFunc("DELETE /api/v1/store/cart", cartHandler.ClearCart)

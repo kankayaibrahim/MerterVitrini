@@ -134,6 +134,26 @@ export default function CartDrawer({
 
     setSubmittingOrder(true);
     try {
+      // Sync local cart to database before placing order
+      const syncRes = await fetch("/api/v1/store/cart/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          items: cart.map(item => ({
+            product_id: item.product_id,
+            quantity: item.packages_qty * item.units_per_package
+          }))
+        })
+      });
+
+      if (!syncRes.ok) {
+        const syncData = await syncRes.json().catch(() => ({}));
+        throw new Error(syncData.error || (lang === "tr" ? "Sepet senkronizasyonu başarısız." : "Failed to sync cart."));
+      }
+
       const res = await fetch("/api/v1/store/orders", {
         method: "POST",
         headers: {

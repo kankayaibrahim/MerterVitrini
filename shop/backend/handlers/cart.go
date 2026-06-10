@@ -390,3 +390,95 @@ func getUnitsFromSeriesRatio(seriesRatio string) int {
 	}
 	return 1
 }
+
+type SyncCartRequestItem struct {
+	ProductID string `json:"product_id"`
+	Quantity  int    `json:"quantity"`
+}
+
+type SyncCartRequest struct {
+	Items []SyncCartRequestItem `json:"items"`
+}
+
+func (h *CartHandler) SyncCart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, err := verifyTokenAndGetUserID(r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	var req SyncCartRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+
+	// Use database transaction to cleanly sync items
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("[STORE CART ERROR] Sync fail begin tx: %v", err)
+		http.Error(w, `{"error":"İşlem başlatılamadı"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	// Ensure cart exists manually to avoid constraint assumptions
+	var cartID string
+	var existingCartID string
+	errFind := tx.QueryRow(ctx, "SELECT id FROM catalog.carts WHERE user_id = $1", userID).Scan(&existingCartID)
+	if errFind == pgx.ErrNoRows {
+		err = tx.QueryRow(ctx, "INSERT INTO catalog.carts (user_id) VALUES ($1) RETURNING id", userID).Scan(&cartID)
+	} else if errFind == nil {
+		cartID = existingCartID
+		_, err = tx.Exec(ctx, "UPDATE catalog.carts SET updated_at = CURRENT_TIMESTAMP WHERE id = $1", cartID)
+	} else {
+		err = errFind
+	}
+
+	if err != nil {
+		log.Printf("[STORE CART ERROR] Sync fail get/create cart: %v", err)
+		http.Error(w, `{"error":"Sepet bulunamadı veya oluşturulamadı"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Delete existing items in cart
+	_, err = tx.Exec(ctx, "DELETE FROM catalog.cart_items WHERE cart_id = $1", cartID)
+	if err != nil {
+		log.Printf("[STORE CART ERROR] Sync fail delete items: %v", err)
+		http.Error(w, `{"error":"Mevcut sepet temizlenemedi"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Insert new items
+	for _, item := range req.Items {
+		if item.ProductID == "" || item.Quantity <= 0 {
+			continue
+		}
+		_, err = tx.Exec(ctx, `
+			INSERT INTO catalog.cart_items (cart_id, product_id, quantity)
+			VALUES ($1, $2, $3)
+		`, cartID, item.ProductID, item.Quantity)
+		if err != nil {
+			log.Printf("[STORE CART ERROR] Sync fail insert item: %v", err)
+			http.Error(w, `{"error":"Sepet güncellenemedi"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Printf("[STORE CART ERROR] Sync fail commit tx: %v", err)
+		http.Error(w, `{"error":"Değişiklikler kaydedilemedi"}`, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
