@@ -4,7 +4,7 @@ import React from "react";
 import { X, ShoppingBag, Plus, Minus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Product } from "@/types/store";
 import { t, getProductTitle, getProductDescription, getProductAttributes, translateColor } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl } from "@/app/utils";
+import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, showToast } from "@/app/utils";
 
 interface ProductDetailsModalProps {
   product: Product;
@@ -119,7 +119,7 @@ export default function ProductDetailsModal({
     setPkgQty((prev) => {
       const next = prev + change;
       if (next < minPkgs) {
-        alert(`${t("minimum_order_alert", lang)} (${minPkgs} ${t("package", lang)})`);
+        showToast(`${t("minimum_order_alert", lang)} (${minPkgs} ${t("package", lang)})`);
         return minPkgs;
       }
       return next;
@@ -138,7 +138,7 @@ export default function ProductDetailsModal({
 
   const handleAddClick = () => {
     if (totalPieces === 0) {
-      alert(lang === "tr" ? "Lütfen en az 1 ürün seçin." : "Please select at least 1 item.");
+      showToast(lang === "tr" ? "Lütfen en az 1 ürün seçin." : "Please select at least 1 item.");
       return;
     }
     onAddToCart(hasSeries ? pkgQty : 0, {});

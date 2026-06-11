@@ -4,7 +4,7 @@ import React from "react";
 import { X, ShoppingBag } from "lucide-react";
 import { CartItem } from "@/types/store";
 import { t } from "@/app/i18n";
-import { convertPrice, getResizedImageUrl } from "@/app/utils";
+import { convertPrice, getResizedImageUrl, showToast } from "@/app/utils";
 
 interface CartDrawerProps {
   lang: string;
@@ -130,7 +130,7 @@ export default function CartDrawer({
     }
 
     if (!finalBilling || !finalDelivery) {
-      alert(lang === "tr" ? "Lütfen fatura ve teslimat adreslerini doldurunuz." : "Please select or enter billing and delivery addresses.");
+      showToast(lang === "tr" ? "Lütfen fatura ve teslimat adreslerini doldurunuz." : "Please select or enter billing and delivery addresses.");
       return;
     }
 
@@ -171,7 +171,7 @@ export default function CartDrawer({
 
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(lang === "tr" 
+        showToast(lang === "tr" 
           ? `Siparişiniz başarıyla alındı! Sipariş No: ${data.order_number}\nLütfen sipariş numaranızı belirterek belirtilen IBAN adreslerine banka havalesi gerçekleştiriniz.` 
           : `Your order has been received successfully! Order No: ${data.order_number}\nPlease transfer the amount to the provided IBANs mentioning your order number.`
         );
@@ -182,11 +182,11 @@ export default function CartDrawer({
         // Redirect to profile orders tab
         window.location.href = `/${lang}/profile?tab=orders`;
       } else {
-        alert(data.error || (lang === "tr" ? "Sipariş verilirken bir hata oluştu." : "Failed to place order."));
+        showToast(data.error || (lang === "tr" ? "Sipariş verilirken bir hata oluştu." : "Failed to place order."));
       }
     } catch (err) {
       console.error(err);
-      alert(lang === "tr" ? "Bir ağ hatası oluştu." : "A network error occurred.");
+      showToast(lang === "tr" ? "Bir ağ hatası oluştu." : "A network error occurred.");
     } finally {
       setSubmittingOrder(false);
     }

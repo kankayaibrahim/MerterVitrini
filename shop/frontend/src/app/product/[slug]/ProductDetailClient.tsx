@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { ShoppingBag, Plus, Minus, ChevronRight, ChevronLeft, Home, X, Share2 } from "lucide-react";
 import { Product, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getProductDescription, getProductAttributes, getCategoryPrefix, getCategoryTitle, getCategoryTrail, getCategoryUrl, translateColor } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, apiFetch, convertPrice, ExchangeRate, getResizedImageUrl } from "@/app/utils";
+import { getUnitsFromSeriesRatio, apiFetch, convertPrice, ExchangeRate, getResizedImageUrl, showToast as triggerToast } from "@/app/utils";
 
 // Reuse the premium Tailwind storefront components
 import Header from "@/components/store/Header";
@@ -276,7 +276,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     setPkgQty((prev) => {
       const next = prev + change;
       if (next < minPkgs) {
-        alert(`${t("minimum_order_alert", lang)} (${minPkgs} ${t("package", lang)})`);
+        triggerToast(`${t("minimum_order_alert", lang)} (${minPkgs} ${t("package", lang)})`);
         return minPkgs;
       }
       return next;
@@ -404,7 +404,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
 
       if (!response.ok) {
         const errData = await response.json();
-        alert(`Error: ${errData.error || t("failed_submit_inquiry", lang)}`);
+        triggerToast(`Error: ${errData.error || t("failed_submit_inquiry", lang)}`);
         setSubmittingInquiry(false);
         return;
       }
@@ -422,7 +422,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
       setShowSuccessOverlay(true);
     } catch (err) {
       console.error("Failed to submit B2B inquiry", err);
-      alert(t("connection_error_inquiry", lang));
+      triggerToast(t("connection_error_inquiry", lang));
     } finally {
       setSubmittingInquiry(false);
     }

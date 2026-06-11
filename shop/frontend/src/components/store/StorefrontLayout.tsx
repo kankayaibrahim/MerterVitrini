@@ -45,7 +45,7 @@ function QueryParamSyncer({
 import { ChevronLeft, ChevronRight, Home, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Product, Brand, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getCategoryPrefix, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, apiFetch } from "@/app/utils";
+import { getUnitsFromSeriesRatio, apiFetch, showToast } from "@/app/utils";
 
 // Import modular, premium Tailwind E-Commerce subcomponents
 import Header from "@/components/store/Header";
@@ -735,7 +735,7 @@ export default function StorefrontLayout({
       
       if (!response.ok) {
         const errData = await response.json();
-        alert(`Error: ${errData.error || "Failed to submit inquiry"}`);
+        showToast(`Error: ${errData.error || "Failed to submit inquiry"}`);
         setSubmittingInquiry(false);
         return;
       }
@@ -756,7 +756,7 @@ export default function StorefrontLayout({
       
     } catch (err) {
       console.error("Failed to submit B2B inquiry", err);
-      alert("Connection error! Failed to register your quote request.");
+      showToast("Connection error! Failed to register your quote request.");
     } finally {
       setSubmittingInquiry(false);
     }

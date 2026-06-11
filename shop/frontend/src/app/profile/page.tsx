@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { User, Settings, MapPin, Clipboard, Check, AlertCircle, Home, LogOut, Plus, Trash2, Edit3, Globe, Briefcase, ChevronDown, ChevronUp, Download, CreditCard, XCircle, RotateCcw } from "lucide-react";
 import { t } from "@/app/i18n";
 import { Category, CartItem } from "@/types/store";
-import { apiFetch, getResizedImageUrl } from "@/app/utils";
+import { apiFetch, getResizedImageUrl, showToast } from "@/app/utils";
 
 // Custom Instagram SVG Icon to avoid older lucide-react import issues
 const Instagram = (props: React.SVGProps<SVGSVGElement>) => (
@@ -751,7 +751,7 @@ export default function ProfilePage() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(blobUrl);
     } catch (err: any) {
-      alert("Hata: " + err.message);
+      showToast("Hata: " + err.message);
     }
   };
 
@@ -769,10 +769,10 @@ export default function ProfilePage() {
       if (!response.ok) {
         throw new Error(data.error || "Sipariş iptal edilemedi");
       }
-      alert(getOrderT("order_cancelled"));
+      showToast(getOrderT("order_cancelled"));
       if (token) fetchOrders(token);
     } catch (err: any) {
-      alert("Hata: " + err.message);
+      showToast("Hata: " + err.message);
     }
   };
 
@@ -806,11 +806,11 @@ export default function ProfilePage() {
       if (!response.ok) {
         throw new Error(data.error || "Ödeme bildirimi iletilemedi");
       }
-      alert(getOrderT("payment_notification_submitted"));
+      showToast(getOrderT("payment_notification_submitted"));
       setIsPaymentModalOpen(false);
       if (token) fetchOrders(token);
     } catch (err: any) {
-      alert("Hata: " + err.message);
+      showToast("Hata: " + err.message);
     } finally {
       setSubmittingPayment(false);
     }
@@ -862,7 +862,7 @@ export default function ProfilePage() {
         }));
       
       if (itemsPayload.length === 0) {
-        alert(getOrderT("refund_items_selection"));
+        showToast(getOrderT("refund_items_selection"));
         return;
       }
     }
@@ -885,11 +885,11 @@ export default function ProfilePage() {
       if (!response.ok) {
         throw new Error(data.error || "İade talebi oluşturulamadı");
       }
-      alert(getOrderT("refund_requested"));
+      showToast(getOrderT("refund_requested"));
       setIsRefundModalOpen(false);
       if (token) fetchOrders(token);
     } catch (err: any) {
-      alert("Hata: " + err.message);
+      showToast("Hata: " + err.message);
     } finally {
       setSubmittingRefund(false);
     }
@@ -1216,7 +1216,7 @@ export default function ProfilePage() {
 
       if (token) fetchAddresses(token);
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message);
     }
   };
 

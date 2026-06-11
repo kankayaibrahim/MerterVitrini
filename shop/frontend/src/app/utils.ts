@@ -75,4 +75,18 @@ export function getResizedImageUrl(url?: string, width: number = 288, height: nu
   return url;
 }
 
+export function showToast(message: string): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("merter-show-toast", {
+        detail: {
+          id: Math.random().toString(),
+          message,
+        },
+      })
+    );
+  }
+}
+
+
 
