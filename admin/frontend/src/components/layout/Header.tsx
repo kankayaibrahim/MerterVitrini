@@ -1,4 +1,4 @@
-import { RefreshCw, Settings, LogOut, User, Menu } from "lucide-react";
+import { RefreshCw, Settings, LogOut, User, Menu, Globe } from "lucide-react";
 import { UserInfo } from "../../types/integration";
 
 // Localized labels dictionary to prevent JSX literal internationalization warnings
@@ -13,7 +13,8 @@ const LABELS = {
   apiAddress: "Backend API Adresi",
   applyAndRefresh: "Uygula & Yenile",
   apiExplanation: "Next.js uygulamanız statik derleme ile çalıştığı için lokalde veya uzakta çalışan Go backend servisinize API isteklerini doğrudan tarayıcı üzerinden gönderir.",
-  logoutButton: "Çıkış Yap"
+  logoutButton: "Çıkış Yap",
+  viewSite: "Siteyi Görüntüle"
 };
 
 interface HeaderProps {
@@ -65,6 +66,18 @@ export default function Header({
         </div>
 
         <div className="flex items-center gap-4">
+          {/* View Site Button */}
+          <a
+            href="https://mertervitrini.com.tr"
+            target="_blank"
+            rel="noopener noreferrer"
+            title={LABELS.viewSite}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 hover:text-violet-600 text-zinc-700 shadow-sm text-xs font-bold transition-all cursor-pointer"
+          >
+            <Globe size={16} />
+            <span className="hidden md:inline">{LABELS.viewSite}</span>
+          </a>
+
           {/* DB Health Status */}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 border border-zinc-200/50 text-xs font-semibold">
             <span className={`w-2.5 h-2.5 rounded-full ${
