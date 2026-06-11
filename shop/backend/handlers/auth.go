@@ -868,6 +868,7 @@ type UserAddress struct {
 	Phone        string    `json:"phone"`
 	CountryID    string    `json:"country_id"`
 	StateID      *string   `json:"state_id"`     // nullable
+	CityID       *string   `json:"city_id"`      // nullable
 	AddressLine  string    `json:"address_line"`
 	PostalCode   string    `json:"postal_code"`
 	TaxNoTCKN    *string   `json:"tax_no_tckn"`  // nullable
@@ -879,6 +880,7 @@ type UserAddress struct {
 	// Joined fields for display
 	CountryName  string    `json:"country_name,omitempty"`
 	StateName    string    `json:"state_name,omitempty"`
+	CityName     string    `json:"city_name,omitempty"`
 }
 
 type CountryLookup struct {
@@ -919,10 +921,11 @@ func (h *AuthHandler) ListAddresses(w http.ResponseWriter, r *http.Request) {
 		       a.company_name, a.phone, a.country_id, a.state_id, a.address_line, 
 		       a.tax_no_tckn, a.tax_office, a.is_default, a.created_at, a.updated_at,
 		       coalesce(c.localized_names->>'tr_TR', c.localized_names->>'en_US', c.code) as country_name,
-		       coalesce(s.state_name, '') as state_name, a.postal_code
+		       coalesce(s.state_name, '') as state_name, a.postal_code, a.city_id, coalesce(ci.name, '') as city_name
 		FROM identity.user_addresses a
 		JOIN catalog.countries c ON a.country_id = c.id
 		LEFT JOIN catalog.country_states s ON a.state_id = s.id
+		LEFT JOIN catalog.country_cities ci ON a.city_id = ci.id
 		WHERE a.user_id = $1
 		ORDER BY a.is_default DESC, a.created_at DESC
 	`, userID)
@@ -936,12 +939,12 @@ func (h *AuthHandler) ListAddresses(w http.ResponseWriter, r *http.Request) {
 	addresses := []UserAddress{}
 	for rows.Next() {
 		var addr UserAddress
-		var company, taxNo, taxOff, stateID, stateName sql.NullString
+		var company, taxNo, taxOff, stateID, stateName, cityID, cityName sql.NullString
 		err := rows.Scan(
 			&addr.ID, &addr.UserID, &addr.Title, &addr.AddressType, &addr.FirstName, &addr.LastName,
 			&company, &addr.Phone, &addr.CountryID, &stateID, &addr.AddressLine,
 			&taxNo, &taxOff, &addr.IsDefault, &addr.CreatedAt, &addr.UpdatedAt,
-			&addr.CountryName, &stateName, &addr.PostalCode,
+			&addr.CountryName, &stateName, &addr.PostalCode, &cityID, &cityName,
 		)
 		if err != nil {
 			log.Printf("[ADDRESS ERROR] Scan error: %v", err)
@@ -960,7 +963,11 @@ func (h *AuthHandler) ListAddresses(w http.ResponseWriter, r *http.Request) {
 		if stateID.Valid {
 			addr.StateID = &stateID.String
 		}
+		if cityID.Valid {
+			addr.CityID = &cityID.String
+		}
 		addr.StateName = stateName.String
+		addr.CityName = cityName.String
 		addresses = append(addresses, addr)
 	}
 
@@ -992,6 +999,7 @@ func (h *AuthHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 		Phone       string  `json:"phone"`
 		CountryID   string  `json:"country_id"`
 		StateID     *string `json:"state_id"`
+		CityID      *string `json:"city_id"`
 		AddressLine string  `json:"address_line"`
 		PostalCode  string  `json:"postal_code"`
 		TaxNoTCKN   *string `json:"tax_no_tckn"`
@@ -1068,11 +1076,11 @@ func (h *AuthHandler) CreateAddress(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRow(ctx, `
 		INSERT INTO identity.user_addresses (
 			user_id, title, address_type, first_name, last_name, company_name, 
-			phone, country_id, state_id, address_line, tax_no_tckn, tax_office, is_default, postal_code
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			phone, country_id, state_id, address_line, tax_no_tckn, tax_office, is_default, postal_code, city_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id
 	`, userID, req.Title, req.AddressType, req.FirstName, req.LastName, req.CompanyName,
-		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault, req.PostalCode).Scan(&newID)
+		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault, req.PostalCode, req.CityID).Scan(&newID)
 
 	if err != nil {
 		log.Printf("[ADDRESS ERROR] Failed to insert address: %v", err)
@@ -1126,6 +1134,7 @@ func (h *AuthHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 		Phone       string  `json:"phone"`
 		CountryID   string  `json:"country_id"`
 		StateID     *string `json:"state_id"`
+		CityID      *string `json:"city_id"`
 		AddressLine string  `json:"address_line"`
 		PostalCode  string  `json:"postal_code"`
 		TaxNoTCKN   *string `json:"tax_no_tckn"`
@@ -1231,10 +1240,11 @@ func (h *AuthHandler) UpdateAddress(w http.ResponseWriter, r *http.Request) {
 			tax_office = $11,
 			is_default = $12,
 			postal_code = $13,
+			city_id = $14,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $14 AND user_id = $15
+		WHERE id = $15 AND user_id = $16
 	`, req.Title, req.AddressType, req.FirstName, req.LastName, req.CompanyName,
-		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault, req.PostalCode, id, userID)
+		req.Phone, req.CountryID, req.StateID, req.AddressLine, req.TaxNoTCKN, req.TaxOffice, req.IsDefault, req.PostalCode, req.CityID, id, userID)
 
 	if err != nil {
 		log.Printf("[ADDRESS ERROR] Failed to update address: %v", err)
@@ -1429,6 +1439,58 @@ func (h *AuthHandler) ListStatesByCountry(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(states)
+}
+
+type CityLookup struct {
+	ID      string `json:"id"`
+	StateID string `json:"state_id"`
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+}
+
+// ListCitiesByState fetches cities / towns for the given state
+func (h *AuthHandler) ListCitiesByState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	stateID := r.PathValue("state_id")
+	if stateID == "" {
+		http.Error(w, `{"error":"Eyalet ID gereklidir"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id, state_id, code, name
+		FROM catalog.country_cities
+		WHERE state_id = $1
+		ORDER BY name ASC
+	`, stateID)
+	if err != nil {
+		log.Printf("[LOCATION ERROR] Failed to query cities: %v", err)
+		http.Error(w, `{"error":"İlçe/şehir listesi alınırken hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	cities := []CityLookup{}
+	for rows.Next() {
+		var c CityLookup
+		err := rows.Scan(&c.ID, &c.StateID, &c.Code, &c.Name)
+		if err != nil {
+			log.Printf("[LOCATION ERROR] Scan error: %v", err)
+			http.Error(w, `{"error":"İlçe/şehir bilgileri okunurken hata oluştu"}`, http.StatusInternalServerError)
+			return
+		}
+		cities = append(cities, c)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cities)
 }
 
 func getClientIP(r *http.Request) string {

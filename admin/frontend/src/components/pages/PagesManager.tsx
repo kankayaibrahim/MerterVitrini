@@ -140,24 +140,26 @@ export default function PagesManager({ apiUrl, token }: PagesManagerProps) {
     try {
       const data = await apiRequest("/api/v1/languages", "GET");
       if (data && data.length > 0) {
-        // Map codes
-        const formattedLangs = data.map((l: any) => {
-          let code = l.code;
-          if (code.startsWith("en_")) code = "en";
-          else if (code.startsWith("tr_")) code = "tr";
-          else if (code.startsWith("pl_")) code = "pl";
-          else if (code.startsWith("bg_")) code = "bg";
-          else if (code.startsWith("de_")) code = "de";
-          else if (code.startsWith("fr_")) code = "fr";
-          else if (code.startsWith("ru_")) code = "ru";
-          else if (code.startsWith("ar_")) code = "ar";
-          return { ...l, code };
-        });
+        // Map codes and filter only active ones
+        const formattedLangs = data
+          .filter((l: any) => l.isActive)
+          .map((l: any) => {
+            let code = l.code;
+            if (code.startsWith("en_")) code = "en";
+            else if (code.startsWith("tr_")) code = "tr";
+            else if (code.startsWith("pl_")) code = "pl";
+            else if (code.startsWith("bg_")) code = "bg";
+            else if (code.startsWith("de_")) code = "de";
+            else if (code.startsWith("fr_")) code = "fr";
+            else if (code.startsWith("ru_")) code = "ru";
+            else if (code.startsWith("ar_")) code = "ar";
+            return { ...l, code };
+          });
         setActiveLangs(formattedLangs);
         // Default active tab to tr
         const hasTr = formattedLangs.some((l: any) => l.code === "tr");
         if (hasTr) setActiveLangTab("tr");
-        else setActiveLangTab(formattedLangs[0].code);
+        else if (formattedLangs.length > 0) setActiveLangTab(formattedLangs[0].code);
       }
     } catch (err) {
       console.error("Failed to load languages:", err);

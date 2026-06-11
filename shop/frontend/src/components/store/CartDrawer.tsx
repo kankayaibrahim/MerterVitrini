@@ -113,7 +113,8 @@ export default function CartDrawer({
     } else {
       const addr = addresses.find(a => a.id === billingAddr);
       if (addr) {
-        finalBilling = `${addr.first_name} ${addr.last_name} - ${addr.company_name || ""}\n${addr.address_line}\n${addr.state_name || ""}/${addr.country_name || ""}\nTel: ${addr.phone}`;
+        const cityPart = addr.city_name ? `${addr.city_name}, ` : "";
+        finalBilling = `${addr.first_name} ${addr.last_name} - ${addr.company_name || ""}\n${addr.address_line}\n${cityPart}${addr.state_name || ""}/${addr.country_name || ""}\nTel: ${addr.phone}`;
       }
     }
 
@@ -123,7 +124,8 @@ export default function CartDrawer({
     } else {
       const addr = addresses.find(a => a.id === deliveryAddr);
       if (addr) {
-        finalDelivery = `${addr.first_name} ${addr.last_name} - ${addr.company_name || ""}\n${addr.address_line}\n${addr.state_name || ""}/${addr.country_name || ""}\nTel: ${addr.phone}`;
+        const cityPart = addr.city_name ? `${addr.city_name}, ` : "";
+        finalDelivery = `${addr.first_name} ${addr.last_name} - ${addr.company_name || ""}\n${addr.address_line}\n${cityPart}${addr.state_name || ""}/${addr.country_name || ""}\nTel: ${addr.phone}`;
       }
     }
 

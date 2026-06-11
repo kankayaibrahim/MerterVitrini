@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { User, Settings, MapPin, Clipboard, Check, AlertCircle, Home, LogOut, Plus, Trash2, Edit3, Globe, Briefcase, ChevronDown, ChevronUp, Download, CreditCard, XCircle, RotateCcw } from "lucide-react";
 import { t } from "@/app/i18n";
 import { Category, CartItem } from "@/types/store";
-import { apiFetch } from "@/app/utils";
+import { apiFetch, getResizedImageUrl } from "@/app/utils";
 
 // Custom Instagram SVG Icon to avoid older lucide-react import issues
 const Instagram = (props: React.SVGProps<SVGSVGElement>) => (
@@ -42,6 +42,7 @@ const addressTranslations: Record<string, Record<string, string>> = {
     shipping_address: "Sevk / Teslimat Adresi",
     country_label: "Ülke",
     state_label: "Şehir / İl / Eyalet",
+    city_label: "İlçe / Kasaba",
     address_line_label: "Açık Adres",
     tax_office_label: "Vergi Dairesi",
     default_address_label: "Varsayılan adres olarak ayarla",
@@ -81,6 +82,7 @@ const addressTranslations: Record<string, Record<string, string>> = {
     shipping_address: "Shipping / Delivery Address",
     country_label: "Country",
     state_label: "City / State / Province",
+    city_label: "City / Town / Sub-district",
     address_line_label: "Full Address",
     tax_office_label: "Tax Office",
     default_address_label: "Set as default address",
@@ -120,6 +122,7 @@ const addressTranslations: Record<string, Record<string, string>> = {
     shipping_address: "عنوان الشحن / التسليم",
     country_label: "البلد",
     state_label: "المدينة / الولاية / المقاطعة",
+    city_label: "المدينة / البلدة / المنطقة الفرعية",
     address_line_label: "العنوان الكامل",
     tax_office_label: "المكتب الضريبي",
     default_address_label: "تعيين كعنوان افتراضي",
@@ -159,6 +162,7 @@ const addressTranslations: Record<string, Record<string, string>> = {
     shipping_address: "Адрес доставки / отправки",
     country_label: "Страна",
     state_label: "Город / Область / Провинция",
+    city_label: "Город / Населенный пункт",
     address_line_label: "Полный адрес",
     tax_office_label: "Налоговая инспекция",
     default_address_label: "Сделать адресом по умолчанию",
@@ -198,12 +202,13 @@ const addressTranslations: Record<string, Record<string, string>> = {
     shipping_address: "Adres do wysyłki / dostawy",
     country_label: "Kraj",
     state_label: "Miasto / Województwo",
+    city_label: "Miasto / Miejscowość",
     address_line_label: "Pełny adres",
-    tax_office_label: "Urząd Skarbowy",
-    default_address_label: "Ustaw jako adres domyślny",
+    tax_office_label: "Urząd skarbowy",
+    default_address_label: "Ustaw jako domyślny adres",
     no_addresses_found: "Brak zapisanych adresów.",
     address_delete_confirm: "Czy na pewno chcesz usunąć ten adres?",
-    legacy_migration_notice: "W Twoim profilu znaleziono stare dane adresowe. Czy chcesz je automatycznie zaimportować do nowej książki adresowej?",
+    legacy_migration_notice: "W Twoim profilu znaleziono stare dane adresowe. Czy chcesz je automatycznie przenieść do nowej książki adresowej?",
     migrate_addresses_btn: "Przenieś moje adresy",
     address_title_placeholder: "np. Magazyn Warszawa",
     tax_no_tckn_label: "NIP / PESEL",
@@ -213,10 +218,10 @@ const addressTranslations: Record<string, Record<string, string>> = {
     phone_label: "Numer telefonu odbiorcy",
     save_address_btn: "Zapisz adres",
     cancel_btn: "Anuluj",
-    loading_addresses: "Wczytywanie adresów...",
-    migration_success: "Twoje dotychczasowe adresy zostały pomyślnie przeniesione!",
+    loading_addresses: "Ładowanie adresów...",
+    migration_success: "Stare adresy zostały pomyślnie przeniesione!",
     default_badge: "Domyślny",
-    address_line_placeholder: "Ulica, numer budynku, mieszkania, kod, piętro i inne szczegóły...",
+    address_line_placeholder: "Ulica, numer budynku, mieszkania, piętro i inne szczegóły...",
     tax_office_placeholder: "np. Urząd Skarbowy Warszawa Śródmieście",
     postal_code_label: "Kod pocztowy *",
     postal_code_placeholder: "np. 00-001",
@@ -237,6 +242,7 @@ const addressTranslations: Record<string, Record<string, string>> = {
     shipping_address: "Адрес за доставка / изпращане",
     country_label: "Държава",
     state_label: "Град / Област",
+    city_label: "Град / Селище",
     address_line_label: "Пълен адрес",
     tax_office_label: "Данъчна служба",
     default_address_label: "Задаване като адрес по подразбиране",
@@ -276,6 +282,7 @@ const addressTranslations: Record<string, Record<string, string>> = {
     shipping_address: "Lieferadresse / Versandadresse",
     country_label: "Land",
     state_label: "Stadt / Bundesland",
+    city_label: "Stadt / Ort",
     address_line_label: "Vollständige Adresse",
     tax_office_label: "Finanzamt",
     default_address_label: "Als Standardadresse festlegen",
@@ -315,6 +322,7 @@ const addressTranslations: Record<string, Record<string, string>> = {
     shipping_address: "Adresse de livraison",
     country_label: "Pays",
     state_label: "Ville / État / Province",
+    city_label: "Ville / Commune",
     address_line_label: "Adresse complète",
     tax_office_label: "Bureau des impôts",
     default_address_label: "Définir comme adresse par défaut",
@@ -498,12 +506,14 @@ interface UserAddress {
   phone: string;
   country_id: string;
   state_id?: string;
+  city_id?: string;
   address_line: string;
   tax_no_tckn?: string;
   tax_office?: string;
   is_default: boolean;
   country_name?: string;
   state_name?: string;
+  city_name?: string;
   postal_code: string;
 }
 
@@ -520,6 +530,13 @@ interface StateLookup {
   country_id: string;
   code: string;
   state_name: string;
+}
+
+interface CityLookup {
+  id: string;
+  state_id: string;
+  code: string;
+  name: string;
 }
 
 export default function ProfilePage() {
@@ -588,6 +605,7 @@ export default function ProfilePage() {
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [countries, setCountries] = useState<CountryLookup[]>([]);
   const [states, setStates] = useState<StateLookup[]>([]);
+  const [cities, setCities] = useState<CityLookup[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState<boolean>(true);
 
   // Modal / Form States
@@ -604,6 +622,7 @@ export default function ProfilePage() {
   const [formPhoneOnly, setFormPhoneOnly] = useState("");
   const [formCountryID, setFormCountryID] = useState("");
   const [formStateID, setFormStateID] = useState("");
+  const [formCityID, setFormCityID] = useState("");
   const [formAddressLine, setFormAddressLine] = useState("");
   const [formPostalCode, setFormPostalCode] = useState("");
   const [formTaxNo, setFormTaxNo] = useState("");
@@ -971,10 +990,38 @@ export default function ProfilePage() {
     return Promise.resolve();
   };
 
+  const fetchCities = async (stateId: string): Promise<void> => {
+    if (!stateId) {
+      setCities([]);
+      return Promise.resolve();
+    }
+    try {
+      const response = await fetch(`/api/v1/store/locations/states/${stateId}/cities`);
+      if (response.ok) {
+        const data = await response.json();
+        setCities(data || []);
+      } else {
+        setCities([]);
+      }
+    } catch (e) {
+      console.error("Failed to fetch cities:", e);
+      setCities([]);
+    }
+    return Promise.resolve();
+  };
+
   const handleCountryChange = (countryId: string) => {
     setFormCountryID(countryId);
     setFormStateID("");
+    setFormCityID("");
+    setCities([]);
     fetchStates(countryId);
+  };
+
+  const handleStateChange = (stateId: string) => {
+    setFormStateID(stateId);
+    setFormCityID("");
+    fetchCities(stateId);
   };
 
   const openAddressModal = (address: UserAddress | null = null) => {
@@ -1010,6 +1057,14 @@ export default function ProfilePage() {
       
       fetchStates(address.country_id).then(() => {
         setFormStateID(address.state_id || "");
+        if (address.state_id) {
+          fetchCities(address.state_id).then(() => {
+            setFormCityID(address.city_id || "");
+          });
+        } else {
+          setFormCityID("");
+          setCities([]);
+        }
       });
     } else {
       setEditingAddress(null);
@@ -1041,6 +1096,8 @@ export default function ProfilePage() {
         fetchStates(defaultCountryID);
       }
       setFormStateID("");
+      setFormCityID("");
+      setCities([]);
       setFormAddressLine("");
       setFormPostalCode("");
       setFormTaxNo(taxNoTCKN || "");
@@ -1092,6 +1149,7 @@ export default function ProfilePage() {
       phone: fullPhone,
       country_id: formCountryID,
       state_id: formStateID || null,
+      city_id: formCityID || null,
       address_line: formAddressLine,
       postal_code: formPostalCode,
       tax_no_tckn: formType === "billing" ? (formTaxNo || null) : null,
@@ -1741,6 +1799,7 @@ export default function ProfilePage() {
                               <Globe className="w-3.5 h-3.5 text-spanish-gray" />
                               <span>
                                 {addr.postal_code ? `${addr.postal_code} ` : ""}
+                                {addr.city_name ? `${addr.city_name}, ` : ""}
                                 {addr.state_name ? `${addr.state_name}, ` : ""}
                                 {addr.country_name}
                               </span>
@@ -1921,7 +1980,7 @@ export default function ProfilePage() {
                                   </h4>
                                   <div className="flex flex-col gap-4">
                                     {(order.items || []).map((item: any) => {
-                                      const coverImg = `/api/v1/store/images/resize?url=${encodeURIComponent(item.image_url_at_purchase)}&width=80&height=80`;
+                                      const coverImg = getResizedImageUrl(item.image_url_at_purchase, 80, 106);
                                       return (
                                         <div key={item.id} className="flex items-center gap-4 text-xs font-bold">
                                           <img
@@ -2105,33 +2164,35 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Country & State */}
+              {/* Country */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                  {getAddressT("country_label")} *
+                </label>
+                <select
+                  required
+                  value={formCountryID}
+                  onChange={(e) => handleCountryChange(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-bold focus:outline-none focus:border-salmon-pink text-onyx cursor-pointer shadow-sm"
+                >
+                  <option value="">-- {getAddressT("country_label")} --</option>
+                  {countries.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {lang === "tr" ? c.name_tr : c.name_en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* State & City/Town */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                    {getAddressT("country_label")} *
-                  </label>
-                  <select
-                    required
-                    value={formCountryID}
-                    onChange={(e) => handleCountryChange(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-bold focus:outline-none focus:border-salmon-pink text-onyx cursor-pointer shadow-sm"
-                  >
-                    <option value="">-- {getAddressT("country_label")} --</option>
-                    {countries.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {lang === "tr" ? c.name_tr : c.name_en}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
                     {getAddressT("state_label")}
                   </label>
                   <select
                     value={formStateID}
-                    onChange={(e) => setFormStateID(e.target.value)}
+                    onChange={(e) => handleStateChange(e.target.value)}
                     disabled={states.length === 0}
                     className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-bold focus:outline-none focus:border-salmon-pink text-onyx cursor-pointer shadow-sm disabled:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:text-sonic-silver"
                   >
@@ -2139,6 +2200,25 @@ export default function ProfilePage() {
                     {states.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.state_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                    {getAddressT("city_label")}
+                  </label>
+                  <select
+                    value={formCityID}
+                    onChange={(e) => setFormCityID(e.target.value)}
+                    disabled={cities.length === 0}
+                    className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-bold focus:outline-none focus:border-salmon-pink text-onyx cursor-pointer shadow-sm disabled:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:text-sonic-silver"
+                  >
+                    <option value="">-- {cities.length === 0 ? "N/A" : getAddressT("city_label")} --</option>
+                    {cities.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
                       </option>
                     ))}
                   </select>

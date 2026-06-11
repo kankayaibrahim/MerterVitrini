@@ -158,7 +158,7 @@ if ($Project -eq "admin" -or $Project -eq "all") {
         Write-Host "--------------------------------------------------" -ForegroundColor Yellow
         Push-Location $rootDir
         try {
-            & python scripts/deploy_admin.py
+            & python scripts/unified_deployer.py -p admin -c all -a deploy
         } catch {
             Write-Host "[ERROR] Admin suite deployment failed!" -ForegroundColor Red
             throw $_
@@ -205,7 +205,7 @@ if ($Project -eq "shop" -or $Project -eq "all") {
         Write-Host "--------------------------------------------------" -ForegroundColor Yellow
         Push-Location $rootDir
         try {
-            & python scripts/deploy_shop.py
+            & python scripts/unified_deployer.py -p shop -c all -a deploy
         } catch {
             Write-Host "[ERROR] Shop deployment failed!" -ForegroundColor Red
             throw $_

@@ -155,6 +155,7 @@ func main() {
 	// Location Lookups
 	mux.HandleFunc("GET /api/v1/store/locations/countries", authHandler.ListCountries)
 	mux.HandleFunc("GET /api/v1/store/locations/countries/{country_id}/states", authHandler.ListStatesByCountry)
+	mux.HandleFunc("GET /api/v1/store/locations/states/{state_id}/cities", authHandler.ListCitiesByState)
 
 
 	// Catalog Storefront Endpoints (Public - v1)
