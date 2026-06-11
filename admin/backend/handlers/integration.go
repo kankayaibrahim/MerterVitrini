@@ -1823,8 +1823,6 @@ func (h *IntegrationHandler) ListXMLHistory(w http.ResponseWriter, r *http.Reque
 			switch feedID {
 			case "etika":
 				supplierName = "Etika Fashion"
-			case "blackfashion":
-				supplierName = "Black Fashion"
 			case "janes":
 				supplierName = "Jane's"
 			default:

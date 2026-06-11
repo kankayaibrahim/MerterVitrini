@@ -724,7 +724,6 @@ CREATE INDEX idx_blog_posts_is_active ON catalog.blog_posts(is_active);
 INSERT INTO catalog.brands (id, brand_name, slug, alias_code, is_active) VALUES
 ('019e620f-2ca6-774c-9450-6c69015045a1', 'Lustrin Toptan Tekstil', 'lustrin-toptan-tekstil', 'MIMOZA', true),
 ('019e620f-2ca6-774c-9450-6c69015045a2', 'Etika Fashion Toptan', 'etika-fashion-toptan', 'FLORA', true),
-('019e620f-2ca6-774c-9450-6c69015045a3', 'Black Fashion Toptan Tekstil', 'black-fashion-toptan-tekstil', 'NOIR', true),
 ('019e620f-2ca6-774c-9450-6c69015045a4', 'Jane''s Toptan Tekstil', 'janes-toptan-tekstil', 'EDUSA', true)
 ON CONFLICT (id) DO UPDATE SET brand_name = EXCLUDED.brand_name, alias_code = EXCLUDED.alias_code;
 
@@ -732,7 +731,6 @@ ON CONFLICT (id) DO UPDATE SET brand_name = EXCLUDED.brand_name, alias_code = EX
 INSERT INTO integration.xml_feeds (id, feed_name, alias_code, feed_url, is_active, brand_id, mapping_config, category_mapping) VALUES
 ('lustrin', 'Lustrin Toptan Tekstil', 'MIMOZA', NULL, true, '019e620f-2ca6-774c-9450-6c69015045a1', NULL, NULL),
 ('etika', 'Etika Fashion Toptan', 'FLORA', NULL, true, '019e620f-2ca6-774c-9450-6c69015045a2', NULL, NULL),
-('blackfashion', 'Black Fashion Toptan Tekstil', 'NOIR', NULL, true, '019e620f-2ca6-774c-9450-6c69015045a3', NULL, NULL),
 ('janes', 'elbise', 'EDUSA', 'https://janestoptan.net/production/xml/janestoptanxmltr', true, '019e620f-2ca6-774c-9450-6c69015045a4', '{"parser_type": "python_script", "python_script": "parsers/janes.py"}', NULL)
 ON CONFLICT (id) DO UPDATE SET 
     feed_name = EXCLUDED.feed_name, 

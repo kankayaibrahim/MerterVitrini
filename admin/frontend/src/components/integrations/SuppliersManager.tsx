@@ -105,7 +105,6 @@ const LABELS = {
   DELETE_ALL_HISTORY: "Tüm XML Geçmişini Sil",
   DELETE_ETIKA_HISTORY: "Sadece Etika Geçmişini Sil",
   DELETE_JANES_HISTORY: "Sadece Jane's Geçmişini Sil",
-  DELETE_BF_HISTORY: "Sadece Black Fashion Sil",
   TOTAL_ARCHIVED: "Toplam Arşivlenmiş XML",
   PIECE_FILES: " adet dosya",
   TOTAL_DISK_USAGE: "Toplam Disk Kullanımı",
@@ -115,7 +114,6 @@ const LABELS = {
   ALL_SUPPLIERS: "Tüm Tedarikçiler",
   ETIKA_FASHION: "Etika Fashion",
   JANES_FASHION: "Jane's",
-  BLACK_FASHION: "Black Fashion",
   DELETE_SELECTED: "Seçilenleri Sil",
   COL_SUPPLIER: "Tedarikçi",
   COL_FILENAME: "Dosya Adı",
@@ -133,7 +131,6 @@ const LABELS = {
   CUSTOM_SCRIPT_LABEL: "Özel Script Dosya Yolu",
   ACTIVATE_SCRIPT_BTN: "Entegrasyon Scriptini Aktifleştir",
   OPTION_CUSTOM: "Diğer / Özel Script Yolu...",
-  OPTION_BF: "parsers/blackfashion.py (Black Fashion)",
   OPTION_ETIKA: "parsers/etika.py (Etika Fashion)",
   OPTION_JANES: "parsers/janes.py (Jane's)"
 };
@@ -186,7 +183,7 @@ export default function SuppliersManager({
   const [feedCustomId, setFeedCustomId] = useState("");
   const [feedName, setFeedName] = useState("");
   const [feedUrl, setFeedUrl] = useState("");
-  const [selectedParserScript, setSelectedParserScript] = useState("parsers/blackfashion.py");
+  const [selectedParserScript, setSelectedParserScript] = useState("parsers/etika.py");
   const [customParserScript, setCustomParserScript] = useState("");
 
   // Status indicators
@@ -225,7 +222,7 @@ export default function SuppliersManager({
     if (options.feedId === "all") {
       confirmMsg = "TÜM XML indirme geçmişini kalıcı olarak silmek istediğinize emin misiniz?";
     } else if (options.feedId) {
-      const supplierName = options.feedId === "etika" ? "Etika" : options.feedId === "janes" ? "Jane's" : options.feedId === "blackfashion" ? "Black Fashion" : options.feedId;
+      const supplierName = options.feedId === "etika" ? "Etika" : options.feedId === "janes" ? "Jane's" : options.feedId;
       confirmMsg = `${supplierName} tedarikçisine ait tüm XML geçmişini kalıcı olarak silmek istediğinize emin misiniz?`;
     } else if (options.filenames && options.filenames.length === 1) {
       confirmMsg = `"${options.filenames[0]}" dosyasını kalıcı olarak silmek istediğinize emin misiniz?`;
@@ -371,8 +368,6 @@ export default function SuppliersManager({
       setSelectedParserScript("parsers/etika.py");
     } else if (alias === "EDUSA") {
       setSelectedParserScript("parsers/janes.py");
-    } else if (alias === "NOIR") {
-      setSelectedParserScript("parsers/blackfashion.py");
     } else {
       setSelectedParserScript("parsers/custom.py");
     }
@@ -450,9 +445,7 @@ export default function SuppliersManager({
 
     // Determine target feed ID from selected script or fallback
     let feedId = `${alias.toLowerCase()}_feed`;
-    if (scriptPath.includes("blackfashion.py")) {
-      feedId = "blackfashion";
-    } else if (scriptPath.includes("etika.py")) {
+    if (scriptPath.includes("etika.py")) {
       feedId = "etika";
     } else if (scriptPath.includes("janes.py")) {
       feedId = "janes";
@@ -990,14 +983,6 @@ export default function SuppliersManager({
                   <Building size={13} className="text-indigo-500" />
                   {LABELS.DELETE_JANES_HISTORY}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteHistory({ feedId: "blackfashion" })}
-                  className="w-full text-left px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 rounded-xl transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <Building size={13} className="text-zinc-950" />
-                  {LABELS.DELETE_BF_HISTORY}
-                </button>
               </div>
             </div>
           </div>
@@ -1082,7 +1067,6 @@ export default function SuppliersManager({
                 <option value="all">{LABELS.ALL_SUPPLIERS}</option>
                 <option value="etika">{LABELS.ETIKA_FASHION}</option>
                 <option value="janes">{LABELS.JANES_FASHION}</option>
-                <option value="blackfashion">{LABELS.BLACK_FASHION}</option>
               </select>
             </div>
 
@@ -1153,8 +1137,6 @@ export default function SuppliersManager({
                     badgeClass = "bg-violet-50 text-violet-700 border-violet-100";
                   } else if (item.feed_id === "janes") {
                     badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-100";
-                  } else if (item.feed_id === "blackfashion") {
-                    badgeClass = "bg-zinc-950 text-zinc-100 border-zinc-900";
                   }
 
                   return (
@@ -1511,7 +1493,6 @@ export default function SuppliersManager({
                                 onChange={(e) => setSelectedParserScript(e.target.value)}
                                 className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 text-xs font-semibold cursor-pointer appearance-none pr-10"
                               >
-                                <option value="parsers/blackfashion.py">{LABELS.OPTION_BF}</option>
                                 <option value="parsers/etika.py">{LABELS.OPTION_ETIKA}</option>
                                 <option value="parsers/janes.py">{LABELS.OPTION_JANES}</option>
                                 <option value="parsers/custom.py">{LABELS.OPTION_CUSTOM}</option>
