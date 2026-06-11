@@ -92,6 +92,17 @@ PROJECTS_CONFIG = {
 # ==============================================================================
 # PIPELINE RUNNER LOGIC (COMPILATION & SFTP DEPLOYMENT)
 # ==============================================================================
+def disable_ssr_for_admin(func):
+    def wrapper(self, proj_key, *args, **kwargs):
+        orig_ssr = self.ssr_mode
+        if proj_key == "admin":
+            self.ssr_mode = False
+        try:
+            return func(self, proj_key, *args, **kwargs)
+        finally:
+            self.ssr_mode = orig_ssr
+    return wrapper
+
 class DeployPipeline:
     def __init__(self, log_callback=print, remote_build=False, ssr_mode=False):
         self.log = log_callback
@@ -196,6 +207,7 @@ class DeployPipeline:
         else:
             raise Exception("Go binary not generated after build.")
 
+    @disable_ssr_for_admin
     def build_frontend(self, proj_key):
         self.log(f"\n==================================================")
         self.log(f" BUILDING FRONTEND FOR: {proj_key.upper()}")
@@ -349,6 +361,7 @@ WantedBy=multi-user.target
         finally:
             ssh.close()
 
+    @disable_ssr_for_admin
     def deploy_frontend(self, proj_key):
         self.log(f"\n==================================================")
         self.log(f" DEPLOYING FRONTEND FOR: {proj_key.upper()}")
