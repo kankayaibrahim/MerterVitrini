@@ -208,18 +208,19 @@ func (h *CartHandler) AddToCart(w http.ResponseWriter, r *http.Request) {
 			SELECT id, quantity FROM catalog.cart_items WHERE cart_id = $1 AND product_id = $2
 		`, cartID, req.ProductID).Scan(&existingID, &existingQty)
 		
-		if findErr == pgx.ErrNoRows {
+		switch findErr {
+		case pgx.ErrNoRows:
 			_, err = tx.Exec(ctx, `
 				INSERT INTO catalog.cart_items (cart_id, product_id, quantity)
 				VALUES ($1, $2, $3)
 			`, cartID, req.ProductID, req.Quantity)
-		} else if findErr == nil {
+		case nil:
 			_, err = tx.Exec(ctx, `
 				UPDATE catalog.cart_items
 				SET quantity = $1
 				WHERE id = $2
 			`, existingQty + req.Quantity, existingID)
-		} else {
+		default:
 			err = findErr
 		}
 	}
@@ -433,12 +434,13 @@ func (h *CartHandler) SyncCart(w http.ResponseWriter, r *http.Request) {
 	var cartID string
 	var existingCartID string
 	errFind := tx.QueryRow(ctx, "SELECT id FROM catalog.carts WHERE user_id = $1", userID).Scan(&existingCartID)
-	if errFind == pgx.ErrNoRows {
+	switch errFind {
+	case pgx.ErrNoRows:
 		err = tx.QueryRow(ctx, "INSERT INTO catalog.carts (user_id) VALUES ($1) RETURNING id", userID).Scan(&cartID)
-	} else if errFind == nil {
+	case nil:
 		cartID = existingCartID
 		_, err = tx.Exec(ctx, "UPDATE catalog.carts SET updated_at = CURRENT_TIMESTAMP WHERE id = $1", cartID)
-	} else {
+	default:
 		err = errFind
 	}
 
