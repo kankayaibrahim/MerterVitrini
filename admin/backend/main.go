@@ -112,6 +112,16 @@ func main() {
 	defer db.CloseDB()
 	log.Println("Database connection pool established successfully!")
 
+	// 4z. Provision Cron Tables
+	cronInitCtx, cronInitCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := handlers.ProvisionCronTables(cronInitCtx); err != nil {
+		log.Printf("[WARNING] Failed to provision cron tables: %v\n", err)
+	} else {
+		log.Println("Cron scheduler database tables successfully provisioned/verified!")
+		handlers.StartCronScheduler()
+	}
+	cronInitCancel()
+
 	// 4a. Clean up any stuck 'running' sync runs from database on server startup
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cleanupCancel()
@@ -280,6 +290,13 @@ func main() {
 	mux.Handle("GET /api/v1/translate/status", authMiddleware(http.HandlerFunc(translateHandler.GetStatus)))
 	mux.Handle("POST /api/v1/translate/start", authMiddleware(http.HandlerFunc(translateHandler.StartJob)))
 	mux.Handle("POST /api/v1/translate/pause", authMiddleware(http.HandlerFunc(translateHandler.PauseJob)))
+
+	// Cron Scheduler API routes
+	cronHandler := handlers.NewCronHandler()
+	mux.Handle("GET /api/v1/cron/settings", authMiddleware(http.HandlerFunc(cronHandler.GetSettings)))
+	mux.Handle("PUT /api/v1/cron/settings", authMiddleware(http.HandlerFunc(cronHandler.UpdateSettings)))
+	mux.Handle("POST /api/v1/cron/trigger", authMiddleware(http.HandlerFunc(cronHandler.TriggerCron)))
+	mux.Handle("GET /api/v1/cron/logs", authMiddleware(http.HandlerFunc(cronHandler.GetLogs)))
 
 	// Customer Management API routes
 	customersHandler := handlers.NewCustomersHandler(cfg)

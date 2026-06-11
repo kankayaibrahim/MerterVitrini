@@ -20,7 +20,8 @@ import {
   Languages,
   User,
   Image as ImageIcon,
-  Clipboard
+  Clipboard,
+  Clock
 } from "lucide-react";
 
 // Types
@@ -50,6 +51,7 @@ import ImageCacheManager from "../components/catalog/ImageCacheManager";
 import BlogManager from "../components/catalog/BlogManager";
 import IndexNowManager from "../components/catalog/IndexNowManager";
 import OrdersManager from "../components/orders/OrdersManager";
+import CronManager from "../components/cron/CronManager";
 
 const LABELS = {
   SUB_TAB_PRODUCTS: "Ürün Listesi",
@@ -101,7 +103,7 @@ export default function Home() {
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Navigation State
-  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders" | "cron">("dashboard");
   const [catalogSubTab, setCatalogSubTab] = useState<"products" | "categories">("products");
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -117,7 +119,7 @@ export default function Home() {
     orders: true
   });
 
-  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders", subtab?: "products" | "categories") => {
+  const updateNavigation = (tab: "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders" | "cron", subtab?: "products" | "categories") => {
     setActiveTab(tab);
     if (subtab) {
       setCatalogSubTab(subtab);
@@ -152,10 +154,10 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders" | null;
+      const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders" | "cron" | null;
       const urlSubTab = params.get("subtab") as "products" | "categories" | null;
       
-      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow", "orders"].includes(urlTab)) {
+      if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow", "orders", "cron"].includes(urlTab)) {
         setActiveTab(urlTab);
       }
       if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -169,10 +171,10 @@ export default function Home() {
     const handlePopState = () => {
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
-        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders" | null;
+        const urlTab = params.get("tab") as "dashboard" | "integrations" | "catalog" | "settings" | "geography" | "policies" | "translate" | "customers" | "pages" | "image-cache" | "blog" | "indexnow" | "orders" | "cron" | null;
         const urlSubTab = params.get("subtab") as "products" | "categories" | null;
         
-        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow", "orders"].includes(urlTab)) {
+        if (urlTab && ["dashboard", "integrations", "catalog", "settings", "geography", "policies", "translate", "customers", "pages", "image-cache", "blog", "indexnow", "orders", "cron"].includes(urlTab)) {
           setActiveTab(urlTab);
         }
         if (urlSubTab && ["products", "categories"].includes(urlSubTab)) {
@@ -926,6 +928,20 @@ export default function Home() {
                   >
                     IndexNow Gönderimi
                   </button>
+                  <button
+                    onClick={() => {
+                      updateNavigation("cron");
+                      setSidebarOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      activeTab === "cron"
+                        ? "bg-violet-500/10 text-violet-400 font-extrabold border-l-2 border-violet-500 pl-3"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    <Clock size={12} />
+                    Zamanlanmış Görevler
+                  </button>
                 </div>
               )}
             </div>
@@ -1401,6 +1417,11 @@ export default function Home() {
           {/* Tab 12: IndexNow Manuel URL İndeksleme Paneli */}
           {activeTab === "indexnow" && (
             <IndexNowManager apiUrl={apiUrl} token={token} />
+          )}
+
+          {/* Tab 14: Zamanlanmış Görevler (Cron) */}
+          {activeTab === "cron" && (
+            <CronManager apiUrl={apiUrl} token={token} />
           )}
 
           {/* Tab 5: Coğrafi Tanımlar (Ülkeler & Şehirler) */}
