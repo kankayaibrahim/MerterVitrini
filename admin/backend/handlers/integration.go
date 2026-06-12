@@ -1407,6 +1407,12 @@ type StandardizedVariant struct {
 
 // runPythonParser runs python script as a subprocess, passing SYNC_RUN_ID via environment
 func runPythonParser(ctx context.Context, runID string, feedID string, brandID *string, feedUrl string, scriptPath string, categoryMapping map[string]any) {
+	defer func() {
+		progressMu.Lock()
+		delete(progressMap, runID)
+		progressMu.Unlock()
+	}()
+
 	_ = feedID
 	_ = brandID
 	_ = feedUrl
