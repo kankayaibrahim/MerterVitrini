@@ -296,14 +296,7 @@ export default function StorefrontLayout({
       else if (lang === "bg") addedText = addedToCartTranslations.bg;
       else if (lang === "de") addedText = addedToCartTranslations.de;
       else if (lang === "fr") addedText = addedToCartTranslations.fr;
-      const message = `${prodTitle} (${quantity} ${lang === "tr" ? "Seri" : "Pack"}) - ${addedText}`;
       
-      const newToast = { id: Math.random().toString(), message };
-      setToasts((prev) => [...prev, newToast]);
-      setTimeout(() => {
-        setToasts((prev) => prev.filter(t => t.id !== newToast.id));
-      }, 3000);
-
       // Trigger center screen premium flash overlay
       setCenterFlash({
         show: true,
