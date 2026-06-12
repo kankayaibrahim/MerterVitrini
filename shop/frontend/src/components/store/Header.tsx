@@ -510,7 +510,7 @@ export default function Header({
                         }}
                         className="w-full text-left px-3 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
                       >
-                        {lang === "tr" ? "Profilim" : "My Profile"}
+                        {t("my_profile", lang)}
                       </button>
                       <button
                         onClick={handleLogout}
@@ -583,7 +583,7 @@ export default function Header({
                           }}
                           className="w-full text-left px-4 py-2.5 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
                         >
-                          {lang === "tr" ? "Profilim" : "My Profile"}
+                          {t("my_profile", lang)}
                         </button>
                         <button
                           onClick={handleLogout}

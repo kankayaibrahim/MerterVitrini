@@ -1,73 +1,23 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-
-// Sub-component to safely read search parameters under Suspense
-function QueryParamSyncer({ 
-  mode,
-  setSearchQuery, 
-  setActiveCategoryId 
-}: { 
-  mode: string;
-  setSearchQuery: (q: string) => void;
-  setActiveCategoryId: (cat: string) => void;
-}) {
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    if (mode === "catalog") {
-      const catParam = searchParams.get("category");
-      const qParam = searchParams.get("q") || "";
-
-      console.log(`[Search Log] QueryParamSyncer triggered. qParam: "${qParam}"`);
-
-      if (catParam) {
-        setActiveCategoryId(catParam);
-      }
-      
-      setSearchQuery(qParam);
-
-      // Safely sync both desktop & mobile input box values in UI
-      const searchInput = document.getElementById("searchInputDesktop") as HTMLInputElement;
-      if (searchInput) {
-        searchInput.value = qParam;
-      }
-      const searchInputMobile = document.getElementById("searchInputMobile") as HTMLInputElement;
-      if (searchInputMobile) {
-        searchInputMobile.value = qParam;
-      }
-    }
-  }, [mode, searchParams, setSearchQuery, setActiveCategoryId]);
-
-  return null;
-}
-import { ChevronLeft, ChevronRight, Home, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Product, Brand, Category, CartItem } from "@/types/store";
-import { t, getProductTitle, getCategoryPrefix, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
+import { t, getProductTitle, getCategoryPrefix } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, apiFetch, showToast } from "@/app/utils";
 
 // Import modular, premium Tailwind E-Commerce subcomponents
 import Header from "@/components/store/Header";
-import HeroBanner from "@/components/store/HeroBanner";
 import FilterSidebar from "@/components/store/FilterSidebar";
-import ProductCard from "@/components/store/ProductCard";
 import ProductDetailsModal from "@/components/store/ProductDetailsModal";
 import CartDrawer from "@/components/store/CartDrawer";
 import SuccessModal from "@/components/store/SuccessModal";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 
-const findCategory = (tree: Category[], target: string): Category | null => {
-  for (const cat of tree) {
-    if (cat.id === target || cat.slug === target) return cat;
-    if (cat.children && cat.children.length > 0) {
-      const found = findCategory(cat.children, target);
-      if (found) return found;
-    }
-  }
-  return null;
-};
+// Modular layout view subcomponents
+import QueryParamSyncer from "@/components/store/QueryParamSyncer";
+import PortalView from "@/components/store/PortalView";
+import CatalogView from "@/components/store/CatalogView";
 
 interface StorefrontLayoutProps {
   mode: "portal" | "catalog";
@@ -90,7 +40,6 @@ export default function StorefrontLayout({
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
   const [policyModalType, setPolicyModalType] = useState<"cancellation_and_return" | "terms_of_service" | "privacy_policy" | "">("");
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState<boolean>(false);
-  const [isSeoExpanded, setIsSeoExpanded] = useState<boolean>(false);
 
   // --- Multi-Currency States ---
   const [displayCurrency, setDisplayCurrency] = useState<string>("TRY");
@@ -101,44 +50,6 @@ export default function StorefrontLayout({
     localStorage.setItem("merter_preferred_currency", curr);
   };
 
-  // Premium Banners SEO localization mapping with fallback support
-  const getLocalizedCollectionBanner = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => {
-    if (type === "kadin") return "/banners/collection_kadin.webp";
-    if (type === "erkek") return "/banners/collection_erkek.webp";
-    if (type === "ic_giyim") return "/banners/collection_ic_giyim.webp";
-    return "/banners/collection_aksesuar.webp";
-  };
-
-  const getLocalizedSliderBanner = (type: "opportunities" | "app_promo") => {
-    if (type === "opportunities") {
-      return "/banners/hero_new_opportunities.webp";
-    }
-    return "/banners/hero_app_promo.webp";
-  };
-
-
-  const handleCollectionImageError = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    let fallback = "/banners/collection_kadin.webp";
-    if (type === "erkek") fallback = "/banners/collection_erkek.webp";
-    else if (type === "ic_giyim") fallback = "/banners/collection_ic_giyim.webp";
-    else if (type === "aksesuar") fallback = "/banners/collection_aksesuar.webp";
-
-    if (!img.src.endsWith(fallback)) {
-      img.src = fallback;
-    }
-  };
-
-  const handleSliderImageError = (type: "opportunities" | "app_promo") => (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    let fallback = "/banners/hero_new_opportunities.webp";
-    if (type === "app_promo") fallback = "/banners/hero_app_promo.webp";
-
-    if (!img.src.endsWith(fallback)) {
-      img.src = fallback;
-    }
-  };
-  
   // --- Filter & Catalog States ---
   const [categories, setCategories] = useState<Category[]>(preFetchedCategories || []);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -150,19 +61,11 @@ export default function StorefrontLayout({
   const [fetchError, setFetchError] = useState<string | null>(null);
   
   const [activeCategoryId, setActiveCategoryId] = useState<string>(initialCategorySlug || "");
-  const [activeSlide, setActiveSlide] = useState<number>(0);
 
   // Sync initialCategorySlug prop updates to activeCategoryId state
   useEffect(() => {
     setActiveCategoryId(initialCategorySlug || "");
   }, [initialCategorySlug]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveSlide((prev) => (prev === 0 ? 1 : 0));
-    }, 6000);
-    return () => clearInterval(interval);
-  }, []);
   
   const [activeBrandIds, setActiveBrandIds] = useState<string[]>([]);
   const [activeSpecs, setActiveSpecs] = useState<{ gender: string[]; season: string[] }>({
@@ -806,549 +709,53 @@ export default function StorefrontLayout({
 
       {/* Main Content Area */}
       {mode === "catalog" ? (
-        <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
-          
-          {/* Category Breadcrumbs */}
-          {activeCategoryId && (
-            <nav className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-sonic-silver mb-6 uppercase tracking-wider select-none">
-              <a href="/" className="hover:text-salmon-pink flex items-center gap-1 transition-colors no-underline text-sonic-silver">
-                <Home className="w-3.5 h-3.5" />
-                <span>{t("home", lang)}</span>
-              </a>
-              {getCategoryTrail(categories, activeCategoryId)?.map((cat) => (
-                <React.Fragment key={cat.id}>
-                  <ChevronRight className="w-3 h-3 text-spanish-gray" />
-                  <a 
-                    href={getCategoryUrl(categories, cat, lang)}
-                    className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver last:text-salmon-pink last:pointer-events-none last:font-extrabold"
-                  >
-                    {getCategoryTitle(cat, lang)}
-                  </a>
-                </React.Fragment>
-              ))}
-            </nav>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            
-            {/* Hero Banner Subcomponent */}
-            <HeroBanner lang={lang} />
-
-            {/* Left Sidebar Filter Subcomponent (Desktop only) */}
-            <div className="hidden lg:block lg:col-span-1">
-              <FilterSidebar
-                lang={lang}
-                brands={brands}
-                activeBrandIds={activeBrandIds}
-                handleBrandChange={handleBrandChange}
-                activeSpecs={activeSpecs}
-                handleSpecChange={handleSpecChange}
-                attributes={attributes}
-                activeAttributes={activeAttributes}
-                handleAttributeChange={handleAttributeChange}
-                minPrice={minPrice}
-                maxPrice={maxPrice}
-                setMinPrice={setMinPrice}
-                setMaxPrice={setMaxPrice}
-                facets={facets}
-                handleClearAllFilters={handleClearAllFilters}
-              />
-            </div>
-
-            {/* Right Product Listing Catalog */}
-            <section className="lg:col-span-3 flex flex-col gap-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-cultured pb-4 w-full">
-                <div className="flex flex-col gap-1 select-none">
-                  <h2 className="font-sans font-extrabold text-xl tracking-tight text-eerie-black">
-                    {activeCategoryId 
-                      ? getCategoryTitle(findCategory(categories, activeCategoryId), lang) || t("all_products", lang)
-                      : t("all_products", lang)
-                    }
-                  </h2>
-                  {(() => {
-                    const activeCatObj = activeCategoryId ? findCategory(categories, activeCategoryId) : null;
-                    if (activeCatObj) {
-                      const activeCount = activeCatObj.active_products || 0;
-                      const totalCount = activeCatObj.total_products || 0;
-                      return (
-                        <span className="text-[11px] font-semibold text-sonic-silver">
-                          {t("active_products_label", lang)} <strong className="text-salmon-pink">{activeCount}</strong> • {t("total_products_label", lang)} <strong className="text-eerie-black">{totalCount}</strong>
-                        </span>
-                      );
-                    } else {
-                      // Total count of all products in catalog
-                      return (
-                        <span className="text-[11px] font-semibold text-sonic-silver">
-                          {t("total_catalog_products_label", lang)} <strong className="text-salmon-pink">{totalProductsCount}</strong>
-                        </span>
-                      );
-                    }
-                  })()}
-                </div>
-                
-                {/* Mobile Filter & Sort Control Bar */}
-                <div className="flex lg:hidden items-center gap-3 w-full mt-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsMobileFiltersOpen(true)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-white border border-cultured rounded-xl hover:bg-zinc-50 font-bold text-xs text-onyx shadow-sm transition-all cursor-pointer"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-salmon-pink"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
-                    <span>{t("Filter", lang)}</span>
-                    {hasActiveFiltersCount > 0 && (
-                      <span className="bg-salmon-pink text-white rounded-full w-4.5 h-4.5 flex items-center justify-center text-[9px] font-black leading-none shrink-0 shadow-sm animate-scale-in">
-                        {hasActiveFiltersCount}
-                      </span>
-                    )}
-                  </button>
-                  
-                  <div className="flex-1 select-none">
-                    <select 
-                      value={sortBy}
-                      onChange={(e) => {
-                        setSortBy(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                      className="w-full bg-white border border-cultured rounded-xl px-3 py-2.5 text-xs font-bold text-onyx focus:outline-none focus:border-salmon-pink cursor-pointer shadow-sm"
-                    >
-                      <option value="newest">{t("sort_newest", lang)}</option>
-                      <option value="price_asc">{t("sort_price_asc", lang)}</option>
-                      <option value="price_desc">{t("sort_price_desc", lang)}</option>
-                      <option value="name_asc">{t("sort_name_asc", lang)}</option>
-                      <option value="name_desc">{t("sort_name_desc", lang)}</option>
-                      <option value="sku_asc">{t("sort_sku_asc", lang)}</option>
-                      <option value="sku_desc">{t("sort_sku_desc", lang)}</option>
-                    </select>
-                  </div>
-                </div>
-                
-                {/* Desktop Filter & Sort Controls */}
-                <div className="hidden lg:flex items-center gap-2 select-none shrink-0">
-                  {/* Page Size Selector */}
-                  <span className="text-[10px] uppercase font-bold text-sonic-silver tracking-wider">{t("Show:", lang)}</span>
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => {
-                      setItemsPerPage(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className="bg-white border border-cultured rounded-[5px] px-2 py-1.5 text-xs font-bold text-onyx focus:outline-none focus:border-salmon-pink cursor-pointer shadow-sm"
-                  >
-                    <option value={12}>12</option>
-                    <option value={24}>24</option>
-                    <option value={48}>48</option>
-                    <option value={96}>96</option>
-                  </select>
-
-                  <select 
-                    value={sortBy}
-                    onChange={(e) => {
-                      setSortBy(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="bg-white border border-cultured rounded-[5px] px-3 py-1.5 text-xs font-bold text-onyx focus:outline-none focus:border-salmon-pink cursor-pointer shadow-sm"
-                  >
-                    <option value="newest">{t("sort_newest", lang)}</option>
-                    <option value="price_asc">{t("sort_price_asc", lang)}</option>
-                    <option value="price_desc">{t("sort_price_desc", lang)}</option>
-                    <option value="name_asc">{t("sort_name_asc", lang)}</option>
-                    <option value="name_desc">{t("sort_name_desc", lang)}</option>
-                    <option value="sku_asc">{t("sort_sku_asc", lang)}</option>
-                    <option value="sku_desc">{t("sort_sku_desc", lang)}</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Products Grid */}
-              {fetchError ? (
-                <div className="flex flex-col items-center justify-center py-10 px-6 text-center border-2 border-salmon-pink/20 bg-salmon-pink/5 rounded-[15px] p-8 select-none shadow-sm gap-3">
-                  <span className="text-3xl">⚠️</span>
-                  <p className="text-sm font-bold text-salmon-pink uppercase tracking-wide">{t("connection_error_title", lang)}</p>
-                  <p className="text-xs font-semibold text-eerie-black/80 max-w-md leading-relaxed">{t("connection_error_desc", lang)}</p>
-                  <p className="text-[10px] font-bold text-sonic-silver mt-1">{t("connection_error_tip", lang)}</p>
-                </div>
-              ) : loadingProducts ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3">
-                  <div className="spinner animate-spin" />
-                  <span className="text-xs font-bold text-sonic-silver select-none">{t("loading", lang)}</span>
-                </div>
-              ) : products.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-cultured bg-white rounded-[10px] p-8 select-none shadow-sm">
-                  <span className="text-3xl mb-2">🔍</span>
-                  <p className="text-xs font-bold text-sonic-silver">{t("no_products", lang)}</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-6" id="catalog-section">
-                  {products.map((p, idx) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      lang={lang}
-                      onOpenModal={handleOpenModal}
-                      priority={idx < 4}
-                      displayCurrency={displayCurrency}
-                      exchangeRates={exchangeRates}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* Pagination Controls */}
-              {products.length > 0 && (() => {
-                const totalPages = Math.ceil(totalProductsCount / itemsPerPage) || 1;
-                return (
-                  <div className="flex items-center justify-center gap-2 sm:gap-3 mt-8 select-none">
-                    {/* First Page Button */}
-                    <button
-                      disabled={currentPage === 1}
-                      onClick={() => {
-                        setCurrentPage(1);
-                        window.scrollTo({ top: 220, behavior: "smooth" });
-                      }}
-                      title={t("First Page", lang)}
-                      className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
-                    >
-                      <ChevronsLeft className="w-4 h-4" />
-                    </button>
-
-                    {/* Previous Page Button */}
-                    <button
-                      disabled={currentPage === 1}
-                      onClick={() => {
-                        setCurrentPage(prev => Math.max(prev - 1, 1));
-                        window.scrollTo({ top: 220, behavior: "smooth" });
-                      }}
-                      title={t("Previous Page", lang)}
-                      className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    
-                    {/* Current Page Status */}
-                    <span className="text-xs font-bold text-sonic-silver px-2 min-w-[70px] text-center">
-                      {t("page", lang)} {currentPage} / {totalPages}
-                    </span>
-                    
-                    {/* Next Page Button */}
-                    <button
-                      disabled={currentPage >= totalPages}
-                      onClick={() => {
-                        setCurrentPage(prev => Math.min(prev + 1, totalPages));
-                        window.scrollTo({ top: 220, behavior: "smooth" });
-                      }}
-                      title={t("Next Page", lang)}
-                      className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-
-                    {/* Last Page Button */}
-                    <button
-                      disabled={currentPage >= totalPages}
-                      onClick={() => {
-                        setCurrentPage(totalPages);
-                        window.scrollTo({ top: 220, behavior: "smooth" });
-                      }}
-                      title={t("Last Page", lang)}
-                      className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
-                    >
-                      <ChevronsRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                );
-              })()}
-            </section>
-          </div>
-
-          {/* Category SEO Description Block */}
-          {(() => {
-            const activeCatObj = activeCategoryId ? findCategory(categories, activeCategoryId) : null;
-            if (!activeCatObj) return null;
-            const trans = activeCatObj.translations?.[lang];
-            const seoDesc = trans?.seo_description;
-            if (!seoDesc) return null;
-
-            const categoryTitle = getCategoryTitle(activeCatObj, lang);
-            
-            const labels = {
-              read_more: {
-                tr: "Devamını Oku",
-                en: "Read More",
-                ar: "اقرأ المزيد",
-                ru: "Читать далее",
-                pl: "Czytaj więcej",
-                bg: "Прочетете повече",
-                de: "Weiterlesen",
-                fr: "Lire la suite"
-              }[lang] || "Read More",
-              read_less: {
-                tr: "Daha Az Göster",
-                en: "Read Less",
-                ar: "عرض أقل",
-                ru: "Свернуть",
-                pl: "Pokaż mniej",
-                bg: "Покажи по-малко",
-                de: "Weniger anzeigen",
-                fr: "Voir moins"
-              }[lang] || "Read Less"
-            };
-
-            return (
-              <div className="mt-12 bg-white border border-cultured rounded-[15px] p-6 md:p-8 shadow-sm relative overflow-hidden select-text">
-                <h3 className="font-sans font-extrabold text-sm sm:text-base uppercase tracking-wider text-eerie-black mb-4">
-                  {categoryTitle}
-                </h3>
-                
-                <div 
-                  className={`text-xs text-sonic-silver font-semibold leading-relaxed transition-all duration-500 ease-in-out relative ${
-                    isSeoExpanded ? "max-h-[5000px]" : "max-h-[140px] overflow-hidden"
-                  }`}
-                >
-                  <div className="space-y-3 whitespace-pre-wrap">
-                    {seoDesc}
-                  </div>
-                  
-                  {/* Fade-out Overlay when collapsed */}
-                  {!isSeoExpanded && (
-                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none" />
-                  )}
-                </div>
-
-                <div className="mt-4 flex justify-center border-t border-cultured pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsSeoExpanded(!isSeoExpanded)}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-cultured/50 hover:bg-cultured border border-transparent rounded-[8px] text-[11px] font-extrabold text-onyx uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-sm active:scale-95"
-                  >
-                    <span>{isSeoExpanded ? labels.read_less : labels.read_more}</span>
-                    <span className={`transform transition-transform duration-300 ${isSeoExpanded ? "rotate-180" : ""}`}>
-                      ▼
-                    </span>
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
-
-        </main>
+        <CatalogView
+          lang={lang}
+          categories={categories}
+          activeCategoryId={activeCategoryId}
+          products={products}
+          totalProductsCount={totalProductsCount}
+          itemsPerPage={itemsPerPage}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          fetchError={fetchError}
+          loadingProducts={loadingProducts}
+          displayCurrency={displayCurrency}
+          exchangeRates={exchangeRates}
+          handleOpenModal={handleOpenModal}
+          hasActiveFiltersCount={hasActiveFiltersCount}
+          setIsMobileFiltersOpen={setIsMobileFiltersOpen}
+          sidebar={
+            <FilterSidebar
+              lang={lang}
+              brands={brands}
+              activeBrandIds={activeBrandIds}
+              handleBrandChange={handleBrandChange}
+              activeSpecs={activeSpecs}
+              handleSpecChange={handleSpecChange}
+              attributes={attributes}
+              activeAttributes={activeAttributes}
+              handleAttributeChange={handleAttributeChange}
+              minPrice={minPrice}
+              maxPrice={maxPrice}
+              setMinPrice={setMinPrice}
+              setMaxPrice={setMaxPrice}
+              facets={facets}
+              handleClearAllFilters={handleClearAllFilters}
+            />
+          }
+        />
       ) : (
-        <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
-          
-          {/* A. PREMIUM AUTO-SLIDING HERO CAROUSEL */}
-          <div className="w-full relative rounded-[20px] overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9] min-h-[220px] xs:min-h-[280px] sm:min-h-[280px] bg-gradient-to-br from-[#fafafa] to-[#fff0f1] shadow-sm select-none mb-10 group">
-            {/* Slide 1: Opportunities Promo */}
-            <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 0 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
-              <img 
-                src={getLocalizedSliderBanner("opportunities")} 
-                alt={t("portal_daily_opportunities", lang)} 
-                className="absolute inset-0 w-full h-full object-cover object-[35%_top]" 
-                onError={handleSliderImageError("opportunities")}
-                fetchPriority="high"
-                loading="eager"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
-              <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white/85 backdrop-blur-md p-4 sm:p-5 md:p-6 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
-                <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_wholesale_opportunities", lang)}</span>
-                <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_daily_opportunities", lang)}</h2>
-                <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_daily_opportunities_desc", lang)}</p>
-                <a href="/tum-urunler" className="mt-2.5 px-4 py-2 sm:px-5 sm:py-2.5 bg-salmon-pink hover:bg-eerie-black text-white text-[10px] sm:text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline">{t("portal_examine_catalog", lang)}</a>
-              </div>
-            </div>
-
-            {/* Slide 2: Mobile App Promo */}
-            <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 1 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
-              <img 
-                src={getLocalizedSliderBanner("app_promo")} 
-                alt={t("portal_download_app", lang)} 
-                className="absolute inset-0 w-full h-full object-cover" 
-                onError={handleSliderImageError("app_promo")}
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
-              <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white/85 backdrop-blur-md p-4 sm:p-5 md:p-6 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
-                <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
-                <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_download_app", lang)}</h2>
-                <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_download_app_desc", lang)}</p>
-                <div className="flex gap-2 mt-2">
-                  <a 
-                    href="#" 
-                    className="px-3.5 py-2 bg-eerie-black hover:bg-salmon-pink text-white text-[10px] sm:text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline flex items-center gap-1.5"
-                  >
-                    <span>🤖</span> {t("portal_google_play", lang) || "Google Play"}
-                  </a>
-                  <a 
-                    href="#" 
-                    className="px-3.5 py-2 bg-eerie-black hover:bg-salmon-pink text-white text-[10px] sm:text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline flex items-center gap-1.5"
-                  >
-                    <span>🍎</span> {t("portal_app_store", lang) || "App Store"}
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            {/* Slide Indicators */}
-            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex items-center gap-0 z-20">
-              <button 
-                onClick={() => setActiveSlide(0)} 
-                aria-label={lang === "tr" ? "Slayt 1" : "Slide 1"}
-                className="w-12 h-12 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all hover:scale-110 active:scale-95"
-              >
-                <span className={`w-2.5 h-2.5 rounded-full transition-all ${activeSlide === 0 ? "bg-salmon-pink scale-110" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
-              </button>
-              <button 
-                onClick={() => setActiveSlide(1)} 
-                aria-label={lang === "tr" ? "Slayt 2" : "Slide 2"}
-                className="w-12 h-12 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all hover:scale-110 active:scale-95"
-              >
-                <span className={`w-2.5 h-2.5 rounded-full transition-all ${activeSlide === 1 ? "bg-salmon-pink scale-110" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
-              </button>
-            </div>
-          </div>
-
-          {/* B. CIRCULAR CATEGORY NAVIGATORS */}
-          <div className="mb-12 select-none">
-            <h3 className="font-sans font-extrabold text-xs tracking-[2px] text-eerie-black uppercase mb-6 text-center">{t("portal_wholesale_categories", lang)}</h3>
-            <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
-              {categories.map((cat) => {
-                const prefix = getCategoryPrefix(lang);
-                const url = `/${prefix}/${cat.slug || cat.id}/`;
-                return (
-                  <a 
-                    key={cat.id} 
-                    href={url}
-                    className="flex flex-col items-center gap-3 group cursor-pointer border-none bg-transparent active:scale-95 transition-transform no-underline"
-                  >
-                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border border-cultured bg-white shadow-sm flex items-center justify-center text-2xl group-hover:border-salmon-pink group-hover:scale-105 transition-all duration-300 relative overflow-hidden">
-                      <span className="relative z-10">
-                        {cat.slug === "kadin-giyim" ? "👗" : cat.slug === "erkek-giyim" ? "👔" : cat.slug === "buyuk-beden" ? "👚" : cat.slug === "ic-giyim" ? "👙" : "✨"}
-                      </span>
-                      <div className="absolute inset-0 bg-salmon-pink/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                    <span className="text-xs font-bold text-onyx group-hover:text-salmon-pink transition-colors">
-                      {getCategoryTitle(cat, lang)}
-                    </span>
-                  </a>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* C. VISUAL PREMIUM COLLECTIONS GRID */}
-          <div className="mb-16 select-none">
-            <h3 className="font-sans font-extrabold text-xs tracking-[2px] text-eerie-black uppercase mb-8 text-center">{t("portal_season_collections", lang)}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Card 1: Kadın Giyim */}
-              <a 
-                href={`/${getCategoryPrefix(lang)}/kadin-giyim/`}
-                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
-              >
-                <img 
-                  src={getLocalizedCollectionBanner("kadin")} 
-                  alt={t("portal_women_clothing", lang)} 
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-                  onError={handleCollectionImageError("kadin")}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
-                  <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_women_trend_desc", lang)}</span>
-                    <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_women_clothing", lang)}</h4>
-                  </div>
-                </div>
-              </a>
-
-              {/* Card 2: Erkek Giyim */}
-              <a 
-                href={`/${getCategoryPrefix(lang)}/erkek-giyim/`}
-                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
-              >
-                <img 
-                  src={getLocalizedCollectionBanner("erkek")} 
-                  alt={t("portal_men_clothing", lang)} 
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-                  onError={handleCollectionImageError("erkek")}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
-                  <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_men_trend_desc", lang)}</span>
-                    <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_men_clothing", lang)}</h4>
-                  </div>
-                </div>
-              </a>
-
-              {/* Card 3: İç Giyim */}
-              <a 
-                href={`/tum-urunler?q=${lang === 'tr' ? 'tayt' : 'leggings'}`}
-                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
-              >
-                <img 
-                  src={getLocalizedCollectionBanner("ic_giyim")} 
-                  alt={t("portal_lingerie", lang)} 
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-                  onError={handleCollectionImageError("ic_giyim")}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
-                  <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_lingerie_desc", lang)}</span>
-                    <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_lingerie", lang)}</h4>
-                  </div>
-                </div>
-              </a>
-
-              {/* Card 4: Aksesuar */}
-              <a 
-                href={`/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`}
-                className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
-              >
-                <img 
-                  src={getLocalizedCollectionBanner("aksesuar")} 
-                  alt={t("portal_accessories", lang)} 
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-                  onError={handleCollectionImageError("aksesuar")}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
-                  <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_accessories_desc", lang)}</span>
-                    <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_accessories", lang)}</h4>
-                  </div>
-                </div>
-              </a>
-
-            </div>
-          </div>
-
-          {/* D. NEW ARRIVALS PREVIEW CAROUSEL */}
-          {portalNewArrivals.length > 0 && (
-            <div className="mb-16 select-none">
-              <h3 className="font-sans font-extrabold text-xs tracking-[2px] text-eerie-black uppercase mb-8 text-center">{t("portal_new_arrivals", lang)}</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {portalNewArrivals.map((p) => (
-                  <ProductCard 
-                    key={p.id} 
-                    product={p} 
-                    lang={lang} 
-                    onOpenModal={handleOpenModal} 
-                    displayCurrency={displayCurrency}
-                    exchangeRates={exchangeRates}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* E. BROWSE ALL CTA PANEL */}
-          <div className="bg-[#fafafa] border border-cultured rounded-[15px] p-8 md:p-12 text-center flex flex-col items-center gap-4 shadow-inner mb-6">
-            <span className="text-[10px] font-extrabold tracking-[2px] uppercase text-salmon-pink">{t("portal_explore_all_collections", lang)}</span>
-            <h3 className="font-sans font-extrabold text-xl md:text-2xl text-eerie-black max-w-md">{t("portal_all_in_one", lang)}</h3>
-            <p className="text-xs text-sonic-silver font-semibold leading-relaxed max-w-lg">{t("portal_all_in_one_desc", lang)}</p>
-            <a 
-              href="/tum-urunler"
-              className="mt-2 px-8 py-3.5 bg-salmon-pink hover:bg-eerie-black text-white text-xs font-extrabold uppercase rounded-[5px] transition-all duration-300 tracking-[1px] border-none shadow-md cursor-pointer active:scale-98 no-underline"
-            >
-              {t("portal_examine_all_products", lang)}
-            </a>
-          </div>
-
-        </main>
+        <PortalView
+          lang={lang}
+          categories={categories}
+          portalNewArrivals={portalNewArrivals}
+          displayCurrency={displayCurrency}
+          exchangeRates={exchangeRates}
+          handleOpenModal={handleOpenModal}
+        />
       )}
 
       <Footer 
