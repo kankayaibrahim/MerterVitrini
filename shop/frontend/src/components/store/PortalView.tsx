@@ -145,27 +145,36 @@ export default function PortalView({
       <div className="mb-12 select-none">
         <h3 className="font-sans font-extrabold text-xs tracking-[2px] text-eerie-black uppercase mb-6 text-center">{t("portal_wholesale_categories", lang)}</h3>
         <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
-          {categories.map((cat) => {
-            const prefix = getCategoryPrefix(lang);
-            const url = `/${prefix}/${cat.slug || cat.id}/`;
-            return (
-              <a 
-                key={cat.id} 
-                href={url}
-                className="flex flex-col items-center gap-3 group cursor-pointer border-none bg-transparent active:scale-95 transition-transform no-underline"
-              >
-                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border border-cultured bg-white shadow-sm flex items-center justify-center text-2xl group-hover:border-salmon-pink group-hover:scale-105 transition-all duration-300 relative overflow-hidden">
-                  <span className="relative z-10">
-                    {cat.slug === "kadin-giyim" ? "👗" : cat.slug === "erkek-giyim" ? "👔" : cat.slug === "buyuk-beden" ? "👚" : cat.slug === "ic-giyim" ? "👙" : "✨"}
+          {categories.length === 0 ? (
+            Array.from({ length: 5 }).map((_, idx) => (
+              <div key={idx} className="flex flex-col items-center gap-3 animate-pulse">
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-cultured" />
+                <div className="h-3 w-16 bg-cultured rounded" />
+              </div>
+            ))
+          ) : (
+            categories.map((cat) => {
+              const prefix = getCategoryPrefix(lang);
+              const url = `/${prefix}/${cat.slug || cat.id}/`;
+              return (
+                <a 
+                  key={cat.id} 
+                  href={url}
+                  className="flex flex-col items-center gap-3 group cursor-pointer border-none bg-transparent active:scale-95 transition-transform no-underline"
+                >
+                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border border-cultured bg-white shadow-sm flex items-center justify-center text-2xl group-hover:border-salmon-pink group-hover:scale-105 transition-all duration-300 relative overflow-hidden">
+                    <span className="relative z-10">
+                      {cat.slug === "kadin-giyim" ? "👗" : cat.slug === "erkek-giyim" ? "👔" : cat.slug === "buyuk-beden" ? "👚" : cat.slug === "ic-giyim" ? "👙" : "✨"}
+                    </span>
+                    <div className="absolute inset-0 bg-salmon-pink/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <span className="text-xs font-bold text-onyx group-hover:text-salmon-pink transition-colors">
+                    {getCategoryTitle(cat, lang)}
                   </span>
-                  <div className="absolute inset-0 bg-salmon-pink/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-                <span className="text-xs font-bold text-onyx group-hover:text-salmon-pink transition-colors">
-                  {getCategoryTitle(cat, lang)}
-                </span>
-              </a>
-            );
-          })}
+                </a>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -254,11 +263,22 @@ export default function PortalView({
       </div>
 
       {/* D. NEW ARRIVALS PREVIEW CAROUSEL */}
-      {portalNewArrivals.length > 0 && (
-        <div className="mb-16 select-none">
-          <h3 className="font-sans font-extrabold text-xs tracking-[2px] text-eerie-black uppercase mb-8 text-center">{t("portal_new_arrivals", lang)}</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {portalNewArrivals.map((p) => (
+      <div className="mb-16 select-none">
+        <h3 className="font-sans font-extrabold text-xs tracking-[2px] text-eerie-black uppercase mb-8 text-center">{t("portal_new_arrivals", lang)}</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {portalNewArrivals.length === 0 ? (
+            Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="bg-white rounded-[15px] border border-cultured flex flex-col h-full overflow-hidden p-4 gap-3 animate-pulse">
+                <div className="aspect-[4/5] bg-cultured rounded-[10px] w-full" />
+                <div className="h-3 bg-cultured rounded w-1/3 mt-2" />
+                <div className="h-4 bg-cultured rounded w-3/4" />
+                <div className="h-3 bg-cultured rounded w-1/2 mt-1" />
+                <div className="h-6 bg-cultured rounded w-1/3 mt-auto" />
+                <div className="h-9 bg-cultured rounded-[8px] w-full mt-2" />
+              </div>
+            ))
+          ) : (
+            portalNewArrivals.map((p) => (
               <ProductCard 
                 key={p.id} 
                 product={p} 
@@ -267,10 +287,10 @@ export default function PortalView({
                 displayCurrency={displayCurrency}
                 exchangeRates={exchangeRates}
               />
-            ))}
-          </div>
+            ))
+          )}
         </div>
-      )}
+      </div>
 
       {/* E. BROWSE ALL CTA PANEL */}
       <div className="bg-[#fafafa] border border-cultured rounded-[15px] p-8 md:p-12 text-center flex flex-col items-center gap-4 shadow-inner mb-6">

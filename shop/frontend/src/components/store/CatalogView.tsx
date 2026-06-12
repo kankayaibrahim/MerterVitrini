@@ -203,9 +203,17 @@ export default function CatalogView({
               <p className="text-[10px] font-bold text-sonic-silver mt-1">{t("connection_error_tip", lang)}</p>
             </div>
           ) : loadingProducts ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-3">
-              <div className="spinner animate-spin" />
-              <span className="text-xs font-bold text-sonic-silver select-none">{t("loading", lang)}</span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div key={idx} className="bg-white rounded-[15px] border border-cultured flex flex-col h-full overflow-hidden p-4 gap-3 animate-pulse">
+                  <div className="aspect-[4/5] bg-cultured rounded-[10px] w-full" />
+                  <div className="h-3 bg-cultured rounded w-1/3 mt-2" />
+                  <div className="h-4 bg-cultured rounded w-3/4" />
+                  <div className="h-3 bg-cultured rounded w-1/2 mt-1" />
+                  <div className="h-6 bg-cultured rounded w-1/3 mt-auto" />
+                  <div className="h-9 bg-cultured rounded-[8px] w-full mt-2" />
+                </div>
+              ))}
             </div>
           ) : products.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-cultured bg-white rounded-[10px] p-8 select-none shadow-sm">
