@@ -75,14 +75,17 @@ export default function PortalView({
       <div className="w-full relative rounded-[20px] overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9] min-h-[220px] xs:min-h-[280px] sm:min-h-[280px] bg-gradient-to-br from-[#fafafa] to-[#fff0f1] shadow-sm select-none mb-10 group">
         {/* Slide 1: Opportunities Promo */}
         <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 0 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
-          <img 
-            src={getLocalizedSliderBanner("opportunities")} 
-            alt={t("portal_daily_opportunities", lang)} 
-            className="absolute inset-0 w-full h-full object-cover object-[35%_top]" 
-            onError={handleSliderImageError("opportunities")}
-            fetchPriority="high"
-            loading="eager"
-          />
+          <picture className="absolute inset-0 w-full h-full">
+            <source media="(max-width: 640px)" srcSet={getLocalizedSliderBanner("opportunities").replace(".webp", "_mobile.webp")} />
+            <img 
+              src={getLocalizedSliderBanner("opportunities")} 
+              alt={t("portal_daily_opportunities", lang)} 
+              className="w-full h-full object-cover object-[35%_top]" 
+              onError={handleSliderImageError("opportunities")}
+              fetchPriority="high"
+              loading="eager"
+            />
+          </picture>
           <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
           <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white/85 backdrop-blur-md p-4 sm:p-5 md:p-6 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
             <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_wholesale_opportunities", lang)}</span>
@@ -94,12 +97,15 @@ export default function PortalView({
 
         {/* Slide 2: Mobile App Promo */}
         <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 1 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
-          <img 
-            src={getLocalizedSliderBanner("app_promo")} 
-            alt={t("portal_download_app", lang)} 
-            className="absolute inset-0 w-full h-full object-cover" 
-            onError={handleSliderImageError("app_promo")}
-          />
+          <picture className="absolute inset-0 w-full h-full">
+            <source media="(max-width: 640px)" srcSet={getLocalizedSliderBanner("app_promo").replace(".webp", "_mobile.webp")} />
+            <img 
+              src={getLocalizedSliderBanner("app_promo")} 
+              alt={t("portal_download_app", lang)} 
+              className="w-full h-full object-cover" 
+              onError={handleSliderImageError("app_promo")}
+            />
+          </picture>
           <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
           <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white/85 backdrop-blur-md p-4 sm:p-5 md:p-6 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
             <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
@@ -188,12 +194,15 @@ export default function PortalView({
             href={`/${getCategoryPrefix(lang)}/kadin-giyim/`}
             className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
           >
-            <img 
-              src={getLocalizedCollectionBanner("kadin")} 
-              alt={t("portal_women_clothing", lang)} 
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-              onError={handleCollectionImageError("kadin")}
-            />
+            <picture className="absolute inset-0 w-full h-full">
+              <source media="(max-width: 640px)" srcSet={getLocalizedCollectionBanner("kadin").replace(".webp", "_mobile.webp")} />
+              <img 
+                src={getLocalizedCollectionBanner("kadin")} 
+                alt={t("portal_women_clothing", lang)} 
+                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                onError={handleCollectionImageError("kadin")}
+              />
+            </picture>
             <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
               <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_women_trend_desc", lang)}</span>
@@ -207,12 +216,15 @@ export default function PortalView({
             href={`/${getCategoryPrefix(lang)}/erkek-giyim/`}
             className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
           >
-            <img 
-              src={getLocalizedCollectionBanner("erkek")} 
-              alt={t("portal_men_clothing", lang)} 
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-              onError={handleCollectionImageError("erkek")}
-            />
+            <picture className="absolute inset-0 w-full h-full">
+              <source media="(max-width: 640px)" srcSet={getLocalizedCollectionBanner("erkek").replace(".webp", "_mobile.webp")} />
+              <img 
+                src={getLocalizedCollectionBanner("erkek")} 
+                alt={t("portal_men_clothing", lang)} 
+                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                onError={handleCollectionImageError("erkek")}
+              />
+            </picture>
             <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
               <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_men_trend_desc", lang)}</span>
@@ -226,12 +238,15 @@ export default function PortalView({
             href={`/tum-urunler?q=${lang === 'tr' ? 'tayt' : 'leggings'}`}
             className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
           >
-            <img 
-              src={getLocalizedCollectionBanner("ic_giyim")} 
-              alt={t("portal_lingerie", lang)} 
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-              onError={handleCollectionImageError("ic_giyim")}
-            />
+            <picture className="absolute inset-0 w-full h-full">
+              <source media="(max-width: 640px)" srcSet={getLocalizedCollectionBanner("ic_giyim").replace(".webp", "_mobile.webp")} />
+              <img 
+                src={getLocalizedCollectionBanner("ic_giyim")} 
+                alt={t("portal_lingerie", lang)} 
+                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                onError={handleCollectionImageError("ic_giyim")}
+              />
+            </picture>
             <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
               <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_lingerie_desc", lang)}</span>
@@ -245,12 +260,15 @@ export default function PortalView({
             href={`/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`}
             className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
           >
-            <img 
-              src={getLocalizedCollectionBanner("aksesuar")} 
-              alt={t("portal_accessories", lang)} 
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-              onError={handleCollectionImageError("aksesuar")}
-            />
+            <picture className="absolute inset-0 w-full h-full">
+              <source media="(max-width: 640px)" srcSet={getLocalizedCollectionBanner("aksesuar").replace(".webp", "_mobile.webp")} />
+              <img 
+                src={getLocalizedCollectionBanner("aksesuar")} 
+                alt={t("portal_accessories", lang)} 
+                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                onError={handleCollectionImageError("aksesuar")}
+              />
+            </picture>
             <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
               <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_accessories_desc", lang)}</span>
