@@ -348,6 +348,61 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close() // Explicitly release main query connection immediately
 
+	// Fetch sibling color variants for the products on this page to support the "+N Renk" badge
+	var groupIDs []string
+	seenGroups := make(map[string]bool)
+	for _, p := range products {
+		if p.SourceProductGroupID != nil && *p.SourceProductGroupID != "" && p.FeedID != nil && *p.FeedID != "" {
+			k := *p.FeedID + "_" + *p.SourceProductGroupID
+			if !seenGroups[k] {
+				seenGroups[k] = true
+				groupIDs = append(groupIDs, *p.SourceProductGroupID)
+			}
+		}
+	}
+
+	if len(groupIDs) > 0 {
+		siblingsQuery := `
+			SELECT p.id, COALESCE(p.feed_id, '') as feed_id, COALESCE(p.source_product_group_id, '') as source_product_group_id, 
+			       p.custom_sku, p.slug, p.slug_id, COALESCE(col.color_name, 'Standart') as color,
+			       COALESCE((SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY sort_order ASC, is_cover DESC LIMIT 1), '') as image_url
+			FROM catalog.products p
+			LEFT JOIN catalog.colors col ON p.color_id = col.id
+			WHERE p.source_product_group_id = ANY($1) AND p.is_active = true
+			ORDER BY col.color_name ASC`
+		
+		sRows, err := db.Pool.Query(ctx, siblingsQuery, groupIDs)
+		if err == nil {
+			siblingsMap := make(map[string][]*models.SiblingProduct)
+			for sRows.Next() {
+				var sib models.SiblingProduct
+				var feedID, groupID string
+				err := sRows.Scan(&sib.ID, &feedID, &groupID, &sib.CustomSku, &sib.Slug, &sib.SlugID, &sib.Color, &sib.ImageUrl)
+				if err == nil {
+					key := feedID + "_" + groupID
+					siblingsMap[key] = append(siblingsMap[key], &sib)
+				}
+			}
+			sRows.Close()
+
+			for _, p := range products {
+				if p.SourceProductGroupID != nil && *p.SourceProductGroupID != "" && p.FeedID != nil && *p.FeedID != "" {
+					key := *p.FeedID + "_" + *p.SourceProductGroupID
+					allSiblings := siblingsMap[key]
+					var filtered []*models.SiblingProduct
+					for _, sib := range allSiblings {
+						if sib.ID != p.ID {
+							filtered = append(filtered, sib)
+						}
+					}
+					p.ColorVariants = filtered
+				}
+			}
+		} else {
+			log.Printf("[STORE API WARNING] Failed to query sibling color variants: %v", err)
+		}
+	}
+
 	// --- Faceted Counts Calculation ---
 	brandStats := make(map[string]int)
 	genderStats := make(map[string]int)
