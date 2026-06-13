@@ -38,6 +38,7 @@ export default function ProductCard({
   const router = useRouter();
   const title = getProductTitle(product, lang);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [activeImgIndex, setActiveImgIndex] = useState<number>(0);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -77,19 +78,29 @@ export default function ProductCard({
     router.push(`/product/${product.slug || product.id}`);
   };
   
-  let coverImg = "/placeholder.png";
-  if (product.images && product.images.length > 0) {
-    const coverObj = product.images.find((img) => img.is_cover) || product.images[0];
-    coverImg = getResizedImageUrl(coverObj.image_url, 288, 385);
+  const cardImages = product.images && product.images.length > 0 ? product.images : [];
+  const coverIndex = cardImages.findIndex((img) => img.is_cover);
+  let sortedImages = [...cardImages];
+  if (coverIndex > 0) {
+    const coverObj = sortedImages.splice(coverIndex, 1)[0];
+    sortedImages.unshift(coverObj);
   }
 
-  let hoverImg = "";
-  if (product.images && product.images.length > 1) {
-    hoverImg = getResizedImageUrl(product.images.at(1)?.image_url, 288, 385);
-  }
+  const displayImages = sortedImages.length > 0
+    ? sortedImages.slice(0, 5).map((img) => getResizedImageUrl(img.image_url, 288, 385))
+    : ["/placeholder.png"];
   
   const units = getUnitsFromSeriesRatio(product.series_ratio);
-  
+
+  let colorText = "";
+  if (product.color_variants && product.color_variants.length > 0) {
+    const totalColors = product.color_variants.length;
+    if (lang === "tr") colorText = `+${totalColors} Renk`;
+    else if (lang === "ru") colorText = `+${totalColors} Цветов`;
+    else if (lang === "ar") colorText = `+${totalColors} ألوان`;
+    else colorText = `+${totalColors} Colors`;
+  }
+
   let price = "0.00 TL";
   let hasDiscount = false;
   let origPrice = 0.0;
@@ -134,27 +145,49 @@ export default function ProductCard({
       onClick={handleCardClick}
       className="bg-white rounded-none overflow-hidden flex flex-col h-full cursor-pointer relative border-none group select-none shadow-none transition-all duration-300 block text-inherit no-underline"
     >
-      {/* 1. Visual Image Container with double-image hover swap */}
-      <div className="relative aspect-[4/5] overflow-hidden bg-[#fafafa]">
-        {/* Primary Image */}
+      {/* 1. Visual Image Container with segmented hover image switcher */}
+      <div 
+        className="relative aspect-[4/5] overflow-hidden bg-[#fafafa]"
+        onMouseLeave={() => setActiveImgIndex(0)}
+      >
+        {/* Active Image */}
         <img 
-          src={coverImg} 
+          src={displayImages[activeImgIndex] || "/placeholder.png"} 
           alt={title}
-          className={`w-full h-full object-contain transition-all duration-500 ease-out group-hover:scale-102 ${
-            hoverImg ? "group-hover:opacity-0" : ""
-          }`}
+          className="w-full h-full object-contain transition-all duration-300 ease-out group-hover:scale-102"
           loading={priority ? undefined : "lazy"}
           fetchPriority={priority ? "high" : undefined}
         />
         
-        {/* Secondary Image for Hover Swap */}
-        {hoverImg && (
-          <img 
-            src={hoverImg} 
-            alt={title}
-            className="absolute inset-0 w-full h-full object-contain opacity-0 group-hover:opacity-100 group-hover:scale-102 transition-all duration-500 ease-out"
-            loading={priority ? undefined : "lazy"}
-          />
+        {/* Invisible vertical hover zones overlays (z-15) */}
+        {displayImages.length > 1 && (
+          <div className="absolute inset-0 z-15 flex">
+            {displayImages.map((_, idx) => (
+              <div 
+                key={idx}
+                className="flex-grow h-full cursor-pointer"
+                onMouseEnter={() => setActiveImgIndex(idx)}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Segmented horizontal indicator bars at the bottom (z-20) */}
+        {displayImages.length > 1 && (
+          <div className="absolute bottom-2.5 left-3.5 right-3.5 flex gap-1 z-20">
+            {displayImages.map((_, idx) => (
+              <div 
+                key={idx}
+                className="flex-grow h-[2px] bg-[#E0E0E0] relative overflow-hidden"
+              >
+                <div 
+                  className={`absolute inset-0 bg-black transition-opacity duration-200 ${
+                    activeImgIndex === idx ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+              </div>
+            ))}
+          </div>
         )}
 
         {/* Discount Badge */}
@@ -171,8 +204,21 @@ export default function ProductCard({
           </span>
         )}
 
-        {/* Action buttons overlay */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 translate-x-3 group-hover:translate-x-0 transition-all duration-300 z-10">
+        {/* Color Variants Badge */}
+        {colorText && (
+          <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm border border-black/5 px-2.5 py-1 flex items-center gap-1.5 z-10 rounded-none shadow-none select-none group-hover:opacity-0 transition-opacity duration-200">
+            <div className="flex">
+              <span className="w-2.5 h-2.5 rounded-full border border-white bg-indigo-500 shadow-sm" />
+              <span className="w-2.5 h-2.5 rounded-full border border-white bg-purple-500 shadow-sm -ml-1.5" />
+            </div>
+            <span className="text-[9.5px] font-bold text-black tracking-wide uppercase">
+              {colorText}
+            </span>
+          </div>
+        )}
+
+        {/* Action buttons overlay (z-20 to ensure clickability above overlay) */}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 translate-x-3 group-hover:translate-x-0 transition-all duration-300 z-20">
           {/* Quick View Button */}
           <button 
             type="button"

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Product, Category } from "@/types/store";
 import { t, getCategoryPrefix, getCategoryTitle } from "@/app/i18n";
 import ProductCard from "@/components/store/ProductCard";
@@ -26,10 +27,92 @@ export default function PortalView({
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setActiveSlide((prev) => (prev === 0 ? 1 : 0));
+      setActiveSlide((prev) => (prev + 1) % 6);
     }, 6000);
     return () => clearInterval(interval);
   }, []);
+
+  const handlePrevSlide = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveSlide((prev) => (prev === 0 ? 5 : prev - 1));
+  };
+
+  const handleNextSlide = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveSlide((prev) => (prev + 1) % 6);
+  };
+
+  // Luxury Campaign Slide details mapping
+  const slides = [
+    {
+      id: 0,
+      bannerKey: "hero_new_season",
+      title: lang === "tr" ? "AKDENİZ ZARAFETİ" : "MEDITERRANEAN ELEGANCE",
+      subtitle: lang === "tr" ? "YENİ SEZON KOLEKSİYONU" : "NEW SEASON COLLECTION",
+      desc: lang === "tr" 
+        ? "Akdeniz'in akıcı silüetlerinden ilham alan tasarım elbiseler ve toptan hazır giyim kreasyonları showroomlarda." 
+        : "Design dresses and wholesale ready-to-wear creations inspired by the fluid silouettes of the Mediterranean.",
+      ctaText: lang === "tr" ? "ALIŞVERİŞE BAŞLA" : "SHOP NOW",
+      ctaUrl: "/tum-urunler",
+      type: "link"
+    },
+    {
+      id: 1,
+      bannerKey: "hero_women_collection",
+      title: lang === "tr" ? "KADIN KOLEKSİYONU" : "WOMEN COLLECTION",
+      subtitle: lang === "tr" ? "SADE VE SEÇKİN" : "PURE LUXURY ESSENTIALS",
+      desc: lang === "tr"
+        ? "En seçkin üreticilerden lüks, minimalist kesimli toptan kadın hazır giyim koleksiyonlarını keşfedin."
+        : "Discover luxury, minimalist cut wholesale women's apparel collections directly from selective manufacturers.",
+      ctaText: lang === "tr" ? "KADIN GİYİMİNİ KEŞFET" : "EXPLORE WOMEN WEAR",
+      ctaUrl: `/${getCategoryPrefix(lang)}/kadin-giyim/`,
+      type: "link"
+    },
+    {
+      id: 2,
+      bannerKey: "hero_men_collection",
+      title: lang === "tr" ? "ERKEK KOLEKSİYONU" : "MEN COLLECTION",
+      subtitle: lang === "tr" ? "PREMIUM KETEN DOKULAR" : "PREMIUM LINEN TEXTURES",
+      desc: lang === "tr"
+        ? "Yeni sezonda rahatlık ve İtalyan şıklığını bir arada sunan toptan erkek giyim koleksiyonları."
+        : "Wholesale men's wear collections bringing comfort and Italian elegance together for the new season.",
+      ctaText: lang === "tr" ? "ERKEK GİYİMİNİ İNCELE" : "BROWSE MEN WEAR",
+      ctaUrl: `/${getCategoryPrefix(lang)}/erkek-giyim/`,
+      type: "link"
+    },
+    {
+      id: 3,
+      bannerKey: "hero_accessories",
+      title: lang === "tr" ? "LÜKS AKSESUARLAR" : "LUXURY ACCESSORIES",
+      subtitle: lang === "tr" ? "ÇANTA, GÖZLÜK & DETAYLAR" : "BAGS, SUNGLASSES & DETAILS",
+      desc: lang === "tr"
+        ? "Kombinleri tamamlayan hakiki deri çanta modelleri ve şık aksesuarlarda en trend toptan ürün grupları."
+        : "The most trending wholesale collections of genuine leather bags and elegant accessories to complete outfits.",
+      ctaText: lang === "tr" ? "AKSESUARLARI KEŞFET" : "EXPLORE ACCESSORIES",
+      ctaUrl: `/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`,
+      type: "link"
+    },
+    {
+      id: 4,
+      bannerKey: "hero_new_opportunities",
+      title: t("portal_daily_opportunities", lang),
+      subtitle: t("portal_wholesale_opportunities", lang),
+      desc: t("portal_daily_opportunities_desc", lang),
+      ctaText: lang === "tr" ? "TÜM ÜRÜNLERİ İNCELE" : "BROWSE ALL PRODUCTS",
+      ctaUrl: "/tum-urunler",
+      type: "link"
+    },
+    {
+      id: 5,
+      bannerKey: "hero_app_promo",
+      title: t("portal_download_app", lang),
+      subtitle: t("portal_mobile_ease", lang),
+      desc: t("portal_download_app_desc", lang),
+      type: "apps"
+    }
+  ];
 
   // Premium Banners SEO localization mapping with fallback support
   const getLocalizedCollectionBanner = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => {
@@ -37,13 +120,6 @@ export default function PortalView({
     if (type === "erkek") return "/banners/collection_erkek.webp";
     if (type === "ic_giyim") return "/banners/collection_ic_giyim.webp";
     return "/banners/collection_aksesuar.webp";
-  };
-
-  const getLocalizedSliderBanner = (type: "opportunities" | "app_promo") => {
-    if (type === "opportunities") {
-      return "/banners/hero_new_opportunities.webp";
-    }
-    return "/banners/hero_app_promo.webp";
   };
 
   const handleCollectionImageError = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -58,92 +134,102 @@ export default function PortalView({
     }
   };
 
-  const handleSliderImageError = (type: "opportunities" | "app_promo") => (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    let fallback = "/banners/hero_new_opportunities.webp";
-    if (type === "app_promo") fallback = "/banners/hero_app_promo.webp";
-
-    if (!img.src.endsWith(fallback)) {
-      img.src = fallback;
-    }
-  };
-
   return (
     <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
       
       {/* A. PREMIUM AUTO-SLIDING HERO CAROUSEL */}
-      <div className="w-full relative rounded-none overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9] min-h-[220px] xs:min-h-[280px] sm:min-h-[280px] bg-[#fafafa] select-none mb-10 group">
-        {/* Slide 1: Opportunities Promo */}
-        <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 0 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
-          <picture className="absolute inset-0 w-full h-full">
-            <source media="(max-width: 640px)" srcSet={getLocalizedSliderBanner("opportunities").replace(".webp", "_mobile.webp")} />
-            <img 
-              src={getLocalizedSliderBanner("opportunities")} 
-              alt={t("portal_daily_opportunities", lang)} 
-              className="w-full h-full object-cover object-[35%_top]" 
-              onError={handleSliderImageError("opportunities")}
-              fetchPriority="high"
-              loading="eager"
-            />
-          </picture>
-          <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
-          <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white p-5 sm:p-6 md:p-8 rounded-none border border-black/10 shadow-none flex flex-col gap-2">
-            <span className="text-accent-gold font-bold text-[9px] sm:text-xs uppercase tracking-[2px]">{t("portal_wholesale_opportunities", lang)}</span>
-            <h2 className="font-serif font-bold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_daily_opportunities", lang)}</h2>
-            <p className="text-[11px] xs:text-xs text-sonic-silver font-normal leading-relaxed mt-0.5">{t("portal_daily_opportunities_desc", lang)}</p>
-            <a href="/tum-urunler" className="mt-2.5 px-6 py-3 bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-xs font-bold uppercase rounded-none transition-colors duration-300 w-fit cursor-pointer border-none no-underline tracking-widest">{t("portal_examine_catalog", lang)}</a>
-          </div>
-        </div>
+      <div className="w-full relative rounded-none overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/8.5] md:aspect-[21/8] lg:aspect-[21/7.5] min-h-[260px] xs:min-h-[320px] sm:min-h-[380px] bg-[#fafafa] select-none mb-10 group">
+        
+        {/* Left Arrow Button */}
+        <button 
+          onClick={handlePrevSlide}
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-14 bg-black/15 hover:bg-black/35 text-white flex items-center justify-center cursor-pointer transition-all duration-300 z-20 border-none select-none opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+          aria-label={lang === "tr" ? "Önceki Slayt" : "Previous Slide"}
+        >
+          <ChevronLeft className="w-6 h-6" />
+        </button>
 
-        {/* Slide 2: Mobile App Promo */}
-        <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 1 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
-          <picture className="absolute inset-0 w-full h-full">
-            <source media="(max-width: 640px)" srcSet={getLocalizedSliderBanner("app_promo").replace(".webp", "_mobile.webp")} />
-            <img 
-              src={getLocalizedSliderBanner("app_promo")} 
-              alt={t("portal_download_app", lang)} 
-              className="w-full h-full object-cover" 
-              onError={handleSliderImageError("app_promo")}
-            />
-          </picture>
-          <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
-          <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white p-5 sm:p-6 md:p-8 rounded-none border border-black/10 shadow-none flex flex-col gap-2">
-            <span className="text-accent-gold font-bold text-[9px] sm:text-xs uppercase tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
-            <h2 className="font-serif font-bold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_download_app", lang)}</h2>
-            <p className="text-[11px] xs:text-xs text-sonic-silver font-normal leading-relaxed mt-0.5">{t("portal_download_app_desc", lang)}</p>
-            <div className="flex gap-2 mt-2">
-              <a 
-                href="#" 
-                className="px-4 py-2.5 bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-xs font-bold uppercase rounded-none transition-colors duration-300 w-fit cursor-pointer border-none no-underline flex items-center gap-1.5 tracking-widest"
-              >
-                {t("portal_google_play", lang) || "Google Play"}
-              </a>
-              <a 
-                href="#" 
-                className="px-4 py-2.5 bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-xs font-bold uppercase rounded-none transition-colors duration-300 w-fit cursor-pointer border-none no-underline flex items-center gap-1.5 tracking-widest"
-              >
-                {t("portal_app_store", lang) || "App Store"}
-              </a>
+        {/* Right Arrow Button */}
+        <button 
+          onClick={handleNextSlide}
+          className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-14 bg-black/15 hover:bg-black/35 text-white flex items-center justify-center cursor-pointer transition-all duration-300 z-20 border-none select-none opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+          aria-label={lang === "tr" ? "Sonraki Slayt" : "Next Slide"}
+        >
+          <ChevronRight className="w-6 h-6" />
+        </button>
+
+        {/* Dynamic Slides Map */}
+        {slides.map((slide) => {
+          const isActive = activeSlide === slide.id;
+          const bannerSrc = `/banners/${slide.bannerKey}.webp`;
+          const mobileBannerSrc = `/banners/${slide.bannerKey}_mobile.webp`;
+          return (
+            <div 
+              key={slide.id}
+              className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${isActive ? "opacity-100 z-10" : "opacity-0 z-0"}`}
+            >
+              <picture className="absolute inset-0 w-full h-full">
+                <source media="(max-width: 640px)" srcSet={mobileBannerSrc} />
+                <img 
+                  src={bannerSrc} 
+                  alt={slide.title} 
+                  className="w-full h-full object-cover object-[35%_top]"
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    if (!img.src.endsWith(bannerSrc)) {
+                      img.src = bannerSrc;
+                    }
+                  }}
+                  fetchPriority={slide.id === 0 ? "high" : undefined}
+                  loading={slide.id === 0 ? "eager" : "lazy"}
+                />
+              </picture>
+              <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
+              <div className="relative z-10 max-w-[90vw] sm:max-w-[360px] md:max-w-[420px] bg-[#F8F6F2]/95 p-6 sm:p-8 md:p-10 rounded-none border-none shadow-none flex flex-col gap-3">
+                <span className="text-accent-gold font-bold text-[9px] sm:text-xs uppercase tracking-[2.5px]">{slide.subtitle}</span>
+                <h2 className="font-serif font-bold text-lg xs:text-xl sm:text-2xl md:text-4xl text-black leading-tight tracking-[1px]">{slide.title}</h2>
+                <p className="text-[11px] xs:text-xs text-sonic-silver font-normal leading-relaxed mt-0.5">{slide.desc}</p>
+                
+                {slide.type === "link" ? (
+                  <a 
+                    href={slide.ctaUrl} 
+                    className="mt-4 text-[10.5px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 w-fit no-underline transition-all hover:text-accent-gold hover:border-accent-gold duration-200"
+                  >
+                    {slide.ctaText}
+                  </a>
+                ) : (
+                  <div className="flex gap-4 mt-4">
+                    <a 
+                      href="#" 
+                      className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 no-underline transition-all hover:text-accent-gold hover:border-accent-gold duration-200"
+                    >
+                      {t("portal_google_play", lang) || "GOOGLE PLAY"}
+                    </a>
+                    <a 
+                      href="#" 
+                      className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 no-underline transition-all hover:text-accent-gold hover:border-accent-gold duration-200"
+                    >
+                      {t("portal_app_store", lang) || "APP STORE"}
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
 
         {/* Slide Indicators */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 z-20">
-          <button 
-            onClick={() => setActiveSlide(0)} 
-            aria-label={lang === "tr" ? "Slayt 1" : "Slide 1"}
-            className="w-8 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
-          >
-            <span className={`w-6 h-0.5 transition-all ${activeSlide === 0 ? "bg-black" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
-          </button>
-          <button 
-            onClick={() => setActiveSlide(1)} 
-            aria-label={lang === "tr" ? "Slayt 2" : "Slide 2"}
-            className="w-8 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
-          >
-            <span className={`w-6 h-0.5 transition-all ${activeSlide === 1 ? "bg-black" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
-          </button>
+          {slides.map((slide) => (
+            <button 
+              key={slide.id}
+              onClick={() => setActiveSlide(slide.id)} 
+              aria-label={lang === "tr" ? `Slayt ${slide.id + 1}` : `Slide ${slide.id + 1}`}
+              className="w-8 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
+            >
+              <span className={`w-6 h-0.5 transition-all ${activeSlide === slide.id ? "bg-black" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
+            </button>
+          ))}
         </div>
       </div>
 
