@@ -371,6 +371,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	go recordLoginHistory(context.Background(), loginUser.ID, ip)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(AuthResponse{
@@ -444,6 +446,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	ip := getClientIP(r)
+	go recordLoginHistory(context.Background(), user.ID, ip)
+
 	json.NewEncoder(w).Encode(AuthResponse{
 		Token: token,
 		User:  user,
@@ -850,6 +855,9 @@ func (h *AuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	ip := getClientIP(r)
+	go recordLoginHistory(context.Background(), userID, ip)
+
 	json.NewEncoder(w).Encode(AuthResponse{
 		Token: accessToken,
 		User:  userInfo,
@@ -1506,6 +1514,19 @@ func getClientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return ip
+}
+
+func recordLoginHistory(ctx context.Context, userID, ipAddress string) {
+	if userID == "" {
+		return
+	}
+	_, err := db.Pool.Exec(ctx, `
+		INSERT INTO identity.user_login_history (user_id, ip_address)
+		VALUES ($1, $2)
+	`, userID, ipAddress)
+	if err != nil {
+		log.Printf("[AUTH WARNING] Failed to record login history for user %s: %v", userID, err)
+	}
 }
 
 

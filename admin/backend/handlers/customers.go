@@ -23,25 +23,32 @@ func NewCustomersHandler(cfg *config.Config) *CustomersHandler {
 	return &CustomersHandler{Cfg: cfg}
 }
 
+type LoginHistoryRecord struct {
+	LoginAt   string `json:"login_at"`
+	IPAddress string `json:"ip_address"`
+}
+
 type CustomerResponse struct {
-	ID                string  `json:"id"`
-	FirstName         string  `json:"first_name"`
-	LastName          string  `json:"last_name"`
-	Email             string  `json:"email"`
-	Phone             string  `json:"phone"`
-	Role              string  `json:"role"`
-	IsActive          bool    `json:"is_active"`
-	IsBlocked         bool    `json:"is_blocked"`
-	BlockReason       *string `json:"block_reason"`
-	CreatedAt         string  `json:"created_at"`
-	UpdatedAt         string  `json:"updated_at"`
-	RegistrationIP    *string `json:"registration_ip"`
-	BillingAddress    *string `json:"billing_address"`
-	DeliveryAddress   *string `json:"delivery_address"`
-	TaxNoTCKN         *string `json:"tax_no_tckn"`
-	InstagramUsername *string `json:"instagram_username"`
-	PreferredLang     *string `json:"preferred_lang"`
-	PreferredCurrency *string `json:"preferred_currency"`
+	ID                string               `json:"id"`
+	FirstName         string               `json:"first_name"`
+	LastName          string               `json:"last_name"`
+	Email             string               `json:"email"`
+	Phone             string               `json:"phone"`
+	Role              string               `json:"role"`
+	IsActive          bool                 `json:"is_active"`
+	IsBlocked         bool                 `json:"is_blocked"`
+	BlockReason       *string              `json:"block_reason"`
+	CreatedAt         string               `json:"created_at"`
+	UpdatedAt         string               `json:"updated_at"`
+	RegistrationIP    *string              `json:"registration_ip"`
+	BillingAddress    *string              `json:"billing_address"`
+	DeliveryAddress   *string              `json:"delivery_address"`
+	TaxNoTCKN         *string              `json:"tax_no_tckn"`
+	InstagramUsername *string              `json:"instagram_username"`
+	PreferredLang     *string              `json:"preferred_lang"`
+	PreferredCurrency *string              `json:"preferred_currency"`
+	LastLoginAt       *string              `json:"last_login_at"`
+	LoginHistory      []LoginHistoryRecord `json:"login_history"`
 }
 
 type ToggleBlockRequest struct {
@@ -58,17 +65,23 @@ func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request)
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 
 	query := `
-		SELECT id, first_name, last_name, email, COALESCE(phone, ''), user_role, is_active, is_blocked, block_reason, created_at, updated_at,
-		       registration_ip, billing_address, delivery_address, tax_no_tckn, instagram_username, preferred_lang, preferred_currency
-		FROM identity.users
-		WHERE user_role = 'customer'
+		SELECT u.id, u.first_name, u.last_name, u.email, COALESCE(u.phone, ''), u.user_role, u.is_active, u.is_blocked, u.block_reason, u.created_at, u.updated_at,
+		       u.registration_ip, u.billing_address, u.delivery_address, u.tax_no_tckn, u.instagram_username, u.preferred_lang, u.preferred_currency,
+		       (SELECT login_at FROM identity.user_login_history WHERE user_id = u.id ORDER BY login_at DESC LIMIT 1) as last_login_at,
+		       COALESCE(
+		           (SELECT json_agg(json_build_object('login_at', login_at, 'ip_address', ip_address) ORDER BY login_at DESC)
+		            FROM identity.user_login_history
+		            WHERE user_id = u.id), '[]'::json
+		       ) as login_history_json
+		FROM identity.users u
+		WHERE u.user_role = 'customer'
 	`
 	var args []any
 	if search != "" {
-		query += " AND (first_name ILIKE $1 OR last_name ILIKE $1 OR email ILIKE $1 OR phone ILIKE $1)"
+		query += " AND (u.first_name ILIKE $1 OR u.last_name ILIKE $1 OR u.email ILIKE $1 OR u.phone ILIKE $1)"
 		args = append(args, "%"+search+"%")
 	}
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY u.created_at DESC"
 
 	rows, err := db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
@@ -82,9 +95,12 @@ func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request)
 	for rows.Next() {
 		var c CustomerResponse
 		var createdAt, updatedAt time.Time
+		var lastLoginAtTime *time.Time
+		var loginHistoryBytes []byte
 		if err := rows.Scan(
 			&c.ID, &c.FirstName, &c.LastName, &c.Email, &c.Phone, &c.Role, &c.IsActive, &c.IsBlocked, &c.BlockReason, &createdAt, &updatedAt,
 			&c.RegistrationIP, &c.BillingAddress, &c.DeliveryAddress, &c.TaxNoTCKN, &c.InstagramUsername, &c.PreferredLang, &c.PreferredCurrency,
+			&lastLoginAtTime, &loginHistoryBytes,
 		); err != nil {
 			log.Printf("[ADMIN CUSTOMERS ERROR] Failed to scan customer: %v", err)
 			continue
@@ -92,6 +108,15 @@ func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request)
 		
 		c.CreatedAt = createdAt.Format(time.RFC3339)
 		c.UpdatedAt = updatedAt.Format(time.RFC3339)
+		
+		if lastLoginAtTime != nil {
+			formatted := lastLoginAtTime.Format(time.RFC3339)
+			c.LastLoginAt = &formatted
+		}
+		
+		if len(loginHistoryBytes) > 0 {
+			json.Unmarshal(loginHistoryBytes, &c.LoginHistory)
+		}
 
 		customers = append(customers, c)
 	}

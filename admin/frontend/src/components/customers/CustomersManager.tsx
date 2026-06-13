@@ -8,6 +8,11 @@ interface CustomersManagerProps {
   token: string | null;
 }
 
+interface LoginHistoryRecord {
+  login_at: string;
+  ip_address: string;
+}
+
 interface Customer {
   id: string;
   first_name: string;
@@ -27,6 +32,8 @@ interface Customer {
   instagram_username?: string | null;
   preferred_lang?: string | null;
   preferred_currency?: string | null;
+  last_login_at?: string | null;
+  login_history?: LoginHistoryRecord[] | null;
 }
 
 const LABELS = {
@@ -534,6 +541,14 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
                       {detailedCustomer.preferred_currency || "-"}
                     </span>
                   </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    <span className="text-zinc-400 font-semibold">Son Oturum:</span>
+                    <span className="col-span-2 text-zinc-700 font-bold text-violet-700">
+                      {detailedCustomer.last_login_at 
+                        ? new Date(detailedCustomer.last_login_at).toLocaleString("tr-TR") 
+                        : "Hiç oturum açılmadı"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -577,6 +592,39 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Login History Section (Full Width) */}
+            <div className="mt-6 bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3 text-xs">
+              <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
+                Oturum Açma Geçmişi (Logins History)
+              </h4>
+              {detailedCustomer.login_history && detailedCustomer.login_history.length > 0 ? (
+                <div className="max-h-[160px] overflow-y-auto border border-zinc-200/60 rounded-lg bg-white">
+                  <table className="w-full text-[11px] text-left border-collapse">
+                    <thead>
+                      <tr className="bg-zinc-50 border-b border-zinc-200/60 text-zinc-500 font-bold uppercase tracking-wider">
+                        <th className="px-4 py-2 font-bold">Tarih / Saat</th>
+                        <th className="px-4 py-2 font-bold">IP Adresi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 text-zinc-700">
+                      {detailedCustomer.login_history.map((lh, idx) => (
+                        <tr key={idx} className="hover:bg-zinc-50/40">
+                          <td className="px-4 py-2 font-semibold">
+                            {new Date(lh.login_at).toLocaleString("tr-TR")}
+                          </td>
+                          <td className="px-4 py-2 font-bold">{lh.ip_address}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-[11px] font-semibold text-zinc-400 py-2 text-center">
+                  Oturum açma geçmişi bulunmuyor.
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t border-zinc-100 mt-6">

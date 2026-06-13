@@ -83,6 +83,13 @@ func ConnectDB(cfg *config.Config) (*pgxpool.Pool, error) {
 			whatsapp = EXCLUDED.whatsapp,
 			email = EXCLUDED.email`,
 		`ALTER TABLE identity.users ADD COLUMN IF NOT EXISTS registration_ip VARCHAR(50) NULL`,
+		`CREATE TABLE IF NOT EXISTS identity.user_login_history (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			user_id VARCHAR(255) REFERENCES identity.users(id) ON DELETE CASCADE NOT NULL,
+			login_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+			ip_address VARCHAR(50) NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_login_history_user_id ON identity.user_login_history(user_id)`,
 		`ALTER TABLE catalog.products ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE NULL`,
 		`DROP MATERIALIZED VIEW IF EXISTS catalog.mv_products CASCADE`,
 		`CREATE MATERIALIZED VIEW catalog.mv_products AS
