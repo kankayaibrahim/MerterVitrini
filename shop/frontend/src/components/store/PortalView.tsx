@@ -56,7 +56,8 @@ export default function PortalView({
         : "Design dresses and wholesale ready-to-wear creations inspired by the fluid silouettes of the Mediterranean.",
       ctaText: lang === "tr" ? "ALIŞVERİŞE BAŞLA" : "SHOP NOW",
       ctaUrl: "/tum-urunler",
-      type: "link"
+      type: "link",
+      positionClass: "object-[center_top]"
     },
     {
       id: 1,
@@ -68,7 +69,8 @@ export default function PortalView({
         : "Discover luxury, minimalist cut wholesale women's apparel collections directly from selective manufacturers.",
       ctaText: lang === "tr" ? "KADIN GİYİMİNİ KEŞFET" : "EXPLORE WOMEN WEAR",
       ctaUrl: `/${getCategoryPrefix(lang)}/kadin-giyim/`,
-      type: "link"
+      type: "link",
+      positionClass: "object-[35%_top]"
     },
     {
       id: 2,
@@ -80,7 +82,8 @@ export default function PortalView({
         : "Wholesale men's wear collections bringing comfort and Italian elegance together for the new season.",
       ctaText: lang === "tr" ? "ERKEK GİYİMİNİ İNCELE" : "BROWSE MEN WEAR",
       ctaUrl: `/${getCategoryPrefix(lang)}/erkek-giyim/`,
-      type: "link"
+      type: "link",
+      positionClass: "object-[center_top]"
     },
     {
       id: 3,
@@ -92,7 +95,8 @@ export default function PortalView({
         : "The most trending wholesale collections of genuine leather bags and elegant accessories to complete outfits.",
       ctaText: lang === "tr" ? "AKSESUARLARI KEŞFET" : "EXPLORE ACCESSORIES",
       ctaUrl: `/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`,
-      type: "link"
+      type: "link",
+      positionClass: "object-center"
     },
     {
       id: 4,
@@ -102,7 +106,8 @@ export default function PortalView({
       desc: t("portal_daily_opportunities_desc", lang),
       ctaText: lang === "tr" ? "TÜM ÜRÜNLERİ İNCELE" : "BROWSE ALL PRODUCTS",
       ctaUrl: "/tum-urunler",
-      type: "link"
+      type: "link",
+      positionClass: "object-center"
     },
     {
       id: 5,
@@ -110,7 +115,8 @@ export default function PortalView({
       title: t("portal_download_app", lang),
       subtitle: t("portal_mobile_ease", lang),
       desc: t("portal_download_app_desc", lang),
-      type: "apps"
+      type: "apps",
+      positionClass: "object-center"
     }
   ];
 
@@ -138,7 +144,7 @@ export default function PortalView({
     <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
       
       {/* A. PREMIUM AUTO-SLIDING HERO CAROUSEL */}
-      <div className="w-full relative rounded-none overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/8.5] md:aspect-[21/8] lg:aspect-[21/7.5] min-h-[260px] xs:min-h-[320px] sm:min-h-[380px] bg-[#fafafa] select-none mb-10 group">
+      <div className="w-full relative rounded-none overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9.5] md:aspect-[21/9] lg:aspect-[21/8.5] min-h-[260px] xs:min-h-[320px] sm:min-h-[400px] bg-[#fafafa] select-none mb-10 group">
         
         {/* Left Arrow Button */}
         <button 
@@ -173,7 +179,7 @@ export default function PortalView({
                 <img 
                   src={bannerSrc} 
                   alt={slide.title} 
-                  className="w-full h-full object-cover object-[35%_top]"
+                  className={`w-full h-full object-cover ${slide.positionClass}`}
                   onError={(e) => {
                     const img = e.currentTarget;
                     if (!img.src.endsWith(bannerSrc)) {
@@ -277,7 +283,7 @@ export default function PortalView({
               <img 
                 src={getLocalizedCollectionBanner("kadin")} 
                 alt={t("portal_women_clothing", lang)} 
-                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out" 
+                className="w-full h-full object-cover object-[center_top] group-hover:scale-[1.02] transition-transform duration-700 ease-out" 
                 onError={handleCollectionImageError("kadin")}
               />
             </picture>
@@ -299,7 +305,7 @@ export default function PortalView({
               <img 
                 src={getLocalizedCollectionBanner("erkek")} 
                 alt={t("portal_men_clothing", lang)} 
-                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out" 
+                className="w-full h-full object-cover object-[center_top] group-hover:scale-[1.02] transition-transform duration-700 ease-out" 
                 onError={handleCollectionImageError("erkek")}
               />
             </picture>
