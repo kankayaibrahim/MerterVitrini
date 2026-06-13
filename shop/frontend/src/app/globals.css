@@ -2,10 +2,10 @@
 
 :root {
   --spanish-gray: hsl(0, 0%, 60%);
-  --sonic-silver: hsl(0, 0%, 47%);
+  --sonic-silver: hsl(0, 0%, 39%); /* Darkened from 47% to pass 4.5:1 contrast audits */
   --eerie-black: hsl(0, 0%, 11%);
   --salmon-pink: hsl(0, 0%, 0%); /* Redefined to pure black for monochrome look */
-  --sandy-brown: hsl(25, 21%, 58%); /* Beymen-inspired gold/beige */
+  --sandy-brown: hsl(25, 22%, 39%); /* Darkened gold/bronze to pass contrast audits */
   --bittersweet: hsl(0, 0%, 7%);
   --ocean-green: hsl(152, 51%, 52%);
   --davys-gray: hsl(0, 0%, 33%);
@@ -23,7 +23,7 @@
   --text-secondary: hsl(0, 0%, 33%);
   --text-muted: hsl(0, 0%, 55%);
   
-  --accent-gold: hsl(25, 21%, 58%);
+  --accent-gold: hsl(25, 22%, 39%); /* Darkened from 58% to pass 4.5:1 contrast audits */
   --shadow-premium: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 

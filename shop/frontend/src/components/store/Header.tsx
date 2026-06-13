@@ -793,11 +793,11 @@ export default function Header({
                   </span>
                 );
               })() : (
-                <span className="px-2 py-0.5 bg-zinc-100 text-zinc-500 rounded-full text-[10px] font-extrabold max-w-[80px] xs:max-w-[120px] truncate">
+                <span className="px-2 py-0.5 bg-zinc-100 text-zinc-700 rounded-full text-[10px] font-extrabold max-w-[80px] xs:max-w-[120px] truncate">
                   {t("all_products", lang)}
                 </span>
               )}
-              <ChevronDown className="w-3 h-3 text-zinc-500 transition-transform duration-300 shrink-0" />
+              <ChevronDown className="w-3 h-3 text-zinc-700 transition-transform duration-300 shrink-0" />
             </div>
           </button>
           
