@@ -400,6 +400,39 @@ export default function PortalView({
         </div>
       </div>
 
+      {/* Popüler Aramalar / Popular Searches (SEO Internal Linking Row) */}
+      <div className="mb-12 text-center select-none border-t border-b border-cultured py-8">
+        <h4 className="font-serif font-bold text-[11px] tracking-[2px] text-sonic-silver uppercase mb-4">
+          {lang === "tr" ? "POPÜLER B2B TOPTAN ARAMALARI" : "POPULAR WHOLESALE B2B SEARCHES"}
+        </h4>
+        <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 max-w-2xl mx-auto px-4">
+          <a
+            href={`/${getCategoryPrefix(lang)}/kadin-giyim/elbise-abiye/elbise/`}
+            className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
+          >
+            {lang === "tr" ? "Toptan Kadın Elbise Modelleri" : "Wholesale Women Dresses"}
+          </a>
+          <a
+            href={`/${getCategoryPrefix(lang)}/kadin-giyim/elbise-abiye/elbise/jaguar-elbise/`}
+            className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
+          >
+            {lang === "tr" ? "Jaguar Elbise" : "Jaguar Dress"}
+          </a>
+          <a
+            href={`/${getCategoryPrefix(lang)}/kadin-giyim/ust-giyim/bustiyer/`}
+            className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
+          >
+            {lang === "tr" ? "Toptan Büstiyer" : "Wholesale Bustiers"}
+          </a>
+          <a
+            href={`/${getCategoryPrefix(lang)}/erkek-giyim/`}
+            className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
+          >
+            {lang === "tr" ? "Merter Toptan Erkek Giyim" : "Merter Wholesale Men Clothing"}
+          </a>
+        </div>
+      </div>
+
       {/* E. BROWSE ALL CTA PANEL */}
       <div className="bg-[#fafafa] border border-cultured rounded-none p-8 md:p-12 text-center flex flex-col items-center gap-4 shadow-none mb-6">
         <span className="text-[10px] font-bold tracking-[2px] uppercase text-accent-gold">{t("portal_explore_all_collections", lang)}</span>

@@ -503,6 +503,7 @@ export default function Header({
               <button 
                 onClick={() => setIsWishlistOpen(true)}
                 className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
+                aria-label={lang === "tr" ? "Favorilerim" : "My Wishlist"}
               >
                 <Heart className="w-[19px] h-[19px]" />
                 <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
@@ -516,6 +517,7 @@ export default function Header({
                   <button 
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
+                    aria-label={lang === "tr" ? "Kullanıcı menüsü" : "User menu"}
                   >
                     <User className="w-[19px] h-[19px] text-accent-gold" />
                   </button>
@@ -526,6 +528,7 @@ export default function Header({
                       setIsAuthOpen(true);
                     }}
                     className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
+                    aria-label={lang === "tr" ? "Giriş yap veya kayıt ol" : "Login or register"}
                   >
                     <User className="w-[19px] h-[19px]" />
                   </button>
@@ -562,6 +565,7 @@ export default function Header({
               <button 
                 onClick={() => setIsCartOpen(true)}
                 className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
+                aria-label={lang === "tr" ? "Sepetim" : "My Cart"}
               >
                 <ShoppingBag className="w-[19px] h-[19px]" />
                 <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
@@ -648,6 +652,7 @@ export default function Header({
             <button 
               onClick={() => setIsWishlistOpen(true)}
               className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
+              aria-label={lang === "tr" ? "Favorilerim" : "My Wishlist"}
             >
               <Heart className="w-[20px] h-[20px]" />
               <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">
@@ -659,6 +664,7 @@ export default function Header({
             <button 
               onClick={() => setIsCartOpen(true)}
               className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
+              aria-label={lang === "tr" ? "Sepetim" : "My Cart"}
             >
               <ShoppingBag className="w-[20px] h-[20px]" />
               <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">
