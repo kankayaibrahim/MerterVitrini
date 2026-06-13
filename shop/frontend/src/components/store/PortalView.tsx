@@ -201,27 +201,32 @@ export default function PortalView({
                 <span className="text-accent-gold font-bold text-[9px] sm:text-xs uppercase tracking-[2.5px]">{slide.subtitle}</span>
                 <h2 className="font-serif font-bold text-lg xs:text-xl sm:text-2xl md:text-4xl text-black leading-tight tracking-[1px]">{slide.title}</h2>
                 <p className="text-[11px] xs:text-xs text-sonic-silver font-normal leading-relaxed mt-0.5">{slide.desc}</p>
-                
                 {slide.type === "link" ? (
                   <a 
                     href={slide.ctaUrl} 
-                    className="mt-4 text-[10.5px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 w-fit no-underline transition-all hover:text-accent-gold hover:border-accent-gold duration-200"
+                    className="mt-2 inline-flex items-center pt-2.5 pb-2.5 w-fit no-underline transition-all duration-200 group"
                   >
-                    {slide.ctaText}
+                    <span className="text-[10.5px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 group-hover:text-accent-gold group-hover:border-accent-gold transition-colors">
+                      {slide.ctaText}
+                    </span>
                   </a>
                 ) : (
-                  <div className="flex gap-4 mt-4">
+                  <div className="flex gap-4 mt-2">
                     <a 
                       href="#" 
-                      className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 no-underline transition-all hover:text-accent-gold hover:border-accent-gold duration-200"
+                      className="inline-flex items-center pt-2.5 pb-2.5 no-underline transition-all duration-200 group"
                     >
-                      {t("portal_google_play", lang) || "GOOGLE PLAY"}
+                      <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 group-hover:text-accent-gold group-hover:border-accent-gold transition-colors">
+                        {t("portal_google_play", lang) || "GOOGLE PLAY"}
+                      </span>
                     </a>
                     <a 
                       href="#" 
-                      className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 no-underline transition-all hover:text-accent-gold hover:border-accent-gold duration-200"
+                      className="inline-flex items-center pt-2.5 pb-2.5 no-underline transition-all duration-200 group"
                     >
-                      {t("portal_app_store", lang) || "APP STORE"}
+                      <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 group-hover:text-accent-gold group-hover:border-accent-gold transition-colors">
+                        {t("portal_app_store", lang) || "APP STORE"}
+                      </span>
                     </a>
                   </div>
                 )}
@@ -237,7 +242,7 @@ export default function PortalView({
               key={slide.id}
               onClick={() => setActiveSlide(slide.id)} 
               aria-label={lang === "tr" ? `Slayt ${slide.id + 1}` : `Slide ${slide.id + 1}`}
-              className="w-8 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
+              className="w-12 h-12 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
             >
               <span className={`w-6 h-0.5 transition-all ${activeSlide === slide.id ? "bg-black" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
             </button>

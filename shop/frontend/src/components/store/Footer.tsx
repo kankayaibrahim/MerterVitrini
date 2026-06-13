@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { t } from "../../app/i18n";
+import { t, getCategoryPrefix } from "../../app/i18n";
 import { apiFetch } from "../../app/utils";
 
 interface Settings {
@@ -106,6 +106,11 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
             <li>
               <a href="#contact" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("contact_us", lang)}
+              </a>
+            </li>
+            <li>
+              <a href={`/${getCategoryPrefix(lang)}/blog`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+                {t("blog", lang)}
               </a>
             </li>
           </ul>

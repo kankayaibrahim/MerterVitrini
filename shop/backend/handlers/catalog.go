@@ -1305,7 +1305,7 @@ func (h *CatalogHandler) GetBlogPostBySlug(w http.ResponseWriter, r *http.Reques
 		)
 
 		err := rows.Scan(
-			&postID, &postSlug, &isActive, &createdAt, &updatedAt,
+			&postID, &postSlug, &coverImage, &isActive, &createdAt, &updatedAt,
 			&langCode, &title, &summary, &content, &metaTitle, &metaDesc,
 		)
 		if err != nil {
