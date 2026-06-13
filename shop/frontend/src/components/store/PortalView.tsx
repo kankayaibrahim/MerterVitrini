@@ -175,7 +175,7 @@ export default function PortalView({
           return (
             <div 
               key={slide.id}
-              className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${isActive ? "opacity-100 z-10" : "opacity-0 z-0"}`}
+              className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 pb-16 xs:p-6 xs:pb-20 sm:p-8 md:p-16 ${isActive ? "opacity-100 z-10" : "opacity-0 z-0"}`}
             >
               <picture className="absolute inset-0 w-full h-full">
                 <source media="(max-width: 640px)" srcSet={mobileBannerSrc} />
