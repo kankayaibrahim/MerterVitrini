@@ -964,7 +964,7 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-Environment=NODE_ENV=production PORT=3000
+Environment=NODE_ENV=production PORT=3000 NEXT_BUILD_SSR=true
 
 [Install]
 WantedBy=multi-user.target
@@ -1083,7 +1083,18 @@ server {{
     }}
 }}"""
             else:
-                location_block = f"""    # Support Next.js App Router static exports with clean URLs
+                location_block = f"""    # Support Next.js Dynamic SSR / ISR Reverse Proxy to Port 3000
+    location / {{
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}""" if self.ssr_mode else f"""    # Support Next.js App Router static exports with clean URLs
     location / {{
         try_files $uri $uri/ $uri.html /index.html =404;
     }}"""

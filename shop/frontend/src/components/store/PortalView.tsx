@@ -122,22 +122,25 @@ export default function PortalView({
 
   // Premium Banners SEO localization mapping with fallback support
   const getLocalizedCollectionBanner = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => {
-    if (type === "kadin") return "/banners/collection_kadin.webp";
-    if (type === "erkek") return "/banners/collection_erkek.webp";
-    if (type === "ic_giyim") return "/banners/collection_ic_giyim.webp";
-    return "/banners/collection_aksesuar.webp";
+    if (type === "kadin") return "/banners/collection_kadin.webp?v=2";
+    if (type === "erkek") return "/banners/collection_erkek.webp?v=2";
+    if (type === "ic_giyim") return "/banners/collection_ic_giyim.webp?v=2";
+    return "/banners/collection_aksesuar.webp?v=2";
   };
 
   const handleCollectionImageError = (type: "kadin" | "erkek" | "ic_giyim" | "aksesuar") => (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
-    let fallback = "/banners/collection_kadin.webp";
-    if (type === "erkek") fallback = "/banners/collection_erkek.webp";
-    else if (type === "ic_giyim") fallback = "/banners/collection_ic_giyim.webp";
-    else if (type === "aksesuar") fallback = "/banners/collection_aksesuar.webp";
+    let fallback = "/banners/collection_kadin.webp?v=2";
+    if (type === "erkek") fallback = "/banners/collection_erkek.webp?v=2";
+    else if (type === "ic_giyim") fallback = "/banners/collection_ic_giyim.webp?v=2";
+    else if (type === "aksesuar") fallback = "/banners/collection_aksesuar.webp?v=2";
 
-    if (!img.src.endsWith(fallback)) {
-      img.src = fallback;
+    const picture = img.parentElement;
+    if (picture) {
+      const sources = picture.querySelectorAll('source');
+      sources.forEach(source => source.remove());
     }
+    img.src = fallback;
   };
 
   return (
@@ -167,8 +170,8 @@ export default function PortalView({
         {/* Dynamic Slides Map */}
         {slides.map((slide) => {
           const isActive = activeSlide === slide.id;
-          const bannerSrc = `/banners/${slide.bannerKey}.webp`;
-          const mobileBannerSrc = `/banners/${slide.bannerKey}_mobile.webp`;
+          const bannerSrc = `/banners/${slide.bannerKey}.webp?v=2`;
+          const mobileBannerSrc = `/banners/${slide.bannerKey}_mobile.webp?v=2`;
           return (
             <div 
               key={slide.id}
@@ -182,9 +185,12 @@ export default function PortalView({
                   className={`w-full h-full object-cover ${slide.positionClass}`}
                   onError={(e) => {
                     const img = e.currentTarget;
-                    if (!img.src.endsWith(bannerSrc)) {
-                      img.src = bannerSrc;
+                    const picture = img.parentElement;
+                    if (picture) {
+                      const sources = picture.querySelectorAll('source');
+                      sources.forEach(source => source.remove());
                     }
+                    img.src = bannerSrc;
                   }}
                   fetchPriority={slide.id === 0 ? "high" : undefined}
                   loading={slide.id === 0 ? "eager" : "lazy"}
