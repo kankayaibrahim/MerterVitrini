@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import { Playfair_Display, Outfit } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
   subsets: ["latin", "latin-ext"],
-  weight: ["400", "600", "700", "800"],
+  weight: ["400", "700", "800"],
+});
+
+const outfit = Outfit({
+  variable: "--font-outfit",
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -21,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr" className={`${poppins.variable} h-full antialiased`}>
+    <html lang="tr" className={`${playfair.variable} ${outfit.variable} h-full antialiased`}>
       <head>
         <meta name="google-site-verification" content="xEjdYBdb9A1n0WFNzuUtrntttgNCFd5IH0vy4yx8I4A" />
         <meta name="yandex-verification" content="77562ce72d424a2f" />

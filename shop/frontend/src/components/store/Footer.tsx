@@ -41,26 +41,26 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
   const whatsappUrl = `https://wa.me/${sanitizedWhatsapp}`;
 
   return (
-    <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-12 px-6 md:px-12 mt-16 font-sans">
+    <footer className="bg-white border-t border-cultured text-sonic-silver py-16 px-6 md:px-12 mt-16 font-sans">
       <div className="max-w-[1720px] mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
         
         {/* Column 1: Contact Details */}
         <div className="space-y-4">
           <div className="flex flex-col">
-            <span className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              <span className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-0.5 rounded text-sm font-black">
+            <span className="text-xl font-bold tracking-tight text-black flex items-center gap-2 font-serif">
+              <span className="bg-black text-white px-2 py-0.5 rounded-none text-xs font-black tracking-widest font-sans">
                 {t("b2b_tag", lang)}
               </span>
               {t("brand_title", lang)}
             </span>
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest mt-1">
+            <span className="text-[10px] font-bold text-accent-gold uppercase tracking-[1.5px] mt-1">
               {t("brand_subtitle", lang)}
             </span>
           </div>
           
-          <div className="text-sm space-y-3 pt-2 text-slate-300">
+          <div className="text-sm space-y-3 pt-2 text-onyx">
             <p className="flex items-start gap-2.5 leading-relaxed">
-              <svg className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-black shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
@@ -68,19 +68,19 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
             </p>
             
             <p className="flex items-center gap-2.5">
-              <svg className="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
               </svg>
-              <a href={`tel:${settings.phone}`} className="hover:text-white transition-colors duration-200">
+              <a href={`tel:${settings.phone}`} className="hover:text-black transition-colors duration-200">
                 {settings.phone}
               </a>
             </p>
 
             <p className="flex items-center gap-2.5">
-              <svg className="w-5 h-5 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              <a href={`mailto:${settings.email}`} className="hover:text-white transition-colors duration-200 break-all">
+              <a href={`mailto:${settings.email}`} className="hover:text-black transition-colors duration-200 break-all">
                 {settings.email}
               </a>
             </p>
@@ -89,22 +89,22 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
 
         {/* Column 2: Hakkımızda (Corporate / Info) */}
         <div>
-          <h3 className="text-white font-semibold text-sm tracking-wider uppercase mb-4 border-l-2 border-indigo-500 pl-3">
+          <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
             {t("about_us", lang)}
           </h3>
-          <ul className="space-y-2 text-sm">
+          <ul className="space-y-3 text-sm">
             <li>
-              <a href="#about" className="hover:text-white transition-colors duration-200">
+              <a href="#about" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("about_us", lang)}
               </a>
             </li>
             <li>
-              <a href="#b2b" className="hover:text-white transition-colors duration-200">
+              <a href="#b2b" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("wholesale_b2b", lang)}
               </a>
             </li>
             <li>
-              <a href="#contact" className="hover:text-white transition-colors duration-200">
+              <a href="#contact" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("contact_us", lang)}
               </a>
             </li>
@@ -113,10 +113,10 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
 
         {/* Column 3: Müşteri Hizmetleri (Customer Service) */}
         <div>
-          <h3 className="text-white font-semibold text-sm tracking-wider uppercase mb-4 border-l-2 border-indigo-500 pl-3">
+          <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
             {t("customer_service", lang)}
           </h3>
-          <ul className="space-y-2 text-sm">
+          <ul className="space-y-3 text-sm">
             <li>
               <a 
                 href="#shipping" 
@@ -126,13 +126,13 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
                     onOpenPolicy("cancellation_and_return");
                   }
                 }}
-                className="hover:text-white transition-colors duration-200"
+                className="text-onyx hover:text-black hover:underline transition-colors duration-200"
               >
                 {t("delivery_returns", lang)}
               </a>
             </li>
             <li>
-              <a href="#faq" className="hover:text-white transition-colors duration-200">
+              <a href="#faq" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("faq", lang)}
               </a>
             </li>
@@ -145,7 +145,7 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
                     onOpenPolicy("privacy_policy");
                   }
                 }}
-                className="hover:text-white transition-colors duration-200"
+                className="text-onyx hover:text-black hover:underline transition-colors duration-200"
               >
                 {t("privacy", lang)}
               </a>
@@ -159,7 +159,7 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
                     onOpenPolicy("terms_of_service");
                   }
                 }}
-                className="hover:text-white transition-colors duration-200"
+                className="text-onyx hover:text-black hover:underline transition-colors duration-200"
               >
                 {t("terms", lang)}
               </a>
@@ -170,10 +170,10 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
         {/* Column 4: Hesabım (My Account) & WhatsApp support */}
         <div className="space-y-6">
           <div>
-            <h3 className="text-white font-semibold text-sm tracking-wider uppercase mb-4 border-l-2 border-indigo-500 pl-3">
+            <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
               {t("my_account", lang)}
             </h3>
-            <ul className="space-y-2 text-sm mb-4">
+            <ul className="space-y-3 text-sm mb-4">
               <li>
                 <a 
                   href="#login" 
@@ -183,7 +183,7 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
                       window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode: "login" } }));
                     }
                   }}
-                  className="hover:text-white transition-colors duration-200"
+                  className="text-onyx hover:text-black hover:underline transition-colors duration-200"
                 >
                   {t("login", lang)}
                 </a>
@@ -197,31 +197,28 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
                       window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode: "register" } }));
                     }
                   }}
-                  className="hover:text-white transition-colors duration-200"
+                  className="text-onyx hover:text-black hover:underline transition-colors duration-200"
                 >
                   {t("register", lang)}
                 </a>
               </li>
               <li>
-                <a href="#tracking" className="hover:text-white transition-colors duration-200">
+                <a href="#tracking" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                   {t("order_tracking", lang)}
                 </a>
               </li>
             </ul>
           </div>
 
-          {/* Premium Interactive WhatsApp support banner with pulsing micro-animation */}
+          {/* Premium Interactive WhatsApp support button */}
           <div className="pt-2">
             <a 
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-3 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg hover:shadow-emerald-900/30 transition-all duration-300 transform hover:-translate-y-0.5 group font-semibold text-sm border border-emerald-500/30 relative overflow-hidden"
+              className="inline-flex items-center gap-3 px-5 py-3 bg-black hover:bg-neutral-850 text-white rounded-none shadow-none transition-all duration-300 group font-bold text-xs tracking-[1.5px] border-none relative overflow-hidden uppercase"
             >
-              {/* WhatsApp Pulsing background radial animation */}
-              <span className="absolute inset-0 bg-emerald-400/20 rounded-xl animate-ping scale-75 opacity-0 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700 pointer-events-none"></span>
-              
-              <svg className="w-5 h-5 shrink-0 animate-bounce group-hover:animate-none" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.458L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.863-9.73.001-2.595-1.006-5.035-2.836-6.87C16.671 2.16 14.237.986 11.64.985c-5.441 0-9.87 4.372-9.873 9.734-.001 1.709.467 3.376 1.354 4.887l-.982 3.582 3.71-.974zm13.14-5.932c-.3-.15-1.776-.875-2.05-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-1.127-.566-1.929-1.009-2.694-2.321-.202-.347-.202-.656-.051-.951.136-.264.3-.35.45-.5.15-.15.2-.25.3-.45.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.588-.491-.508-.675-.518-.175-.009-.375-.01-.575-.01-.2 0-.525.075-.8 1.025-.275.95-1.05 3.3-1.05 3.4 0 .1.075.2.225.35.15.15 1.75 2.673 4.237 3.743.592.255 1.054.408 1.413.523.595.19 1.137.163 1.564.1.477-.07 1.475-.603 1.675-1.18.2-.578.2-1.075.14-1.18-.06-.1-.225-.15-.525-.3z" />
               </svg>
               <span>
@@ -233,11 +230,11 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
 
       </div>
 
-      <div className="max-w-[1720px] mx-auto border-t border-slate-800/80 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+      <div className="max-w-[1720px] mx-auto border-t border-cultured mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-sonic-silver">
         <div>
           © {new Date().getFullYear()} {t("brand_title", lang)}. {t("all_rights_reserved", lang)}
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-6">
           <a 
             href="#privacy" 
             onClick={(e) => {
@@ -246,7 +243,7 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
                 onOpenPolicy("privacy_policy");
               }
             }}
-            className="hover:text-slate-300 transition-colors"
+            className="hover:text-black transition-colors"
           >
             {t("privacy", lang)}
           </a>
@@ -258,7 +255,7 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
                 onOpenPolicy("terms_of_service");
               }
             }}
-            className="hover:text-slate-300 transition-colors"
+            className="hover:text-black transition-colors"
           >
             {t("terms", lang)}
           </a>

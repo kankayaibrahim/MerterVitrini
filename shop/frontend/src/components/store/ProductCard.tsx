@@ -132,7 +132,7 @@ export default function ProductCard({
   return (
     <div 
       onClick={handleCardClick}
-      className="bg-white rounded-[15px] overflow-hidden flex flex-col h-full cursor-pointer relative border border-cultured group select-none shadow-sm hover:shadow-premium transition-all duration-300 block text-inherit no-underline"
+      className="bg-white rounded-none overflow-hidden flex flex-col h-full cursor-pointer relative border-none group select-none shadow-none transition-all duration-300 block text-inherit no-underline"
     >
       {/* 1. Visual Image Container with double-image hover swap */}
       <div className="relative aspect-[4/5] overflow-hidden bg-[#fafafa]">
@@ -140,7 +140,7 @@ export default function ProductCard({
         <img 
           src={coverImg} 
           alt={title}
-          className={`w-full h-full object-contain transition-all duration-500 ease-out group-hover:scale-105 ${
+          className={`w-full h-full object-contain transition-all duration-500 ease-out group-hover:scale-102 ${
             hoverImg ? "group-hover:opacity-0" : ""
           }`}
           loading={priority ? undefined : "lazy"}
@@ -152,21 +152,21 @@ export default function ProductCard({
           <img 
             src={hoverImg} 
             alt={title}
-            className="absolute inset-0 w-full h-full object-contain opacity-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500 ease-out"
+            className="absolute inset-0 w-full h-full object-contain opacity-0 group-hover:opacity-100 group-hover:scale-102 transition-all duration-500 ease-out"
             loading={priority ? undefined : "lazy"}
           />
         )}
 
         {/* Discount Badge */}
         {hasDiscount && (
-          <span className="absolute top-3 left-3 bg-salmon-pink text-white text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-[5px] shadow-sm z-10">
-            {discountPct}% {lang === "tr" ? "İndirim" : "Off"}
+          <span className="absolute top-3 left-3 bg-[#A30000] text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10">
+            {discountPct}% {lang === "tr" ? "İNDİRİM" : "OFF"}
           </span>
         )}
 
         {/* Gender Badge */}
         {!hasDiscount && product.gender && (
-          <span className="absolute top-3 left-3 bg-white border border-cultured text-onyx text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-[5px] shadow-sm z-10">
+          <span className="absolute top-3 left-3 bg-white border border-black/10 text-onyx text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10">
             {t(product.gender, lang)}
           </span>
         )}
@@ -176,7 +176,7 @@ export default function ProductCard({
           {/* Quick View Button */}
           <button 
             type="button"
-            className="w-9 h-9 bg-white border border-cultured rounded-[5px] flex items-center justify-center shadow-sm text-onyx hover:bg-eerie-black hover:text-white hover:border-eerie-black transition-all cursor-pointer"
+            className="w-9 h-9 bg-white border border-black/10 rounded-none flex items-center justify-center shadow-none text-onyx hover:bg-black hover:text-white hover:border-black transition-all cursor-pointer animate-in fade-in duration-200"
             onClick={(e) => {
               e.stopPropagation();
               onOpenModal(product.id);
@@ -189,10 +189,10 @@ export default function ProductCard({
           {/* Add to Favorites (Wishlist) Button */}
           <button 
             type="button"
-            className={`w-9 h-9 border rounded-[5px] flex items-center justify-center shadow-sm transition-all cursor-pointer ${
+            className={`w-9 h-9 border rounded-none flex items-center justify-center shadow-none transition-all cursor-pointer animate-in fade-in duration-200 ${
               isFavorite 
-                ? "bg-salmon-pink border-salmon-pink text-white hover:bg-salmon-pink" 
-                : "bg-white border-cultured text-onyx hover:bg-eerie-black hover:text-white hover:border-eerie-black"
+                ? "bg-black border-black text-white hover:bg-black" 
+                : "bg-white border-black/10 text-onyx hover:bg-black hover:text-white hover:border-black"
             }`}
             onClick={toggleFavorite}
             title={lang === "tr" ? "Favorilerime Ekle" : "Add to Favorites"}
@@ -203,27 +203,26 @@ export default function ProductCard({
       </div>
       
       {/* 2. Visual Details Section */}
-      <div className="p-4 flex flex-col gap-1.5 flex-grow">
+      <div className="p-3 flex flex-col gap-1 flex-grow">
         {/* Brand label */}
-        <span className="text-[10px] uppercase font-bold tracking-[0.5px] text-salmon-pink block">
+        <span className="text-[10px] uppercase font-bold tracking-[1.5px] text-black block mb-0.5">
           {product.brand_name || "Merter Manufacturer"}
         </span>
         
         {/* Product Title */}
-        <h3 className="text-xs font-bold text-onyx line-clamp-2 min-h-[34px] leading-relaxed transition-colors duration-150 group-hover:text-salmon-pink">
+        <h3 className="text-xs font-normal text-onyx line-clamp-2 min-h-[34px] leading-relaxed transition-colors duration-150 group-hover:text-black">
           {title}
         </h3>
-
         
         {/* B2B Specs */}
-        <div className="flex flex-col gap-2 mt-1.5 text-[11px] font-semibold text-sonic-silver">
+        <div className="flex flex-col gap-1.5 mt-1.5 text-[11px] font-normal text-sonic-silver">
           <div className="flex flex-wrap gap-1 text-[10.5px]">
             <span>{units} {t("piece", lang)} / {t("package", lang)}</span>
             <span>•</span>
             <span>{t("min_order_qty", lang)}: {product.minimum_order_quantity} {t("piece", lang)}</span>
           </div>
           {product.packing_ratio && (
-            <div className="mt-1 py-1 px-2.5 bg-zinc-50/50 border border-cultured rounded-[6px] flex items-center justify-between transition-colors duration-150 hover:bg-[#fff5f6] hover:border-salmon-pink/20 shadow-sm">
+            <div className="mt-1 py-1 px-2 bg-neutral-50 border border-cultured rounded-none flex items-center justify-between transition-colors duration-150 hover:bg-neutral-100 hover:border-black/15 shadow-none">
               <span className="text-[8px] uppercase tracking-wider text-sonic-silver font-bold">
                 {t("series_sizes", lang).replace(":", "").trim()}
               </span>
@@ -235,18 +234,18 @@ export default function ProductCard({
         </div>
         
         {/* Pricing structure (Right-Aligned) */}
-        <div className="flex items-baseline justify-end gap-2 mt-auto pt-3 border-t border-cultured">
+        <div className="flex items-baseline justify-end gap-2 mt-auto pt-2 border-t border-cultured">
           {hasDiscount ? (
             <>
-              <span className="text-[11px] text-sonic-silver line-through font-medium">
+              <span className="text-[11px] text-sonic-silver line-through font-normal">
                 {origPrice.toFixed(2)} {currency}
               </span>
-              <span className="text-sm font-extrabold text-eerie-black">
+              <span className="text-xs font-bold text-[#A30000]">
                 {discPrice.toFixed(2)} {currency}
               </span>
             </>
           ) : (
-            <span className="text-sm font-extrabold text-eerie-black">
+            <span className="text-xs font-bold text-eerie-black">
               {price}
             </span>
           )}
@@ -266,9 +265,9 @@ export default function ProductCard({
               })
             );
           }}
-          className="mt-3 w-full bg-salmon-pink hover:bg-eerie-black text-white text-[10px] sm:text-[11px] font-extrabold uppercase py-1.5 sm:py-2.5 px-2 sm:px-4 rounded-[8px] transition-all duration-300 flex items-center justify-center gap-1 sm:gap-2 active:scale-[0.98] shadow-sm select-none border-none cursor-pointer whitespace-nowrap"
+          className="mt-3 w-full bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-[11px] font-bold uppercase py-2 sm:py-2.5 px-2 sm:px-4 rounded-none transition-all duration-300 flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-none select-none border-none cursor-pointer tracking-wider"
         >
-          <ShoppingBag className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+          <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
           <span>{btnText}</span>
         </button>
 

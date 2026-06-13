@@ -262,16 +262,16 @@ export default function Header({
           </div>
 
           {/* Language & Currency Selectors */}
-          <div className="flex items-center gap-3">
+          {/* Language & Currency Selectors */}
+          <div className="flex items-center gap-4">
             {/* Language selector */}
             <div className="relative">
               <button 
                 onClick={() => setIsLangOpen(!isLangOpen)}
-                className="flex items-center gap-1.5 px-3 py-1 bg-white hover:text-salmon-pink font-semibold text-xs transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1 bg-white hover:text-accent-gold font-bold text-xs uppercase tracking-wide transition-colors cursor-pointer"
               >
-                <img src={getFlagUrl(currentLangObj.code)} alt="" aria-hidden="true" className="w-4 h-3 object-cover rounded shadow-sm shrink-0" />
-                <span>{currentLangObj.label}</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isLangOpen ? "rotate-180" : ""}`} />
+                <span>{currentLangObj.code}</span>
+                <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${isLangOpen ? "rotate-180" : ""}`} />
               </button>
               
               {isLangOpen && (
@@ -280,7 +280,7 @@ export default function Header({
                     className="fixed inset-0 z-40 bg-transparent" 
                     onClick={() => setIsLangOpen(false)}
                   />
-                  <div className="absolute right-0 top-7 bg-white border border-cultured rounded-lg shadow-lg min-w-[130px] overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute right-0 top-7 bg-white border border-cultured rounded-none shadow-md min-w-[130px] overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
                     {activeLanguages.map((l) => (
                       <button
                         key={l.code}
@@ -298,13 +298,12 @@ export default function Header({
                             router.push(newPath);
                           }
                         }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors cursor-pointer border-none ${
+                        className={`w-full flex items-center px-3 py-2.5 text-left text-xs font-bold transition-colors cursor-pointer border-none uppercase ${
                           lang === l.code 
-                            ? "text-salmon-pink bg-cultured" 
+                            ? "text-accent-gold bg-cultured" 
                             : "text-onyx hover:bg-cultured hover:text-eerie-black"
                         }`}
                       >
-                        <img src={getFlagUrl(l.code)} alt="" aria-hidden="true" className="w-4 h-3 object-cover rounded shadow-sm shrink-0" />
                         <span>{l.label}</span>
                       </button>
                     ))}
@@ -317,11 +316,10 @@ export default function Header({
             <div className="relative">
               <button 
                 onClick={() => setIsCurrencyOpen(!isCurrencyOpen)}
-                className="flex items-center gap-1.5 px-3 py-1 bg-white hover:text-salmon-pink font-semibold text-xs transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1 bg-white hover:text-accent-gold font-bold text-xs uppercase tracking-wide transition-colors cursor-pointer"
               >
-                <span>{activeCurrObj.flag}</span>
-                <span>{activeCurrObj.label}</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isCurrencyOpen ? "rotate-180" : ""}`} />
+                <span>{activeCurrObj.code}</span>
+                <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${isCurrencyOpen ? "rotate-180" : ""}`} />
               </button>
               
               {isCurrencyOpen && (
@@ -330,7 +328,7 @@ export default function Header({
                     className="fixed inset-0 z-40 bg-transparent" 
                     onClick={() => setIsCurrencyOpen(false)}
                   />
-                  <div className="absolute right-0 top-7 bg-white border border-cultured rounded-lg shadow-lg min-w-[130px] overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute right-0 top-7 bg-white border border-cultured rounded-none shadow-md min-w-[100px] overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100">
                     {currenciesList.map((c) => (
                       <button
                         key={c.code}
@@ -338,14 +336,13 @@ export default function Header({
                           onCurrencyChange(c.code);
                           setIsCurrencyOpen(false);
                         }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs font-medium transition-colors cursor-pointer border-none ${
+                        className={`w-full flex items-center px-3 py-2 text-left text-xs font-bold transition-colors cursor-pointer border-none ${
                           displayCurrency === c.code 
-                            ? "text-salmon-pink bg-cultured" 
+                            ? "text-accent-gold bg-cultured" 
                             : "text-onyx hover:bg-cultured hover:text-eerie-black"
                         }`}
                       >
-                        <span>{c.flag}</span>
-                        <span>{c.label}</span>
+                        <span>{c.code}</span>
                       </button>
                     ))}
                   </div>
@@ -355,35 +352,55 @@ export default function Header({
           </div>
         </div>
       </div>
-
       {/* 2. Header Main Bar - Logo, Search, Actions */}
       <div className="border-b border-cultured py-4 sm:py-5 bg-white">
-        <div className="max-w-[1720px] mx-auto px-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-8">
-          {/* Logo & Mobile Actions Row */}
-          <div className="flex items-center justify-between w-full sm:w-auto">
+        <div className="max-w-[1720px] mx-auto px-4 flex flex-col sm:grid sm:grid-cols-3 sm:items-center gap-4">
+          
+          {/* Left Column (Desktop only Search, hidden on mobile in this slot) */}
+          <div className="hidden sm:flex sm:col-span-1 items-center w-full justify-start">
+            <div className="relative w-full max-w-[280px]">
+              <div className="relative flex items-center w-full border-b border-cultured overflow-hidden focus-within:border-brand-black transition-all">
+                <input 
+                  type="text" 
+                  id="searchInputDesktop"
+                  className="w-full pl-0 pr-8 py-2 text-xs font-bold text-onyx placeholder-spanish-gray focus:outline-none bg-white"
+                  placeholder={t("search_placeholder", lang)}
+                  onChange={handleSearchChange}
+                />
+                <button 
+                  aria-label={lang === "tr" ? "Arama yap" : "Submit search"}
+                  className="absolute right-0 top-0 bottom-0 px-1 bg-white hover:text-accent-gold transition-colors flex items-center justify-center cursor-pointer text-eerie-black border-none"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Center Column: Logo (Desktop centered, Mobile layout row) */}
+          <div className="sm:col-span-1 flex items-center justify-between sm:justify-center w-full">
             {/* Brand Logo */}
             <a 
               href="#" 
               onClick={handleLogoClick}
-              className="flex flex-col no-underline group active:scale-[0.98] transition-transform duration-100 shrink-0"
+              className="flex flex-col no-underline group active:scale-[0.98] transition-transform duration-100 shrink-0 text-center sm:mx-auto"
             >
-              <span className="font-sans font-extrabold text-[18px] xs:text-[20px] sm:text-[26px] tracking-tight text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
+              <span className="font-serif font-extrabold text-[20px] sm:text-[30px] tracking-[2px] uppercase text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
                 {t("brand_title", lang) || "Merter Vitrini"}
               </span>
-              <span className="text-[7px] xs:text-[7.5px] sm:text-[9px] uppercase tracking-[2px] xs:tracking-[2.5px] sm:tracking-[3px] text-sonic-silver -mt-0.5 font-bold">
+              <span className="text-[7.5px] sm:text-[9px] uppercase tracking-[3.5px] text-sonic-silver -mt-0.5 font-bold">
                 {t("brand_subtitle", lang) || "Toptan Showroom"}
               </span>
             </a>
 
             {/* Mobile Actions: Language Selector, Currency Selector, Wishlist, Cart */}
-            <div className="flex sm:hidden items-center gap-1 text-eerie-black shrink-0">
+            <div className="flex sm:hidden items-center gap-1.5 text-eerie-black shrink-0">
               {/* Compact Language Selector */}
               <div className="relative">
                 <button 
                   onClick={() => setIsLangOpen(!isLangOpen)}
-                  className="flex items-center gap-1 px-1.5 py-1 bg-zinc-50 border border-zinc-200/60 rounded-lg hover:text-salmon-pink font-extrabold text-[9px] transition-all cursor-pointer select-none shrink-0"
+                  className="flex items-center gap-1 px-1.5 py-1 bg-zinc-50 border border-zinc-200/60 rounded-none hover:text-accent-gold font-extrabold text-[9px] transition-all cursor-pointer select-none shrink-0"
                 >
-                  <img src={getFlagUrl(currentLangObj.code)} alt="" aria-hidden="true" className="w-3.5 h-2.5 object-cover rounded shadow-sm shrink-0" />
                   <span className="uppercase text-[9px] text-zinc-800 shrink-0">{currentLangObj.code}</span>
                 </button>
                 
@@ -393,7 +410,7 @@ export default function Header({
                       className="fixed inset-0 z-40 bg-transparent" 
                       onClick={() => setIsLangOpen(false)}
                     />
-                    <div className="absolute right-0 top-7 bg-white border border-cultured rounded shadow-lg min-w-[100px] overflow-hidden z-50">
+                    <div className="absolute right-0 top-7 bg-white border border-cultured rounded-none shadow-lg min-w-[100px] overflow-hidden z-50">
                       {activeLanguages.map((l) => (
                         <button
                           key={l.code}
@@ -411,13 +428,12 @@ export default function Header({
                               router.push(newPath);
                             }
                           }}
-                          className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[10px] font-semibold transition-colors cursor-pointer border-none ${
+                          className={`w-full flex items-center px-2.5 py-2 text-left text-[10px] font-bold transition-colors cursor-pointer border-none uppercase ${
                             lang === l.code 
-                              ? "text-salmon-pink bg-cultured" 
+                              ? "text-accent-gold bg-cultured" 
                               : "text-onyx hover:bg-cultured hover:text-eerie-black"
                           }`}
                         >
-                          <img src={getFlagUrl(l.code)} alt="" aria-hidden="true" className="w-4 h-3 object-cover rounded shadow-sm shrink-0" />
                           <span className="uppercase">{l.code}</span>
                         </button>
                       ))}
@@ -430,7 +446,7 @@ export default function Header({
               <div className="relative">
                 <button 
                   onClick={() => setIsCurrencyOpen(!isCurrencyOpen)}
-                  className="flex items-center gap-1 px-1.5 py-1 bg-zinc-50 border border-zinc-200/60 rounded-lg hover:text-salmon-pink font-extrabold text-[9px] transition-all cursor-pointer select-none shrink-0"
+                  className="flex items-center gap-1 px-1.5 py-1 bg-zinc-50 border border-zinc-200/60 rounded-none hover:text-accent-gold font-extrabold text-[9px] transition-all cursor-pointer select-none shrink-0"
                 >
                   <span className="uppercase text-[9px] text-zinc-800 shrink-0">{activeCurrObj.code}</span>
                 </button>
@@ -441,7 +457,7 @@ export default function Header({
                       className="fixed inset-0 z-40 bg-transparent" 
                       onClick={() => setIsCurrencyOpen(false)}
                     />
-                    <div className="absolute right-0 top-7 bg-white border border-cultured rounded shadow-lg min-w-[90px] overflow-hidden z-50">
+                    <div className="absolute right-0 top-7 bg-white border border-cultured rounded-none shadow-lg min-w-[90px] overflow-hidden z-50">
                       {currenciesList.map((c) => (
                         <button
                           key={c.code}
@@ -449,13 +465,12 @@ export default function Header({
                             onCurrencyChange(c.code);
                             setIsCurrencyOpen(false);
                           }}
-                          className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left text-[10px] font-semibold transition-colors cursor-pointer border-none ${
+                          className={`w-full flex items-center px-2.5 py-2 text-left text-[10px] font-bold transition-colors cursor-pointer border-none ${
                             displayCurrency === c.code 
-                              ? "text-salmon-pink bg-cultured" 
+                              ? "text-accent-gold bg-cultured" 
                               : "text-onyx hover:bg-cultured hover:text-eerie-black"
                           }`}
                         >
-                          <span>{c.flag}</span>
                           <span className="uppercase">{c.code}</span>
                         </button>
                       ))}
@@ -464,25 +479,25 @@ export default function Header({
                 )}
               </div>
 
-               {/* Wishlist Heart Icon */}
-               <button 
-                 onClick={() => setIsWishlistOpen(true)}
-                 className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
-               >
-                 <Heart className="w-[19px] h-[19px] sm:w-[20px] sm:h-[20px]" />
-                 <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[13px] h-[13px] flex items-center justify-center font-bold text-[7.5px] leading-none shadow-sm">
-                   {wishlistCount}
-                 </span>
-               </button>
+              {/* Wishlist Heart Icon */}
+              <button 
+                onClick={() => setIsWishlistOpen(true)}
+                className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
+              >
+                <Heart className="w-[19px] h-[19px]" />
+                <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
+                  {wishlistCount}
+                </span>
+              </button>
 
               {/* User Account / Profile Mobile Action */}
               <div className="relative flex items-center shrink-0">
                 {user ? (
                   <button 
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent"
+                    className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
                   >
-                    <User className="w-[19px] h-[19px] sm:w-[20px] sm:h-[20px] text-salmon-pink animate-pulse" />
+                    <User className="w-[19px] h-[19px] text-accent-gold" />
                   </button>
                 ) : (
                   <button 
@@ -490,16 +505,16 @@ export default function Header({
                       setAuthMode("login");
                       setIsAuthOpen(true);
                     }}
-                    className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent"
+                    className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
                   >
-                    <User className="w-[19px] h-[19px] sm:w-[20px] sm:h-[20px]" />
+                    <User className="w-[19px] h-[19px]" />
                   </button>
                 )}
                 
                 {isUserMenuOpen && user && (
                   <>
                     <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsUserMenuOpen(false)} />
-                    <div className="absolute right-0 top-8 bg-white border border-cultured rounded-xl shadow-xl min-w-[150px] overflow-hidden z-50 animate-in fade-in duration-150">
+                    <div className="absolute right-0 top-8 bg-white border border-cultured rounded-none shadow-xl min-w-[150px] overflow-hidden z-50 animate-in fade-in duration-150">
                       <div className="px-3 py-2 border-b border-cultured text-[10px] text-sonic-silver truncate">
                         {user.first_name} {user.last_name}
                       </div>
@@ -508,13 +523,13 @@ export default function Header({
                           setIsUserMenuOpen(false);
                           router.push("/profile");
                         }}
-                        className="w-full text-left px-3 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
+                        className="w-full text-left px-3 py-2.5 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
                       >
                         {t("my_profile", lang)}
                       </button>
                       <button
                         onClick={handleLogout}
-                        className="w-full text-left px-3 py-2 border-t border-cultured text-xs font-bold text-red-500 hover:bg-red-50 transition-colors border-none bg-transparent cursor-pointer"
+                        className="w-full text-left px-3 py-2.5 border-t border-cultured text-xs font-bold text-red-500 hover:bg-red-50 transition-colors border-none bg-transparent cursor-pointer"
                       >
                         {t("logout", lang) || "Çıkış Yap"}
                       </button>
@@ -526,53 +541,53 @@ export default function Header({
               {/* Cart Icon */}
               <button 
                 onClick={() => setIsCartOpen(true)}
-                className="p-1 sm:p-1.5 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
+                className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
               >
-                <ShoppingBag className="w-[19px] h-[19px] sm:w-[20px] sm:h-[20px]" />
-                <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[13px] h-[13px] flex items-center justify-center font-bold text-[7.5px] leading-none shadow-sm">
+                <ShoppingBag className="w-[19px] h-[19px]" />
+                <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
                   {totalPkgs}
                 </span>
               </button>
             </div>
           </div>
 
-          {/* Rounded Search Bar - stacks below logo on mobile, inline on desktop */}
-          <div className="relative w-full sm:flex-1 sm:max-w-[480px]">
-            <div className="relative flex items-center w-full border border-cultured rounded-lg overflow-hidden focus-within:border-salmon-pink transition-all">
+          {/* Mobile Search Bar - stacks below logo on mobile, hidden on desktop */}
+          <div className="relative w-full sm:hidden">
+            <div className="relative flex items-center w-full border-b border-cultured overflow-hidden focus-within:border-brand-black transition-all">
               <input 
                 type="text" 
-                id="searchInputDesktop"
-                className="w-full pl-4 pr-12 py-2 sm:py-2.5 text-xs sm:text-[13px] font-medium text-onyx placeholder-spanish-gray focus:outline-none bg-white"
+                id="searchInputMobile"
+                className="w-full pl-0 pr-8 py-2 text-xs font-medium text-onyx placeholder-spanish-gray focus:outline-none bg-white"
                 placeholder={t("search_placeholder", lang)}
                 onChange={handleSearchChange}
               />
               <button 
                 aria-label={lang === "tr" ? "Arama yap" : "Submit search"}
-                className="absolute right-0 top-0 bottom-0 px-4 bg-white border-l border-cultured hover:text-salmon-pink transition-colors flex items-center justify-center cursor-pointer text-eerie-black"
+                className="absolute right-0 top-0 bottom-0 px-1 bg-white hover:text-accent-gold transition-colors flex items-center justify-center cursor-pointer text-eerie-black border-none"
               >
-                <Search className="w-[18px] h-[18px]" />
+                <Search className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Desktop Only Actions */}
-          <div className="hidden sm:flex items-center gap-4 text-eerie-black">
+          {/* Right Column: Desktop Only Actions */}
+          <div className="hidden sm:flex sm:col-span-1 items-center justify-end gap-5 text-eerie-black">
             {/* Account Profile Icon / Dropdown */}
             <div className="relative">
               {user ? (
                 <>
                   <button 
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-cultured hover:text-salmon-pink text-xs font-bold transition-all duration-200 cursor-pointer border-none"
+                    className="flex items-center gap-1.5 px-3 py-1 bg-transparent hover:text-accent-gold text-xs font-extrabold uppercase transition-all duration-200 cursor-pointer border-none"
                   >
-                    <User className="w-[18px] h-[18px] text-salmon-pink" />
-                    <span>{`${t("hello", lang)}, ${user.first_name}`}</span>
+                    <User className="w-[17px] h-[17px] text-accent-gold" />
+                    <span>{user.first_name}</span>
                     <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isUserMenuOpen ? "rotate-180" : ""}`} />
                   </button>
                   {isUserMenuOpen && (
                     <>
                       <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setIsUserMenuOpen(false)} />
-                      <div className="absolute right-0 top-11 bg-white border border-cultured rounded-xl shadow-xl min-w-[160px] overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="absolute right-0 top-9 bg-white border border-cultured rounded-none shadow-xl min-w-[160px] overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                         <div className="px-4 py-2.5 border-b border-cultured text-[10px] text-sonic-silver">
                           {user.email}
                         </div>
@@ -601,32 +616,32 @@ export default function Header({
                     setAuthMode("login");
                     setIsAuthOpen(true);
                   }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-cultured hover:border-salmon-pink text-xs font-bold text-eerie-black hover:text-salmon-pink transition-all duration-200 cursor-pointer bg-white"
+                  className="flex items-center gap-1 px-3 py-1 hover:text-accent-gold text-xs font-extrabold uppercase transition-all duration-200 cursor-pointer border-none bg-transparent"
                 >
-                  <User className="w-[18px] h-[18px]" />
+                  <User className="w-[17px] h-[17px]" />
                   <span>{t("login", lang)}</span>
                 </button>
               )}
             </div>
 
             {/* Wishlist Heart Icon */}
-             <button 
-               onClick={() => setIsWishlistOpen(true)}
-               className="p-2 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent"
-             >
-               <Heart className="w-[22px] h-[22px]" />
-               <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[17px] h-[17px] flex items-center justify-center font-bold text-[10px] leading-none shadow-sm">
-                 {wishlistCount}
-               </span>
-             </button>
+            <button 
+              onClick={() => setIsWishlistOpen(true)}
+              className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
+            >
+              <Heart className="w-[20px] h-[20px]" />
+              <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">
+                {wishlistCount}
+              </span>
+            </button>
 
             {/* Cart Icon */}
             <button 
               onClick={() => setIsCartOpen(true)}
-              className="p-2 hover:text-salmon-pink transition-colors relative cursor-pointer border-none bg-transparent"
+              className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
             >
-              <ShoppingBag className="w-[22px] h-[22px]" />
-              <span className="absolute top-0 right-0 bg-salmon-pink text-white rounded-full w-[17px] h-[17px] flex items-center justify-center font-bold text-[10px] leading-none shadow-sm">
+              <ShoppingBag className="w-[20px] h-[20px]" />
+              <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">
                 {totalPkgs}
               </span>
             </button>
@@ -669,7 +684,7 @@ export default function Header({
               {/* Mega Dropdown Menu for Categories with Children */}
               {cat.children && cat.children.length > 0 && (
                 <div className="absolute left-1/2 -translate-x-1/2 top-full pt-4 z-50 w-[90vw] max-w-5xl transition-all duration-300 opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 pointer-events-none group-hover:pointer-events-auto">
-                  <div className="bg-white border border-cultured rounded-xl shadow-2xl p-8 grid grid-cols-4 gap-x-8 gap-y-6">
+                  <div className="bg-white border border-cultured rounded-none shadow-lg p-8 grid grid-cols-4 gap-x-8 gap-y-6">
                     {cat.children.map((sub) => (
                       <div key={sub.id} className="flex flex-col">
                         <button

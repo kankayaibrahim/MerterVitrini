@@ -72,7 +72,7 @@ export default function PortalView({
     <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
       
       {/* A. PREMIUM AUTO-SLIDING HERO CAROUSEL */}
-      <div className="w-full relative rounded-[20px] overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9] min-h-[220px] xs:min-h-[280px] sm:min-h-[280px] bg-gradient-to-br from-[#fafafa] to-[#fff0f1] shadow-sm select-none mb-10 group">
+      <div className="w-full relative rounded-none overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9] min-h-[220px] xs:min-h-[280px] sm:min-h-[280px] bg-[#fafafa] select-none mb-10 group">
         {/* Slide 1: Opportunities Promo */}
         <div className={`absolute inset-0 transition-opacity duration-1000 flex items-center p-4 xs:p-6 sm:p-8 md:p-16 ${activeSlide === 0 ? "opacity-100 z-10" : "opacity-0 z-0"}`}>
           <picture className="absolute inset-0 w-full h-full">
@@ -87,11 +87,11 @@ export default function PortalView({
             />
           </picture>
           <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
-          <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white/85 backdrop-blur-md p-4 sm:p-5 md:p-6 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
-            <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_wholesale_opportunities", lang)}</span>
-            <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_daily_opportunities", lang)}</h2>
-            <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_daily_opportunities_desc", lang)}</p>
-            <a href="/tum-urunler" className="mt-2.5 px-4 py-2 sm:px-5 sm:py-2.5 bg-salmon-pink hover:bg-eerie-black text-white text-[10px] sm:text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline">{t("portal_examine_catalog", lang)}</a>
+          <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white p-5 sm:p-6 md:p-8 rounded-none border border-black/10 shadow-none flex flex-col gap-2">
+            <span className="text-accent-gold font-bold text-[9px] sm:text-xs uppercase tracking-[2px]">{t("portal_wholesale_opportunities", lang)}</span>
+            <h2 className="font-serif font-bold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_daily_opportunities", lang)}</h2>
+            <p className="text-[11px] xs:text-xs text-sonic-silver font-normal leading-relaxed mt-0.5">{t("portal_daily_opportunities_desc", lang)}</p>
+            <a href="/tum-urunler" className="mt-2.5 px-6 py-3 bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-xs font-bold uppercase rounded-none transition-colors duration-300 w-fit cursor-pointer border-none no-underline tracking-widest">{t("portal_examine_catalog", lang)}</a>
           </div>
         </div>
 
@@ -107,56 +107,52 @@ export default function PortalView({
             />
           </picture>
           <div className="absolute inset-0 bg-gradient-to-r from-white/70 via-white/30 to-transparent z-0" />
-          <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white/85 backdrop-blur-md p-4 sm:p-5 md:p-6 rounded-[15px] border border-white/20 shadow-lg flex flex-col gap-1.5 sm:gap-2">
-            <span className="text-salmon-pink font-extrabold text-[9px] sm:text-xs uppercase tracking-[1.5px] sm:tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
-            <h2 className="font-sans font-extrabold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_download_app", lang)}</h2>
-            <p className="text-[11px] xs:text-xs text-sonic-silver font-semibold leading-relaxed mt-0.5">{t("portal_download_app_desc", lang)}</p>
+          <div className="relative z-10 max-w-[90vw] sm:max-w-[340px] md:max-w-[380px] bg-white p-5 sm:p-6 md:p-8 rounded-none border border-black/10 shadow-none flex flex-col gap-2">
+            <span className="text-accent-gold font-bold text-[9px] sm:text-xs uppercase tracking-[2px]">{t("portal_mobile_ease", lang)}</span>
+            <h2 className="font-serif font-bold text-base xs:text-lg sm:text-xl md:text-3xl text-eerie-black leading-tight">{t("portal_download_app", lang)}</h2>
+            <p className="text-[11px] xs:text-xs text-sonic-silver font-normal leading-relaxed mt-0.5">{t("portal_download_app_desc", lang)}</p>
             <div className="flex gap-2 mt-2">
               <a 
                 href="#" 
-                className="px-3.5 py-2 bg-eerie-black hover:bg-salmon-pink text-white text-[10px] sm:text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline flex items-center gap-1.5"
+                className="px-4 py-2.5 bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-xs font-bold uppercase rounded-none transition-colors duration-300 w-fit cursor-pointer border-none no-underline flex items-center gap-1.5 tracking-widest"
               >
-                <span>🤖</span> {t("portal_google_play", lang) || "Google Play"}
+                {t("portal_google_play", lang) || "Google Play"}
               </a>
               <a 
                 href="#" 
-                className="px-3.5 py-2 bg-eerie-black hover:bg-salmon-pink text-white text-[10px] sm:text-xs font-bold uppercase rounded-[5px] transition-colors duration-300 w-fit cursor-pointer border-none shadow-sm no-underline flex items-center gap-1.5"
+                className="px-4 py-2.5 bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-xs font-bold uppercase rounded-none transition-colors duration-300 w-fit cursor-pointer border-none no-underline flex items-center gap-1.5 tracking-widest"
               >
-                <span>🍎</span> {t("portal_app_store", lang) || "App Store"}
+                {t("portal_app_store", lang) || "App Store"}
               </a>
             </div>
           </div>
         </div>
 
         {/* Slide Indicators */}
-        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex items-center gap-0 z-20">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 z-20">
           <button 
             onClick={() => setActiveSlide(0)} 
             aria-label={lang === "tr" ? "Slayt 1" : "Slide 1"}
-            className="w-12 h-12 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all hover:scale-110 active:scale-95"
+            className="w-8 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
           >
-            <span className={`w-2.5 h-2.5 rounded-full transition-all ${activeSlide === 0 ? "bg-salmon-pink scale-110" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
+            <span className={`w-6 h-0.5 transition-all ${activeSlide === 0 ? "bg-black" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
           </button>
           <button 
             onClick={() => setActiveSlide(1)} 
             aria-label={lang === "tr" ? "Slayt 2" : "Slide 2"}
-            className="w-12 h-12 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all hover:scale-110 active:scale-95"
+            className="w-8 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
           >
-            <span className={`w-2.5 h-2.5 rounded-full transition-all ${activeSlide === 1 ? "bg-salmon-pink scale-110" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
+            <span className={`w-6 h-0.5 transition-all ${activeSlide === 1 ? "bg-black" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
           </button>
         </div>
       </div>
 
-      {/* B. CIRCULAR CATEGORY NAVIGATORS */}
-      <div className="mb-12 select-none">
-        <h3 className="font-sans font-extrabold text-xs tracking-[2px] text-eerie-black uppercase mb-6 text-center">{t("portal_wholesale_categories", lang)}</h3>
-        <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10">
+      {/* B. CATEGORY NAVIGATORS (Beymen-inspired clean text badges) */}
+      <div className="mb-12 select-none border-t border-b border-cultured py-6">
+        <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 md:gap-6">
           {categories.length === 0 ? (
             Array.from({ length: 5 }).map((_, idx) => (
-              <div key={idx} className="flex flex-col items-center gap-3 animate-pulse">
-                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-cultured" />
-                <div className="h-3 w-16 bg-cultured rounded" />
-              </div>
+              <div key={idx} className="h-10 w-28 bg-cultured animate-pulse" />
             ))
           ) : (
             categories.map((cat) => {
@@ -166,17 +162,13 @@ export default function PortalView({
                 <a 
                   key={cat.id} 
                   href={url}
-                  className="flex flex-col items-center gap-3 group cursor-pointer border-none bg-transparent active:scale-95 transition-transform no-underline"
+                  className="group cursor-pointer border-none bg-transparent transition-all no-underline"
                 >
-                  <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border border-cultured bg-white shadow-sm flex items-center justify-center text-2xl group-hover:border-salmon-pink group-hover:scale-105 transition-all duration-300 relative overflow-hidden">
-                    <span className="relative z-10">
-                      {cat.slug === "kadin-giyim" ? "👗" : cat.slug === "erkek-giyim" ? "👔" : cat.slug === "buyuk-beden" ? "👚" : cat.slug === "ic-giyim" ? "👙" : "✨"}
+                  <div className="border border-black/10 group-hover:border-black bg-white py-3 px-5 sm:px-6 text-center transition-all duration-300">
+                    <span className="text-[11px] sm:text-xs font-bold uppercase tracking-[2px] text-onyx group-hover:text-black transition-colors block">
+                      {getCategoryTitle(cat, lang)}
                     </span>
-                    <div className="absolute inset-0 bg-salmon-pink/5 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                  <span className="text-xs font-bold text-onyx group-hover:text-salmon-pink transition-colors">
-                    {getCategoryTitle(cat, lang)}
-                  </span>
                 </a>
               );
             })
@@ -186,27 +178,27 @@ export default function PortalView({
 
       {/* C. VISUAL PREMIUM COLLECTIONS GRID */}
       <div className="mb-16 select-none">
-        <h3 className="font-sans font-extrabold text-xs tracking-[2px] text-eerie-black uppercase mb-8 text-center">{t("portal_season_collections", lang)}</h3>
+        <h3 className="font-serif font-bold text-sm tracking-[2px] text-eerie-black uppercase mb-8 text-center">{t("portal_season_collections", lang)}</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* Card 1: Kadın Giyim */}
           <a 
             href={`/${getCategoryPrefix(lang)}/kadin-giyim/`}
-            className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
+            className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">
               <source media="(max-width: 640px)" srcSet={getLocalizedCollectionBanner("kadin").replace(".webp", "_mobile.webp")} />
               <img 
                 src={getLocalizedCollectionBanner("kadin")} 
                 alt={t("portal_women_clothing", lang)} 
-                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out" 
                 onError={handleCollectionImageError("kadin")}
               />
             </picture>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
-              <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_women_trend_desc", lang)}</span>
-                <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_women_clothing", lang)}</h4>
+            <div className="absolute inset-0 bg-black/5 flex items-end justify-center p-6">
+              <div className="bg-white px-6 py-4 rounded-none border border-black/10 shadow-none text-center flex flex-col gap-1 max-w-[90%] transform group-hover:scale-[1.01] transition-transform duration-300">
+                <span className="text-accent-gold font-bold text-[9px] uppercase tracking-[1.5px]">{t("portal_women_trend_desc", lang)}</span>
+                <h4 className="font-serif font-bold text-sm sm:text-base text-black uppercase tracking-[1px] leading-tight">{t("portal_women_clothing", lang)}</h4>
               </div>
             </div>
           </a>
@@ -214,21 +206,21 @@ export default function PortalView({
           {/* Card 2: Erkek Giyim */}
           <a 
             href={`/${getCategoryPrefix(lang)}/erkek-giyim/`}
-            className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
+            className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">
               <source media="(max-width: 640px)" srcSet={getLocalizedCollectionBanner("erkek").replace(".webp", "_mobile.webp")} />
               <img 
                 src={getLocalizedCollectionBanner("erkek")} 
                 alt={t("portal_men_clothing", lang)} 
-                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out" 
                 onError={handleCollectionImageError("erkek")}
               />
             </picture>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
-              <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_men_trend_desc", lang)}</span>
-                <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_men_clothing", lang)}</h4>
+            <div className="absolute inset-0 bg-black/5 flex items-end justify-center p-6">
+              <div className="bg-white px-6 py-4 rounded-none border border-black/10 shadow-none text-center flex flex-col gap-1 max-w-[90%] transform group-hover:scale-[1.01] transition-transform duration-300">
+                <span className="text-accent-gold font-bold text-[9px] uppercase tracking-[1.5px]">{t("portal_men_trend_desc", lang)}</span>
+                <h4 className="font-serif font-bold text-sm sm:text-base text-black uppercase tracking-[1px] leading-tight">{t("portal_men_clothing", lang)}</h4>
               </div>
             </div>
           </a>
@@ -236,21 +228,21 @@ export default function PortalView({
           {/* Card 3: İç Giyim */}
           <a 
             href={`/tum-urunler?q=${lang === 'tr' ? 'tayt' : 'leggings'}`}
-            className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
+            className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">
               <source media="(max-width: 640px)" srcSet={getLocalizedCollectionBanner("ic_giyim").replace(".webp", "_mobile.webp")} />
               <img 
                 src={getLocalizedCollectionBanner("ic_giyim")} 
                 alt={t("portal_lingerie", lang)} 
-                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out" 
                 onError={handleCollectionImageError("ic_giyim")}
               />
             </picture>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
-              <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_lingerie_desc", lang)}</span>
-                <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_lingerie", lang)}</h4>
+            <div className="absolute inset-0 bg-black/5 flex items-end justify-center p-6">
+              <div className="bg-white px-6 py-4 rounded-none border border-black/10 shadow-none text-center flex flex-col gap-1 max-w-[90%] transform group-hover:scale-[1.01] transition-transform duration-300">
+                <span className="text-accent-gold font-bold text-[9px] uppercase tracking-[1.5px]">{t("portal_lingerie_desc", lang)}</span>
+                <h4 className="font-serif font-bold text-sm sm:text-base text-black uppercase tracking-[1px] leading-tight">{t("portal_lingerie", lang)}</h4>
               </div>
             </div>
           </a>
@@ -258,21 +250,21 @@ export default function PortalView({
           {/* Card 4: Aksesuar */}
           <a 
             href={`/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`}
-            className="relative rounded-[15px] overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-sm select-none no-underline"
+            className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">
               <source media="(max-width: 640px)" srcSet={getLocalizedCollectionBanner("aksesuar").replace(".webp", "_mobile.webp")} />
               <img 
                 src={getLocalizedCollectionBanner("aksesuar")} 
                 alt={t("portal_accessories", lang)} 
-                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-700 ease-out" 
                 onError={handleCollectionImageError("aksesuar")}
               />
             </picture>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent flex items-end p-5 sm:p-7">
-              <div className="bg-white/90 backdrop-blur-md px-5 py-3.5 rounded-[10px] border border-white/20 shadow-md flex flex-col gap-1 max-w-[85%] transform group-hover:translate-y-[-2px] transition-transform duration-300 select-none animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <span className="text-salmon-pink font-extrabold text-[8px] sm:text-[9px] uppercase tracking-[1.5px]">{t("portal_accessories_desc", lang)}</span>
-                <h4 className="font-sans font-extrabold text-xs sm:text-sm text-eerie-black uppercase tracking-[0.5px] leading-tight">{t("portal_accessories", lang)}</h4>
+            <div className="absolute inset-0 bg-black/5 flex items-end justify-center p-6">
+              <div className="bg-white px-6 py-4 rounded-none border border-black/10 shadow-none text-center flex flex-col gap-1 max-w-[90%] transform group-hover:scale-[1.01] transition-transform duration-300">
+                <span className="text-accent-gold font-bold text-[9px] uppercase tracking-[1.5px]">{t("portal_accessories_desc", lang)}</span>
+                <h4 className="font-serif font-bold text-sm sm:text-base text-black uppercase tracking-[1px] leading-tight">{t("portal_accessories", lang)}</h4>
               </div>
             </div>
           </a>
@@ -282,17 +274,17 @@ export default function PortalView({
 
       {/* D. NEW ARRIVALS PREVIEW CAROUSEL */}
       <div className="mb-16 select-none">
-        <h3 className="font-sans font-extrabold text-xs tracking-[2px] text-eerie-black uppercase mb-8 text-center">{t("portal_new_arrivals", lang)}</h3>
+        <h3 className="font-serif font-bold text-sm tracking-[2px] text-eerie-black uppercase mb-8 text-center">{t("portal_new_arrivals", lang)}</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {portalNewArrivals.length === 0 ? (
             Array.from({ length: 4 }).map((_, idx) => (
-              <div key={idx} className="bg-white rounded-[15px] border border-cultured flex flex-col h-full overflow-hidden p-4 gap-3 animate-pulse">
-                <div className="aspect-[4/5] bg-cultured rounded-[10px] w-full" />
-                <div className="h-3 bg-cultured rounded w-1/3 mt-2" />
-                <div className="h-4 bg-cultured rounded w-3/4" />
-                <div className="h-3 bg-cultured rounded w-1/2 mt-1" />
-                <div className="h-6 bg-cultured rounded w-1/3 mt-auto" />
-                <div className="h-9 bg-cultured rounded-[8px] w-full mt-2" />
+              <div key={idx} className="bg-white rounded-none border border-cultured flex flex-col h-full overflow-hidden p-4 gap-3 animate-pulse">
+                <div className="aspect-[4/5] bg-cultured rounded-none w-full" />
+                <div className="h-3 bg-cultured rounded-none w-1/3 mt-2" />
+                <div className="h-4 bg-cultured rounded-none w-3/4" />
+                <div className="h-3 bg-cultured rounded-none w-1/2 mt-1" />
+                <div className="h-6 bg-cultured rounded-none w-1/3 mt-auto" />
+                <div className="h-9 bg-cultured rounded-none w-full mt-2" />
               </div>
             ))
           ) : (
@@ -311,13 +303,13 @@ export default function PortalView({
       </div>
 
       {/* E. BROWSE ALL CTA PANEL */}
-      <div className="bg-[#fafafa] border border-cultured rounded-[15px] p-8 md:p-12 text-center flex flex-col items-center gap-4 shadow-inner mb-6">
-        <span className="text-[10px] font-extrabold tracking-[2px] uppercase text-salmon-pink">{t("portal_explore_all_collections", lang)}</span>
-        <h3 className="font-sans font-extrabold text-xl md:text-2xl text-eerie-black max-w-md">{t("portal_all_in_one", lang)}</h3>
-        <p className="text-xs text-sonic-silver font-semibold leading-relaxed max-w-lg">{t("portal_all_in_one_desc", lang)}</p>
+      <div className="bg-[#fafafa] border border-cultured rounded-none p-8 md:p-12 text-center flex flex-col items-center gap-4 shadow-none mb-6">
+        <span className="text-[10px] font-bold tracking-[2px] uppercase text-accent-gold">{t("portal_explore_all_collections", lang)}</span>
+        <h3 className="font-serif font-bold text-xl md:text-2xl text-eerie-black max-w-md">{t("portal_all_in_one", lang)}</h3>
+        <p className="text-xs text-sonic-silver font-normal leading-relaxed max-w-lg">{t("portal_all_in_one_desc", lang)}</p>
         <a 
           href="/tum-urunler"
-          className="mt-2 px-8 py-3.5 bg-salmon-pink hover:bg-eerie-black text-white text-xs font-extrabold uppercase rounded-[5px] transition-all duration-300 tracking-[1px] border-none shadow-md cursor-pointer active:scale-98 no-underline"
+          className="mt-2 px-8 py-3.5 bg-black hover:bg-neutral-800 text-white text-xs font-bold uppercase rounded-none transition-all duration-300 tracking-[2px] border-none shadow-none cursor-pointer active:scale-98 no-underline"
         >
           {t("portal_examine_all_products", lang)}
         </a>

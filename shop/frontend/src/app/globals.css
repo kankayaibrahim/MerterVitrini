@@ -3,28 +3,28 @@
 :root {
   --spanish-gray: hsl(0, 0%, 60%);
   --sonic-silver: hsl(0, 0%, 47%);
-  --eerie-black: hsl(0, 0%, 13%);
-  --salmon-pink: hsl(353, 75%, 48%);
-  --sandy-brown: hsl(29, 90%, 65%);
-  --bittersweet: hsl(0, 100%, 70%);
+  --eerie-black: hsl(0, 0%, 11%);
+  --salmon-pink: hsl(0, 0%, 0%); /* Redefined to pure black for monochrome look */
+  --sandy-brown: hsl(25, 21%, 58%); /* Beymen-inspired gold/beige */
+  --bittersweet: hsl(0, 0%, 7%);
   --ocean-green: hsl(152, 51%, 52%);
   --davys-gray: hsl(0, 0%, 33%);
   --cultured: hsl(0, 0%, 93%);
   --white: hsl(0, 100%, 100%);
-  --onyx: hsl(0, 0%, 27%);
+  --onyx: hsl(0, 0%, 15%);
 
   --bg-dark: #ffffff;
   --bg-card: #ffffff;
   --bg-input: #ffffff;
-  --border-light: hsl(0, 0%, 93%);
-  --border-focus: hsl(353, 75%, 48%);
+  --border-light: hsl(0, 0%, 90%);
+  --border-focus: hsl(0, 0%, 0%);
   
-  --text-primary: hsl(0, 0%, 13%);
+  --text-primary: hsl(0, 0%, 11%);
   --text-secondary: hsl(0, 0%, 33%);
-  --text-muted: hsl(0, 0%, 47%);
+  --text-muted: hsl(0, 0%, 55%);
   
-  --accent-gold: hsl(353, 75%, 48%);
-  --shadow-premium: 0 5px 20px rgba(0, 0, 0, 0.05);
+  --accent-gold: hsl(25, 21%, 58%);
+  --shadow-premium: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 @theme {
@@ -50,7 +50,8 @@
   --color-cultured: var(--cultured);
   --color-onyx: var(--onyx);
 
-  --font-sans: var(--font-poppins), sans-serif;
+  --font-sans: var(--font-outfit), sans-serif;
+  --font-serif: var(--font-playfair), serif;
 }
 
 body {
