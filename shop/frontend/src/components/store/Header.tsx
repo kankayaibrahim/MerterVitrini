@@ -681,7 +681,7 @@ export default function Header({
         <div className="max-w-[1720px] mx-auto px-4 flex items-center justify-center gap-8">
           <button 
             onClick={() => {
-              router.push("/tum-urunler");
+              router.push(`/${getCategoryPrefix()}/tum-urunler`);
             }}
             className={`text-[13px] font-bold tracking-[0.5px] uppercase transition-colors border-none bg-transparent cursor-pointer relative after:absolute after:bottom-[-6px] after:left-0 after:right-0 after:h-[2px] after:bg-salmon-pink after:transition-all after:duration-200 ${
               activeCategoryId === "" 
@@ -804,7 +804,7 @@ export default function Header({
           {/* Fast Shortcut: "Tüm Ürünler" button directly next to it */}
           <button
             onClick={() => {
-              router.push("/tum-urunler");
+              router.push(`/${getCategoryPrefix()}/tum-urunler`);
               setIsMobileMenuOpen(false);
             }}
             className={`px-3 xs:px-4 py-2 rounded-xl text-xs font-extrabold transition-all border cursor-pointer select-none shrink-0 ${
@@ -834,7 +834,7 @@ export default function Header({
               <div className="py-2.5">
                 <button
                   onClick={() => {
-                    router.push("/tum-urunler");
+                    router.push(`/${getCategoryPrefix()}/tum-urunler`);
                     setIsMobileMenuOpen(false);
                   }}
                   className={`w-full text-left text-xs font-bold uppercase transition-colors border-none bg-transparent cursor-pointer ${

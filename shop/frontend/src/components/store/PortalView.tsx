@@ -53,7 +53,7 @@ export default function PortalView({
       subtitle: t("portal_slide0_subtitle", lang),
       desc: t("portal_slide0_desc", lang),
       ctaText: t("portal_slide0_cta", lang),
-      ctaUrl: "/tum-urunler",
+      ctaUrl: `/${getCategoryPrefix(lang)}/tum-urunler`,
       type: "link",
       positionClass: "object-[center_top]"
     },
@@ -86,7 +86,7 @@ export default function PortalView({
       subtitle: t("portal_slide3_subtitle", lang),
       desc: t("portal_slide3_desc", lang),
       ctaText: t("portal_slide3_cta", lang),
-      ctaUrl: `/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`,
+      ctaUrl: `/${getCategoryPrefix(lang)}/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`,
       type: "link",
       positionClass: "object-center"
     },
@@ -96,8 +96,8 @@ export default function PortalView({
       title: t("portal_daily_opportunities", lang),
       subtitle: t("portal_wholesale_opportunities", lang),
       desc: t("portal_daily_opportunities_desc", lang),
-      ctaText: lang === "tr" ? "TÜM ÜRÜNLERİ İNCELE" : "BROWSE ALL PRODUCTS",
-      ctaUrl: "/tum-urunler",
+      ctaText: t("portal_examine_all_products", lang),
+      ctaUrl: `/${getCategoryPrefix(lang)}/tum-urunler`,
       type: "link",
       positionClass: "object-center"
     },
@@ -322,7 +322,7 @@ export default function PortalView({
 
           {/* Card 3: İç Giyim */}
           <a 
-            href={`/tum-urunler?q=${lang === 'tr' ? 'tayt' : 'leggings'}`}
+            href={`/${getCategoryPrefix(lang)}/tum-urunler?q=${lang === 'tr' ? 'tayt' : 'leggings'}`}
             className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">
@@ -344,7 +344,7 @@ export default function PortalView({
 
           {/* Card 4: Aksesuar */}
           <a 
-            href={`/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`}
+            href={`/${getCategoryPrefix(lang)}/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`}
             className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">
@@ -436,7 +436,7 @@ export default function PortalView({
         <h3 className="font-serif font-bold text-xl md:text-2xl text-eerie-black max-w-md">{t("portal_all_in_one", lang)}</h3>
         <p className="text-xs text-sonic-silver font-normal leading-relaxed max-w-lg">{t("portal_all_in_one_desc", lang)}</p>
         <a 
-          href="/tum-urunler"
+          href={`/${getCategoryPrefix(lang)}/tum-urunler`}
           className="mt-2 px-8 py-3.5 bg-black hover:bg-neutral-800 text-white text-xs font-bold uppercase rounded-none transition-all duration-300 tracking-[2px] border-none shadow-none cursor-pointer active:scale-98 no-underline"
         >
           {t("portal_examine_all_products", lang)}
