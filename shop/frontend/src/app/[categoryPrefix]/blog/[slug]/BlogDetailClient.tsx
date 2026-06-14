@@ -193,6 +193,21 @@ export default function BlogDetailClient({
     });
   }
 
+  // Render function that handles both HTML and Markdown content
+  function renderContent(content: string) {
+    if (!content) return null;
+    const isHtml = content.trim().startsWith("<") && content.trim().toLowerCase().includes("</");
+    if (isHtml) {
+      return (
+        <div 
+          dangerouslySetInnerHTML={{ __html: content }} 
+          className="text-xs md:text-sm text-zinc-700 font-semibold leading-relaxed space-y-4 [&_p]:mb-4 [&_h3]:font-sans [&_h3]:font-extrabold [&_h3]:text-sm [&_h3]:md:text-base [&_h3]:text-eerie-black [&_h3]:mt-6 [&_h3]:mb-3 [&_h3]:uppercase [&_h3]:tracking-wider [&_strong]:font-extrabold [&_strong]:text-eerie-black [&_a]:text-salmon-pink [&_a]:hover:underline [&_a]:font-extrabold"
+        />
+      );
+    }
+    return renderMarkdown(content);
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-[#FDFDFD] font-sans antialiased text-onyx">
       {/* Dynamic Storefront Header */}
@@ -276,7 +291,7 @@ export default function BlogDetailClient({
 
               {/* Parsed Body Markdown */}
               <article className="max-w-none text-zinc-700 select-text">
-                {renderMarkdown(translation.content)}
+                {renderContent(translation.content)}
               </article>
             </div>
           </div>
