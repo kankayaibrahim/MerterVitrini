@@ -20,6 +20,7 @@ export function getCategoryPrefix(lang: string): string {
 export const dictionary: Record<string, Record<string, string>> = {
   tr: {
     home: "Ana Sayfa",
+    go_to_cart: "Sepetime Git",
     istanbul_wholesale: "İstanbul Merter'den Doğrudan Toptan Alım",
     about_us: "Hakkımızda",
     customer_service: "Müşteri Hizmetleri",
@@ -540,6 +541,7 @@ export const dictionary: Record<string, Record<string, string>> = {
   },
   en: {
     home: "Home",
+    go_to_cart: "Go to Cart",
     istanbul_wholesale: "Direct Wholesale Apparel from Istanbul Merter",
     remember_me: "Remember Me",
     forgot_password: "Forgot Password",
@@ -1102,6 +1104,7 @@ export const dictionary: Record<string, Record<string, string>> = {
   },
   pl: {
     home: "Strona Główna",
+    go_to_cart: "Przejdź do koszyka",
     istanbul_wholesale: "Bezpośredni hurt odzieży ze Stambułu Merter",
     "Kadın Giyim": "Odzież damska",
     "Üst Giyim": "Górna odzież",
@@ -1661,6 +1664,7 @@ export const dictionary: Record<string, Record<string, string>> = {
   },
   ar: {
     home: "الرئيسية",
+    go_to_cart: "الذهاب إلى السلة",
     istanbul_wholesale: "شراء ملابس بالجملة مباشرة من مرتر اسطنبول",
     "Kadın Giyim": "ملابس نسائية",
     "Üst Giyim": "ملابس علوية",
@@ -2231,6 +2235,7 @@ export const dictionary: Record<string, Record<string, string>> = {
   },
   ru: {
     home: "Главная",
+    go_to_cart: "Перейти в корзину",
     istanbul_wholesale: "Прямые оптовые поставки одежды из Стамбула Мертер",
     "Kadın Giyim": "Женская одежда",
     "Üst Giyim": "Верхняя одежда",
@@ -2799,6 +2804,7 @@ export const dictionary: Record<string, Record<string, string>> = {
   },
   de: {
     home: "Startseite",
+    go_to_cart: "Zum Warenkorb",
     istanbul_wholesale: "Direkter Bekleidungsgroßhandel aus Istanbul Merter",
     "Kadın Giyim": "Damenbekleidung",
     "Üst Giyim": "Oberteile",
@@ -3367,6 +3373,7 @@ export const dictionary: Record<string, Record<string, string>> = {
   },
   bg: {
     home: "Начало",
+    go_to_cart: "Отиди в количката",
     istanbul_wholesale: "Пряко изкупуване на едро от Истанбул Мертер",
     "Kadın Giyim": "Дамско облекло",
     "Üst Giyim": "Горно облекло",
@@ -3935,6 +3942,7 @@ export const dictionary: Record<string, Record<string, string>> = {
   },
   fr: {
     home: "Accueil",
+    go_to_cart: "Aller au panier",
     istanbul_wholesale: "Achat en Gros Direct de Merter Istanbul",
     remember_me: "Se souvenir de moi",
     forgot_password: "Mot de passe oublié",

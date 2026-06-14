@@ -3,7 +3,7 @@
 import React from "react";
 import { X, ShoppingBag } from "lucide-react";
 import { CartItem } from "@/types/store";
-import { t } from "@/app/i18n";
+import { t, getCategoryPrefix } from "@/app/i18n";
 import { convertPrice, getResizedImageUrl, showToast } from "@/app/utils";
 
 interface CartDrawerProps {
@@ -310,6 +310,24 @@ export default function CartDrawer({
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Wide Cart Navigation Bar */}
+              <div className="flex justify-between items-center py-2 px-1 border-b border-cultured shrink-0 mt-1 select-none">
+                <span className="text-xs font-bold text-sonic-silver">
+                  {cart.length} {lang === "tr" ? "Çeşit Ürün" : "Items"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    window.location.href = `/${getCategoryPrefix(lang)}/cart`;
+                  }}
+                  className="px-4 py-2 bg-salmon-pink text-white hover:bg-eerie-black rounded-[5px] font-extrabold text-[11px] uppercase transition-all duration-200 cursor-pointer active:scale-[0.98] flex items-center gap-1.5 shadow-sm border-none"
+                >
+                  <span>🛒</span>
+                  <span>{t("go_to_cart", lang)}</span>
+                </button>
               </div>
 
               {/* B2B Cart Totals Summary */}
