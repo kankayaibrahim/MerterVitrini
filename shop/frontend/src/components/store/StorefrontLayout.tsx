@@ -577,6 +577,12 @@ export default function StorefrontLayout({
     const updatedCart = [...cart];
     const item = updatedCart.at(index);
     if (item) {
+      if (change < 0 && item.packages_qty + change <= 0) {
+        const confirmMsg = t("remove_from_cart_confirm", lang) || "Sepetten komple kaldırılacaktır onaylıyor musunuz?";
+        if (!confirm(confirmMsg)) {
+          return;
+        }
+      }
       item.packages_qty += change;
       if (item.packages_qty <= 0) {
         updatedCart.splice(index, 1);
