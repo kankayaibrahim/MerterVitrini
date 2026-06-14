@@ -131,8 +131,15 @@ export default function PagesClient({
             </div>
 
             {/* Content body with responsive typography */}
-            <article className="prose prose-zinc max-w-none text-zinc-700 text-xs md:text-sm leading-relaxed whitespace-pre-wrap select-text">
-              {translation.content}
+            <article className="prose prose-zinc max-w-none text-zinc-700 text-xs md:text-sm leading-relaxed select-text">
+              {translation.content.trim().startsWith("<") && translation.content.trim().toLowerCase().includes("</") ? (
+                <div 
+                  dangerouslySetInnerHTML={{ __html: translation.content }} 
+                  className="space-y-4 [&_p]:mb-4 [&_h2]:font-sans [&_h2]:font-extrabold [&_h2]:text-lg [&_h2]:md:text-xl [&_h2]:text-eerie-black [&_h2]:mt-8 [&_h2]:mb-4 [&_h2]:border-b [&_h2]:border-cultured [&_h2]:pb-2 [&_strong]:font-extrabold [&_strong]:text-eerie-black [&_a]:text-salmon-pink [&_a]:hover:underline [&_a]:font-extrabold"
+                />
+              ) : (
+                <div className="whitespace-pre-wrap">{translation.content}</div>
+              )}
             </article>
           </div>
         ) : (

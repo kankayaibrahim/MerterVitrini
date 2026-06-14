@@ -94,7 +94,7 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
           </h3>
           <ul className="space-y-3 text-sm">
             <li>
-              <a href="#about" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+              <a href={`/${getCategoryPrefix(lang)}/pages/hakkimizda`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("about_us", lang)}
               </a>
             </li>
@@ -263,6 +263,12 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
             className="hover:text-black transition-colors"
           >
             {t("terms", lang)}
+          </a>
+          <a 
+            href={`/${getCategoryPrefix(lang)}/site-haritasi`} 
+            className="hover:text-black transition-colors"
+          >
+            {lang === "tr" ? "Site Haritası" : "Sitemap"}
           </a>
         </div>
       </div>
