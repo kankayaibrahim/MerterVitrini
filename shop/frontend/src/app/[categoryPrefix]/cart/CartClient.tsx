@@ -197,24 +197,25 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
           currency = item.currency || "TRY";
         }
 
-        const absoluteImgUrl = item.image_url.startsWith("http")
-          ? item.image_url
-          : `${window.location.origin}${getResizedImageUrl(item.image_url, 80, 106)}`;
+        const imgPath = getResizedImageUrl(item.image_url, 80, 106);
+        const absoluteImgUrl = imgPath.startsWith("http")
+          ? imgPath
+          : `https://mertervitrini.com.tr${imgPath.startsWith("/") ? "" : "/"}${imgPath}`;
 
         const titleText = (item.title_translations && item.title_translations[lang]) || item.title;
-        const absoluteProductUrl = `${window.location.origin}/${lang}/product/${item.slug || item.product_id}`;
+        const absoluteProductUrl = `https://mertervitrini.com.tr/product/${item.slug || item.product_id}/`;
 
         itemCols = `
-          <td style="text-align: center; vertical-align: middle; width: 80px; height: 106px;">
+          <td width="80" height="106" align="center" valign="middle" style="text-align: center; vertical-align: middle;">
             <img src="${absoluteImgUrl}" width="60" height="80" style="display: block; margin: auto;" />
           </td>
           <td style="vertical-align: middle;">${titleText}</td>
           <td style="vertical-align: middle;">${item.custom_sku}</td>
           <td style="vertical-align: middle;">${item.color}</td>
-          <td style="text-align: center; vertical-align: middle; mso-number-format:'#,##0';">${item.packages_qty}</td>
-          <td x:fmla="=E${rowNum}*${item.units_per_package}" style="text-align: center; vertical-align: middle; mso-number-format:'#,##0';">${itemTotalUnits}</td>
-          <td style="text-align: right; vertical-align: middle; mso-number-format:'#,##0.00';">${pricePerUnit.toFixed(2)}</td>
-          <td x:fmla="=F${rowNum}*G${rowNum}" style="text-align: right; vertical-align: middle; mso-number-format:'#,##0.00';">${itemTotalPrice.toFixed(2)}</td>
+          <td x:num="${item.packages_qty}" style="text-align: center; vertical-align: middle; mso-number-format:'#,##0';">${item.packages_qty}</td>
+          <td x:num="${itemTotalUnits}" x:fmla="=E${rowNum}*${item.units_per_package}" style="text-align: center; vertical-align: middle; mso-number-format:'#,##0';">${itemTotalUnits}</td>
+          <td x:num="${pricePerUnit}" style="text-align: right; vertical-align: middle; mso-number-format:'#,##0.00';">${pricePerUnit.toFixed(2)}</td>
+          <td x:num="${itemTotalPrice}" x:fmla="=F${rowNum}*G${rowNum}" style="text-align: right; vertical-align: middle; mso-number-format:'#,##0.00';">${itemTotalPrice.toFixed(2)}</td>
           <td style="text-align: center; vertical-align: middle;">${currency}</td>
           <td style="text-align: center; vertical-align: middle;">
             <a href="${absoluteProductUrl}" style="color: #0284c7; text-decoration: underline;">${lang === "tr" ? "Ürünü Aç" : "Open Product"}</a>
@@ -247,8 +248,8 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
 
         rateCols = `
           <td style="text-align: center; vertical-align: middle; font-weight: bold; background-color: #f8fafc;">${targetCurr}</td>
-          <td style="text-align: right; vertical-align: middle; mso-number-format:'#,##0.000000';">${crossRate.toFixed(6)}</td>
-          <td x:fmla="=H${grandTotalExcelRow}/M${rowNum}" style="text-align: right; vertical-align: middle; font-weight: bold; background-color: #eff6ff; mso-number-format:'#,##0.00';">${convertedVal.toFixed(2)}</td>
+          <td x:num="${crossRate}" style="text-align: right; vertical-align: middle; mso-number-format:'#,##0.000000';">${crossRate.toFixed(6)}</td>
+          <td x:num="${convertedVal}" x:fmla="=H${grandTotalExcelRow}/M${rowNum}" style="text-align: right; vertical-align: middle; font-weight: bold; background-color: #eff6ff; mso-number-format:'#,##0.00';">${convertedVal.toFixed(2)}</td>
         `;
       } else {
         rateCols = `
@@ -272,10 +273,10 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
     const grandTotalRowHtml = `
       <tr height="30" class="total-row" style="height: 30px;">
         <td colspan="4" style="text-align: right; vertical-align: middle;">${lang === "tr" ? "Genel Toplam / Grand Total:" : "Grand Total / Genel Toplam:"}</td>
-        <td x:fmla="=SUM(E2:E${maxRows + 1})" style="text-align: center; vertical-align: middle; mso-number-format:'#,##0';">${totalPkgs}</td>
-        <td x:fmla="=SUM(F2:F${maxRows + 1})" style="text-align: center; vertical-align: middle; mso-number-format:'#,##0';">${totalItemsCount}</td>
+        <td x:num="${totalPkgs}" x:fmla="=SUM(E2:E${maxRows + 1})" style="text-align: center; vertical-align: middle; mso-number-format:'#,##0';">${totalPkgs}</td>
+        <td x:num="${totalItemsCount}" x:fmla="=SUM(F2:F${maxRows + 1})" style="text-align: center; vertical-align: middle; mso-number-format:'#,##0';">${totalItemsCount}</td>
         <td></td>
-        <td x:fmla="=SUM(H2:H${maxRows + 1})" style="text-align: right; vertical-align: middle; mso-number-format:'#,##0.00';">${finalTotalPrice.toFixed(2)}</td>
+        <td x:num="${finalTotalPrice}" x:fmla="=SUM(H2:H${maxRows + 1})" style="text-align: right; vertical-align: middle; mso-number-format:'#,##0.00';">${finalTotalPrice.toFixed(2)}</td>
         <td style="text-align: center; vertical-align: middle;">${currentDisplayCurrency}</td>
         <td></td>
         <td class="spacer-cell"></td>
@@ -290,13 +291,22 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
       <head>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         <style>
+          @page {
+            mso-displayed-decimal-separator: "\\.";
+            mso-displayed-thousand-separator: "\\,";
+          }
+          table {
+            mso-displayed-decimal-separator: "\\.";
+            mso-displayed-thousand-separator: "\\,";
+            border-collapse: collapse;
+          }
           body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
-          table { border-collapse: collapse; }
           th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; font-size: 11px; }
           th { background-color: #1e293b; color: #ffffff; font-weight: bold; font-size: 11px; text-transform: uppercase; }
           .exchange-header { background-color: #0f766e; color: #ffffff; }
           .total-row td { font-weight: bold; background-color: #f8fafc; border-top: 2px solid #94a3b8; border-bottom: 2px solid #94a3b8; color: #0f172a; }
           .spacer-cell { border: none !important; background-color: transparent !important; }
+          img { max-width: 60px; max-height: 80px; display: block; margin: auto; }
         </style>
       </head>
       <body>

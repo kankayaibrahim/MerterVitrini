@@ -38,6 +38,7 @@ type CartResponseItem struct {
 	ImageUrl         string   `json:"image_url"`
 	Currency         string   `json:"currency"`
 	TitleTranslations map[string]string `json:"title_translations"`
+	Slug             string   `json:"slug"`
 }
 
 func (h *CartHandler) GetCart(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +68,8 @@ func (h *CartHandler) GetCart(w http.ResponseWriter, r *http.Request) {
 		           (SELECT json_object_agg(t.language_code, t.title)
 		            FROM catalog.product_translations t
 		            WHERE t.product_id = p.id), '{}'::json
-		       ) as translations_json
+		       ) as translations_json,
+		       p.slug
 		FROM catalog.cart_items ci
 		INNER JOIN catalog.carts c ON ci.cart_id = c.id
 		INNER JOIN catalog.products p ON ci.product_id = p.id
@@ -96,7 +98,7 @@ func (h *CartHandler) GetCart(w http.ResponseWriter, r *http.Request) {
 		err := rows.Scan(
 			&item.ID, &item.ProductID, &item.Title, &item.CustomSku, &item.Color,
 			&seriesRatio, &price, &discountedPrice, &item.Currency, &shippingWeight,
-			&quantity, &item.ImageUrl, &transBytes,
+			&quantity, &item.ImageUrl, &transBytes, &item.Slug,
 		)
 		if err != nil {
 			log.Printf("[STORE CART ERROR] Failed to scan cart row: %v", err)
