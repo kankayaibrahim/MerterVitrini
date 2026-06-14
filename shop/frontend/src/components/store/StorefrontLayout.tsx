@@ -13,6 +13,7 @@ import CartDrawer from "@/components/store/CartDrawer";
 import SuccessModal from "@/components/store/SuccessModal";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+import ConfirmModal from "@/components/store/ConfirmModal";
 
 // Modular layout view subcomponents
 import QueryParamSyncer from "@/components/store/QueryParamSyncer";
@@ -40,6 +41,7 @@ export default function StorefrontLayout({
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
   const [policyModalType, setPolicyModalType] = useState<"cancellation_and_return" | "terms_of_service" | "privacy_policy" | "">("");
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState<boolean>(false);
+  const [pendingRemove, setPendingRemove] = useState<{ index: number; change: number } | null>(null);
 
   // --- Multi-Currency States ---
   const [displayCurrency, setDisplayCurrency] = useState<string>("TRY");
@@ -578,10 +580,8 @@ export default function StorefrontLayout({
     const item = updatedCart.at(index);
     if (item) {
       if (change < 0 && item.packages_qty + change <= 0) {
-        const confirmMsg = t("remove_from_cart_confirm", lang) || "Sepetten komple kaldırılacaktır onaylıyor musunuz?";
-        if (!confirm(confirmMsg)) {
-          return;
-        }
+        setPendingRemove({ index, change });
+        return;
       }
       item.packages_qty += change;
       if (item.packages_qty <= 0) {
@@ -589,6 +589,22 @@ export default function StorefrontLayout({
       }
     }
     saveCart(updatedCart);
+  };
+
+  const confirmRemove = () => {
+    if (pendingRemove !== null) {
+      const { index, change } = pendingRemove;
+      const updatedCart = [...cart];
+      const item = updatedCart.at(index);
+      if (item) {
+        item.packages_qty += change;
+        if (item.packages_qty <= 0) {
+          updatedCart.splice(index, 1);
+        }
+      }
+      saveCart(updatedCart);
+      setPendingRemove(null);
+    }
   };
 
   const handleRemoveCartItem = (index: number) => {
@@ -834,6 +850,15 @@ export default function StorefrontLayout({
         policyType={policyModalType}
         lang={lang}
       />
+
+      {pendingRemove !== null && (
+        <ConfirmModal
+          lang={lang}
+          message={t("remove_from_cart_confirm", lang) || "Sepetten komple kaldırılacaktır onaylıyor musunuz?"}
+          onConfirm={confirmRemove}
+          onCancel={() => setPendingRemove(null)}
+        />
+      )}
 
       {/* 5. Premium Toast Notification Container */}
       <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">

@@ -10,6 +10,7 @@ import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import SuccessModal from "@/components/store/SuccessModal";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+import ConfirmModal from "@/components/store/ConfirmModal";
 
 interface CartClientProps {
   categoryPrefix: string;
@@ -37,6 +38,8 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
   const [activeCategoryId, setActiveCategoryId] = useState("");
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
   const [policyModalType, setPolicyModalType] = useState<"cancellation_and_return" | "terms_of_service" | "privacy_policy" | "">("");
+  const [pendingRemove, setPendingRemove] = useState<{ index: number; change: number } | null>(null);
+  const [pendingClearCart, setPendingClearCart] = useState<boolean>(false);
 
   // --- Multi-Currency States ---
   const [displayCurrency, setDisplayCurrency] = useState<string>("TRY");
@@ -141,10 +144,8 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
     const item = updatedCart[index];
     if (item) {
       if (change < 0 && item.packages_qty + change <= 0) {
-        const confirmMsg = t("remove_from_cart_confirm", lang) || "Sepetten komple kaldırılacaktır onaylıyor musunuz?";
-        if (!confirm(confirmMsg)) {
-          return;
-        }
+        setPendingRemove({ index, change });
+        return;
       }
       item.packages_qty += change;
       if (item.packages_qty <= 0) {
@@ -154,6 +155,22 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
     saveCart(updatedCart);
   };
 
+  const confirmRemove = () => {
+    if (pendingRemove !== null) {
+      const { index, change } = pendingRemove;
+      const updatedCart = [...cart];
+      const item = updatedCart[index];
+      if (item) {
+        item.packages_qty += change;
+        if (item.packages_qty <= 0) {
+          updatedCart.splice(index, 1);
+        }
+      }
+      saveCart(updatedCart);
+      setPendingRemove(null);
+    }
+  };
+
   const handleRemoveItem = (index: number) => {
     const updatedCart = [...cart];
     updatedCart.splice(index, 1);
@@ -161,9 +178,12 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
   };
 
   const handleClearCart = () => {
-    if (confirm(lang === "tr" ? "Sepetinizi tamamen boşaltmak istediğinize emin misiniz?" : "Are you sure you want to empty your cart?")) {
-      saveCart([]);
-    }
+    setPendingClearCart(true);
+  };
+
+  const confirmClearCart = () => {
+    saveCart([]);
+    setPendingClearCart(false);
   };
 
   const exportToExcel = async () => {
@@ -1095,6 +1115,26 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
         policyType={policyModalType}
         lang={lang}
       />
+
+      {pendingRemove !== null && (
+        <ConfirmModal
+          lang={lang}
+          message={t("remove_from_cart_confirm", lang) || "Sepetten komple kaldırılacaktır onaylıyor musunuz?"}
+          onConfirm={confirmRemove}
+          onCancel={() => setPendingRemove(null)}
+        />
+      )}
+
+      {pendingClearCart && (
+        <ConfirmModal
+          lang={lang}
+          message={lang === "tr" ? "Sepetinizi tamamen boşaltmak istediğinize emin misiniz?" : "Are you sure you want to empty your cart?"}
+          onConfirm={confirmClearCart}
+          onCancel={() => setPendingClearCart(false)}
+          confirmText={lang === "tr" ? "Sepeti Boşalt" : "Empty Cart"}
+          cancelText={lang === "tr" ? "Vazgeç" : "Cancel"}
+        />
+      )}
 
     </div>
   );

@@ -9,6 +9,7 @@ import { getUnitsFromSeriesRatio, apiFetch, convertPrice, ExchangeRate, showToas
 // Reuse the premium Tailwind storefront components
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
+import ConfirmModal from "@/components/store/ConfirmModal";
 
 // Modular sub-components
 import ProductImageGallery from "./components/ProductImageGallery";
@@ -74,6 +75,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
   const [submittingInquiry, setSubmittingInquiry] = useState<boolean>(false);
   const [whatsappUrl, setWhatsappUrl] = useState<string>("");
   const [showSuccessOverlay, setShowSuccessOverlay] = useState<boolean>(false);
+  const [pendingRemove, setPendingRemove] = useState<{ index: number; change: number } | null>(null);
   const [storeSettings, setStoreSettings] = useState<any>(null);
 
   useEffect(() => {
@@ -304,10 +306,8 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     const item = updatedCart.at(index);
     if (item) {
       if (change < 0 && item.packages_qty + change <= 0) {
-        const confirmMsg = t("remove_from_cart_confirm", lang) || "Sepetten komple kaldırılacaktır onaylıyor musunuz?";
-        if (!confirm(confirmMsg)) {
-          return;
-        }
+        setPendingRemove({ index, change });
+        return;
       }
       item.packages_qty += change;
       if (item.packages_qty <= 0) {
@@ -315,6 +315,22 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
       }
     }
     saveCart(updatedCart);
+  };
+
+  const confirmRemove = () => {
+    if (pendingRemove !== null) {
+      const { index, change } = pendingRemove;
+      const updatedCart = [...cart];
+      const item = updatedCart.at(index);
+      if (item) {
+        item.packages_qty += change;
+        if (item.packages_qty <= 0) {
+          updatedCart.splice(index, 1);
+        }
+      }
+      saveCart(updatedCart);
+      setPendingRemove(null);
+    }
   };
 
   const handleRemoveCartItem = (index: number) => {
@@ -572,6 +588,15 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
         setShowSuccessOverlay={setShowSuccessOverlay}
         whatsappUrl={whatsappUrl}
       />
+
+      {pendingRemove !== null && (
+        <ConfirmModal
+          lang={lang}
+          message={t("remove_from_cart_confirm", lang) || "Sepetten komple kaldırılacaktır onaylıyor musunuz?"}
+          onConfirm={confirmRemove}
+          onCancel={() => setPendingRemove(null)}
+        />
+      )}
     </div>
   );
 }
