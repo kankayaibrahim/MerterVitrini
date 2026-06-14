@@ -147,6 +147,13 @@ func runCronPipeline(manual bool) {
 	log.Printf("[CRON-%s] Job pipeline started (Manual: %t).", logID, manual)
 	t_start := time.Now()
 
+	type SyncedFeedInfo struct {
+		FeedID    string `json:"feed_id"`
+		FeedName  string `json:"feed_name"`
+		SyncRunID string `json:"sync_run_id"`
+	}
+	var runFeeds []SyncedFeedInfo
+
 	summary := map[string]any{
 		"manual_trigger":  manual,
 		"xml_status":      "pending",
@@ -159,6 +166,43 @@ func runCronPipeline(manual bool) {
 		if errStr != "" {
 			summary["error"] = errStr
 		}
+
+		// Dynamically query sync runs status & summary metrics
+		if len(runFeeds) > 0 {
+			feedsDetail := []map[string]any{}
+			for _, rf := range runFeeds {
+				var runStatus string
+				var runSummaryBytes []byte
+				err := db.Pool.QueryRow(ctx, `
+					SELECT status, summary 
+					FROM integration.sync_runs 
+					WHERE id = $1
+				`, rf.SyncRunID).Scan(&runStatus, &runSummaryBytes)
+
+				detail := map[string]any{
+					"feed_id":     rf.FeedID,
+					"feed_name":   rf.FeedName,
+					"sync_run_id": rf.SyncRunID,
+					"status":      "unknown",
+				}
+
+				if err == nil {
+					detail["status"] = runStatus
+					if len(runSummaryBytes) > 0 {
+						var runSummary map[string]any
+						if err := json.Unmarshal(runSummaryBytes, &runSummary); err == nil {
+							detail["items_parsed"] = runSummary["items_parsed"]
+							detail["items_added"] = runSummary["items_added"]
+							detail["items_updated"] = runSummary["items_updated"]
+							detail["errors_skipped"] = runSummary["errors_skipped"]
+						}
+					}
+				}
+				feedsDetail = append(feedsDetail, detail)
+			}
+			summary["synced_feeds"] = feedsDetail
+		}
+
 		summaryBytes, _ := json.Marshal(summary)
 		_, _ = db.Pool.Exec(ctx, `
 			UPDATE integration.cron_logs 
@@ -219,6 +263,12 @@ func runCronPipeline(manual bool) {
 			log.Printf("[CRON ERROR] Failed to create sync run for feed %s: %v", feed.ID, err)
 			continue
 		}
+
+		runFeeds = append(runFeeds, SyncedFeedInfo{
+			FeedID:    feed.ID,
+			FeedName:  feed.Name,
+			SyncRunID: runID,
+		})
 
 		// Run synchronously
 		simulateBackgroundSync(runID, ctx)

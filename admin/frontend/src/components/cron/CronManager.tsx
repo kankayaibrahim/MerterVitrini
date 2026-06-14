@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import React, { useState, useEffect, useTransition, Fragment } from "react";
 import {
   Clock,
   Play,
@@ -14,7 +14,9 @@ import {
   Sparkles,
   Image as ImageIcon,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 
 interface CronSettings {
@@ -28,6 +30,17 @@ interface CronSettings {
   last_run_status: string;
 }
 
+interface SyncedFeedDetail {
+  feed_id: string;
+  feed_name: string;
+  sync_run_id: string;
+  status: string;
+  items_parsed?: number;
+  items_added?: number;
+  items_updated?: number;
+  errors_skipped?: number;
+}
+
 interface CronLogItem {
   id: string;
   started_at: string;
@@ -39,6 +52,7 @@ interface CronLogItem {
     image_status?: string;
     translate_status?: string;
     synced_feeds_count?: number;
+    synced_feeds?: SyncedFeedDetail[];
     elapsed_time?: string;
     error?: string;
   } | null;
@@ -54,6 +68,16 @@ export default function CronManager({ apiUrl, token }: CronManagerProps) {
   const [logs, setLogs] = useState<CronLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
+
+  // Expanded logs state
+  const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
+
+  const toggleExpandLog = (id: string) => {
+    setExpandedLogs((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
 
   // Form states
   const [isActive, setIsActive] = useState(true);
@@ -495,6 +519,7 @@ export default function CronManager({ apiUrl, token }: CronManagerProps) {
           <table className="w-full border-collapse text-left">
             <thead className="bg-zinc-50 border-b border-zinc-200/60 text-zinc-500 font-extrabold text-[10px] uppercase tracking-wider sticky top-0 z-10">
               <tr>
+                <th className="w-10 py-3 px-2"></th>
                 <th className="py-3 px-4">Başlangıç Tarihi</th>
                 <th className="py-3 px-4">Bitiş Tarihi</th>
                 <th className="py-3 px-4">Süre</th>
@@ -505,90 +530,193 @@ export default function CronManager({ apiUrl, token }: CronManagerProps) {
             </thead>
             <tbody className="divide-y divide-zinc-200/50 text-xs font-semibold text-zinc-700">
               {logs.length > 0 ? (
-                logs.map((logItem) => (
-                  <tr key={logItem.id} className="hover:bg-zinc-50/50 transition-colors">
-                    <td className="py-3.5 px-4 text-zinc-800">
-                      {new Date(logItem.started_at).toLocaleString("tr-TR")}
-                    </td>
-                    <td className="py-3.5 px-4 text-zinc-500">
-                      {logItem.completed_at
-                        ? new Date(logItem.completed_at).toLocaleString("tr-TR")
-                        : "-"}
-                    </td>
-                    <td className="py-3.5 px-4 text-zinc-800">
-                      {logItem.summary?.elapsed_time || "-"}
-                    </td>
-                    <td className="py-3.5 px-4 text-zinc-600">
-                      {logItem.summary?.manual_trigger ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-bold">
-                          <Zap size={9} />
-                          Manuel
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-bold">
-                          <Clock size={9} />
-                          Otomatik
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-1.5 text-[10px]">
-                        <span className={`px-2 py-0.5 rounded-md font-bold ${
-                          logItem.summary?.xml_status === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
-                          logItem.summary?.xml_status === "failed" ? "bg-rose-50 text-rose-700 border border-rose-100" : "bg-zinc-100 text-zinc-500"
-                        }`}>
-                          XML
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-md font-bold ${
-                          logItem.summary?.image_status === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
-                          logItem.summary?.image_status === "failed" ? "bg-rose-50 text-rose-700 border border-rose-100" : "bg-zinc-100 text-zinc-500"
-                        }`}>
-                          IMAGE
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-md font-bold ${
-                          logItem.summary?.translate_status === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
-                          logItem.summary?.translate_status === "failed" ? "bg-rose-50 text-rose-700 border border-rose-100" : "bg-zinc-100 text-zinc-500"
-                        }`}>
-                          AI
-                        </span>
-                        {logItem.summary?.error && (
-                          <span className="text-rose-600 font-bold truncate max-w-xs" title={logItem.summary.error}>
-                            Hata: {logItem.summary.error}
+                logs.map((logItem) => {
+                  const isExpanded = !!expandedLogs[logItem.id];
+                  return (
+                    <Fragment key={logItem.id}>
+                      <tr className="hover:bg-zinc-50/50 transition-colors">
+                        <td className="py-3.5 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandLog(logItem.id)}
+                            className="p-1 hover:bg-zinc-100 rounded-md transition-colors text-zinc-400 hover:text-zinc-600 cursor-pointer flex items-center justify-center mx-auto"
+                          >
+                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </button>
+                        </td>
+                        <td className="py-3.5 px-4 text-zinc-800">
+                          {new Date(logItem.started_at).toLocaleString("tr-TR")}
+                        </td>
+                        <td className="py-3.5 px-4 text-zinc-500">
+                          {logItem.completed_at
+                            ? new Date(logItem.completed_at).toLocaleString("tr-TR")
+                            : "-"}
+                        </td>
+                        <td className="py-3.5 px-4 text-zinc-800">
+                          {logItem.summary?.elapsed_time || "-"}
+                        </td>
+                        <td className="py-3.5 px-4 text-zinc-600">
+                          {logItem.summary?.manual_trigger ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-bold">
+                              <Zap size={9} />
+                              Manuel
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-bold">
+                              <Clock size={9} />
+                              Otomatik
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-1.5 text-[10px]">
+                            <span className={`px-2 py-0.5 rounded-md font-bold ${
+                              logItem.summary?.xml_status === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                              logItem.summary?.xml_status === "failed" ? "bg-rose-50 text-rose-700 border border-rose-100" : "bg-zinc-100 text-zinc-500"
+                            }`}>
+                              XML
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-md font-bold ${
+                              logItem.summary?.image_status === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                              logItem.summary?.image_status === "failed" ? "bg-rose-50 text-rose-700 border border-rose-100" : "bg-zinc-100 text-zinc-500"
+                            }`}>
+                              IMAGE
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-md font-bold ${
+                              logItem.summary?.translate_status === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                              logItem.summary?.translate_status === "failed" ? "bg-rose-50 text-rose-700 border border-rose-100" : "bg-zinc-100 text-zinc-500"
+                            }`}>
+                              AI
+                            </span>
+                            {logItem.summary?.error && (
+                              <span className="text-rose-600 font-bold truncate max-w-xs" title={logItem.summary.error}>
+                                Hata: {logItem.summary.error}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                            logItem.status === "success"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                              : logItem.status === "failed"
+                              ? "bg-rose-50 text-rose-700 border-rose-100"
+                              : "bg-violet-50 text-violet-700 border-violet-100 animate-pulse"
+                          }`}>
+                            {logItem.status === "success" ? (
+                              <>
+                                <CheckCircle2 size={11} />
+                                Başarılı
+                              </>
+                            ) : logItem.status === "failed" ? (
+                              <>
+                                <XCircle size={11} />
+                                Hatalı
+                              </>
+                            ) : (
+                              <>
+                                <Loader2 size={11} className="animate-spin" />
+                                Çalışıyor
+                              </>
+                            )}
                           </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                        logItem.status === "success"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                          : logItem.status === "failed"
-                          ? "bg-rose-50 text-rose-700 border-rose-100"
-                          : "bg-violet-50 text-violet-700 border-violet-100 animate-pulse"
-                      }`}>
-                        {logItem.status === "success" ? (
-                          <>
-                            <CheckCircle2 size={11} />
-                            Başarılı
-                          </>
-                        ) : logItem.status === "failed" ? (
-                          <>
-                            <XCircle size={11} />
-                            Hatalı
-                          </>
-                        ) : (
-                          <>
-                            <Loader2 size={11} className="animate-spin" />
-                            Çalışıyor
-                          </>
-                        )}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={7} className="bg-zinc-50/60 p-4 border-b border-zinc-200/50">
+                            <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 space-y-4 shadow-sm text-xs max-w-4xl mx-auto">
+                              <h4 className="font-bold text-zinc-800 text-xs flex items-center gap-1.5 pb-2 border-b border-zinc-100 flex justify-between">
+                                <span className="flex items-center gap-1.5">
+                                  <Database size={13} className="text-violet-500" />
+                                  Detaylı Görev Raporu
+                                </span>
+                                {logItem.summary?.elapsed_time && (
+                                  <span className="text-[10px] text-zinc-400 font-bold">Toplam Süre: {logItem.summary.elapsed_time}</span>
+                                )}
+                              </h4>
+                              
+                              {/* XML Sync Details */}
+                              <div className="space-y-2">
+                                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex justify-between">
+                                  <span>XML Entegrasyon Senkronizasyonu</span>
+                                  <span>{logItem.summary?.synced_feeds_count || 0} aktif besleme</span>
+                                </div>
+                                {logItem.summary?.synced_feeds && logItem.summary.synced_feeds.length > 0 ? (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {logItem.summary.synced_feeds.map((feed) => (
+                                      <div key={feed.sync_run_id} className="p-3 bg-zinc-50 rounded-xl border border-zinc-200/50 flex flex-col gap-1.5">
+                                        <div className="flex justify-between items-center font-bold">
+                                          <span className="text-zinc-700">{feed.feed_name}</span>
+                                          <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-black tracking-wider border ${
+                                            feed.status === "success" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                            feed.status === "running" ? "bg-violet-50 text-violet-700 border-violet-100 animate-pulse" :
+                                            "bg-rose-50 text-rose-700 border-rose-100"
+                                          }`}>
+                                            {feed.status === "success" ? "Başarılı" : feed.status === "running" ? "Çalışıyor" : "Hatalı"}
+                                          </span>
+                                        </div>
+                                        {feed.status !== "failed" && (
+                                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-zinc-500 font-semibold mt-1">
+                                            <div>Ayrıştırılan: <span className="text-zinc-800 font-bold">{feed.items_parsed ?? 0}</span></div>
+                                            <div>Yeni Ürün: <span className="text-emerald-600 font-bold">{feed.items_added ?? 0}</span></div>
+                                            <div>Güncellenen: <span className="text-blue-600 font-bold">{feed.items_updated ?? 0}</span></div>
+                                            <div>Atlanan Hata: <span className="text-rose-600 font-bold">{feed.errors_skipped ?? 0}</span></div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-[11px] text-zinc-500 italic">
+                                    {logItem.summary?.xml_status === "success" 
+                                      ? "XML senkronizasyon adımı tamamlandı (detaylı feed bilgisi bulunmuyor)." 
+                                      : "XML senkronizasyon adımı detayı bulunamadı."}
+                                  </p>
+                                )}
+                              </div>
+                              
+                              {/* Other steps overview */}
+                              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-zinc-100 text-[11px]">
+                                <div>
+                                  <span className="text-zinc-400 block font-bold text-[9px] uppercase tracking-wider mb-1">Görsel Thumbnail Boyutlandırması (Resize)</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`inline-block h-2 w-2 rounded-full ${
+                                      logItem.summary?.image_status === "success" ? "bg-emerald-500" :
+                                      logItem.summary?.image_status === "failed" ? "bg-rose-500" : "bg-zinc-300"
+                                    }`} />
+                                    <span className="font-bold text-zinc-700">
+                                      {logItem.summary?.image_status === "success" ? "Başarılı" :
+                                       logItem.summary?.image_status === "failed" ? "Hatalı" :
+                                       logItem.summary?.image_status === "running" ? "Çalışıyor" : "Beklemede"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-zinc-400 block font-bold text-[9px] uppercase tracking-wider mb-1">Çok Dilli Yapay Zeka AI Çevirileri</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`inline-block h-2 w-2 rounded-full ${
+                                      logItem.summary?.translate_status === "success" ? "bg-emerald-500" :
+                                      logItem.summary?.translate_status === "failed" ? "bg-rose-500" : "bg-zinc-300"
+                                    }`} />
+                                    <span className="font-bold text-zinc-700">
+                                      {logItem.summary?.translate_status === "success" ? "Başarılı" :
+                                       logItem.summary?.translate_status === "failed" ? "Hatalı" :
+                                       logItem.summary?.translate_status === "running" ? "Çalışıyor" : "Beklemede"}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-zinc-400">
+                  <td colSpan={7} className="py-12 text-center text-zinc-400">
                     <AlertCircle size={28} className="mx-auto text-zinc-300 mb-2" />
                     <span className="font-semibold">Henüz çalışma kaydı bulunmuyor.</span>
                   </td>

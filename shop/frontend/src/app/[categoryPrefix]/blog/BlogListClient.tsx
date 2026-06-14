@@ -118,7 +118,7 @@ export default function BlogListClient({
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b border-cultured pb-8">
           <div>
             <h1 className="font-sans font-extrabold text-3xl md:text-4xl text-eerie-black leading-tight tracking-tight mb-2">
-              {lang === "tr" ? "Blog & Sektörel Rehberler" : "Blog & Industry Insights"}
+              {t("blog", lang)}
             </h1>
             <p className="text-sm text-sonic-silver font-semibold max-w-2xl leading-relaxed">
               {lang === "tr" 
