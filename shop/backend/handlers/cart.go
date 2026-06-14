@@ -1,12 +1,23 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"image"
+	"image/png"
+	_ "image/jpeg"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/xuri/excelize/v2"
+	golangDraw "golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 	"mertervitrini/shop/backend/db"
 )
 
@@ -485,4 +496,470 @@ func (h *CartHandler) SyncCart(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"success":true}`))
+}
+
+// --- Cart Excel Export ---
+
+type CartExchangeRate struct {
+	CurrencyCode string
+	BuyingRate   float64
+}
+
+type ExportCartExcelRequestItem struct {
+	ProductID         string            `json:"product_id"`
+	Title             string            `json:"title"`
+	CustomSku         string            `json:"custom_sku"`
+	Color             string            `json:"color"`
+	PackagesQty       int               `json:"packages_qty"`
+	UnitsPerPackage   int               `json:"units_per_package"`
+	PricePerUnit      float64           `json:"price_per_unit"`
+	WeightPerUnit     float64           `json:"weight_per_unit"`
+	ImageUrl          string            `json:"image_url"`
+	Currency          string            `json:"currency"`
+	Slug              string            `json:"slug"`
+	TitleTranslations map[string]string `json:"title_translations"`
+}
+
+type ExportCartExcelRequest struct {
+	Lang            string                        `json:"lang"`
+	DisplayCurrency string                        `json:"display_currency"`
+	Items           []ExportCartExcelRequestItem `json:"items"`
+}
+
+func convertPriceGo(price float64, baseCurrency string, targetCurrency string, rates []CartExchangeRate) float64 {
+	base := strings.ToUpper(baseCurrency)
+	if base == "" {
+		base = "TRY"
+	}
+	target := strings.ToUpper(targetCurrency)
+	if target == "" {
+		target = "TRY"
+	}
+	if base == target {
+		return price
+	}
+
+	// Convert base to TRY
+	priceInTRY := price
+	if base != "TRY" && base != "TL" {
+		var baseRate float64 = 1.0
+		found := false
+		for _, r := range rates {
+			if strings.ToUpper(r.CurrencyCode) == base {
+				baseRate = r.BuyingRate
+				found = true
+				break
+			}
+		}
+		if found && baseRate > 0 {
+			priceInTRY = price * baseRate
+		}
+	}
+
+	// Convert TRY to target
+	if target == "TRY" || target == "TL" {
+		return priceInTRY
+	}
+
+	var targetRate float64 = 1.0
+	found := false
+	for _, r := range rates {
+		if strings.ToUpper(r.CurrencyCode) == target {
+			targetRate = r.BuyingRate
+			found = true
+			break
+		}
+	}
+	if found && targetRate > 0 {
+		return priceInTRY / targetRate
+	}
+
+	return price
+}
+
+func resizeToPNGBytes(imgPath string, maxW, maxH int) ([]byte, int, int, error) {
+	file, err := os.Open(imgPath)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	defer file.Close()
+
+	srcImg, _, err := image.Decode(file)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	bounds := srcImg.Bounds()
+	w, h := bounds.Dx(), bounds.Dy()
+
+	scale := 1.0
+	if w > maxW || h > maxH {
+		scaleW := float64(maxW) / float64(w)
+		scaleH := float64(maxH) / float64(h)
+		if scaleW < scaleH {
+			scale = scaleW
+		} else {
+			scale = scaleH
+		}
+	}
+
+	newW := int(float64(w) * scale)
+	newH := int(float64(h) * scale)
+	if newW <= 0 {
+		newW = 1
+	}
+	if newH <= 0 {
+		newH = 1
+	}
+
+	dstImg := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	golangDraw.CatmullRom.Scale(dstImg, dstImg.Bounds(), srcImg, srcImg.Bounds(), golangDraw.Over, nil)
+
+	var buf bytes.Buffer
+	err = png.Encode(&buf, dstImg)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	return buf.Bytes(), newW, newH, nil
+}
+
+func (h *CartHandler) ExportExcel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ExportCartExcelRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+
+	// 1. Fetch exchange rates
+	var rates []CartExchangeRate
+	rateRows, err := db.Pool.Query(ctx, "SELECT currency_code, buying_rate FROM catalog.exchange_rates")
+	if err == nil {
+		defer rateRows.Close()
+		for rateRows.Next() {
+			var rt CartExchangeRate
+			if errScan := rateRows.Scan(&rt.CurrencyCode, &rt.BuyingRate); errScan == nil {
+				rates = append(rates, rt)
+			}
+		}
+	}
+
+
+
+	// 2. Setup excelize file
+	f := excelize.NewFile()
+	defer f.Close()
+
+	sheetName := "Sheet1"
+	
+	// Create Styles
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#1E293B"}, Pattern: 1},
+		Font: &excelize.Font{Bold: true, Size: 10, Color: "#FFFFFF", Family: "Segoe UI"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+		Border: []excelize.Border{
+			{Type: "left", Color: "#cbd5e1", Style: 1},
+			{Type: "right", Color: "#cbd5e1", Style: 1},
+			{Type: "top", Color: "#cbd5e1", Style: 1},
+			{Type: "bottom", Color: "#cbd5e1", Style: 1},
+		},
+	})
+
+	// Removed unused exchangeHeaderStyle
+
+	textStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Size: 10, Family: "Segoe UI"},
+		Alignment: &excelize.Alignment{Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "left", Color: "#cbd5e1", Style: 1},
+			{Type: "right", Color: "#cbd5e1", Style: 1},
+			{Type: "top", Color: "#cbd5e1", Style: 1},
+			{Type: "bottom", Color: "#cbd5e1", Style: 1},
+		},
+	})
+
+	centerStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Size: 10, Family: "Segoe UI"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "left", Color: "#cbd5e1", Style: 1},
+			{Type: "right", Color: "#cbd5e1", Style: 1},
+			{Type: "top", Color: "#cbd5e1", Style: 1},
+			{Type: "bottom", Color: "#cbd5e1", Style: 1},
+		},
+	})
+
+	intStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Size: 10, Family: "Segoe UI"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		CustomNumFmt: &[]string{"#,##0"}[0],
+		Border: []excelize.Border{
+			{Type: "left", Color: "#cbd5e1", Style: 1},
+			{Type: "right", Color: "#cbd5e1", Style: 1},
+			{Type: "top", Color: "#cbd5e1", Style: 1},
+			{Type: "bottom", Color: "#cbd5e1", Style: 1},
+		},
+	})
+
+	floatStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Size: 10, Family: "Segoe UI"},
+		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"},
+		CustomNumFmt: &[]string{"#,##0.00"}[0],
+		Border: []excelize.Border{
+			{Type: "left", Color: "#cbd5e1", Style: 1},
+			{Type: "right", Color: "#cbd5e1", Style: 1},
+			{Type: "top", Color: "#cbd5e1", Style: 1},
+			{Type: "bottom", Color: "#cbd5e1", Style: 1},
+		},
+	})
+
+	// Removed unused exchangeRateStyle and convertedRateStyle
+
+	totalTextStyle, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#F8FAFC"}, Pattern: 1},
+		Font: &excelize.Font{Bold: true, Size: 10, Color: "#0F172A", Family: "Segoe UI"},
+		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "left", Color: "#94a3b8", Style: 1},
+			{Type: "right", Color: "#94a3b8", Style: 1},
+			{Type: "top", Color: "#94a3b8", Style: 2},
+			{Type: "bottom", Color: "#94a3b8", Style: 2},
+		},
+	})
+
+	totalIntStyle, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#F8FAFC"}, Pattern: 1},
+		Font: &excelize.Font{Bold: true, Size: 10, Color: "#0F172A", Family: "Segoe UI"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		CustomNumFmt: &[]string{"#,##0"}[0],
+		Border: []excelize.Border{
+			{Type: "left", Color: "#94a3b8", Style: 1},
+			{Type: "right", Color: "#94a3b8", Style: 1},
+			{Type: "top", Color: "#94a3b8", Style: 2},
+			{Type: "bottom", Color: "#94a3b8", Style: 2},
+		},
+	})
+
+	totalFloatStyle, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#F8FAFC"}, Pattern: 1},
+		Font: &excelize.Font{Bold: true, Size: 10, Color: "#0F172A", Family: "Segoe UI"},
+		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"},
+		CustomNumFmt: &[]string{"#,##0.00"}[0],
+		Border: []excelize.Border{
+			{Type: "left", Color: "#94a3b8", Style: 1},
+			{Type: "right", Color: "#94a3b8", Style: 1},
+			{Type: "top", Color: "#94a3b8", Style: 2},
+			{Type: "bottom", Color: "#94a3b8", Style: 2},
+		},
+	})
+
+	linkStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Size: 10, Color: "#0284C7", Underline: "single", Family: "Segoe UI"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "left", Color: "#cbd5e1", Style: 1},
+			{Type: "right", Color: "#cbd5e1", Style: 1},
+			{Type: "top", Color: "#cbd5e1", Style: 1},
+			{Type: "bottom", Color: "#cbd5e1", Style: 1},
+		},
+	})
+
+	// Set Col Widths
+	widths := map[string]float64{
+		"A": 18, // Image (wider for larger image)
+		"B": 45, // Description
+		"C": 18, // SKU
+		"D": 15, // Color
+		"E": 12, // Packages
+		"F": 12, // Pieces
+		"G": 16, // Unit Price
+		"H": 18, // Total
+		"I": 12, // Currency
+		"J": 22, // Link
+	}
+	for col, w := range widths {
+		f.SetColWidth(sheetName, col, col, w)
+	}
+
+	// Set Row 1 Height
+	f.SetRowHeight(sheetName, 1, 35)
+
+	// Write Headers
+	headers := []string{
+		"Ürün Resmi / Product Image",
+		"Ürün Açıklaması / Product Description",
+		"SKU / Kod / SKU / Code",
+		"Renk / Color",
+		"Paket / Packages",
+		"Adet / Pieces",
+		"Birim Fiyat / Unit Price",
+		"Toplam / Total",
+		"Para Birimi / Currency",
+		"Ürün Linki / Product Link",
+	}
+
+	for i, hText := range headers {
+		colName, _ := excelize.ColumnNumberToName(i + 1)
+		cell := colName + "1"
+		f.SetCellValue(sheetName, cell, hText)
+		f.SetCellStyle(sheetName, cell, cell, headerStyle)
+	}
+
+	// Enable AutoFilter on A1:J1
+	f.AutoFilter(sheetName, "A1:J1", nil)
+
+	// Data loop preparation
+	maxRows := len(req.Items)
+	grandTotalRow := maxRows + 2
+
+	currentDisplayCurrency := req.DisplayCurrency
+	if currentDisplayCurrency == "" {
+		currentDisplayCurrency = "TRY"
+	}
+
+	mediaDir := getMediaDir()
+
+	// Write rows
+	for idx := 0; idx < maxRows; idx++ {
+		rNum := idx + 2
+		f.SetRowHeight(sheetName, rNum, 85)
+
+		// A. Item columns
+		if idx < len(req.Items) {
+			item := req.Items[idx]
+
+			// Determine title translations
+			titleText := item.Title
+			if item.TitleTranslations != nil && item.TitleTranslations[req.Lang] != "" {
+				titleText = item.TitleTranslations[req.Lang]
+			}
+
+			// Format image path
+			var imageBytes []byte
+			var newW, newH int
+			if strings.HasPrefix(item.ImageUrl, "/uploads/") {
+				rel := strings.TrimPrefix(item.ImageUrl, "/uploads/")
+				imgPath := filepath.Join(mediaDir, rel)
+				if _, errStat := os.Stat(imgPath); errStat == nil {
+					// Resize and convert WebP/JPEG/PNG to PNG bytes fit within 105x110
+					// Row height is 85pt = 113px, Col A width is 18 = 144px.
+					if b, nw, nh, errResize := resizeToPNGBytes(imgPath, 105, 110); errResize == nil {
+						imageBytes = b
+						newW = nw
+						newH = nh
+					}
+				}
+			}
+
+			// Format prices
+			currency := currentDisplayCurrency
+			var pricePerUnit float64
+			
+			if req.DisplayCurrency != "" && len(rates) > 0 {
+				pricePerUnit = convertPriceGo(item.PricePerUnit, item.Currency, req.DisplayCurrency, rates)
+			} else {
+				pricePerUnit = item.PricePerUnit
+				if item.Currency != "" {
+					currency = item.Currency
+				}
+			}
+
+			// Write standard values
+			f.SetCellValue(sheetName, fmt.Sprintf("B%d", rNum), titleText)
+			f.SetCellValue(sheetName, fmt.Sprintf("C%d", rNum), item.CustomSku)
+			f.SetCellValue(sheetName, fmt.Sprintf("D%d", rNum), item.Color)
+			f.SetCellValue(sheetName, fmt.Sprintf("E%d", rNum), item.PackagesQty)
+			
+			// Formulas
+			f.SetCellFormula(sheetName, fmt.Sprintf("F%d", rNum), fmt.Sprintf("=E%d*%d", rNum, item.UnitsPerPackage))
+			f.SetCellValue(sheetName, fmt.Sprintf("G%d", rNum), pricePerUnit)
+			f.SetCellFormula(sheetName, fmt.Sprintf("H%d", rNum), fmt.Sprintf("=F%d*G%d", rNum, rNum))
+			f.SetCellValue(sheetName, fmt.Sprintf("I%d", rNum), currency)
+
+			// Links
+			openText := "Open Product"
+			if req.Lang == "tr" {
+				openText = "Ürünü Aç"
+			}
+			absoluteUrl := fmt.Sprintf("https://mertervitrini.com.tr/product/%s/", item.Slug)
+			if item.Slug == "" {
+				absoluteUrl = fmt.Sprintf("https://mertervitrini.com.tr/product/%s/", item.ProductID)
+			}
+			f.SetCellHyperLink(sheetName, fmt.Sprintf("J%d", rNum), absoluteUrl, "External")
+			f.SetCellValue(sheetName, fmt.Sprintf("J%d", rNum), openText)
+
+			// Apply cell styles
+			f.SetCellStyle(sheetName, fmt.Sprintf("A%d", rNum), fmt.Sprintf("A%d", rNum), centerStyle)
+			f.SetCellStyle(sheetName, fmt.Sprintf("B%d", rNum), fmt.Sprintf("B%d", rNum), textStyle)
+			f.SetCellStyle(sheetName, fmt.Sprintf("C%d", rNum), fmt.Sprintf("C%d", rNum), centerStyle)
+			f.SetCellStyle(sheetName, fmt.Sprintf("D%d", rNum), fmt.Sprintf("D%d", rNum), centerStyle)
+			f.SetCellStyle(sheetName, fmt.Sprintf("E%d", rNum), fmt.Sprintf("E%d", rNum), intStyle)
+			f.SetCellStyle(sheetName, fmt.Sprintf("F%d", rNum), fmt.Sprintf("F%d", rNum), intStyle)
+			f.SetCellStyle(sheetName, fmt.Sprintf("G%d", rNum), fmt.Sprintf("G%d", rNum), floatStyle)
+			f.SetCellStyle(sheetName, fmt.Sprintf("H%d", rNum), fmt.Sprintf("H%d", rNum), floatStyle)
+			f.SetCellStyle(sheetName, fmt.Sprintf("I%d", rNum), fmt.Sprintf("I%d", rNum), centerStyle)
+			f.SetCellStyle(sheetName, fmt.Sprintf("J%d", rNum), fmt.Sprintf("J%d", rNum), linkStyle)
+
+			// Embed image if bytes are available
+			if imageBytes != nil {
+				cell := fmt.Sprintf("A%d", rNum)
+				offsetX := (144 - newW) / 2
+				offsetY := (113 - newH) / 2
+				if offsetX < 0 { offsetX = 0 }
+				if offsetY < 0 { offsetY = 0 }
+
+				f.AddPictureFromBytes(sheetName, cell, &excelize.Picture{
+					Extension: ".png",
+					File:      imageBytes,
+					Format: &excelize.GraphicOptions{
+						OffsetX:     offsetX,
+						OffsetY:     offsetY,
+						Positioning: "oneCell",
+					},
+				})
+			}
+		} else {
+			for _, col := range []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"} {
+				f.SetCellStyle(sheetName, fmt.Sprintf("%s%d", col, rNum), fmt.Sprintf("%s%d", col, rNum), textStyle)
+			}
+		}
+	}
+
+	// 3. Grand Total Row
+	f.SetRowHeight(sheetName, grandTotalRow, 30)
+
+	totalLabel := "Grand Total / Genel Toplam:"
+	if req.Lang == "tr" {
+		totalLabel = "Genel Toplam / Grand Total:"
+	}
+	f.MergeCell(sheetName, fmt.Sprintf("A%d", grandTotalRow), fmt.Sprintf("D%d", grandTotalRow))
+	f.SetCellValue(sheetName, fmt.Sprintf("A%d", grandTotalRow), totalLabel)
+
+	f.SetCellFormula(sheetName, fmt.Sprintf("E%d", grandTotalRow), fmt.Sprintf("=SUM(E2:E%d)", maxRows+1))
+	f.SetCellFormula(sheetName, fmt.Sprintf("F%d", grandTotalRow), fmt.Sprintf("=SUM(F2:F%d)", maxRows+1))
+	f.SetCellFormula(sheetName, fmt.Sprintf("H%d", grandTotalRow), fmt.Sprintf("=SUM(H2:H%d)", maxRows+1))
+
+	// Apply Styles to Grand Total Row (Only A to J)
+	f.SetCellStyle(sheetName, fmt.Sprintf("A%d", grandTotalRow), fmt.Sprintf("D%d", grandTotalRow), totalTextStyle)
+	f.SetCellStyle(sheetName, fmt.Sprintf("E%d", grandTotalRow), fmt.Sprintf("E%d", grandTotalRow), totalIntStyle)
+	f.SetCellStyle(sheetName, fmt.Sprintf("F%d", grandTotalRow), fmt.Sprintf("F%d", grandTotalRow), totalIntStyle)
+	f.SetCellStyle(sheetName, fmt.Sprintf("G%d", grandTotalRow), fmt.Sprintf("G%d", grandTotalRow), totalTextStyle)
+	f.SetCellStyle(sheetName, fmt.Sprintf("H%d", grandTotalRow), fmt.Sprintf("H%d", grandTotalRow), totalFloatStyle)
+	f.SetCellStyle(sheetName, fmt.Sprintf("I%d", grandTotalRow), fmt.Sprintf("I%d", grandTotalRow), totalTextStyle)
+	f.SetCellStyle(sheetName, fmt.Sprintf("J%d", grandTotalRow), fmt.Sprintf("J%d", grandTotalRow), totalTextStyle)
+
+	// Stream file
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=sepet-%s.xlsx", time.Now().Format("2006-01-02")))
+
+	if err := f.Write(w); err != nil {
+		log.Printf("[STORE CART ERROR] Failed to write XLSX: %v", err)
+	}
 }
