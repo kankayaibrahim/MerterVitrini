@@ -160,19 +160,17 @@ export default function SitemapClient({
         {/* Page Title */}
         <div className="border-b border-cultured pb-6 mb-10 flex flex-col gap-2">
           <h1 className="font-sans font-extrabold text-2xl md:text-3xl text-eerie-black leading-tight tracking-tight uppercase">
-            {lang === "tr" ? "Site Haritası" : "Sitemap"}
+            {t("sitemap_title", lang)}
           </h1>
           <p className="text-xs text-sonic-silver font-semibold leading-relaxed max-w-2xl">
-            {lang === "tr" 
-              ? "Merter Vitrini B2B toptan hazır giyim platformumuzun tüm kategori, blog ve kurumsal sayfalarının güncel listesi."
-              : "Complete hierarchy and list of categories, sourcing blogs, and corporate content of our B2B wholesale clothing platform."}
+            {t("sitemap_desc", lang)}
           </p>
         </div>
 
         {/* Section 1: Dynamic Categories Tree */}
         <div className="space-y-6">
           <h2 className="text-xs font-extrabold uppercase tracking-[2px] text-zinc-400 border-b border-cultured pb-3">
-            {lang === "tr" ? "Ürün Kategorileri" : "Product Categories"}
+            {t("sitemap_categories", lang)}
           </h2>
           {renderCategoryTree(categories)}
         </div>
@@ -184,7 +182,7 @@ export default function SitemapClient({
           <div className="border border-cultured p-6 bg-white space-y-4 hover:border-accent-gold transition-colors rounded-none">
             <h3 className="text-xs font-extrabold uppercase tracking-[2px] text-eerie-black border-b border-cultured pb-2 flex items-center gap-2">
               <Compass size={14} className="text-accent-gold shrink-0" />
-              <span>{lang === "tr" ? "Genel Sayfalar" : "General Pages"}</span>
+              <span>{t("sitemap_general_pages", lang)}</span>
             </h3>
             <ul className="space-y-2.5 text-xs font-bold text-zinc-700">
               <li>
@@ -209,7 +207,7 @@ export default function SitemapClient({
           <div className="border border-cultured p-6 bg-white space-y-4 hover:border-accent-gold transition-colors rounded-none">
             <h3 className="text-xs font-extrabold uppercase tracking-[2px] text-eerie-black border-b border-cultured pb-2 flex items-center gap-2">
               <BookOpen size={14} className="text-accent-gold shrink-0" />
-              <span>{lang === "tr" ? "Tedarik Rehberleri & Blog" : "Sourcing Guides & Blog"}</span>
+              <span>{t("sitemap_sourcing_guides", lang)}</span>
             </h3>
             <ul className="space-y-2.5 text-xs font-semibold text-zinc-600">
               {blogPosts.length === 0 ? (
@@ -233,7 +231,7 @@ export default function SitemapClient({
           <div className="border border-cultured p-6 bg-white space-y-4 hover:border-accent-gold transition-colors rounded-none">
             <h3 className="text-xs font-extrabold uppercase tracking-[2px] text-eerie-black border-b border-cultured pb-2 flex items-center gap-2">
               <Info size={14} className="text-accent-gold shrink-0" />
-              <span>{lang === "tr" ? "Kurumsal & Bilgi" : "Corporate & Agreements"}</span>
+              <span>{t("sitemap_corporate", lang)}</span>
             </h3>
             <ul className="space-y-2.5 text-xs font-bold text-zinc-700">
               <li>

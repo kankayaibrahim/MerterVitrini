@@ -49,12 +49,10 @@ export default function PortalView({
     {
       id: 0,
       bannerKey: "hero_new_season",
-      title: lang === "tr" ? "AKDENİZ ZARAFETİ" : "MEDITERRANEAN ELEGANCE",
-      subtitle: lang === "tr" ? "YENİ SEZON KOLEKSİYONU" : "NEW SEASON COLLECTION",
-      desc: lang === "tr" 
-        ? "Akdeniz'in akıcı silüetlerinden ilham alan tasarım elbiseler ve toptan hazır giyim kreasyonları showroomlarda." 
-        : "Design dresses and wholesale ready-to-wear creations inspired by the fluid silouettes of the Mediterranean.",
-      ctaText: lang === "tr" ? "ALIŞVERİŞE BAŞLA" : "SHOP NOW",
+      title: t("portal_slide0_title", lang),
+      subtitle: t("portal_slide0_subtitle", lang),
+      desc: t("portal_slide0_desc", lang),
+      ctaText: t("portal_slide0_cta", lang),
       ctaUrl: "/tum-urunler",
       type: "link",
       positionClass: "object-[center_top]"
@@ -62,12 +60,10 @@ export default function PortalView({
     {
       id: 1,
       bannerKey: "hero_women_collection",
-      title: lang === "tr" ? "KADIN KOLEKSİYONU" : "WOMEN COLLECTION",
-      subtitle: lang === "tr" ? "SADE VE SEÇKİN" : "PURE LUXURY ESSENTIALS",
-      desc: lang === "tr"
-        ? "En seçkin üreticilerden lüks, minimalist kesimli toptan kadın hazır giyim koleksiyonlarını keşfedin."
-        : "Discover luxury, minimalist cut wholesale women's apparel collections directly from selective manufacturers.",
-      ctaText: lang === "tr" ? "KADIN GİYİMİNİ KEŞFET" : "EXPLORE WOMEN WEAR",
+      title: t("portal_slide1_title", lang),
+      subtitle: t("portal_slide1_subtitle", lang),
+      desc: t("portal_slide1_desc", lang),
+      ctaText: t("portal_slide1_cta", lang),
       ctaUrl: `/${getCategoryPrefix(lang)}/kadin-giyim/`,
       type: "link",
       positionClass: "object-[35%_top]"
@@ -75,12 +71,10 @@ export default function PortalView({
     {
       id: 2,
       bannerKey: "hero_men_collection",
-      title: lang === "tr" ? "ERKEK KOLEKSİYONU" : "MEN COLLECTION",
-      subtitle: lang === "tr" ? "PREMIUM KETEN DOKULAR" : "PREMIUM LINEN TEXTURES",
-      desc: lang === "tr"
-        ? "Yeni sezonda rahatlık ve İtalyan şıklığını bir arada sunan toptan erkek giyim koleksiyonları."
-        : "Wholesale men's wear collections bringing comfort and Italian elegance together for the new season.",
-      ctaText: lang === "tr" ? "ERKEK GİYİMİNİ İNCELE" : "BROWSE MEN WEAR",
+      title: t("portal_slide2_title", lang),
+      subtitle: t("portal_slide2_subtitle", lang),
+      desc: t("portal_slide2_desc", lang),
+      ctaText: t("portal_slide2_cta", lang),
       ctaUrl: `/${getCategoryPrefix(lang)}/erkek-giyim/`,
       type: "link",
       positionClass: "object-[center_top]"
@@ -88,12 +82,10 @@ export default function PortalView({
     {
       id: 3,
       bannerKey: "hero_accessories",
-      title: lang === "tr" ? "LÜKS AKSESUARLAR" : "LUXURY ACCESSORIES",
-      subtitle: lang === "tr" ? "ÇANTA, GÖZLÜK & DETAYLAR" : "BAGS, SUNGLASSES & DETAILS",
-      desc: lang === "tr"
-        ? "Kombinleri tamamlayan hakiki deri çanta modelleri ve şık aksesuarlarda en trend toptan ürün grupları."
-        : "The most trending wholesale collections of genuine leather bags and elegant accessories to complete outfits.",
-      ctaText: lang === "tr" ? "AKSESUARLARI KEŞFET" : "EXPLORE ACCESSORIES",
+      title: t("portal_slide3_title", lang),
+      subtitle: t("portal_slide3_subtitle", lang),
+      desc: t("portal_slide3_desc", lang),
+      ctaText: t("portal_slide3_cta", lang),
       ctaUrl: `/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`,
       type: "link",
       positionClass: "object-center"
@@ -408,32 +400,32 @@ export default function PortalView({
       {/* Popüler Aramalar / Popular Searches (SEO Internal Linking Row) */}
       <div className="mb-12 text-center select-none border-t border-b border-cultured py-8">
         <h4 className="font-serif font-bold text-[11px] tracking-[2px] text-sonic-silver uppercase mb-4">
-          {lang === "tr" ? "POPÜLER B2B TOPTAN ARAMALARI" : "POPULAR WHOLESALE B2B SEARCHES"}
+          {t("portal_popular_searches_title", lang)}
         </h4>
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 max-w-2xl mx-auto px-4">
           <a
             href={`/${getCategoryPrefix(lang)}/kadin-giyim/elbise-abiye/elbise/`}
             className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
           >
-            {lang === "tr" ? "Toptan Kadın Elbise Modelleri" : "Wholesale Women Dresses"}
+            {t("portal_popular_searches_link1", lang)}
           </a>
           <a
             href={`/${getCategoryPrefix(lang)}/kadin-giyim/elbise-abiye/elbise/jaguar-elbise/`}
             className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
           >
-            {lang === "tr" ? "Jaguar Elbise" : "Jaguar Dress"}
+            {t("portal_popular_searches_link2", lang)}
           </a>
           <a
             href={`/${getCategoryPrefix(lang)}/kadin-giyim/ust-giyim/bustiyer/`}
             className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
           >
-            {lang === "tr" ? "Toptan Büstiyer" : "Wholesale Bustiers"}
+            {t("portal_popular_searches_link3", lang)}
           </a>
           <a
             href={`/${getCategoryPrefix(lang)}/erkek-giyim/`}
             className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
           >
-            {lang === "tr" ? "Merter Toptan Erkek Giyim" : "Merter Wholesale Men Clothing"}
+            {t("portal_popular_searches_link4", lang)}
           </a>
         </div>
       </div>

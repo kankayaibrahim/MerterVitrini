@@ -22,6 +22,14 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
   // --- Core States ---
   const [lang, setLang] = useState<string>(categoryPrefix || "tr");
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  // Sync lang to document element for correct localization context (preventing Turkish localized forms on English text)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      document.documentElement.setAttribute("lang", lang);
+    }
+  }, [lang]);
+
   const [isLangOpen, setIsLangOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -150,6 +158,103 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
     if (confirm(lang === "tr" ? "Sepetinizi tamamen boşaltmak istediğinize emin misiniz?" : "Are you sure you want to empty your cart?")) {
       saveCart([]);
     }
+  };
+
+  const exportToExcel = () => {
+    if (cart.length === 0) return;
+
+    let itemsHtml = "";
+    cart.forEach((item) => {
+      const itemTotalUnits = item.packages_qty * item.units_per_package;
+      const rawItemPricePerUnit = item.price_per_unit;
+      const rawItemTotalPrice = itemTotalUnits * rawItemPricePerUnit;
+
+      let pricePerUnit = rawItemPricePerUnit;
+      let itemTotalPrice = rawItemTotalPrice;
+      let currency = displayCurrency || "TRY";
+
+      if (displayCurrency && exchangeRates && exchangeRates.length > 0) {
+        pricePerUnit = convertPrice(rawItemPricePerUnit, item.currency || "TRY", displayCurrency, exchangeRates);
+        itemTotalPrice = convertPrice(rawItemTotalPrice, item.currency || "TRY", displayCurrency, exchangeRates);
+      } else {
+        currency = item.currency || "TRY";
+      }
+
+      // Generate absolute image URL for Excel to download and render
+      const absoluteImgUrl = item.image_url.startsWith("http")
+        ? item.image_url
+        : `${window.location.origin}${getResizedImageUrl(item.image_url, 80, 106)}`;
+
+      const titleText = (item.title_translations && item.title_translations[lang]) || item.title;
+
+      itemsHtml += `
+        <tr>
+          <td style="text-align: center; vertical-align: middle; width: 80px; height: 106px;">
+            <img src="${absoluteImgUrl}" width="60" height="80" style="display: block; margin: auto;" />
+          </td>
+          <td style="vertical-align: middle;">${titleText}</td>
+          <td style="vertical-align: middle;">${item.custom_sku}</td>
+          <td style="vertical-align: middle;">${item.color}</td>
+          <td style="text-align: center; vertical-align: middle;">${item.packages_qty}</td>
+          <td style="text-align: center; vertical-align: middle;">${itemTotalUnits} (${item.units_per_package} Adet/Pkt)</td>
+          <td style="text-align: right; vertical-align: middle;">${pricePerUnit.toFixed(2)} ${currency}</td>
+          <td style="text-align: right; vertical-align: middle;">${itemTotalPrice.toFixed(2)} ${currency}</td>
+        </tr>
+      `;
+    });
+
+    const excelHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; }
+          table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+          th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+          th { background-color: #f5f5f5; font-weight: bold; }
+          .title { font-size: 20px; font-weight: bold; color: #1e3a8a; margin-bottom: 15px; }
+          .section-header { font-size: 14px; font-weight: bold; background-color: #eff6ff; color: #1e40af; }
+          .total-row { font-weight: bold; background-color: #f8fafc; color: #0f172a; }
+        </style>
+      </head>
+      <body>
+        <div class="title">${lang === "tr" ? "Müşteri Sipariş Teklifi (B2B Proforma)" : "Customer Order Quote (B2B Proforma)"}</div>
+        <table>
+          <thead>
+            <tr class="section-header">
+              <th style="width: 12%; text-align: center;">${lang === "tr" ? "Ürün Resmi" : "Product Image"}</th>
+              <th style="width: 35%;">${lang === "tr" ? "Ürün Açıklaması" : "Product Name"}</th>
+              <th style="width: 15%;">${lang === "tr" ? "SKU / Kod" : "SKU"}</th>
+              <th style="width: 10%;">${lang === "tr" ? "Renk" : "Color"}</th>
+              <th style="width: 8%; text-align: center;">${lang === "tr" ? "Paket" : "Packages"}</th>
+              <th style="width: 10%; text-align: center;">${lang === "tr" ? "Adet" : "Pieces"}</th>
+              <th style="width: 10%; text-align: right;">${lang === "tr" ? "Birim Fiyat" : "Unit Price"}</th>
+              <th style="width: 12%; text-align: right;">${lang === "tr" ? "Toplam" : "Total"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+            <tr class="total-row">
+              <td colspan="4" style="text-align: right; vertical-align: middle;">${lang === "tr" ? "Genel Toplam:" : "Grand Total:"}</td>
+              <td style="text-align: center; vertical-align: middle;">${totalPkgs}</td>
+              <td style="text-align: center; vertical-align: middle;">${totalItemsCount} ${lang === "tr" ? "Adet" : "pcs"}</td>
+              <td></td>
+              <td style="text-align: right; vertical-align: middle;">${finalTotalPrice.toFixed(2)} ${displayCurrency}</td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `sepet-${new Date().toISOString().split("T")[0]}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // --- Calculations ---
@@ -423,13 +528,23 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
             </div>
           </div>
           {cart.length > 0 && (
-            <button
-              onClick={handleClearCart}
-              className="text-xs font-bold text-red-500 hover:text-red-700 bg-transparent border-none cursor-pointer flex items-center gap-1.5 self-start md:self-auto transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>{lang === "tr" ? "Sepeti Boşalt" : "Empty Cart"}</span>
-            </button>
+            <div className="flex items-center gap-4.5 self-start md:self-auto select-none">
+              <button
+                onClick={exportToExcel}
+                className="text-xs font-extrabold text-accent-gold hover:text-eerie-black bg-transparent border-none cursor-pointer flex items-center gap-1.5 transition-colors"
+              >
+                <span>📥</span>
+                <span>{lang === "tr" ? "Excel Olarak İndir" : "Export to Excel"}</span>
+              </button>
+              <span className="text-cultured">|</span>
+              <button
+                onClick={handleClearCart}
+                className="text-xs font-extrabold text-red-500 hover:text-red-700 bg-transparent border-none cursor-pointer flex items-center gap-1.5 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{lang === "tr" ? "Sepeti Boşalt" : "Empty Cart"}</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -462,12 +577,12 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
               <div className="hidden md:block bg-white border border-cultured rounded-[12px] overflow-hidden shadow-premium">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-[#fafafa] border-b border-cultured text-xs font-extrabold text-sonic-silver uppercase tracking-wider">
-                      <th className="py-4.5 px-5 w-[42%]">{lang === "tr" ? "Ürün" : "Product"}</th>
-                      <th className="py-4.5 px-4 text-center w-[12%]">{lang === "tr" ? "Birim Fiyat" : "Unit Price"}</th>
-                      <th className="py-4.5 px-4 text-center w-[15%]">{lang === "tr" ? "Paket Miktarı" : "Package Qty"}</th>
-                      <th className="py-4.5 px-4 text-center w-[16%]">{lang === "tr" ? "Paket İçeriği" : "Pack Content"}</th>
-                      <th className="py-4.5 px-5 text-right w-[15%]">{lang === "tr" ? "Toplam Tutar" : "Total Price"}</th>
+                    <tr className="bg-[#fafafa] border-b border-cultured text-xs font-extrabold text-sonic-silver tracking-wider">
+                      <th className="py-4.5 px-5 w-[42%]">{lang === "tr" ? "ÜRÜN" : "PRODUCT"}</th>
+                      <th className="py-4.5 px-4 text-center w-[12%]">{lang === "tr" ? "BİRİM FİYAT" : "UNIT PRICE"}</th>
+                      <th className="py-4.5 px-4 text-center w-[15%]">{lang === "tr" ? "PAKET MİKTARI" : "PACKAGE QTY"}</th>
+                      <th className="py-4.5 px-4 text-center w-[16%]">{lang === "tr" ? "PAKET İÇERİĞİ" : "PACK CONTENT"}</th>
+                      <th className="py-4.5 px-5 text-right w-[15%]">{lang === "tr" ? "TOPLAM TUTAR" : "TOTAL PRICE"}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-cultured">
@@ -497,9 +612,14 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                                 className="w-16 h-20 object-cover rounded-[5px] bg-[#fafafa] border border-cultured shrink-0"
                               />
                               <div className="flex flex-col gap-1 min-w-0 pr-4">
-                                <h4 className="text-sm font-bold text-eerie-black truncate leading-normal">
+                                <a
+                                  href={`/product/${item.slug || item.product_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm font-bold text-eerie-black hover:text-salmon-pink transition-colors truncate leading-normal no-underline block"
+                                >
                                   {(item.title_translations && item.title_translations[lang]) || item.title}
-                                </h4>
+                                </a>
                                 <span className="text-[11px] font-bold text-accent-gold">
                                   {t("color", lang)}: {item.color}
                                 </span>
@@ -596,9 +716,14 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                           className="w-14 h-18 object-cover rounded-[5px] bg-[#fafafa] border border-cultured shrink-0"
                         />
                         <div className="flex-grow min-w-0 pr-4">
-                          <h4 className="text-xs font-bold text-eerie-black line-clamp-2 leading-relaxed">
+                          <a
+                            href={`/product/${item.slug || item.product_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-bold text-eerie-black hover:text-salmon-pink transition-colors line-clamp-2 leading-relaxed no-underline block"
+                          >
                             {(item.title_translations && item.title_translations[lang]) || item.title}
-                          </h4>
+                          </a>
                           <span className="text-[10px] font-bold text-accent-gold block mt-0.5">
                             {t("color", lang)}: {item.color} | SKU: {item.custom_sku}
                           </span>
@@ -648,8 +773,8 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
               
               {/* Summary Card */}
               <div className="bg-white border border-cultured rounded-[12px] p-5 shadow-premium flex flex-col gap-4">
-                <h3 className="font-sans font-extrabold text-sm uppercase text-eerie-black border-b border-cultured pb-3 tracking-wider">
-                  {lang === "tr" ? "Sipariş Özeti" : "Order Summary"}
+                <h3 className="font-sans font-extrabold text-sm text-eerie-black border-b border-cultured pb-3 tracking-wider">
+                  {lang === "tr" ? "SİPARİŞ ÖZETİ" : "ORDER SUMMARY"}
                 </h3>
                 
                 <div className="flex flex-col gap-3.5 text-xs font-bold text-davys-gray">
@@ -675,8 +800,8 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                 {/* TCMB Multi-Currency Exchange Equivalents Card */}
                 <div className="mt-2 pt-4 border-t border-dashed border-cultured flex flex-col gap-3 bg-[#fafafa] p-3.5 rounded-[8px] border border-cultured">
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] uppercase font-extrabold text-sonic-silver tracking-wider">
-                      {t("exchange_rate_equivalents", lang)}
+                    <span className="text-[10px] font-extrabold text-sonic-silver tracking-wider">
+                      {t("exchange_rate_equivalents", lang).toLocaleUpperCase(lang === "tr" ? "tr" : "en")}
                     </span>
                     {ratesBanner.length > 0 && (
                       <div className="flex flex-col gap-0.5">
@@ -724,9 +849,9 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                       <button
                         type="button"
                         onClick={() => setIsCheckout(true)}
-                        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer transition-colors"
                       >
-                        💳 {lang === "tr" ? "Banka Havalesi ile Sipariş Ver" : "Order via Bank Transfer"}
+                        💳 {lang === "tr" ? "BANKA HAVALESİ İLE SİPARİŞ VER" : "ORDER VIA BANK TRANSFER"}
                       </button>
                       <button
                         type="button"
@@ -737,17 +862,17 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                           setIsCheckout(false);
                           setForceShowInquiry(true);
                         }}
-                        className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-[5px] font-bold text-xs uppercase border-none flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                        className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-[5px] font-bold text-xs border-none flex items-center justify-center gap-2 cursor-pointer transition-colors"
                       >
-                        📄 {lang === "tr" ? "Fiyat Teklifi İste (Proforma)" : "Request Price Quote Only"}
+                        📄 {lang === "tr" ? "FİYAT TEKLİFİ İSTE (PROFORMA)" : "REQUEST PRICE QUOTE ONLY"}
                       </button>
                     </div>
                   ) : (
                     /* Checkout Address details */
                     <form onSubmit={handleCheckoutSubmit} className="flex flex-col gap-4 pt-2 border-t border-cultured mt-1">
                       <div className="flex items-center justify-between">
-                        <h4 className="text-xs uppercase font-extrabold text-salmon-pink tracking-[0.5px]">
-                          {lang === "tr" ? "Adres ve Ödeme Bilgileri" : "Address & Payment"}
+                        <h4 className="text-xs font-extrabold text-salmon-pink tracking-[0.5px]">
+                          {lang === "tr" ? "ADRES VE ÖDEME BİLGİLERİ" : "ADDRESS & PAYMENT"}
                         </h4>
                         <button
                           type="button"
@@ -763,8 +888,8 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
 
                       {/* Delivery Address */}
                       <div className="flex flex-col gap-1">
-                        <label className="text-[10px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">
-                          🚚 {lang === "tr" ? "Teslimat Adresi" : "Delivery Address"}
+                        <label className="text-[10px] font-extrabold text-eerie-black tracking-[0.5px]">
+                          🚚 {lang === "tr" ? "TESLİMAT ADRESİ" : "DELIVERY ADDRESS"}
                         </label>
                         {addresses.length > 0 ? (
                           <select
@@ -798,8 +923,8 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
 
                       {/* Billing Address */}
                       <div className="flex flex-col gap-1">
-                        <label className="text-[10px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">
-                          📄 {lang === "tr" ? "Fatura Adresi" : "Billing Address"}
+                        <label className="text-[10px] font-extrabold text-eerie-black tracking-[0.5px]">
+                          📄 {lang === "tr" ? "FATURA ADRESİ" : "BILLING ADDRESS"}
                         </label>
                         {addresses.length > 0 ? (
                           <select
@@ -833,8 +958,8 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
 
                       {/* Bank IBAN detail list */}
                       <div className="bg-[#eff6ff] border border-blue-100 rounded-lg p-3.5 flex flex-col gap-2.5 text-xs text-blue-900 shadow-sm leading-normal">
-                        <div className="font-extrabold uppercase tracking-wide border-b border-blue-200/50 pb-1 text-[10px] text-blue-800">
-                          🏦 {lang === "tr" ? "Banka Havale/EFT Hesapları" : "Bank Accounts"}
+                        <div className="font-extrabold tracking-wide border-b border-blue-200/50 pb-1 text-[10px] text-blue-800">
+                          🏦 {lang === "tr" ? "BANKA HAVALE/EFT HESAPLARI" : "BANK ACCOUNTS"}
                         </div>
                         <div className="flex flex-col gap-2 font-semibold text-[10px]">
                           <div>
@@ -863,12 +988,12 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                       <button
                         type="submit"
                         disabled={submittingOrder}
-                        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99] transition-all"
+                        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99] transition-all"
                       >
                         {submittingOrder ? (
                           <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
                         ) : (
-                          "✔️ " + (lang === "tr" ? "Siparişi Onayla" : "Confirm B2B Order")
+                          "✔️ " + (lang === "tr" ? "SİPARİŞİ ONAYLA" : "CONFIRM B2B ORDER")
                         )}
                       </button>
                     </form>
@@ -879,8 +1004,8 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                 {(!token || forceShowInquiry) && (
                   <form onSubmit={handleInquirySubmit} className="flex flex-col gap-3.5 pt-2 border-t border-cultured mt-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs uppercase font-extrabold text-eerie-black tracking-wider">
-                        {lang === "tr" ? "Teklif Talep Formu" : "Request Quote Form"}
+                      <span className="text-xs font-extrabold text-eerie-black tracking-wider">
+                        {lang === "tr" ? "TEKLİF TALEP FORMU" : "REQUEST QUOTE FORM"}
                       </span>
                       {token && (
                         <button
@@ -897,7 +1022,7 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("full_name", lang)}</label>
+                      <label className="text-[10px] font-extrabold text-eerie-black tracking-[0.5px]">{t("full_name", lang).toLocaleUpperCase(lang === "tr" ? "tr" : "en")}</label>
                       <input 
                         type="text" 
                         required 
@@ -909,7 +1034,7 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("company_name", lang)}</label>
+                      <label className="text-[10px] font-extrabold text-eerie-black tracking-[0.5px]">{t("company_name", lang).toLocaleUpperCase(lang === "tr" ? "tr" : "en")}</label>
                       <input 
                         type="text" 
                         value={companyName}
@@ -920,7 +1045,7 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("phone", lang)}</label>
+                      <label className="text-[10px] font-extrabold text-eerie-black tracking-[0.5px]">{t("phone", lang).toLocaleUpperCase(lang === "tr" ? "tr" : "en")}</label>
                       <input 
                         type="tel" 
                         required 
@@ -932,7 +1057,7 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("email", lang)}</label>
+                      <label className="text-[10px] font-extrabold text-eerie-black tracking-[0.5px]">{t("email", lang).toLocaleUpperCase(lang === "tr" ? "tr" : "en")}</label>
                       <input 
                         type="email" 
                         required 
@@ -944,7 +1069,7 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("message", lang)}</label>
+                      <label className="text-[10px] font-extrabold text-eerie-black tracking-[0.5px]">{t("message", lang).toLocaleUpperCase(lang === "tr" ? "tr" : "en")}</label>
                       <textarea 
                         value={customerMessage}
                         onChange={(e) => setCustomerMessage(e.target.value)}
@@ -956,12 +1081,12 @@ export default function CartClient({ categoryPrefix, categories }: CartClientPro
                     <button
                       type="submit"
                       disabled={submittingInquiry}
-                      className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99] transition-all mt-1"
+                      className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99] transition-all mt-1"
                     >
                       {submittingInquiry ? (
                         <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
                       ) : (
-                        "🚀 " + t("submit_inquiry", lang)
+                        "🚀 " + t("submit_inquiry", lang).toLocaleUpperCase(lang === "tr" ? "tr" : "en")
                       )}
                     </button>
                   </form>

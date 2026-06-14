@@ -66,10 +66,30 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
   
-  const title = categoryPrefix === "tr" ? "Site Haritası" : "Sitemap";
-  const desc = categoryPrefix === "tr" 
-    ? "Merter Vitrini B2B toptan hazır giyim platformunun tüm kategori, blog ve kurumsal sayfalarının güncel listesi."
-    : "Complete hierarchy and list of categories, sourcing blogs, and corporate content of our B2B wholesale clothing platform.";
+  const titles: Record<string, string> = {
+    tr: "Site Haritası",
+    en: "Sitemap",
+    pl: "Mapa Strony",
+    bg: "Карта на Сайта",
+    ar: "خريطة الموقع",
+    ru: "Карта Сайта",
+    de: "Sitemap",
+    fr: "Plan du Site"
+  };
+
+  const descs: Record<string, string> = {
+    tr: "Merter Vitrini B2B toptan hazır giyim platformumuzun tüm kategori, blog ve kurumsal sayfalarının güncel listesi.",
+    en: "Complete hierarchy and list of categories, sourcing blogs, and corporate content of our B2B wholesale clothing platform.",
+    pl: "Pełna hierarchia i lista kategorii, blogów zaopatrzeniowych i treści korporacyjnych naszej platformy hurtowej B2B.",
+    bg: "Пълна йерархия и списък с категории, блогове за доставка и корпоративно съдържание на нашата B2B платформа за облекло на едро.",
+    ar: "التسلسل الهرمي الكامل وقائمة الفئات ومدونات المصادر ومحتوى الشركات لمنصة ملابس الجملة B2B الخاصة بنا.",
+    ru: "Полная иерархия и список категорий, блогов о закупках и корпоративного контента нашей оптовой платформы B2B.",
+    de: "Vollständige Hierarchie und Liste der Kategorien, Einkaufs-Blogs und Unternehmensinhalte unserer B2B-Großhandelsplattform.",
+    fr: "Hiérarchie et liste complète des catégories, blogs d'approvisionnement et contenus d'entreprise de notre plateforme de vente en gros B2B."
+  };
+
+  const title = titles[categoryPrefix] || titles.en;
+  const desc = descs[categoryPrefix] || descs.en;
   
   const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/site-haritasi/`;
   const languagesList = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];

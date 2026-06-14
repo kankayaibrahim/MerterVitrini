@@ -290,6 +290,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
             bg: product.translations?.bg?.title || product.title || "",
             fr: product.translations?.fr?.title || product.title || "",
           },
+          slug: product.slug || product.id,
         });
       }
     }

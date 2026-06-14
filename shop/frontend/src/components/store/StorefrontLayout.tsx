@@ -279,6 +279,7 @@ export default function StorefrontLayout({
               bg: product.translations?.bg?.title || product.title || "",
               fr: product.translations?.fr?.title || product.title || "",
             },
+            slug: product.slug || product.id,
           });
         }
         
@@ -561,6 +562,7 @@ export default function StorefrontLayout({
           weight_per_unit: weightPerUnit,
           image_url: coverImg,
           currency: activeProduct.currency || "TRY",
+          slug: activeProduct.slug || activeProduct.id,
         });
       }
     }

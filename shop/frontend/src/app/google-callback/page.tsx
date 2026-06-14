@@ -20,6 +20,13 @@ function GoogleCallbackHandler() {
   const [activeCategoryId, setActiveCategoryId] = useState<string>("");
   const [cart, setCart] = useState<CartItem[]>([]);
 
+  // Sync lang to document element
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      document.documentElement.setAttribute("lang", lang);
+    }
+  }, [lang]);
+
   useEffect(() => {
     // Load language, currency, cart & categories for header/footer consistency
     if (typeof window !== "undefined") {

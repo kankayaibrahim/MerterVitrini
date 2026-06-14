@@ -268,7 +268,7 @@ export default function Footer({ lang, onOpenPolicy }: FooterProps) {
             href={`/${getCategoryPrefix(lang)}/site-haritasi`} 
             className="hover:text-black transition-colors"
           >
-            {lang === "tr" ? "Site Haritası" : "Sitemap"}
+            {t("sitemap_title", lang)}
           </a>
         </div>
       </div>
