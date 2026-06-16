@@ -497,7 +497,7 @@ WantedBy=multi-user.target
                 self.log("[REMOTE-DEPLOY] Copying compiled files to final directory...")
                 t_sync_start = time.time()
                 self._ssh_cmd(ssh, f"mkdir -p {cfg['remote_dir']}")
-                if self.ssr_mode:
+                if proj_key == "shop" and self.ssr_mode:
                     self.log("[SYSTEMD] Stopping active shop-frontend service for final swap...")
                     self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
                     deploy_cmd = (
@@ -519,9 +519,10 @@ WantedBy=multi-user.target
 
                 # 7. Configure frontend systemd Service & dynamic Nginx config
                 t_service_start = time.time()
-                if self.ssr_mode:
-                    self.log("[SYSTEMD] Configuring shop-frontend systemd daemon service...")
-                    frontend_systemd = f"""[Unit]
+                if proj_key == "shop":
+                    if self.ssr_mode:
+                        self.log("[SYSTEMD] Configuring shop-frontend systemd daemon service...")
+                        frontend_systemd = f"""[Unit]
 Description=Merter Vitrini Shop Storefront Frontend Service (Next.js SSR)
 After=network.target
 
@@ -539,25 +540,25 @@ Environment=NODE_ENV=production PORT=3000 NEXT_BUILD_SSR=true
 [Install]
 WantedBy=multi-user.target
 """
-                    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".service") as tmp:
-                        tmp.write(frontend_systemd)
-                        tmp_path = tmp.name
-                    try:
-                        sftp = ssh.open_sftp()
-                        sftp.put(tmp_path, "/etc/systemd/system/shop-frontend.service")
-                        sftp.close()
-                    finally:
-                        os.remove(tmp_path)
+                        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".service") as tmp:
+                            tmp.write(frontend_systemd)
+                            tmp_path = tmp.name
+                        try:
+                            sftp = ssh.open_sftp()
+                            sftp.put(tmp_path, "/etc/systemd/system/shop-frontend.service")
+                            sftp.close()
+                        finally:
+                            os.remove(tmp_path)
 
-                    self._ssh_cmd(ssh, "systemctl daemon-reload")
-                    self._ssh_cmd(ssh, "systemctl enable shop-frontend")
-                    self._ssh_cmd(ssh, "systemctl restart shop-frontend")
-                else:
-                    self.log("[SYSTEMD] Disabling and stopping active shop-frontend service (static export mode)...")
-                    self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
-                    self._ssh_cmd(ssh, "systemctl disable shop-frontend || true")
-                    self._ssh_cmd(ssh, "rm -f /etc/systemd/system/shop-frontend.service")
-                    self._ssh_cmd(ssh, "systemctl daemon-reload")
+                        self._ssh_cmd(ssh, "systemctl daemon-reload")
+                        self._ssh_cmd(ssh, "systemctl enable shop-frontend")
+                        self._ssh_cmd(ssh, "systemctl restart shop-frontend")
+                    else:
+                        self.log("[SYSTEMD] Disabling and stopping active shop-frontend service (static export mode)...")
+                        self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
+                        self._ssh_cmd(ssh, "systemctl disable shop-frontend || true")
+                        self._ssh_cmd(ssh, "rm -f /etc/systemd/system/shop-frontend.service")
+                        self._ssh_cmd(ssh, "systemctl daemon-reload")
 
                 # Dynamic Nginx Configuration rewrite
                 self.log("[NGINX] Dynamic Virtual Host configuration update...")
@@ -927,7 +928,7 @@ server {{
             # 3. Extract remotely
             self.log("[EXTRACT] Extracting frontend assets on production server...")
             t_extract_start = time.time()
-            if self.ssr_mode:
+            if proj_key == "shop" and self.ssr_mode:
                 self.log("[SYSTEMD] Stopping active shop-frontend service for final swap...")
                 self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
             self._ssh_cmd(ssh, f"tar -xzf {remote_archive} -C {cfg['remote_dir']} --strip-components=1")
@@ -949,9 +950,10 @@ server {{
 
             # 5. Configure frontend systemd Service & dynamic Nginx config
             t_service_start = time.time()
-            if self.ssr_mode:
-                self.log("[SYSTEMD] Configuring shop-frontend systemd daemon service...")
-                frontend_systemd = f"""[Unit]
+            if proj_key == "shop":
+                if self.ssr_mode:
+                    self.log("[SYSTEMD] Configuring shop-frontend systemd daemon service...")
+                    frontend_systemd = f"""[Unit]
 Description=Merter Vitrini Shop Storefront Frontend Service (Next.js SSR)
 After=network.target
 
@@ -969,25 +971,25 @@ Environment=NODE_ENV=production PORT=3000 NEXT_BUILD_SSR=true
 [Install]
 WantedBy=multi-user.target
 """
-                with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".service") as tmp:
-                    tmp.write(frontend_systemd)
-                    tmp_path = tmp.name
-                try:
-                    sftp = ssh.open_sftp()
-                    sftp.put(tmp_path, "/etc/systemd/system/shop-frontend.service")
-                    sftp.close()
-                finally:
-                    os.remove(tmp_path)
+                    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".service") as tmp:
+                        tmp.write(frontend_systemd)
+                        tmp_path = tmp.name
+                    try:
+                        sftp = ssh.open_sftp()
+                        sftp.put(tmp_path, "/etc/systemd/system/shop-frontend.service")
+                        sftp.close()
+                    finally:
+                        os.remove(tmp_path)
 
-                self._ssh_cmd(ssh, "systemctl daemon-reload")
-                self._ssh_cmd(ssh, "systemctl enable shop-frontend")
-                self._ssh_cmd(ssh, "systemctl restart shop-frontend")
-            else:
-                self.log("[SYSTEMD] Disabling and stopping active shop-frontend service (static export mode)...")
-                self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
-                self._ssh_cmd(ssh, "systemctl disable shop-frontend || true")
-                self._ssh_cmd(ssh, "rm -f /etc/systemd/system/shop-frontend.service")
-                self._ssh_cmd(ssh, "systemctl daemon-reload")
+                    self._ssh_cmd(ssh, "systemctl daemon-reload")
+                    self._ssh_cmd(ssh, "systemctl enable shop-frontend")
+                    self._ssh_cmd(ssh, "systemctl restart shop-frontend")
+                else:
+                    self.log("[SYSTEMD] Disabling and stopping active shop-frontend service (static export mode)...")
+                    self._ssh_cmd(ssh, "systemctl stop shop-frontend || true")
+                    self._ssh_cmd(ssh, "systemctl disable shop-frontend || true")
+                    self._ssh_cmd(ssh, "rm -f /etc/systemd/system/shop-frontend.service")
+                    self._ssh_cmd(ssh, "systemctl daemon-reload")
 
         # Dynamic Nginx Configuration rewrite
             self.log("[NGINX] Dynamic Virtual Host configuration update...")
