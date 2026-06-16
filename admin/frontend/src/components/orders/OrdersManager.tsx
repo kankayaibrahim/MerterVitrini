@@ -580,7 +580,7 @@ export default function OrdersManager({ apiUrl, token }: OrdersManagerProps) {
                     {orderDetail.items.map((item) => (
                       <div key={item.id} className="flex items-center gap-4 p-3 hover:bg-zinc-50/20">
                         <img
-                          src={`/api/v1/store/images/resize?url=${encodeURIComponent(item.image_url_at_purchase)}&width=60&height=60`}
+                          src={item.image_url_at_purchase}
                           alt={item.product_name}
                           className="w-12 h-12 object-cover rounded-lg border border-zinc-200"
                           onError={(e) => {
