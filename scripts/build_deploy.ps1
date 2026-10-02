@@ -1,14 +1,14 @@
-# PowerShell Script to Cross-Compile & Deploy Go + Next.js Projects for Windows & Linux
+# PowerShell Script to Cross-Compile & Deploy Unified Go Backend + Next.js Frontend
 # Usage:
-#   .\scripts\build_deploy.ps1 -Project admin
-#   .\scripts\build_deploy.ps1 -Project admin -Deploy
-#   .\scripts\build_deploy.ps1 -Project shop -Deploy
+#   .\scripts\build_deploy.ps1 -Project backend
+#   .\scripts\build_deploy.ps1 -Project frontend
+#   .\scripts\build_deploy.ps1 -Project all
 #   .\scripts\build_deploy.ps1 -Project all -Deploy
 
 param (
     [Parameter(Mandatory=$false)]
-    [ValidateSet("admin", "shop", "all")]
-    [string]$Project = "admin",
+    [ValidateSet("backend", "frontend", "all", "admin", "shop")]
+    [string]$Project = "all",
 
     [Parameter(Mandatory=$false)]
     [switch]$Deploy = $false
@@ -16,25 +16,21 @@ param (
 
 $ErrorActionPreference = "Stop"
 
-# Clear screen
 Clear-Host
 
 Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host "         BUILD & DEPLOYMENT PIPELINE TOOLBOX       " -ForegroundColor Cyan
+Write-Host "   MERTER VITRINI UNIFIED BUILD & DEPLOY TOOLBOX  " -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 
-# Check if Go is installed and available
+# Check Go
 try {
     $goVersion = & go version
     Write-Host "Detected Go Environment: $goVersion" -ForegroundColor Green
 } catch {
-    Write-Host "ERROR: 'go' command was not found." -ForegroundColor Red
-    Write-Host "If you have just installed Go, please restart your PowerShell terminal or editor (like VS Code)" -ForegroundColor Yellow
-    Write-Host "to reload your environment PATH variables, and then try again!" -ForegroundColor Yellow
+    Write-Host "ERROR: 'go' command was not found in PATH." -ForegroundColor Red
     Exit 1
 }
 
-# Resolve script root directory
 $rootDir = Resolve-Path "$PSScriptRoot\.."
 
 function Build-GoProject {
@@ -46,52 +42,32 @@ function Build-GoProject {
     $fullProjPath = Join-Path $rootDir $projPath
     $binDir = Join-Path $fullProjPath "bin"
 
-    # Create bin directory if not exists
     if (-not (Test-Path $binDir)) {
         New-Item -ItemType Directory -Path $binDir -Force | Out-Null
     }
 
-    # If versioninfo.json exists, compile it to resource.syso for Windows properties embedding
-    $versionJson = Join-Path $fullProjPath "versioninfo.json"
-    if (Test-Path $versionJson) {
-        $goVersionInfo = Join-Path $env:USERPROFILE "go\bin\goversioninfo.exe"
-        if (Test-Path $goVersionInfo) {
-            Write-Host "[BUILD] Compiling Windows metadata properties..." -ForegroundColor White
-            Push-Location $fullProjPath
-            try {
-                & $goVersionInfo | Out-Null
-            } finally {
-                Pop-Location
-            }
-        }
-    }
-
-    # Backup current environment
     $oldGoOs = $env:GOOS
     $oldGoArch = $env:GOARCH
 
     try {
-        # Go into the project path
         Push-Location $fullProjPath
 
         Write-Host "`n--------------------------------------------------" -ForegroundColor DarkCyan
-        Write-Host "Building Go Backend: $projPath" -ForegroundColor DarkCyan
+        Write-Host "Building Unified Go Backend: $projPath" -ForegroundColor DarkCyan
         Write-Host "--------------------------------------------------" -ForegroundColor DarkCyan
 
         # 1. Compile for WINDOWS (AMD64)
         $winBinaryName = "$binaryName.exe"
         $winBinaryPath = Join-Path $binDir $winBinaryName
         
-        # Terminate running process if active to release file locks on Windows
         $processName = $binaryName
         if (Get-Process -Name $processName -ErrorAction SilentlyContinue) {
-            Write-Host "[WARNING] Found running instance of '$processName.exe'. Terminating to release file lock..." -ForegroundColor Yellow
+            Write-Host "[WARNING] Found running instance of '$processName.exe'. Terminating..." -ForegroundColor Yellow
             Stop-Process -Name $processName -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
         }
 
         Write-Host "[BUILD] Compiling Go for Windows (amd64)..." -ForegroundColor White
-        
         $env:GOOS = "windows"
         $env:GOARCH = "amd64"
         & go build -o (Join-Path "bin" $winBinaryName) .
@@ -119,7 +95,6 @@ function Build-GoProject {
         Write-Host "[ERROR] Compilation FAILED for Go project $projPath`n$_" -ForegroundColor Red
         throw $_
     } finally {
-        # Restore environment variables
         $env:GOOS = $oldGoOs
         $env:GOARCH = $oldGoArch
         Pop-Location
@@ -128,69 +103,23 @@ function Build-GoProject {
 
 # --- PIPELINE ACTIONS ---
 
-# 1. ADMIN SUITE (Backend Go + Frontend Next.js)
-if ($Project -eq "admin" -or $Project -eq "all") {
-    # Compile Backend
-    Build-GoProject -projPath "admin\backend" -binaryName "admin-backend"
-
-    # Compile Frontend
-    Write-Host "`n--------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "Building Admin Next.js Frontend" -ForegroundColor DarkCyan
-    Write-Host "--------------------------------------------------" -ForegroundColor DarkCyan
-    
-    $adminFrontendDir = Join-Path $rootDir "admin\frontend"
-    Push-Location $adminFrontendDir
-    try {
-        Write-Host "[BUILD] Running Next.js static export build..." -ForegroundColor White
-        & npm.cmd run build
-        Write-Host "[OK] Next.js Frontend Compilation Success!" -ForegroundColor Green
-    } catch {
-        Write-Host "[ERROR] Next.js Frontend Compilation FAILED!" -ForegroundColor Red
-        throw $_
-    } finally {
-        Pop-Location
-    }
-
-    # Trigger Deploy if flagged
-    if ($Deploy) {
-        Write-Host "`n--------------------------------------------------" -ForegroundColor Yellow
-        Write-Host "Deploying Admin Suite to http://admin.mertervitrini.com.tr" -ForegroundColor Yellow
-        Write-Host "--------------------------------------------------" -ForegroundColor Yellow
-        Push-Location $rootDir
-        try {
-            & python scripts/unified_deployer.py -p admin -c all -a deploy
-        } catch {
-            Write-Host "[ERROR] Admin suite deployment failed!" -ForegroundColor Red
-            throw $_
-        } finally {
-            Pop-Location
-        }
-    }
+# 1. UNIFIED GO BACKEND
+if ($Project -eq "backend" -or $Project -eq "all" -or $Project -eq "admin" -or $Project -eq "shop") {
+    Build-GoProject -projPath "backend" -binaryName "backend"
 }
 
-# 2. SHOP SUITE (Frontend HTML index + Nginx configuration)
-if ($Project -eq "shop" -or $Project -eq "all") {
-    $shopDir = Join-Path $rootDir "shop\backend"
-    if (Test-Path $shopDir) {
-        if (-not (Test-Path (Join-Path $shopDir "go.mod"))) {
-            Write-Host "`nInitializing shop/backend module placeholder..." -ForegroundColor Yellow
-            New-Item -ItemType File -Path (Join-Path $shopDir "go.mod") -Value "module mertervitrini/shop/backend`n`ngo 1.22" -Force | Out-Null
-            New-Item -ItemType File -Path (Join-Path $shopDir "main.go") -Value "package main`n`nimport `"fmt`"`n`nfunc main() {`n`tfmt.Println(`"Shop Backend Placeholder`")`n}" -Force | Out-Null
-        }
-        Build-GoProject -projPath "shop\backend" -binaryName "shop-backend"
-    }
-
-    # Compile Frontend
+# 2. UNIFIED NEXT.JS FRONTEND (SSR Mağaza + /admin Yönetim Paneli)
+if ($Project -eq "frontend" -or $Project -eq "all" -or $Project -eq "admin" -or $Project -eq "shop") {
     Write-Host "`n--------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "Building Shop Next.js Frontend" -ForegroundColor DarkCyan
+    Write-Host "Building Unified Next.js Frontend (SSR Mağaza + /admin)" -ForegroundColor DarkCyan
     Write-Host "--------------------------------------------------" -ForegroundColor DarkCyan
     
-    $shopFrontendDir = Join-Path $rootDir "shop\frontend"
-    Push-Location $shopFrontendDir
+    $frontendDir = Join-Path $rootDir "frontend"
+    Push-Location $frontendDir
     try {
-        Write-Host "[BUILD] Running Next.js static export build..." -ForegroundColor White
+        Write-Host "[BUILD] Running Next.js SSR build..." -ForegroundColor White
         & npm.cmd run build
-        Write-Host "[OK] Next.js Frontend Compilation Success!" -ForegroundColor Green
+        Write-Host "[OK] Next.js Unified Frontend Compilation Success!" -ForegroundColor Green
     } catch {
         Write-Host "[ERROR] Next.js Frontend Compilation FAILED!" -ForegroundColor Red
         throw $_
@@ -201,13 +130,13 @@ if ($Project -eq "shop" -or $Project -eq "all") {
     # Trigger Deploy if flagged
     if ($Deploy) {
         Write-Host "`n--------------------------------------------------" -ForegroundColor Yellow
-        Write-Host "Deploying Shop Suite to http://mertervitrini.com.tr" -ForegroundColor Yellow
+        Write-Host "Deploying Unified Suite to AlmaLinux Production..." -ForegroundColor Yellow
         Write-Host "--------------------------------------------------" -ForegroundColor Yellow
         Push-Location $rootDir
         try {
-            & python scripts/unified_deployer.py -p shop -c all -a deploy
+            & python scripts/unified_deployer.py -p unified -c all -a deploy
         } catch {
-            Write-Host "[ERROR] Shop deployment failed!" -ForegroundColor Red
+            Write-Host "[ERROR] Unified deployment failed!" -ForegroundColor Red
             throw $_
         } finally {
             Pop-Location

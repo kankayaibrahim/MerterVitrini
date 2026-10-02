@@ -1,16 +1,25 @@
-import paramiko
 import sys
+from pathlib import Path
+import paramiko
+
+# Ensure scripts directory is available for importing unified_deployer config
+scripts_dir = Path(__file__).resolve().parent
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+
+from unified_deployer import SERVER_CONFIG
+
 
 def main():
-    hostname = "213.202.255.80"
-    port = 22
-    username = "root"
-    password = "02vMhY8Xgi"
+    hostname = SERVER_CONFIG.get("hostname", "")
+    port = SERVER_CONFIG.get("port", 22)
+    username = SERVER_CONFIG.get("username", "root")
+    auth_secret = SERVER_CONFIG.get("password", "")
 
     print("Connecting to SSH...")
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(hostname, port=port, username=username, password=password)
+    ssh.connect(hostname, port=port, username=username, password=auth_secret)
     print("Connected.")
 
     # 1. Read existing config
@@ -32,7 +41,7 @@ def main():
 
     # 3. Perform optimized build for Keycloak
     print("\nRunning Keycloak optimized build (kc.sh build)...")
-    stdin, stdout, stderr = ssh.exec_command("/opt/keycloak/bin/kc.sh build")
+    _, stdout, stderr = ssh.exec_command("/opt/keycloak/bin/kc.sh build")
     
     # Read output
     out = stdout.read().decode('utf-8', errors='ignore')
@@ -47,6 +56,7 @@ def main():
 
     ssh.close()
     print("\nKeycloak config fix script completed!")
+
 
 if __name__ == '__main__':
     main()

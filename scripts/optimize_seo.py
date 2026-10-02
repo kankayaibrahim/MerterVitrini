@@ -4,8 +4,21 @@ import sys
 import json
 import time
 import hashlib
+from pathlib import Path
 import requests
 import psycopg
+
+# Ensure scripts directory is available for importing unified_deployer config
+scripts_dir = str(Path(__file__).resolve().parent)
+if scripts_dir not in sys.path:
+    sys.path.insert(0, scripts_dir)
+
+try:
+    from unified_deployer import PROJECTS_CONFIG
+    DEFAULT_DB_PW = PROJECTS_CONFIG.get("unified", {}).get("backend", {}).get("config_template", {}).get("db_password", "")
+except ImportError:
+    DEFAULT_DB_PW = ""
+
 
 def load_env():
     """Loads environment variables from local .env file."""
@@ -27,19 +40,22 @@ def load_env():
                         os.environ[parts[0].strip()] = parts[1].strip().strip('"').strip("'")
             break
 
+
 load_env()
 
 # Database Configs from Env
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = int(os.environ.get("DB_PORT", 5432))
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "DHMwK0Qzyox7")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", DEFAULT_DB_PW)
 DB_NAME = os.environ.get("DB_NAME", "merterdevdb")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+
 
 def get_db_connection():
     conninfo = f"host={DB_HOST} port={DB_PORT} user={DB_USER} password={DB_PASSWORD} dbname={DB_NAME}"
     return psycopg.connect(conninfo)
+
 
 def calculate_content_hash(product_payload):
     """Generates a stable SHA-256 hash of the product payload to prevent double optimization of duplicate content."""
@@ -51,52 +67,53 @@ def calculate_content_hash(product_payload):
     raw_str = f"{title}|{desc}|{fabric}|{gender}"
     return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
+
 def get_cached_ai_seo(content_hash, ai_engine="deepseek"):
     """Checks if we already have an optimized version of this exact content fingerprint."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT seo_title, seo_description, meta_title, meta_description, tags, highlights
-                FROM catalog.product_ai_content
-                WHERE content_hash = %s AND ai_engine = %s;
-            """, (content_hash, ai_engine))
-            row = cur.fetchone()
-            if row:
-                tags_data = row[4]
-                if isinstance(tags_data, str):
-                    tags_data = json.loads(tags_data)
-                elif tags_data is None:
-                    tags_data = []
+    with get_db_connection() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT seo_title, seo_description, meta_title, meta_description, tags, highlights
+            FROM catalog.product_ai_content
+            WHERE content_hash = %s AND ai_engine = %s;
+        """, (content_hash, ai_engine))
+        row = cur.fetchone()
+        if row:
+            tags_data = row[4]
+            if isinstance(tags_data, str):
+                tags_data = json.loads(tags_data)
+            elif tags_data is None:
+                tags_data = []
 
-                highlights_data = row[5]
-                if isinstance(highlights_data, str):
-                    highlights_data = json.loads(highlights_data)
-                elif highlights_data is None:
-                    highlights_data = []
+            highlights_data = row[5]
+            if isinstance(highlights_data, str):
+                highlights_data = json.loads(highlights_data)
+            elif highlights_data is None:
+                highlights_data = []
 
-                return {
-                    "seo_title": row[0],
-                    "seo_description": row[1],
-                    "meta_title": row[2],
-                    "meta_description": row[3],
-                    "tags": tags_data,
-                    "highlight_features": highlights_data
-                }
-            return None
+            return {
+                "seo_title": row[0],
+                "seo_description": row[1],
+                "meta_title": row[2],
+                "meta_description": row[3],
+                "tags": tags_data,
+                "highlight_features": highlights_data
+            }
+        return None
+
 
 def fetch_sample_products():
     """Fetches up to 5 RANDOM products from the database, excluding 'etika' feed products."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT p.id, p.title, p.description, p.gender, p.season, p.kumas_fabric, p.series_ratio
-                FROM catalog.products p
-                WHERE p.is_active = true
-                  AND (p.feed_id IS NULL OR p.feed_id <> 'etika')
-                ORDER BY random()
-                LIMIT 5;
-            """)
-            return cur.fetchall()
+    with get_db_connection() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT p.id, p.title, p.description, p.gender, p.season, p.kumas_fabric, p.series_ratio
+            FROM catalog.products p
+            WHERE p.is_active = true
+              AND (p.feed_id IS NULL OR p.feed_id <> 'etika')
+            ORDER BY random()
+            LIMIT 5;
+        """)
+        return cur.fetchall()
+
 
 def get_deepseek_seo(product_data, api_key):
     """Contacts DeepSeek API to optimize title and description for SEO. Returns (seo_data, usage)."""
@@ -142,129 +159,83 @@ def get_deepseek_seo(product_data, api_key):
     usage = resp_json.get("usage", {})
     return json.loads(result_content), usage
 
+
 def save_or_update_ai_seo(product_id, seo_data, content_hash, product_payload, ai_engine="deepseek"):
     """Saves or updates the AI generated SEO content and original product info in the dedicated table."""
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO catalog.product_ai_content (
-                    product_id, ai_engine, content_hash, 
-                    original_title, original_description, original_fabric, original_gender,
-                    seo_title, seo_description, meta_title, meta_description, tags, highlights, updated_at
-                ) VALUES (
-                    %s, %s, %s, 
-                    %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, NOW()
-                )
-                ON CONFLICT (content_hash, ai_engine) 
-                DO UPDATE SET
-                    product_id = EXCLUDED.product_id,
-                    original_title = EXCLUDED.original_title,
-                    original_description = EXCLUDED.original_description,
-                    original_fabric = EXCLUDED.original_fabric,
-                    original_gender = EXCLUDED.original_gender,
-                    seo_title = EXCLUDED.seo_title,
-                    seo_description = EXCLUDED.seo_description,
-                    meta_title = EXCLUDED.meta_title,
-                    meta_description = EXCLUDED.meta_description,
-                    tags = EXCLUDED.tags,
-                    highlights = EXCLUDED.highlights,
-                    updated_at = NOW();
-            """, (
-                product_id,
-                ai_engine,
-                content_hash,
-                product_payload["title"],
-                product_payload["original_description"],
-                product_payload["fabric"],
-                product_payload["gender"],
-                seo_data["seo_title"],
-                seo_data["seo_description"],
-                seo_data["meta_title"],
-                seo_data["meta_description"],
-                json.dumps(seo_data["tags"]),
-                json.dumps(seo_data["highlight_features"])
-            ))
-            conn.commit()
+    with get_db_connection() as conn, conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO catalog.product_ai_content (
+                product_id, ai_engine, content_hash, 
+                original_title, original_description, original_fabric, original_gender,
+                seo_title, seo_description, meta_title, meta_description, tags, highlights, updated_at
+            ) VALUES (
+                %s, %s, %s, 
+                %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, NOW()
+            )
+            ON CONFLICT (content_hash, ai_engine) 
+            DO UPDATE SET
+                product_id = EXCLUDED.product_id,
+                original_title = EXCLUDED.original_title,
+                original_description = EXCLUDED.original_description,
+                original_fabric = EXCLUDED.original_fabric,
+                original_gender = EXCLUDED.original_gender,
+                seo_title = EXCLUDED.seo_title,
+                seo_description = EXCLUDED.seo_description,
+                meta_title = EXCLUDED.meta_title,
+                meta_description = EXCLUDED.meta_description,
+                tags = EXCLUDED.tags,
+                highlights = EXCLUDED.highlights,
+                updated_at = NOW();
+        """, (
+            product_id,
+            ai_engine,
+            content_hash,
+            product_payload["title"],
+            product_payload["original_description"],
+            product_payload["fabric"],
+            product_payload["gender"],
+            seo_data["seo_title"],
+            seo_data["seo_description"],
+            seo_data["meta_title"],
+            seo_data["meta_description"],
+            json.dumps(seo_data["tags"]),
+            json.dumps(seo_data["highlight_features"])
+        ))
+        conn.commit()
 
-def main():
-    print("=" * 65)
-    print("      DEEPSEEK YAPAY ZEKA SEO OPTİMİZASYON TEST ARACI")
-    print("=" * 65)
 
-    # 2. API Key Control
+def get_api_key() -> str:
     api_key = DEEPSEEK_API_KEY
     if not api_key:
         api_key = input("[!] Lütfen DeepSeek API anahtarınızı girin: ").strip()
         if not api_key:
             print("[HATA] API anahtarı boş bırakılamaz!")
             sys.exit(1)
+    return api_key
 
-    # 3. Fetch Sample Products (Randomized!)
-    print("\n[+] Veritabanından rastgele 5 ürün getiriliyor...")
-    try:
-        products = fetch_sample_products()
-    except Exception as e:
-        print(f"[HATA] Veritabanı bağlantı hatası: {e}")
-        sys.exit(1)
 
-    if not products:
-        print("[!] Veritabanında ürün bulunamadı!")
-        sys.exit(0)
-
+def print_sample_products(products):
     print("\n--- RASTGELE 5 ÜRÜN ---")
     for i, p in enumerate(products, 1):
-        pid, title, desc, gender, season, fabric, ratio = p
+        _, title, desc, gender, _, fabric, _ = p
         desc_preview = (desc[:60] + "...") if desc else "Açıklama yok"
         print(f"{i}) Başlık: {title} | Cinsiyet: {gender or 'Belirsiz'} | Kumaş: {fabric or 'Belirsiz'}")
         print(f"   Açıklama: {desc_preview}\n")
 
-    # 4. Product Selection
+
+def select_product(products):
     try:
         selection = int(input("[?] SEO optimizasyonu yapmak istediğiniz ürünün numarasını seçin (1-5): ").strip())
-        if selection < 1 or selection > len(products):
-            raise ValueError()
+        if 1 <= selection <= len(products):
+            return products[selection - 1]
     except ValueError:
-        print("[HATA] Geçersiz seçim yapıldı!")
-        sys.exit(1)
+        pass
+    print("[HATA] Geçersiz seçim yapıldı!")
+    sys.exit(1)
 
-    selected_product = products[selection - 1]
-    pid, title, desc, gender, season, fabric, ratio = selected_product
 
-    product_payload = {
-        "title": title,
-        "original_description": desc or "",
-        "gender": gender or "",
-        "season": season or "",
-        "fabric": fabric or "",
-        "series_ratio": ratio or ""
-    }
-
-    # 5. Calculate Payload Hash for Duplication / Local Caching Detection
-    content_hash = calculate_content_hash(product_payload)
-
-    # 6. Check Local AI Cache First (Save Money and Time!)
-    print("\n[+] Yerel AI önbelleği kontrol ediliyor...")
-    cached_seo = get_cached_ai_seo(content_hash, "deepseek")
-    
-    usage = None
-    if cached_seo:
-        print("\n[⚡] HARİKA! Bu ürünün SEO metinleri yerel önbellekte (local cache) bulundu!")
-        print("[⚡] API çağrısı atlanarak 100% hız ve bütçe tasarrufu sağlandı! ($0.00000 USD)")
-        seo_data = cached_seo
-    else:
-        # 7. Contact DeepSeek API (If Cache Miss)
-        print("\n[🤖] DeepSeek API ile bağlantı kuruluyor ve SEO metinleri üretiliyor...")
-        try:
-            t_start = time.time()
-            seo_data, usage = get_deepseek_seo(product_payload, api_key)
-            t_end = time.time()
-            print(f"[OK] Yapay zeka yanıtı başarıyla oluşturuldu! ({t_end - t_start:.2f} saniye)")
-        except Exception as e:
-            print(f"[HATA] DeepSeek API hatası: {e}")
-            sys.exit(1)
-
-    # 8. Show Optimization Results
+def print_seo_comparison(pid, content_hash, title, desc, seo_data):
     print("\n" + "=" * 65)
     print("              SEO METİN KARŞILAŞTIRMA TABLOSU")
     print("=" * 65)
@@ -279,11 +250,13 @@ def main():
     print(f"🔵 META BAŞLIĞI      : {seo_data.get('meta_title')}")
     print(f"🔵 META AÇIKLAMASI   : {seo_data.get('meta_description')}")
     print(f"🔵 ETİKETLER (TAGS)  : {', '.join(seo_data.get('tags', []))}")
-    print(f"🔵 ÖNE ÇIKANLAR      :")
+    print("🔵 ÖNE ÇIKANLAR      :")
     for feat in seo_data.get("highlight_features", []):
         print(f"   * {feat}")
     print("=" * 65)
 
+
+def print_cost_report(usage, cached_seo):
     if usage:
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
@@ -306,13 +279,69 @@ def main():
         print("   - Harcanan Token / Ücret : 0 Token / $0.00000 USD (Bedava)")
         print("=" * 65)
 
-    # 9. Apply to Database automatically
+
+def main():
+    print("=" * 65)
+    print("      DEEPSEEK YAPAY ZEKA SEO OPTİMİZASYON TEST ARACI")
+    print("=" * 65)
+
+    api_key = get_api_key()
+
+    print("\n[+] Veritabanından rastgele 5 ürün getiriliyor...")
+    try:
+        products = fetch_sample_products()
+    except Exception as e:
+        print(f"[HATA] Veritabanı bağlantı hatası: {e}")
+        sys.exit(1)
+
+    if not products:
+        print("[!] Veritabanında ürün bulunamadı!")
+        sys.exit(0)
+
+    print_sample_products(products)
+    selected_product = select_product(products)
+    pid, title, desc, gender, season, fabric, ratio = selected_product
+
+    product_payload = {
+        "title": title,
+        "original_description": desc or "",
+        "gender": gender or "",
+        "season": season or "",
+        "fabric": fabric or "",
+        "series_ratio": ratio or ""
+    }
+
+    content_hash = calculate_content_hash(product_payload)
+
+    print("\n[+] Yerel AI önbelleği kontrol ediliyor...")
+    cached_seo = get_cached_ai_seo(content_hash, "deepseek")
+    
+    usage = None
+    if cached_seo:
+        print("\n[⚡] HARİKA! Bu ürünün SEO metinleri yerel önbellekte (local cache) bulundu!")
+        print("[⚡] API çağrısı atlanarak 100% hız ve bütçe tasarrufu sağlandı! ($0.00000 USD)")
+        seo_data = cached_seo
+    else:
+        print("\n[🤖] DeepSeek API ile bağlantı kuruluyor ve SEO metinleri üretiliyor...")
+        try:
+            t_start = time.time()
+            seo_data, usage = get_deepseek_seo(product_payload, api_key)
+            t_end = time.time()
+            print(f"[OK] Yapay zeka yanıtı başarıyla oluşturuldu! ({t_end - t_start:.2f} saniye)")
+        except Exception as e:
+            print(f"[HATA] DeepSeek API hatası: {e}")
+            sys.exit(1)
+
+    print_seo_comparison(pid, content_hash, title, desc, seo_data)
+    print_cost_report(usage, cached_seo)
+
     print("\n[+] SEO verileri otomatik olarak 'catalog.product_ai_content' tablosuna kaydediliyor...")
     try:
         save_or_update_ai_seo(pid, seo_data, content_hash, product_payload, ai_engine="deepseek")
         print("[OK] SEO verileri başarıyla veritabanına kaydedildi!")
     except Exception as e:
         print(f"[HATA] Veritabanı güncelleme hatası: {e}")
+
 
 if __name__ == "__main__":
     try:

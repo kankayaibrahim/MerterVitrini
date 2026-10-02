@@ -1,21 +1,31 @@
+import os
+import sys
+from pathlib import Path
 import paramiko
-import json
+
+# Ensure scripts directory is available for importing unified_deployer config
+scripts_dir = Path(__file__).resolve().parent
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+
+from unified_deployer import SERVER_CONFIG, PROJECTS_CONFIG
+
 
 def run_remote_commands():
-    hostname = "213.202.255.80"
-    port = 22
-    username = "root"
-    password = "02vMhY8Xgi"
+    hostname = SERVER_CONFIG.get("hostname", "")
+    port = SERVER_CONFIG.get("port", 22)
+    username = SERVER_CONFIG.get("username", "root")
+    auth_secret = SERVER_CONFIG.get("password", "")
+    db_password = os.environ.get("DB_PASSWORD") or PROJECTS_CONFIG.get("unified", {}).get("backend", {}).get("config_template", {}).get("db_password", "")
 
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     
     try:
-        ssh.connect(hostname, port, username, password)
+        ssh.connect(hostname, port=port, username=username, password=auth_secret)
         print("Connected to SSH.")
         
         # We will insert major German cities.
-        # Munich, Frankfurt, Cologne, Stuttgart, Düsseldorf, Dortmund, Essen, Leipzig, Dresden, Hannover, Nürnberg, Duisburg, Bochum, Wuppertal, Bielefeld, Bonn, Münster, Karlsruhe, Mannheim, Augsburg, Wiesbaden, Gelsenkirchen, Mönchengladbach, Braunschweig, Chemnitz, Kiel, Aachen, Halle, Magdeburg, Freiburg, Krefeld, Lübeck, Oberhausen, Erfurt, Mainz, Rostock, Kassel, Hagen, Hamm, Saarbrücken, Mülheim, Ludwigshafen, Osnabrück, Solingen, Leverkusen, Heidelberg, Neuss, Darmstadt, Paderborn, Regensburg, Ingolstadt, Würzburg, Wolfsburg, Ulm, Heilbronn, Pforzheim, Göttingen, Bottrop, Recklinghausen, Koblenz, Bremerhaven, Remscheid, Jena, Trier, Erlangen, Moers, Siegen, Hildesheim, Cottbus, Salzgitter
         cities = [
             ("DE-MUN", "München (Munich)"),
             ("DE-KOL", "Köln (Cologne)"),
@@ -99,7 +109,6 @@ def run_remote_commands():
         # Build multi-insert query dynamically
         sql_vals = []
         for code, name in cities:
-            # Escape single quotes in names
             escaped_name = name.replace("'", "''")
             sql_vals.append(f"((SELECT id FROM catalog.countries WHERE code = 'DE'), '{code}', '{escaped_name}')")
             
@@ -110,21 +119,22 @@ def run_remote_commands():
         """
         
         # We run the insertion via psql
-        cmd = f'PGPASSWORD="DHMwK0Qzyox7" psql -h 127.0.0.1 -U postgres -d merterdevdb -c "{insert_query}"'
+        cmd = f'PGPASSWORD="{db_password}" psql -h 127.0.0.1 -U postgres -d merterdevdb -c "{insert_query}"'
         print("Executing bulk insertion of German cities...")
-        stdin, stdout, stderr = ssh.exec_command(cmd)
+        _, stdout, stderr = ssh.exec_command(cmd)
         print(stdout.read().decode('utf-8'))
         print(stderr.read().decode('utf-8'))
         
         # Verify state counts for Germany again
-        verify_cmd = 'PGPASSWORD="DHMwK0Qzyox7" psql -h 127.0.0.1 -U postgres -d merterdevdb -c "SELECT COUNT(*) FROM catalog.country_states WHERE country_id IN (SELECT id FROM catalog.countries WHERE code = \'DE\');"'
-        stdin, stdout, stderr = ssh.exec_command(verify_cmd)
+        verify_cmd = f'PGPASSWORD="{db_password}" psql -h 127.0.0.1 -U postgres -d merterdevdb -c "SELECT COUNT(*) FROM catalog.country_states WHERE country_id IN (SELECT id FROM catalog.countries WHERE code = \'DE\');"'
+        _, stdout, _ = ssh.exec_command(verify_cmd)
         print("Verified count for Germany states/cities:", stdout.read().decode('utf-8').strip())
 
     except Exception as e:
         print(f"Error: {e}")
     finally:
         ssh.close()
+
 
 if __name__ == "__main__":
     run_remote_commands()

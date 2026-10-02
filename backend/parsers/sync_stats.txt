@@ -1,0 +1,30 @@
+====================================================
+JANES AUTONOMOUS SYNC PERFORMANCE STATS
+Timestamp: 2026-05-28T17:31:20.436670
+Sync Run ID: 019e6ed8-4aaf-7aa2-ad2f-165ad1b81655
+Status: SUCCESS
+====================================================
+
+SYNCHRONIZATION METRICS:
+- Products Parsed: 2066
+- Products Added: 2066
+- Products Updated: 0
+- Variants Aligned: 6097
+- Image Downloads (Total): 14964
+- Image Downloads (Success): 14964
+- Errors Skipped: 8
+
+STEP DURATION BENCHMARKS:
+- 1. Feed Download              : 9.2142 seconds
+- 2. Cache Loading              : 0.1708 seconds
+- 3. XML Ingestion (Parse)      : 4.4408 seconds
+- 4. DB Products Bulk Upsert    : 1.2624 seconds
+- 5. DB Variants Bulk Upsert    : 1.1373 seconds
+- 6. DB Relations Delete        : 0.1222 seconds
+- 7. DB Attributes Insert       : 2.1808 seconds
+- 9. DB Image Mappings Insert   : 1.0254 seconds
+- 10. Image Downloads           : 2529.2478 seconds
+- 11. Inactive Products Cleanup : 0.1866 seconds
+- Total Sync Duration           : 2550.9389 seconds
+
+====================================================

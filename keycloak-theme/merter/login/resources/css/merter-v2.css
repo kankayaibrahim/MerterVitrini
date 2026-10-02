@@ -47,7 +47,7 @@ html, body {
   font-family: 'Outfit', sans-serif !important;
   font-weight: 800 !important;
   font-size: 32px !important;
-  letter-spacing: -0.04em !important;
+  letter-spacing: -0.04em;
   color: #ffffff !important;
   text-shadow: 0 0 40px rgba(244, 63, 94, 0.4) !important;
   margin-bottom: 2px !important;
@@ -102,7 +102,7 @@ h1, #kc-page-title, .pf-c-title, .login-pf-page .card-pf h1 {
   text-align: center !important;
   margin-top: 0 !important;
   margin-bottom: 2rem !important;
-  letter-spacing: -0.02em !important;
+  letter-spacing: -0.02em;
   border: none !important;
   padding: 0 45px !important;
 }
@@ -121,12 +121,13 @@ label, .pf-c-form__label, .control-label {
   font-weight: 500 !important;
   margin-bottom: 8px !important;
   display: inline-block !important;
-  letter-spacing: 0.02em !important;
+  letter-spacing: 0.02em;
   font-family: 'Outfit', sans-serif !important;
 }
 
 .pf-c-form-control, .form-control, input[type="text"], input[type="password"], input[type="email"] {
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: #161e2e !important;
+  background-color: #161e2e !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   border-radius: 12px !important;
   color: #f8fafc !important;
@@ -146,7 +147,8 @@ label, .pf-c-form__label, .control-label {
 }
 
 .pf-c-form-control:focus, .form-control:focus, input[type="text"]:focus, input[type="password"]:focus {
-  background: rgba(255, 255, 255, 0.07) !important;
+  background: #1e293b !important;
+  background-color: #1e293b !important;
   border-color: #f43f5e !important;
   box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.18) !important;
   color: #ffffff !important;
@@ -181,7 +183,8 @@ input:-webkit-autofill:focus {
 /* Eye toggle button inside password field */
 .pf-c-button.pf-m-control,
 .pf-c-input-group button[data-password-toggle] {
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: #161e2e !important;
+  background-color: #161e2e !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   border-left: none !important;
   border-top-right-radius: 12px !important;
@@ -198,13 +201,15 @@ input:-webkit-autofill:focus {
 
 .pf-c-button.pf-m-control:hover,
 .pf-c-input-group button[data-password-toggle]:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: #1a2436 !important;
+  background-color: #1a2436 !important;
   color: #ffffff !important;
 }
 
 .pf-c-button.pf-m-control:focus,
 .pf-c-input-group button[data-password-toggle]:focus {
-  background: rgba(255, 255, 255, 0.07) !important;
+  background: #1e293b !important;
+  background-color: #1e293b !important;
   border-color: #f43f5e !important;
   color: #ffffff !important;
   box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.18) !important;
@@ -225,7 +230,8 @@ input:-webkit-autofill:focus {
    5. PREMIUM GRADIENT SUBMIT BUTTON
    ============================================================================== */
 .btn-primary, #kc-login, .pf-c-button.pf-m-primary {
-  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+  background-color: #be123c !important;
+  background-image: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
   border: none !important;
   border-radius: 12px !important;
   color: #ffffff !important;
@@ -273,7 +279,7 @@ input:-webkit-autofill:focus {
   font-size: 0.8rem !important;
   font-weight: 500 !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.1em !important;
+  letter-spacing: 0.1em;
   text-align: center !important;
   margin-bottom: 0.8rem !important;
 }
@@ -413,25 +419,29 @@ input[type="checkbox"] {
 }
 
 .alert-error, .pf-c-alert.pf-m-danger, .alert-danger {
-  background: rgba(239, 68, 68, 0.12) !important;
+  background: #241822 !important;
+  background-color: #241822 !important;
   border-color: rgba(239, 68, 68, 0.25) !important;
   color: #fca5a5 !important;
 }
 
 .alert-success, .pf-c-alert.pf-m-success {
-  background: rgba(34, 197, 94, 0.12) !important;
+  background: #122722 !important;
+  background-color: #122722 !important;
   border-color: rgba(34, 197, 94, 0.25) !important;
   color: #86efac !important;
 }
 
 .alert-warning, .pf-c-alert.pf-m-warning {
-  background: rgba(234, 179, 8, 0.12) !important;
+  background: #272419 !important;
+  background-color: #272419 !important;
   border-color: rgba(234, 179, 8, 0.25) !important;
   color: #fef08a !important;
 }
 
 .alert-info, .pf-c-alert.pf-m-info {
-  background: rgba(59, 130, 246, 0.12) !important;
+  background: #14223d !important;
+  background-color: #14223d !important;
   border-color: rgba(59, 130, 246, 0.25) !important;
   color: #93c5fd !important;
 }
@@ -533,8 +543,8 @@ input[type="checkbox"] {
 #kc-current-locale-link, 
 .kc-dropdown-toggle, 
 #kc-locale-wrapper a {
-  background: rgba(255, 255, 255, 0.05) !important;
-  background-color: rgba(255, 255, 255, 0.05) !important;
+  background: #161e2e !important;
+  background-color: #161e2e !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 8px !important;
   color: #cbd5e1 !important;
@@ -559,8 +569,8 @@ input[type="checkbox"] {
 #kc-locale-wrapper a:hover,
 #kc-locale-dropdown button:focus,
 #kc-current-locale-link:focus {
-  background: rgba(255, 255, 255, 0.1) !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
+  background: #1e293b !important;
+  background-color: #1e293b !important;
   color: #ffffff !important;
   border-color: rgba(255, 255, 255, 0.15) !important;
 }
@@ -652,8 +662,8 @@ ul#language-switch1 li a:hover,
 #kc-locale-dropdown ul li a:hover,
 .menu-button-links ul li a:hover,
 #kc-locale .pf-c-dropdown__menu-item:hover {
-  background: rgba(244, 63, 94, 0.15) !important;
-  background-color: rgba(244, 63, 94, 0.15) !important;
+  background: #311824 !important;
+  background-color: #311824 !important;
   color: #ffffff !important;
   text-decoration: none !important;
 }
@@ -670,7 +680,8 @@ p, .instruction, .subtitle, .pf-c-empty-state__body, .kc-feedback-text {
 
 /* Logout submit button gradient styling */
 #kc-logout {
-  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+  background-color: #be123c !important;
+  background-image: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
   border: none !important;
   border-radius: 12px !important;
   color: #ffffff !important;
@@ -703,7 +714,8 @@ p, .instruction, .subtitle, .pf-c-empty-state__body, .kc-feedback-text {
 
 /* Secondary Button Overrides (OIDC Back/Cancel button) */
 .btn-secondary, #kc-cancel, .pf-c-button.pf-m-secondary {
-  background: rgba(255, 255, 255, 0.05) !important;
+  background: #161e2e !important;
+  background-color: #161e2e !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   border-radius: 12px !important;
   color: #f1f5f9 !important;
@@ -721,7 +733,8 @@ p, .instruction, .subtitle, .pf-c-empty-state__body, .kc-feedback-text {
 }
 
 .btn-secondary:hover, #kc-cancel:hover, .pf-c-button.pf-m-secondary:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: #1e293b !important;
+  background-color: #1e293b !important;
   border-color: rgba(255, 255, 255, 0.2) !important;
   color: #ffffff !important;
 }

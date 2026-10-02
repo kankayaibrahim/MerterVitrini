@@ -1,140 +1,133 @@
-import paramiko
-import urllib.request
 import json
 import os
+import sys
+import urllib.request
+from pathlib import Path
+import paramiko
 
-def run_deployment():
-    # 1. Fetch Germany cities JSON from GitHub
+# Ensure scripts directory is available for importing unified_deployer config
+scripts_dir = Path(__file__).resolve().parent
+if str(scripts_dir) not in sys.path:
+    sys.path.insert(0, str(scripts_dir))
+
+from unified_deployer import SERVER_CONFIG, PROJECTS_CONFIG
+
+GERMAN_STATES = [
+    ("DE-BW", "Baden-Württemberg"),
+    ("DE-BY", "Bayern"),
+    ("DE-BE", "Berlin"),
+    ("DE-BB", "Brandenburg"),
+    ("DE-HB", "Bremen"),
+    ("DE-HH", "Hamburg"),
+    ("DE-HE", "Hessen"),
+    ("DE-MV", "Mecklenburg-Vorpommern"),
+    ("DE-NI", "Niedersachsen"),
+    ("DE-NW", "Nordrhein-Westfalen"),
+    ("DE-RP", "Rheinland-Pfalz"),
+    ("DE-SL", "Saarland"),
+    ("DE-SN", "Sachsen"),
+    ("DE-ST", "Sachsen-Anhalt"),
+    ("DE-SH", "Schleswig-Holstein"),
+    ("DE-TH", "Thüringen")
+]
+
+CITY_STATE_NAMES = {"berlin", "hamburg", "bremen"}
+UMLAUT_REPLACEMENTS = {
+    'ä': 'AE', 'ö': 'OE', 'ü': 'UE', 'ß': 'SS',
+    'Ä': 'AE', 'Ö': 'OE', 'Ü': 'UE'
+}
+
+
+def fetch_germany_cities() -> list:
     url = "https://raw.githubusercontent.com/pensnarik/german-cities/master/germany.json"
     try:
         print("Fetching Germany cities json...")
         with urllib.request.urlopen(url) as response:
             cities_data = json.loads(response.read().decode('utf-8'))
         print(f"Fetched {len(cities_data)} cities.")
+        return cities_data
     except Exception as e:
         print("Failed to fetch cities from github:", e)
-        return
+        return []
 
-    # 2. Define the 16 federal states
-    states = [
-        ("DE-BW", "Baden-Württemberg"),
-        ("DE-BY", "Bayern"),
-        ("DE-BE", "Berlin"),
-        ("DE-BB", "Brandenburg"),
-        ("DE-HB", "Bremen"),
-        ("DE-HH", "Hamburg"),
-        ("DE-HE", "Hessen"),
-        ("DE-MV", "Mecklenburg-Vorpommern"),
-        ("DE-NI", "Niedersachsen"),
-        ("DE-NW", "Nordrhein-Westfalen"),
-        ("DE-RP", "Rheinland-Pfalz"),
-        ("DE-SL", "Saarland"),
-        ("DE-SN", "Sachsen"),
-        ("DE-ST", "Sachsen-Anhalt"),
-        ("DE-SH", "Schleswig-Holstein"),
-        ("DE-TH", "Thüringen")
+
+def normalize_code(name: str) -> str:
+    res = name
+    for old, new in UMLAUT_REPLACEMENTS.items():
+        res = res.replace(old, new)
+    
+    clean = [char for char in res if char.isalnum() or char in (' ', '-')]
+    res = "".join(clean).replace(' ', '-').upper()
+    while '--' in res:
+        res = res.replace('--', '-')
+    res = res.strip('-')
+    return f"DE-{res}"[:50]
+
+
+def resolve_unique_city_code(name: str, city: dict, inserted_codes: set) -> str:
+    code = normalize_code(name)
+    if code not in inserted_codes:
+        return code
+    district = city.get("district", "").strip()
+    if district:
+        code = normalize_code(f"{name}-{district}")
+    if code in inserted_codes:
+        counter = 2
+        base = code[:46]
+        while f"{base}-{counter}" in inserted_codes:
+            counter += 1
+        code = f"{base}-{counter}"
+    return code
+
+
+def generate_germany_sql(cities_data: list) -> str:
+    sql_lines = [
+        "BEGIN;",
+        "-- Delete existing German states/cities",
+        "DELETE FROM catalog.country_states WHERE country_id = (SELECT id FROM catalog.countries WHERE code = 'DE');",
+        "\n-- Insert 16 Federal States"
     ]
-
-    # Deduplicate set for names (case-insensitive) to prevent inserting city-states twice
-    state_names_lower = {"berlin", "hamburg", "bremen"}
     
-    # 3. Process cities and generate SQL
-    sql_lines = []
-    sql_lines.append("BEGIN;")
-    sql_lines.append("-- Delete existing German states/cities")
-    sql_lines.append("DELETE FROM catalog.country_states WHERE country_id = (SELECT id FROM catalog.countries WHERE code = 'DE');")
-    
-    sql_lines.append("\n-- Insert 16 Federal States")
-    for code, name in states:
+    for code, name in GERMAN_STATES:
         escaped_name = name.replace("'", "''")
         sql_lines.append(f"INSERT INTO catalog.country_states (country_id, code, state_name) VALUES ((SELECT id FROM catalog.countries WHERE code = 'DE'), '{code}', '{escaped_name}');")
 
-    # Function to normalize city names into a clean uppercase code slug
-    def normalize_code(name):
-        # Umlaut replacements
-        replacements = {
-            'ä': 'AE', 'ö': 'OE', 'ü': 'UE', 'ß': 'SS',
-            'Ä': 'AE', 'Ö': 'OE', 'Ü': 'UE'
-        }
-        res = name
-        for old, new in replacements.items():
-            res = res.replace(old, new)
-        
-        # Keep alphanumeric, space and hyphen
-        clean = []
-        for char in res:
-            if char.isalnum() or char in (' ', '-'):
-                clean.append(char)
-        res = "".join(clean)
-        
-        # Replace spaces with hyphens, convert to uppercase, strip extra hyphens
-        res = res.replace(' ', '-').upper()
-        while '--' in res:
-            res = res.replace('--', '-')
-        res = res.strip('-')
-        
-        # Prepend DE-
-        code = f"DE-{res}"
-        return code[:50]  # limit to 50 chars max
+    sql_lines.append("\n-- Insert Cities and Towns")
+    inserted_codes = {code for code, _ in GERMAN_STATES}
 
-    sql_lines.append("\n-- Insert 2054 Cities and Towns")
-    inserted_codes = set(code for code, _ in states)
-    
     for city in cities_data:
         name = city.get("name", "").strip()
-        if not name:
+        if not name or name.lower() in CITY_STATE_NAMES:
             continue
-            
-        # Skip city states already added at state-level
-        if name.lower() in state_names_lower:
-            continue
-            
-        code = normalize_code(name)
-        # Ensure we don't insert duplicate codes
-        if code in inserted_codes:
-            # Append district name or count to distinguish
-            district = city.get("district", "").strip()
-            if district:
-                code = normalize_code(f"{name}-{district}")
-            else:
-                counter = 2
-                base_code = code
-                while code in inserted_codes:
-                    code = f"{base_code[:46]}-{counter}"
-                    counter += 1
-                    
+        code = resolve_unique_city_code(name, city, inserted_codes)
         inserted_codes.add(code)
         escaped_name = name.replace("'", "''")
         sql_lines.append(f"INSERT INTO catalog.country_states (country_id, code, state_name) VALUES ((SELECT id FROM catalog.countries WHERE code = 'DE'), '{code}', '{escaped_name}');")
 
     sql_lines.append("COMMIT;")
-    sql_content = "\n".join(sql_lines)
+    return "\n".join(sql_lines)
 
-    # 4. SSH to server and deploy SQL
-    hostname = "213.202.255.80"
-    port = 22
-    username = "root"
-    password = "02vMhY8Xgi"
+
+def deploy_sql_remotely(sql_content: str):
+    hostname = SERVER_CONFIG.get("hostname", "")
+    port = SERVER_CONFIG.get("port", 22)
+    username = SERVER_CONFIG.get("username", "root")
+    auth_secret = SERVER_CONFIG.get("password", "")
+    db_password = os.environ.get("DB_PASSWORD") or PROJECTS_CONFIG.get("unified", {}).get("backend", {}).get("config_template", {}).get("db_password", "")
 
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     
     try:
-        ssh.connect(hostname, port, username, password)
+        ssh.connect(hostname, port=port, username=username, password=auth_secret)
         print("Connected to SSH.")
         
-        # Write SQL content to a remote file /tmp/populate_germany.sql
-        print("Writing SQL file to remote server...")
-        sftp = ssh.open_sftp()
-        with sftp.file('/tmp/populate_germany.sql', 'w') as f:
-            f.write(sql_content)
-        sftp.close()
-        print("Remote SQL file written successfully.")
-        
-        # Execute the SQL file using psql
-        print("Executing SQL query on production database...")
-        cmd = 'PGPASSWORD="DHMwK0Qzyox7" psql -h 127.0.0.1 -U postgres -d merterdevdb -f /tmp/populate_germany.sql'
+        print("Executing SQL query directly on production database via stdin stream...")
+        cmd = f'PGPASSWORD="{db_password}" psql -h 127.0.0.1 -U postgres -d merterdevdb'
         stdin, stdout, stderr = ssh.exec_command(cmd)
+        stdin.write(sql_content)
+        stdin.flush()
+        stdin.channel.shutdown_write()
         
         out = stdout.read().decode('utf-8', errors='replace')
         err = stderr.read().decode('utf-8', errors='replace')
@@ -145,20 +138,24 @@ def run_deployment():
             print("Command error:")
             print(err.encode('ascii', errors='replace').decode('ascii'))
             
-        # Verify and count
         print("Verifying locations count for DE:")
-        verify_cmd = 'PGPASSWORD="DHMwK0Qzyox7" psql -h 127.0.0.1 -U postgres -d merterdevdb -c "SELECT COUNT(*) FROM catalog.country_states WHERE country_id = (SELECT id FROM catalog.countries WHERE code = \'DE\');"'
-        stdin, stdout, stderr = ssh.exec_command(verify_cmd)
-        print(stdout.read().decode('utf-8', errors='replace').strip())
-        
-        # Clean up remote file
-        ssh.exec_command("rm -f /tmp/populate_germany.sql")
-        print("Cleaned up temporary remote SQL file.")
+        verify_cmd = f'PGPASSWORD="{db_password}" psql -h 127.0.0.1 -U postgres -d merterdevdb -c "SELECT COUNT(*) FROM catalog.country_states WHERE country_id = (SELECT id FROM catalog.countries WHERE code = \'DE\');"'
+        _, verify_out, _ = ssh.exec_command(verify_cmd)
+        print(verify_out.read().decode('utf-8', errors='replace').strip())
         
     except Exception as e:
         print("Error during SSH/SQL deployment:", e)
     finally:
         ssh.close()
+
+
+def run_deployment():
+    cities_data = fetch_germany_cities()
+    if not cities_data:
+        return
+    sql_content = generate_germany_sql(cities_data)
+    deploy_sql_remotely(sql_content)
+
 
 if __name__ == "__main__":
     run_deployment()
