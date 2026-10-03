@@ -39,7 +39,7 @@ export interface CategoryNode {
   node_path: string;
   is_active: boolean;
   children: CategoryNode[];
-  translations?: Record<string, Record<string, any>>;
+  translations?: Record<string, Record<string, unknown>>;
 }
 
 export interface Product {
@@ -116,6 +116,13 @@ export interface UserInfo {
   role: string;
 }
 
+export interface SupplierAddress {
+  id?: string;
+  title: string;
+  text: string;
+  coordinates: string;
+}
+
 export interface Brand {
   id: string;
   name: string;
@@ -123,7 +130,7 @@ export interface Brand {
   alias_code: string | null;
   website?: string | null;
   phone?: string | null;
-  addresses?: any[] | null;
+  addresses?: SupplierAddress[] | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

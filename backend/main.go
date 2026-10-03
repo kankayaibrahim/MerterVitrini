@@ -4,13 +4,10 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"sync"
 	"syscall"
 	"time"
 
@@ -18,6 +15,8 @@ import (
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/handlers"
 	"mertervitrini/backend/middleware"
+	"mertervitrini/backend/pkg/logger"
+	"mertervitrini/backend/pkg/safe"
 )
 
 //go:embed docs/swagger.yaml
@@ -28,75 +27,17 @@ var swaggerHTML []byte
 
 const headerContentType = "Content-Type"
 
-// DailyLogWriter handles thread-safe daily rotating logging to files named after the date (YYYY-MM-DD.log)
-type DailyLogWriter struct {
-	mu          sync.Mutex
-	logDir      string
-	currentFile *os.File
-	currentDate string
-}
-
-func NewDailyLogWriter(logDir string) (*DailyLogWriter, error) {
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return nil, err
-	}
-	return &DailyLogWriter{logDir: logDir}, nil
-}
-
-func (w *DailyLogWriter) Write(p []byte) (n int, err error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	dateStr := time.Now().Format("2006-01-02")
-
-	if dateStr != w.currentDate {
-		if w.currentFile != nil {
-			w.currentFile.Close()
-		}
-
-		logPath := filepath.Join(w.logDir, dateStr+".log")
-		file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if err != nil {
-			return 0, err
-		}
-		w.currentFile = file
-		w.currentDate = dateStr
-	}
-
-	return w.currentFile.Write(p)
-}
-
-func (w *DailyLogWriter) Close() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.currentFile != nil {
-		err := w.currentFile.Close()
-		w.currentFile = nil
-		return err
-	}
-	return nil
-}
-
 func main() {
-	// 1. Resolve executable directory to place config and logs beside the exe
-	exePath, err := os.Executable()
+	// 1. Initialize centralized daily rotating file logger (both main log and error log)
+	logDir, err := logger.Init("")
 	if err != nil {
-		log.Fatalf("Failed to resolve executable path: %v", err)
+		log.Printf("Warning: Failed to initialize file logger: %v\n", err)
 	}
-	exeDir := filepath.Dir(exePath)
-
-	// 2. Initialize daily rotating log writer beside the exe
-	logDir := filepath.Join(exeDir, "logs")
-	dailyWriter, err := NewDailyLogWriter(logDir)
-	if err != nil {
-		log.Fatalf("Failed to initialize daily log writer: %v", err)
-	}
-	defer dailyWriter.Close()
-
-	log.SetOutput(io.MultiWriter(os.Stdout, dailyWriter))
+	defer logger.Close()
 
 	log.Println("==================================================")
 	log.Println("Merter Vitrini Unified Backend Service Starting...")
+	log.Printf("Active File Log Directory: %s\n", logDir)
 	log.Println("==================================================")
 
 	// 3. Load Configurations
@@ -368,11 +309,12 @@ func main() {
 	mux.Handle("PUT /api/v1/customers/{id}/block", authMiddleware(http.HandlerFunc(customersHandler.ToggleBlockCustomer)))
 	mux.Handle("DELETE /api/v1/customers/{id}", authMiddleware(http.HandlerFunc(customersHandler.DeleteCustomer)))
 
-	// 7. Wrap global middlewares (Logging, RateLimit, CORS)
+	// 7. Wrap global middlewares (Recovery, Logging, RateLimit, CORS)
 	var handler http.Handler = mux
 	handler = middleware.LoggingMiddleware(cfg.LogFormat)(handler)
 	handler = middleware.RateLimitMiddleware(handler)
 	handler = middleware.CORSMiddleware(handler)
+	handler = middleware.RecoveryMiddleware(handler)
 
 	// 8. Graceful Shutdown & Server Init
 	server := &http.Server{
@@ -386,12 +328,12 @@ func main() {
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
-	go func() {
+	safe.Go("HTTP Server Listener", func() {
 		log.Printf("[SERVER] Unified Backend API successfully listening on port :%s\n", cfg.ServerPort)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("HTTP server failed: %v", err)
 		}
-	}()
+	})
 
 	<-stopChan
 	log.Println("Shutting down unified backend service gracefully...")

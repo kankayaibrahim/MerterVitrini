@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"mertervitrini/backend/db"
+	"mertervitrini/backend/pkg/safe"
 )
 
 type CronHandler struct{}
@@ -65,7 +66,7 @@ func ProvisionCronTables(ctx context.Context) error {
 
 // StartCronScheduler starts a background ticker to trigger cron job at specified time
 func StartCronScheduler(ctx context.Context) {
-	go func() {
+	safe.Go("Cron Background Scheduler Thread", func() {
 		log.Println("[CRON] Background scheduler thread initiated.")
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -102,12 +103,14 @@ func StartCronScheduler(ctx context.Context) {
 					if now.Hour() == runHour && now.Minute() == runMinute && lastCheckedDate != currentDate && currentStatus != "running" {
 						lastCheckedDate = currentDate
 						log.Printf("[CRON] Scheduled time matched (%02d:%02d). Starting cron job pipeline...", runHour, runMinute)
-						go runCronPipeline(false)
+						safe.Go("Cron Pipeline Execution", func() {
+							runCronPipeline(false)
+						})
 					}
 				}()
 			}
 		}
-	}()
+	})
 }
 
 type SyncedFeedInfo struct {
@@ -653,7 +656,9 @@ func (h *CronHandler) TriggerCron(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go runCronPipeline(true)
+	safe.Go("Manual Cron Pipeline", func() {
+		runCronPipeline(true)
+	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Write([]byte(`{"success":true,"message":"Cron pipeline triggered manually in background"}`))

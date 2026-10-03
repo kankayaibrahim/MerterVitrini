@@ -1,5 +1,15 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /admin/
+Disallow: /profile
+Disallow: /cart
+Disallow: /checkout
+Disallow: /google-callback
+
+User-agent: Googlebot-Image
+Allow: /
+Allow: /uploads/
+Allow: /_next/static/
 
 Sitemap: https://mertervitrini.com.tr/sitemap.xml

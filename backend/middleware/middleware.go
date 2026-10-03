@@ -15,6 +15,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/logger"
+	"mertervitrini/backend/pkg/safe"
 )
 
 type contextKey string
@@ -118,9 +120,17 @@ func logText(r *http.Request, ip string, container *LogContainer, statusCode int
 		ua = "unknown"
 	}
 
-	log.Printf("[API] %s - [%s] %s %s %s | Status: %d | Duration: %.2fms | UA: %s",
+	msg := fmt.Sprintf("[API] %s - [%s] %s %s %s | Status: %d | Duration: %.2fms | UA: %s",
 		ip, userText, r.Method, r.URL.Path, r.Proto, statusCode,
 		float64(duration.Microseconds())/1000.0, ua)
+
+	if statusCode >= 500 {
+		logger.Errorf("%s", msg)
+	} else if statusCode >= 400 {
+		logger.Warnf("%s", msg)
+	} else {
+		log.Println(msg)
+	}
 }
 
 // LoggingMiddleware logs HTTP requests, execution time, and client context details in either Text or JSON format
@@ -338,7 +348,9 @@ func parseUserInfoFromClaims(claims jwt.MapClaims) *models.UserInfo {
 func AuthMiddleware(jwtSecret string, keycloakPublicKey string) func(http.Handler) http.Handler {
 	keyProvider := &keycloakKeyProvider{rawKey: keycloakPublicKey}
 	if keycloakPublicKey != "" {
-		go keyProvider.GetKey()
+		safe.Go("Keycloak Key Provider", func() {
+			keyProvider.GetKey()
+		})
 	}
 
 	keyFunc := makeKeyFunc(jwtSecret, keyProvider)

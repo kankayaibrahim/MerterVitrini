@@ -10,14 +10,15 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://mertervitrini.com.tr",
     languages: {
-      tr: "https://mertervitrini.com.tr/tr/",
-      en: "https://mertervitrini.com.tr/en/",
-      pl: "https://mertervitrini.com.tr/pl/",
-      bg: "https://mertervitrini.com.tr/bg/",
-      ar: "https://mertervitrini.com.tr/ar/",
-      ru: "https://mertervitrini.com.tr/ru/",
-      de: "https://mertervitrini.com.tr/de/",
-      fr: "https://mertervitrini.com.tr/fr/",
+      "x-default": "https://mertervitrini.com.tr/en",
+      tr: "https://mertervitrini.com.tr/tr",
+      en: "https://mertervitrini.com.tr/en",
+      pl: "https://mertervitrini.com.tr/pl",
+      bg: "https://mertervitrini.com.tr/bg",
+      ar: "https://mertervitrini.com.tr/ar",
+      ru: "https://mertervitrini.com.tr/ru",
+      de: "https://mertervitrini.com.tr/de",
+      fr: "https://mertervitrini.com.tr/fr",
     }
   },
   openGraph: {
@@ -30,6 +31,47 @@ export const metadata: Metadata = {
   }
 };
 
+const jsonLdOrg = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://mertervitrini.com.tr/#organization",
+      "name": "Merter Vitrini B2B",
+      "url": "https://mertervitrini.com.tr",
+      "logo": "https://mertervitrini.com.tr/placeholder.png",
+      "description": "Türkiye'nin lider üreticilerinden doğrudan toptan hazır giyim ve tekstil e-ticaret platformu.",
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "customer service",
+        "availableLanguage": ["Turkish", "English", "Russian", "Arabic"]
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://mertervitrini.com.tr/#website",
+      "url": "https://mertervitrini.com.tr",
+      "name": "Merter Vitrini",
+      "publisher": {
+        "@id": "https://mertervitrini.com.tr/#organization"
+      },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://mertervitrini.com.tr/tr/tum-urunler?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+  ]
+};
+
 export default function StorefrontPage() {
-  return <StorefrontLayout mode="portal" />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdOrg) }}
+      />
+      <StorefrontLayout mode="portal" />
+    </>
+  );
 }

@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Image from "next/image";
 import { Product } from "@/types/store";
 import { getProductTitle, t } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/utils";
-import { Heart, ShoppingBag, Eye } from "lucide-react";
+import { Heart, ShoppingBag, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useWishlistStore } from "@/store/useWishlistStore";
 
@@ -122,6 +122,54 @@ export default function ProductCard({
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
 
   const [activeImgIndex, setActiveImgIndex] = useState<number>(0);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchDeltaX = useRef<number>(0);
+  const isSwiping = useRef<boolean>(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    touchDeltaX.current = 0;
+    isSwiping.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - touchStartX.current;
+    const deltaY = currentY - touchStartY.current;
+
+    touchDeltaX.current = deltaX;
+
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+      isSwiping.current = true;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX.current === null) return;
+    const deltaX = touchDeltaX.current;
+
+    if (isSwiping.current && Math.abs(deltaX) > 30 && displayImages.length > 1) {
+      if (deltaX < 0) {
+        // Swiped left -> next image
+        setActiveImgIndex((prev) => (prev + 1) % displayImages.length);
+      } else {
+        // Swiped right -> previous image
+        setActiveImgIndex((prev) => (prev - 1 + displayImages.length) % displayImages.length);
+      }
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+    touchDeltaX.current = 0;
+    setTimeout(() => {
+      isSwiping.current = false;
+    }, 150);
+  };
 
   const toggleFavorite = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -141,69 +189,127 @@ export default function ProductCard({
 
   return (
     <article className="bg-white rounded-none overflow-hidden flex flex-col h-full cursor-pointer relative border-none group select-none shadow-none transition-all duration-300 block text-inherit no-underline">
-      {/* 1. Visual Image Container with segmented hover image switcher */}
+      {/* 1. Visual Image Container with mobile touch swipe & desktop hover switcher */}
       <div
-        className="relative aspect-[4/5] overflow-hidden bg-[#fafafa]"
+        className="relative aspect-[4/5] overflow-hidden bg-[#fafafa] touch-pan-y"
         onMouseLeave={() => setActiveImgIndex(0)}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
-        {/* Active Image */}
-        <Image
-          src={displayImages[activeImgIndex] || "/placeholder.png"}
-          alt={title}
-          fill
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          priority={priority}
-          className="object-contain transition-all duration-300 ease-out group-hover:scale-102"
-        />
+        {/* Active Image Link */}
+        <Link
+          href={`/product/${product.slug || product.id}`}
+          tabIndex={-1}
+          aria-hidden="true"
+          onClick={(e) => {
+            if (isSwiping.current) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+          className="absolute inset-0 block z-0"
+        >
+          <Image
+            src={displayImages[activeImgIndex] || "/placeholder.png"}
+            alt={title}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            priority={priority}
+            className="object-contain transition-all duration-300 ease-out group-hover:scale-102"
+          />
+        </Link>
 
-        {/* Invisible vertical hover zones overlays (z-15) */}
+        {/* Desktop-only vertical hover zones overlays (hidden on mobile, z-15) */}
         {displayImages.length > 1 && (
-          <div className="absolute inset-0 z-15 flex">
+          <div className="hidden md:flex absolute inset-0 z-15">
             {displayImages.map((imgUrl, idx) => (
-              <div
+              <Link
                 key={`zone-${product.id}-${imgUrl}`}
-                className="flex-grow h-full cursor-pointer"
+                href={`/product/${product.slug || product.id}`}
+                tabIndex={-1}
+                aria-hidden="true"
+                className="flex-grow h-full cursor-pointer block"
                 onMouseEnter={() => setActiveImgIndex(idx)}
               />
             ))}
           </div>
         )}
 
-        {/* Segmented horizontal indicator bars at the bottom (z-20) */}
+        {/* Mobile touch navigation chevrons (md:hidden, z-25) */}
+        {displayImages.length > 1 && (
+          <>
+            <button
+              type="button"
+              aria-label="Önceki Görsel"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setActiveImgIndex((prev) => (prev - 1 + displayImages.length) % displayImages.length);
+              }}
+              className="md:hidden absolute left-1.5 top-1/2 -translate-y-1/2 z-25 w-7 h-7 rounded-full bg-white/90 shadow-sm border border-black/10 flex items-center justify-center text-onyx active:scale-90 transition-transform cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Sonraki Görsel"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setActiveImgIndex((prev) => (prev + 1) % displayImages.length);
+              }}
+              className="md:hidden absolute right-1.5 top-1/2 -translate-y-1/2 z-25 w-7 h-7 rounded-full bg-white/90 shadow-sm border border-black/10 flex items-center justify-center text-onyx active:scale-90 transition-transform cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        )}
+
+        {/* Segmented horizontal indicator bars at the bottom with touch-friendly tap hit area (z-20) */}
         {displayImages.length > 1 && (
           <div className="absolute bottom-2.5 left-3.5 right-3.5 flex gap-1 z-20">
             {displayImages.map((imgUrl, idx) => (
-              <div
+              <button
                 key={`bar-${product.id}-${imgUrl}`}
-                className="flex-grow h-[2px] bg-[#E0E0E0] relative overflow-hidden"
+                type="button"
+                aria-label={`Görsel ${idx + 1}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setActiveImgIndex(idx);
+                }}
+                className="flex-grow h-3 -my-1 py-1 relative cursor-pointer focus:outline-none bg-transparent border-none p-0 group/bar"
               >
-                <div
-                  className={`absolute inset-0 bg-black transition-opacity duration-200 ${
-                    activeImgIndex === idx ? "opacity-100" : "opacity-0"
-                  }`}
-                />
-              </div>
+                <div className="w-full h-[2px] bg-[#E0E0E0] relative overflow-hidden transition-all group-hover/bar:h-[3px]">
+                  <div
+                    className={`absolute inset-0 bg-black transition-opacity duration-200 ${
+                      activeImgIndex === idx ? "opacity-100" : "opacity-0"
+                    }`}
+                  />
+                </div>
+              </button>
             ))}
           </div>
         )}
 
         {/* Discount Badge */}
         {hasDiscount && (
-          <span className="absolute top-3 left-3 bg-[#A30000] text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10">
+          <span className="absolute top-3 left-3 bg-[#A30000] text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10 pointer-events-none">
             {discountPct}% {lang === "tr" ? "İNDİRİM" : "OFF"}
           </span>
         )}
 
         {/* Gender Badge */}
         {!hasDiscount && product.gender && (
-          <span className="absolute top-3 left-3 bg-white border border-black/10 text-onyx text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10">
+          <span className="absolute top-3 left-3 bg-white border border-black/10 text-onyx text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10 pointer-events-none">
             {t(product.gender, lang)}
           </span>
         )}
 
         {/* Color Variants Badge */}
         {colorText && (
-          <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm border border-black/5 px-2.5 py-1 flex items-center gap-1.5 z-10 rounded-none shadow-none select-none group-hover:opacity-0 transition-opacity duration-200">
+          <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm border border-black/5 px-2.5 py-1 flex items-center gap-1.5 z-10 rounded-none shadow-none select-none group-hover:opacity-0 transition-opacity duration-200 pointer-events-none">
             <div className="flex">
               <span className="w-2.5 h-2.5 rounded-full border border-white bg-indigo-500 shadow-sm" />
               <span className="w-2.5 h-2.5 rounded-full border border-white bg-purple-500 shadow-sm -ml-1.5" />
@@ -214,8 +320,8 @@ export default function ProductCard({
           </div>
         )}
 
-        {/* Action buttons overlay (z-20 to ensure clickability above overlay) */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 translate-x-3 group-hover:translate-x-0 transition-all duration-300 z-20">
+        {/* Action buttons overlay (z-30 to ensure clickability above overlay) */}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 translate-x-3 group-hover:translate-x-0 transition-all duration-300 z-30">
           <button
             type="button"
             className="w-9 h-9 bg-white border border-black/10 rounded-none flex items-center justify-center shadow-none text-onyx hover:bg-black hover:text-white hover:border-black transition-all cursor-pointer animate-in fade-in duration-200"
@@ -250,7 +356,7 @@ export default function ProductCard({
         </span>
 
         <h3 className="text-xs font-normal text-onyx line-clamp-2 min-h-[34px] leading-relaxed transition-colors duration-150 group-hover:text-black">
-          <Link href={`/product/${product.slug || product.id}`} className="hover:underline text-inherit after:absolute after:inset-0 after:z-1">
+          <Link href={`/product/${product.slug || product.id}`} className="hover:underline text-inherit">
             {title}
           </Link>
         </h3>

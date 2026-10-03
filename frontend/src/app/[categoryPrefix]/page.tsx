@@ -3,7 +3,7 @@ import { Metadata } from "next";
 import StorefrontLayout from "@/components/store/StorefrontLayout";
 
 interface PageProps {
-  params: Promise<{ categoryPrefix: string }>;
+  readonly params: Promise<{ readonly categoryPrefix: string }>;
 }
 
 // Generate static routes for all active language prefixes at compile time (essential for static export mode)
@@ -49,13 +49,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = titles[categoryPrefix] || titles.en;
   const desc = descs[categoryPrefix] || descs.en;
 
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/`;
+  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}`;
   const languagesList = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
-  const alternatesLanguages = Object.fromEntries(
-    languagesList
-      .filter((code) => code !== "__proto__" && code !== "constructor")
-      .map((code) => [code, `https://mertervitrini.com.tr/${code}/`])
-  );
+  const alternatesLanguages: Record<string, string> = {
+    "x-default": "https://mertervitrini.com.tr/en",
+  };
+  languagesList.forEach((code) => {
+    alternatesLanguages[code] = `https://mertervitrini.com.tr/${code}`;
+  });
 
   return {
     title: title,

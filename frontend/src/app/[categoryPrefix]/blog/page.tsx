@@ -2,7 +2,6 @@ import React from "react";
 import { Metadata } from "next";
 import { apiFetch } from "@/app/utils";
 import { Category } from "@/types/store";
-import { t as translate } from "@/app/i18n";
 import BlogListClient from "./BlogListClient";
 
 interface PageProps {
@@ -46,7 +45,7 @@ async function fetchLanguages(): Promise<Language[]> {
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data)) {
-        return data.map((l: any) => {
+        return data.map((l: Language) => {
           let code = l.code;
           if (code.startsWith("en_")) code = "en";
           else if (code.startsWith("tr_")) code = "tr";
@@ -129,16 +128,17 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = titles[lang] || titles.en;
   const desc = descs[lang] || descs.en;
 
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/`;
+  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog`;
   
-  const alternatesLanguages = Object.fromEntries(
-    activeLangs
-      .filter((l) => l.code !== "__proto__" && l.code !== "constructor")
-      .map((l) => [l.code, `https://mertervitrini.com.tr/${l.categoryPrefix}/blog/`])
-  );
+  const alternatesLanguages: Record<string, string> = {
+    "x-default": `https://mertervitrini.com.tr/en/blog`,
+  };
+  activeLangs.forEach((l) => {
+    alternatesLanguages[l.code] = `https://mertervitrini.com.tr/${l.categoryPrefix}/blog`;
+  });
 
   return {
-    title: `${title} | Merter Vitrini`,
+    title: `${title} | Merter Vitrini B2B`,
     description: desc,
     alternates: {
       canonical: canonicalUrl,

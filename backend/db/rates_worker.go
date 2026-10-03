@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"mertervitrini/backend/pkg/httpclient"
+	"mertervitrini/backend/pkg/safe"
 )
 
 // XML Struct mappings for TCMB today.xml
@@ -34,14 +35,14 @@ func StartRatesWorker(ctx context.Context) {
 	log.Println("[TCMB WORKER] Starting TCMB Daily Exchange Rate Fetcher Goroutine...")
 
 	// Perform an immediate initial sync check on boot to populate database if missing today's rate
-	go func() {
+	safe.Go("TCMB Initial Boot Sync", func() {
 		time.Sleep(5 * time.Second)
 		log.Println("[TCMB WORKER] Running boot-time exchange rates sync check...")
 		SyncTCMBRates()
-	}()
+	})
 
 	// Start daily scheduler loop
-	go func() {
+	safe.Go("TCMB Daily Scheduler Loop", func() {
 		for {
 			now := time.Now()
 			
@@ -69,7 +70,7 @@ func StartRatesWorker(ctx context.Context) {
 				SyncTCMBRates()
 			}
 		}
-	}()
+	})
 }
 
 func fetchTCMBXml(url string) ([]byte, error) {

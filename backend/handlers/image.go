@@ -20,6 +20,7 @@ import (
 	"golang.org/x/image/draw"
 
 	"mertervitrini/backend/db"
+	"mertervitrini/backend/pkg/safe"
 )
 
 type ImageHandler struct{}
@@ -238,7 +239,8 @@ func runImageResizeWorker() {
 func startWorkerPool() {
 	workerOnce.Do(func() {
 		for i := 0; i < 4; i++ {
-			go runImageResizeWorker()
+			workerIdx := i + 1
+			safe.Go(fmt.Sprintf("Image Resize Worker %d", workerIdx), runImageResizeWorker)
 		}
 	})
 }
@@ -315,7 +317,7 @@ func (h *ImageHandler) StartBulkResize(w http.ResponseWriter, r *http.Request) {
 		<-jobQueue
 	}
 
-	go func() {
+	safe.Go("Bulk Image Resize Dispatcher", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		defer cancel()
 
@@ -330,7 +332,7 @@ func (h *ImageHandler) StartBulkResize(w http.ResponseWriter, r *http.Request) {
 
 		jobs := collectImageResizeJobs(urls, getMediaDir())
 		enqueueResizeJobs(jobs)
-	}()
+	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Write([]byte(`{"status":"started","message":"Bulk resize task initiated"}`))

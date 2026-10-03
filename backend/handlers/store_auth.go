@@ -19,6 +19,7 @@ import (
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/pkg/httpclient"
+	"mertervitrini/backend/pkg/safe"
 )
 
 type StoreAuthHandler struct {
@@ -393,7 +394,9 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go recordLoginHistory(context.Background(), loginUser.ID, ip)
+	safe.Go("Record Login History Register", func() {
+		recordLoginHistory(context.Background(), loginUser.ID, ip)
+	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
@@ -469,7 +472,9 @@ func (h *StoreAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	ip := getClientIP(r)
-	go recordLoginHistory(context.Background(), user.ID, ip)
+	safe.Go("Record Login History Login", func() {
+		recordLoginHistory(context.Background(), user.ID, ip)
+	})
 
 	json.NewEncoder(w).Encode(AuthResponse{
 		Token: token,
@@ -690,7 +695,8 @@ func (h *StoreAuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request)
 	}
 
 	// 2. Synchronize to Keycloak asynchronously
-	go func(id, first, last, ph string) {
+	safe.Go("Keycloak Async Profile Sync", func() {
+		id, first, last, ph := userID, req.FirstName, req.LastName, req.Phone
 		ctxBG, cancelBG := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancelBG()
 
@@ -735,7 +741,7 @@ func (h *StoreAuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request)
 		} else {
 			log.Printf("[PROFILE SYNC SUCCESS] Keycloak account successfully synchronized for user %s", id)
 		}
-	}(userID, req.FirstName, req.LastName, req.Phone)
+	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Write([]byte(`{"success":true,"message":"Profiliniz başarıyla güncellendi."}`))
@@ -826,7 +832,9 @@ func (h *StoreAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	ip := getClientIP(r)
-	go recordLoginHistory(context.Background(), userID, ip)
+	safe.Go("Record Login History Token", func() {
+		recordLoginHistory(context.Background(), userID, ip)
+	})
 
 	json.NewEncoder(w).Encode(AuthResponse{
 		Token: accessToken,

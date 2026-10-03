@@ -20,7 +20,7 @@ async function fetchLanguages(): Promise<Language[]> {
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data)) {
-        return data.map((l: any) => {
+        return data.map((l: Language) => {
           let code = l.code;
           if (code.startsWith("en_")) code = "en";
           else if (code.startsWith("tr_")) code = "tr";
@@ -65,7 +65,7 @@ export async function generateStaticParams() {
         const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
         
         uniquePrefixes.forEach((prefix) => {
-          posts.forEach((post: any) => {
+          posts.forEach((post: BlogPost) => {
             if (post.slug) {
               params.push({
                 categoryPrefix: prefix,
@@ -122,17 +122,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = t?.meta_title || t?.title || "Merter Vitrini";
   const desc = t?.meta_description || t?.summary || translate("seo_fallback_desc", lang);
   
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/${slug}/`;
+  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/${slug}`;
   
   // Build Hreflang alternates
-  const alternatesLanguages = Object.fromEntries(
-    activeLangs
-      .filter((l) => l.code !== "__proto__" && l.code !== "constructor")
-      .map((l) => [l.code, `https://mertervitrini.com.tr/${l.categoryPrefix}/blog/${slug}/`])
-  );
+  const alternatesLanguages: Record<string, string> = {
+    "x-default": `https://mertervitrini.com.tr/en/blog/${slug}`,
+  };
+  activeLangs.forEach((l) => {
+    alternatesLanguages[l.code] = `https://mertervitrini.com.tr/${l.categoryPrefix}/blog/${slug}`;
+  });
 
   return {
-    title: `${title} | Merter Vitrini`,
+    title: `${title} | Merter Vitrini B2B`,
     description: desc,
     alternates: {
       canonical: canonicalUrl,

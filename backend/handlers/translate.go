@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/pkg/httpclient"
+	"mertervitrini/backend/pkg/safe"
 )
 
 type TranslationStatus string
@@ -434,10 +435,10 @@ func (h *TranslateHandler) StartJob(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Trigger concurrent background translating process
 	globalTranslationManager.wg.Add(1)
-	go func() {
+	safe.Go("Translation Execution Job", func() {
 		defer globalTranslationManager.wg.Done()
 		globalTranslationManager.executeTranslationJob()
-	}()
+	})
 
 	w.Header().Set(contentTypeHeader, appJSON)
 	json.NewEncoder(w).Encode(globalTranslationManager.state)
@@ -555,7 +556,8 @@ func (m *TranslationManager) runWorkerPool(ctx context.Context, table, language 
 
 	for i := 0; i < numWorkers; i++ {
 		workerWg.Add(1)
-		go func() {
+		workerIdx := i + 1
+		safe.Go(fmt.Sprintf("Translation Worker Thread %d", workerIdx), func() {
 			defer workerWg.Done()
 
 			for {
@@ -579,7 +581,7 @@ func (m *TranslationManager) runWorkerPool(ctx context.Context, table, language 
 					m.mu.Unlock()
 				}
 			}
-		}()
+		})
 	}
 
 	workerWg.Wait()

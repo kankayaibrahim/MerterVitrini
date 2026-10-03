@@ -6,46 +6,17 @@ import ProductDetailClient from "./ProductDetailClient";
 
 interface PageProps {
   readonly params: Promise<{ readonly slug: string }>;
+  readonly searchParams?: Promise<{ readonly lang?: string }>;
 }
 
-// Generate static routes for a subset of products at compilation time.
-// Other pages will be generated dynamically on demand when visited.
-export async function generateStaticParams() {
-  try {
-    // Skip or limit SSG during development or heavy builds to avoid network bottlenecks and rate limits.
-    const limit = (process.env.NODE_ENV === "development" || process.env.NEXT_BUILD_SSR === "true") ? 0 : 15000;
-    if (limit === 0) return [];
+export const revalidate = 300;
 
-    const response = await fetch(`https://mertervitrini.com.tr/api/v1/store/products?limit=${limit}&t=` + Date.now());
-    if (response.ok) {
-      const data = await response.json();
-      // Go API returns {"products": [...], "total": 3936}. Handle both list and dictionary formats.
-      let products: Array<{ slug?: string; id?: string | number }> = [];
-      if (Array.isArray(data)) {
-        products = data;
-      } else if (data && typeof data === "object" && "products" in data && Array.isArray(data.products)) {
-        products = data.products;
-      }
-
-      if (products.length > 0) {
-        return products.map((p) => ({
-          slug: String(p.slug || p.id),
-        }));
-      }
-    }
-  } catch (err) {
-    console.error("[SEO] generateStaticParams failed, fallback to fallback array:", err);
-  }
-  // Return a static fallback list of common/sample product slugs to prevent Next.js from throwing build errors on output: "export"
-  return [
-    { slug: "kadin-askili-v-yaka-pul-payetli-bluz-kirmizi-3a15" },
-    { slug: "fallback-product-detail" }
-  ];
-}
-
-// Generate dynamic SEO metadata on the server side using the slug
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+// Generate dynamic SEO metadata on the server side using the slug and optional lang
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { slug } = await params;
+  const sParams = searchParams ? await searchParams : {};
+  const requestedLang = sParams?.lang || "tr";
+  
   const product = await apiFetch<Product>(`/products/${slug}`);
   
   if (!product) {
@@ -55,9 +26,43 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const title = product.title || "Toptan B2B Ürün";
-  const brandName = product.brand_name || "Merter Manufacturer";
-  const desc = product.description || `${title} toptan serili ve asortili sipariş imkanları.`;
+  const translation = product.translations?.[requestedLang];
+  const rawTitle = translation?.title || product.title || "Hazır Giyim Ürünü";
+  const brandName = product.brand_name || "Merter Üretici";
+
+  let b2bPrefix = "Toptan";
+  let b2bSuffix = "Serili Paket";
+  let descTemplate = `${rawTitle} toptan serili ve asortili butik sipariş imkanları. Doğrudan Merter üretici ${brandName} fabrika fiyatlarıyla toptan hazır giyim tedariği. Minimum paket alımı.`;
+
+  if (requestedLang === "en") {
+    b2bPrefix = "Wholesale";
+    b2bSuffix = "Series Pack";
+    descTemplate = `Wholesale ${rawTitle} series and pack orders for boutiques. Direct Istanbul Merter factory prices from ${brandName}. Minimum package order.`;
+  } else if (requestedLang === "ru") {
+    b2bPrefix = "Оптом";
+    b2bSuffix = "Серия Упаковка";
+    descTemplate = `Оптовые закупки ${rawTitle} сериями и упаковками для бутиков. Прямые поставки от производителя ${brandName} из Стамбула по фабричным ценам.`;
+  } else if (requestedLang === "ar") {
+    b2bPrefix = "بالجملة";
+    b2bSuffix = "سيري وباكيت";
+    descTemplate = `شراء ${rawTitle} بالجملة بالسيري والباكيت للمحلات والبوتيكات. بأسعار المصنع المباشرة من مصانع مارتر اسطنبول ${brandName}.`;
+  } else if (requestedLang === "de") {
+    b2bPrefix = "Großhandel";
+    b2bSuffix = "Serienpack";
+    descTemplate = `Großhandel ${rawTitle} in Serien und Packungen für Boutiquen. Direktpreise ab Fabrik Merter Istanbul von ${brandName}.`;
+  } else if (requestedLang === "pl") {
+    b2bPrefix = "Hurt";
+    b2bSuffix = "Pakiety Serii";
+    descTemplate = `Zamówienia hurtowe ${rawTitle} w seriach i pakietach dla butików. Bezpośrednie ceny fabryczne z Merter Stambuł od ${brandName}.`;
+  } else if (requestedLang === "fr") {
+    b2bPrefix = "Vente en Gros";
+    b2bSuffix = "Lot en Série";
+    descTemplate = `Vente en gros ${rawTitle} en séries et lots pour boutiques. Prix direct usine Merter Istanbul de ${brandName}.`;
+  }
+
+  const b2bTitle = rawTitle.toLowerCase().includes(b2bPrefix.toLowerCase()) ? rawTitle : `${b2bPrefix} ${rawTitle}`;
+  const metaTitle = `${b2bTitle} (${b2bSuffix}) - ${brandName} | Merter Vitrini B2B`;
+  const metaDesc = descTemplate;
   
   let coverImg = "/placeholder.png";
   if (product.images && product.images.length > 0) {
@@ -65,41 +70,106 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     coverImg = coverObj.image_url;
   }
 
-  const canonicalUrl = `https://mertervitrini.com.tr/product/${slug}/`;
-  const languagesList = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
-  const alternatesLanguages = Object.fromEntries(
-    languagesList
-      .filter((code) => code !== "__proto__" && code !== "constructor")
-      .map((code) => [code, canonicalUrl])
-  );
+  const canonicalUrl = `https://mertervitrini.com.tr/product/${slug}`;
+  const alternatesLanguages: Record<string, string> = {
+    "x-default": canonicalUrl,
+    "tr": canonicalUrl,
+    "en": `${canonicalUrl}?lang=en`,
+    "ru": `${canonicalUrl}?lang=ru`,
+    "ar": `${canonicalUrl}?lang=ar`,
+    "de": `${canonicalUrl}?lang=de`,
+    "pl": `${canonicalUrl}?lang=pl`,
+    "fr": `${canonicalUrl}?lang=fr`,
+    "bg": `${canonicalUrl}?lang=bg`,
+  };
 
   return {
-    title: `${title} - ${brandName} | Merter Vitrini Toptan B2B`,
-    description: desc,
+    title: metaTitle,
+    description: metaDesc,
     alternates: {
       canonical: canonicalUrl,
       languages: alternatesLanguages,
     },
     openGraph: {
-      title: `${title} - ${brandName} | Toptan B2B`,
-      description: desc,
+      title: metaTitle,
+      description: metaDesc,
       url: canonicalUrl,
       siteName: "Merter Vitrini",
-      images: [{ url: coverImg, width: 800, height: 1000, alt: title }],
+      images: [{ url: coverImg, width: 800, height: 1000, alt: metaTitle }],
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: title,
-      description: desc,
+      title: metaTitle,
+      description: metaDesc,
       images: [coverImg],
     },
   };
 }
 
-export default async function ProductDetailPage({ params }: PageProps) {
+export default async function ProductDetailPage({ params, searchParams }: PageProps) {
+  void searchParams;
   const { slug } = await params;
   const product = await apiFetch<Product>(`/products/${slug}`);
 
-  return <ProductDetailClient product={product} />;
+  const jsonLd = product ? {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Product",
+        "name": product.title || "Toptan Hazır Giyim",
+        "description": product.short_description || product.description || "Merter toptan tekstil hazır giyim ürünü",
+        "image": product.images?.map((img) => img.image_url) || [],
+        "sku": product.custom_sku || product.source_product_id || product.id,
+        "mpn": product.custom_sku || product.source_product_id || product.id,
+        "brand": {
+          "@type": "Brand",
+          "name": product.brand_name || "Merter Üretici",
+        },
+        "offers": {
+          "@type": "Offer",
+          "url": `https://mertervitrini.com.tr/product/${product.slug || product.id}`,
+          "priceCurrency": "USD",
+          "price": (product.discounted_price && product.discounted_price > 0 ? product.discounted_price : product.price || 0).toFixed(2),
+          "availability": "https://schema.org/InStock",
+          "itemCondition": "https://schema.org/NewCondition",
+          "priceValidUntil": "2027-12-31",
+          "seller": {
+            "@type": "Organization",
+            "name": "Merter Vitrini B2B",
+          },
+        },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Ana Sayfa",
+            "item": "https://mertervitrini.com.tr",
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": product.brand_name || "Toptan Giyim",
+            "item": `https://mertervitrini.com.tr/product/${product.slug || product.id}`,
+          },
+        ],
+      },
+    ],
+  } : null;
+
+  return (
+    <>
+      {jsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      )}
+      <ProductDetailClient product={product} />
+    </>
+  );
 }
+

@@ -65,6 +65,8 @@ export default function ProductImageGallery({
           <img
             src={getResizedImageUrl(mainImg, 600, 800)}
             alt={title}
+            loading="eager"
+            fetchPriority="high"
             className="max-w-full max-h-full object-contain transition-all duration-300 group-hover:scale-105"
           />
         </button>

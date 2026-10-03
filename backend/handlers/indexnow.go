@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"mertervitrini/backend/pkg/httpclient"
+	"mertervitrini/backend/pkg/safe"
 )
 
 type IndexNowHandler struct{}
@@ -42,7 +43,7 @@ func NotifyIndexNow(urls []string) {
 		return
 	}
 
-	go func() {
+	safe.Go("IndexNow URL Submission", func() {
 		reqBody := IndexNowRequest{
 			Host:        "mertervitrini.com.tr",
 			Key:         "638d6e3eb8a743ec900269823f24ffe6",
@@ -68,7 +69,7 @@ func NotifyIndexNow(urls []string) {
 		} else {
 			log.Printf("[IndexNow Success] Successfully submitted %d URLs to IndexNow engine", len(cleanUrls))
 		}
-	}()
+	})
 }
 
 // SubmitManual URLs triggers IndexNow for custom paths submitted from Admin Panel

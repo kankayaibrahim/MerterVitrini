@@ -45,9 +45,11 @@ const EXCLUDED_ATTR_NAMES = new Set([
 ]);
 
 export default function ProductDetailClient({ product }: Readonly<ProductDetailClientProps>) {
-  // --- UI & Localizer States ---
   const [lang, setLang] = useState<string>(() => {
     if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlLang = urlParams.get("lang");
+      if (urlLang) return urlLang;
       return localStorage.getItem("preferred_lang") || "tr";
     }
     return "tr";
@@ -394,26 +396,67 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
   const totalWeightCart = Number(cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package * item.weight_per_unit), 0).toFixed(2));
   const totalPriceCart = Number(cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package * item.price_per_unit), 0).toFixed(2));
 
-  // Structured Data (JSON-LD) for SEO
+  // Structured Data (JSON-LD @graph) for Google Rich Snippets
+  const catTrail = product.category_id ? getCategoryTrail(categories, product.category_id) : [];
+  const breadcrumbElements: Array<{ "@type": string; position: number; name: string; item: string }> = [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": t("home", lang),
+      "item": "https://mertervitrini.com.tr",
+    },
+  ];
+
+  catTrail?.forEach((cat, idx) => {
+    breadcrumbElements.push({
+      "@type": "ListItem",
+      "position": idx + 2,
+      "name": getCategoryTitle(cat, lang),
+      "item": `https://mertervitrini.com.tr${getCategoryUrl(categories, cat, lang)}`,
+    });
+  });
+
+  breadcrumbElements.push({
+    "@type": "ListItem",
+    "position": breadcrumbElements.length + 1,
+    "name": title,
+    "item": `https://mertervitrini.com.tr/product/${product.slug || product.id}`,
+  });
+
   const jsonLdData = {
     "@context": "https://schema.org",
-    "@type": "Product",
-    "name": title,
-    "description": desc,
-    "image": product.images?.map((img) => img.image_url) || [],
-    "sku": product.custom_sku || product.source_product_id,
-    "brand": {
-      "@type": "Brand",
-      "name": product.brand_name || t("merter_manufacturer", lang)
-    },
-    "offers": {
-      "@type": "Offer",
-      "priceCurrency": currency,
-      "price": finalPricePerUnit.toFixed(2),
-      "availability": "https://schema.org/InStock",
-      "itemCondition": "https://schema.org/NewCondition",
-      "valueAddedTaxIncluded": "false"
-    }
+    "@graph": [
+      {
+        "@type": "Product",
+        "name": title,
+        "description": desc,
+        "image": product.images?.map((img) => img.image_url) || [],
+        "sku": product.custom_sku || product.source_product_id,
+        "mpn": product.custom_sku || product.source_product_id,
+        "brand": {
+          "@type": "Brand",
+          "name": product.brand_name || t("merter_manufacturer", lang)
+        },
+        "offers": {
+          "@type": "Offer",
+          "url": `https://mertervitrini.com.tr/product/${product.slug || product.id}`,
+          "priceCurrency": currency,
+          "price": finalPricePerUnit.toFixed(2),
+          "availability": "https://schema.org/InStock",
+          "itemCondition": "https://schema.org/NewCondition",
+          "priceValidUntil": "2027-12-31",
+          "valueAddedTaxIncluded": "false",
+          "seller": {
+            "@type": "Organization",
+            "name": "Merter Vitrini B2B"
+          }
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "itemListElement": breadcrumbElements
+      }
+    ]
   };
 
   const safeJsonLdString = JSON.stringify(jsonLdData)

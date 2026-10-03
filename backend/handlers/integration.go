@@ -27,6 +27,7 @@ import (
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/httpclient"
+	"mertervitrini/backend/pkg/safe"
 )
 
 type DownloadTask struct {
@@ -70,7 +71,10 @@ var (
 func init() {
 	// Spin up 8 background workers
 	for i := 0; i < 8; i++ {
-		go downloadWorker(i)
+		workerIndex := i
+		safe.Go(fmt.Sprintf("Image Download Worker %d", workerIndex), func() {
+			downloadWorker(workerIndex)
+		})
 	}
 	// Start progress ticker for live updates
 	startProgressTicker()
@@ -197,11 +201,11 @@ func enqueueDownloadTask(task DownloadTask) {
 
 func startProgressTicker() {
 	ticker := time.NewTicker(1 * time.Second)
-	go func() {
+	safe.Go("Sync Progress Ticker", func() {
 		for range ticker.C {
 			updateProgressTick()
 		}
-	}()
+	})
 }
 
 func syncRedisProgress(runID string, p *SyncProgress) {
@@ -582,7 +586,9 @@ func (h *IntegrationHandler) TriggerSync(w http.ResponseWriter, r *http.Request)
 	cancelMapMu.Unlock()
 
 	// Run background XML processing with cancelable context
-	go simulateBackgroundSync(run.ID, bgCtx)
+	safe.Go(fmt.Sprintf("Simulate Background Sync %s", run.ID), func() {
+		simulateBackgroundSync(run.ID, bgCtx)
+	})
 
 	w.Header().Set(contentTypeHeader, appJSON)
 	w.WriteHeader(http.StatusAccepted)
@@ -1454,7 +1460,7 @@ func updateSyncStatus(runID string, status string, summary map[string]any) {
 	// Proactively refresh storefront catalog cache if sync run completes successfully
 	if status == "success" {
 		log.Printf("[SYNC-%s] Sync succeeded. Triggering concurrent refresh of storefront catalog materialized view...", runID)
-		go func() {
+		safe.Go("Storefront MV Concurrent Refresh", func() {
 			refreshCtx, refreshCancel := context.WithTimeout(context.Background(), 45*time.Second)
 			defer refreshCancel()
 			_, err := db.Pool.Exec(refreshCtx, "REFRESH MATERIALIZED VIEW CONCURRENTLY catalog.mv_products")
@@ -1463,7 +1469,7 @@ func updateSyncStatus(runID string, status string, summary map[string]any) {
 			} else {
 				log.Println("[SYNC] Storefront catalog materialized view successfully refreshed!")
 			}
-		}()
+		})
 	}
 }
 
@@ -1644,7 +1650,9 @@ func runPythonParser(ctx context.Context, runID string, feedID string, brandID *
 	}
 
 	if stdoutPipe != nil {
-		go consumePythonOutput(runID, stdoutPipe)
+		safe.Go(fmt.Sprintf("Consume Python Output %s", runID), func() {
+			consumePythonOutput(runID, stdoutPipe)
+		})
 	}
 
 	err = cmd.Wait()
