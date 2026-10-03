@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, ArrowLeft, Globe, HelpCircle } from "lucide-react";
 import Header from "@/components/store/Header";
@@ -9,13 +9,28 @@ import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import { Category } from "@/types/store";
 import { Page, Language } from "./page";
 import { t } from "@/app/i18n";
+import SafeHtml from "@/components/common/SafeHtml";
 
 interface PagesClientProps {
-  categoryPrefix: string;
-  slug: string;
-  page: Page | null;
-  categories: Category[];
-  activeLangs: Language[];
+  readonly categoryPrefix: string;
+  readonly slug: string;
+  readonly page: Page | null;
+  readonly categories: readonly Category[];
+  readonly activeLangs: readonly Language[];
+}
+
+function subscribeCurrency(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function getCurrencySnapshot(): string {
+  if (typeof window === "undefined") return "TRY";
+  return localStorage.getItem("merter_preferred_currency") || "TRY";
+}
+
+function getCurrencyServerSnapshot(): string {
+  return "TRY";
 }
 
 export default function PagesClient({
@@ -24,7 +39,7 @@ export default function PagesClient({
   page,
   categories,
   activeLangs
-}: PagesClientProps) {
+}: Readonly<PagesClientProps>) {
   const router = useRouter();
 
   // Determine current active language code matching the URL prefix
@@ -40,23 +55,19 @@ export default function PagesClient({
   // --- UI States ---
   const [lang, setLang] = useState<string>(initialLang);
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
-  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
   const [policyModalType, setPolicyModalType] = useState<"cancellation_and_return" | "terms_of_service" | "privacy_policy" | "">("");
 
-  // --- Multi-Currency States ---
-  const [displayCurrency, setDisplayCurrency] = useState<string>("TRY");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const preferredCurr = localStorage.getItem("merter_preferred_currency");
-      if (preferredCurr) setDisplayCurrency(preferredCurr);
-    }
-  }, []);
+  // --- Multi-Currency States via External Store ---
+  const displayCurrency = useSyncExternalStore(
+    subscribeCurrency,
+    getCurrencySnapshot,
+    getCurrencyServerSnapshot
+  );
 
   const handleCurrencyChange = (curr: string) => {
-    setDisplayCurrency(curr);
     localStorage.setItem("merter_preferred_currency", curr);
+    window.dispatchEvent(new Event("storage"));
   };
 
   // Redirect on language switch
@@ -85,7 +96,7 @@ export default function PagesClient({
         isLangOpen={isLangOpen}
         setIsLangOpen={setIsLangOpen}
         totalPkgs={0}
-        setIsCartOpen={setIsCartOpen}
+        setIsCartOpen={() => {}}
         setSearchQuery={() => {}}
         setCurrentPage={() => {}}
         setActiveCategoryId={() => {}}
@@ -133,8 +144,8 @@ export default function PagesClient({
             {/* Content body with responsive typography */}
             <article className="prose prose-zinc max-w-none text-zinc-700 text-xs md:text-sm leading-relaxed select-text">
               {translation.content.trim().startsWith("<") && translation.content.trim().toLowerCase().includes("</") ? (
-                <div 
-                  dangerouslySetInnerHTML={{ __html: translation.content }} 
+                <SafeHtml
+                  html={translation.content}
                   className="space-y-4 [&_p]:mb-4 [&_h2]:font-sans [&_h2]:font-extrabold [&_h2]:text-lg [&_h2]:md:text-xl [&_h2]:text-eerie-black [&_h2]:mt-8 [&_h2]:mb-4 [&_h2]:border-b [&_h2]:border-cultured [&_h2]:pb-2 [&_strong]:font-extrabold [&_strong]:text-eerie-black [&_a]:text-salmon-pink [&_a]:hover:underline [&_a]:font-extrabold"
                 />
               ) : (

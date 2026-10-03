@@ -9,6 +9,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/app/utils";
 import AuthModal from "./AuthModal";
 import WishlistDrawer from "./WishlistDrawer";
+import { useWishlistStore } from "@/store/useWishlistStore";
 
 const getFlagUrl = (code: string): string => {
   const mapping: Record<string, string> = {
@@ -62,10 +63,11 @@ interface HeaderProps {
   readonly setIsLangOpen: (open: boolean) => void;
   readonly totalPkgs: number;
   readonly setIsCartOpen: (open: boolean) => void;
+  readonly searchQuery?: string;
   readonly setSearchQuery?: (query: string) => void;
   readonly setCurrentPage: (page: number) => void;
   readonly setActiveCategoryId?: (catId: string) => void;
-  readonly categories: Category[];
+  readonly categories: readonly Category[];
   readonly activeCategoryId: string;
   readonly displayCurrency: string;
   readonly onCurrencyChange: (currency: string) => void;
@@ -578,6 +580,8 @@ export default function Header({
   setIsLangOpen,
   totalPkgs,
   setIsCartOpen,
+  searchQuery,
+  setSearchQuery,
   setCurrentPage,
   categories,
   activeCategoryId,
@@ -604,40 +608,8 @@ export default function Header({
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
 
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
-  const [wishlistCount, setWishlistCount] = useState<number>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const favs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]");
-        return Array.isArray(favs) ? favs.length : 0;
-      } catch {
-        return 0;
-      }
-    }
-    return 0;
-  });
+  const wishlistCount = useWishlistStore((state) => state.wishlistIds.length);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const handleWishlistUpdate = (e: Event) => {
-        const customEvent = e as CustomEvent;
-        if (customEvent.detail && Array.isArray(customEvent.detail)) {
-          setWishlistCount(customEvent.detail.length);
-        } else {
-          try {
-            const currentFavs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]");
-            setWishlistCount(Array.isArray(currentFavs) ? currentFavs.length : 0);
-          } catch {
-            setWishlistCount(0);
-          }
-        }
-      };
-      window.addEventListener("merter-wishlist-update", handleWishlistUpdate);
-      return () => {
-        window.removeEventListener("merter-wishlist-update", handleWishlistUpdate);
-      };
-    }
-  }, []);
 
   const activeCurrObj = currenciesList.find((c) => c.code === displayCurrency) || currenciesList[0];
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -740,6 +712,7 @@ export default function Header({
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
+    setSearchQuery?.(val);
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -795,6 +768,7 @@ export default function Header({
                 <input
                   type="text"
                   id="searchInputDesktop"
+                  value={searchQuery ?? ""}
                   className="w-full pl-0 pr-8 py-2 text-xs font-bold text-onyx placeholder-spanish-gray focus:outline-none bg-white"
                   placeholder={t("search_placeholder", lang)}
                   onChange={handleSearchChange}
@@ -1013,6 +987,7 @@ export default function Header({
               <input
                 type="text"
                 id="searchInputMobile"
+                value={searchQuery ?? ""}
                 className="w-full pl-0 pr-8 py-2 text-xs font-medium text-onyx placeholder-spanish-gray focus:outline-none bg-white"
                 placeholder={t("search_placeholder", lang)}
                 onChange={handleSearchChange}

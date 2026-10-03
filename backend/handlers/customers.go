@@ -13,6 +13,7 @@ import (
 
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
+	"mertervitrini/backend/pkg/httpclient"
 )
 
 type CustomersHandler struct {
@@ -179,8 +180,7 @@ func (h *CustomersHandler) getAdminAccessToken(ctx context.Context) (string, err
 	}
 	req.Header.Set(headerContentType, mimeFormURLEncoded)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpclient.FastClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -237,8 +237,7 @@ func (h *CustomersHandler) DeleteCustomer(w http.ResponseWriter, r *http.Request
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpclient.FastClient.Do(req)
 	if err != nil {
 		log.Printf("[ADMIN CUSTOMERS ERROR] Failed to execute Keycloak delete request: %v", err)
 		http.Error(w, `{"error":"Keycloak sunucusuna erişilemedi"}`, http.StatusBadGateway)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/db"
+	"mertervitrini/backend/pkg/httpclient"
 )
 
 type TranslationStatus string
@@ -162,8 +163,7 @@ func translateText(ctx context.Context, text, source, target string) (string, er
 	req.Header.Set(contentTypeHeader, appJSON)
 	req.SetBasicAuth(apiUser, apiPass)
 
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpclient.DefaultPooledClient.Do(req)
 	if err != nil {
 		return "", err
 	}

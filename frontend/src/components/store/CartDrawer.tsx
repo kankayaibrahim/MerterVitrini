@@ -7,6 +7,14 @@ import { t, getCategoryPrefix } from "@/app/i18n";
 import { convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
 import { UserAddress } from "@/app/profile/components/types";
 
+export interface InquiryFormData {
+  fullName: string;
+  companyName: string;
+  phoneNumber: string;
+  emailAddress: string;
+  customerMessage: string;
+}
+
 interface CartDrawerProps {
   readonly lang: string;
   readonly cart: readonly CartItem[];
@@ -17,18 +25,8 @@ interface CartDrawerProps {
   readonly totalItemsCount: number;
   readonly totalWeight: number;
   readonly totalPrice?: number;
-  readonly fullName: string;
-  readonly setFullName: (name: string) => void;
-  readonly companyName: string;
-  readonly setCompanyName: (company: string) => void;
-  readonly phoneNumber: string;
-  readonly setPhoneNumber: (phone: string) => void;
-  readonly emailAddress: string;
-  readonly setEmailAddress: (email: string) => void;
-  readonly customerMessage: string;
-  readonly setCustomerMessage: (msg: string) => void;
   readonly submittingInquiry: boolean;
-  readonly onSubmit: (e: React.FormEvent) => void;
+  readonly onSubmitInquiry: (data: InquiryFormData) => void;
   readonly displayCurrency?: string;
   readonly exchangeRates?: readonly ExchangeRate[];
 }
@@ -68,6 +66,63 @@ function selectDefaultAddresses(
   if (firstDel?.id) {
     setDelivery(firstDel.id);
   }
+}
+
+interface SubmitB2BOrderParams {
+  readonly token: string;
+  readonly cart: readonly CartItem[];
+  readonly billingAddress: string;
+  readonly deliveryAddress: string;
+  readonly lang: string;
+}
+
+async function submitB2BOrder({
+  token,
+  cart,
+  billingAddress,
+  deliveryAddress,
+  lang,
+}: SubmitB2BOrderParams): Promise<string> {
+  const syncRes = await fetch("/api/v1/store/cart/sync", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      items: cart.map((item) => ({
+        product_id: item.product_id,
+        quantity: item.packages_qty * item.units_per_package,
+      })),
+    }),
+  });
+
+  if (!syncRes.ok) {
+    const syncData = await syncRes.json().catch(() => ({}));
+    const fallbackSyncMsg = lang === "tr" ? "Sepet senkronizasyonu başarısız." : "Failed to sync cart.";
+    throw new Error(syncData.error || fallbackSyncMsg);
+  }
+
+  const res = await fetch("/api/v1/store/orders", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      billing_address: billingAddress,
+      delivery_address: deliveryAddress,
+      payment_method: "BANK_TRANSFER",
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    const fallbackOrderMsg = lang === "tr" ? "Sipariş verilirken bir hata oluştu." : "Failed to place order.";
+    throw new Error(data.error || fallbackOrderMsg);
+  }
+
+  return data.order_number;
 }
 
 function getFormattedTcmbDate(rawDate: string | undefined, lang: string): string {
@@ -337,6 +392,103 @@ interface CartCheckoutFormProps {
   readonly onSubmit: (e: React.FormEvent) => void;
 }
 
+interface AddressPickerProps {
+  readonly title: string;
+  readonly icon: string;
+  readonly addresses: readonly UserAddress[];
+  readonly selectedAddr: string;
+  readonly onSelectAddr: (val: string) => void;
+  readonly customAddr: string;
+  readonly onCustomAddrChange: (val: string) => void;
+  readonly customPlaceholder: string;
+  readonly customOptionLabel: string;
+  readonly emptyNotice: string;
+}
+
+function AddressPicker({
+  title,
+  icon,
+  addresses,
+  selectedAddr,
+  onSelectAddr,
+  customAddr,
+  onCustomAddrChange,
+  customPlaceholder,
+  customOptionLabel,
+  emptyNotice,
+}: Readonly<AddressPickerProps>) {
+  const showTextarea = selectedAddr === "custom" || addresses.length === 0;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[11px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">
+        {icon} {title}
+      </label>
+      {addresses.length > 0 ? (
+        <select
+          value={selectedAddr}
+          onChange={(e) => onSelectAddr(e.target.value)}
+          className="w-full px-3 py-2 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black"
+        >
+          {addresses.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.title} ({a.address_line.substring(0, 30)}...)
+            </option>
+          ))}
+          <option value="custom">{customOptionLabel}</option>
+        </select>
+      ) : (
+        <div className="text-[10px] text-sonic-silver font-medium italic">
+          {emptyNotice}
+        </div>
+      )}
+      {showTextarea && (
+        <textarea
+          required
+          value={customAddr}
+          onChange={(e) => onCustomAddrChange(e.target.value)}
+          rows={3}
+          className="w-full px-3 py-2.5 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black resize-none mt-1"
+          placeholder={customPlaceholder}
+        />
+      )}
+    </div>
+  );
+}
+
+function BankTransferInfo({ lang }: { readonly lang: string }) {
+  const isTr = lang === "tr";
+  return (
+    <div className="bg-[#eff6ff] border border-blue-100 rounded-lg p-3 flex flex-col gap-2.5 text-xs text-blue-900 shadow-sm leading-normal">
+      <div className="font-extrabold uppercase tracking-[0.5px] border-b border-blue-200/50 pb-1 text-[11px] text-blue-800">
+        🏦 {isTr ? "Banka Havale/EFT Hesapları" : "Bank Transfer IBAN Accounts"}
+      </div>
+      <div className="flex flex-col gap-1.5 font-semibold text-[11px]">
+        <div>
+          <span className="font-bold text-blue-900">Ziraat Bankası:</span>
+          <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
+          <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
+        </div>
+        <div>
+          <span className="font-bold text-blue-900">Garanti BBVA:</span>
+          <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
+          <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
+        </div>
+        <div>
+          <span className="font-bold text-blue-900">VakıfBank:</span>
+          <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
+          <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
+        </div>
+      </div>
+      <div className="text-[9px] font-bold text-blue-800 italic mt-1 border-t border-blue-200/30 pt-1.5 leading-snug">
+        {isTr
+          ? "* Lütfen transfere sipariş numaranızı açıklama olarak ekleyiniz. Ödeme sonrası profilinizden bildirim yapmayı unutmayınız."
+          : "* Please add your order number as payment explanation. Submit notification from profile after transfer."}
+      </div>
+    </div>
+  );
+}
+
 function CartCheckoutForm({
   lang,
   addresses,
@@ -352,118 +504,51 @@ function CartCheckoutForm({
   onBackToCart,
   onSubmit,
 }: Readonly<CartCheckoutFormProps>) {
-  const submitButtonText = lang === "tr" ? "Siparişi Onayla" : "Confirm B2B Order";
+  const isTr = lang === "tr";
+  const submitButtonText = isTr ? "Siparişi Onayla" : "Confirm B2B Order";
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 pt-4 border-t border-cultured mt-2">
       <div className="flex items-center justify-between">
         <h4 className="text-xs uppercase font-extrabold text-salmon-pink tracking-[0.5px]">
-          {lang === "tr" ? "Adres ve Ödeme Bilgileri" : "Address & Payment Info"}
+          {isTr ? "Adres ve Ödeme Bilgileri" : "Address & Payment Info"}
         </h4>
         <button
           type="button"
           onClick={onBackToCart}
           className="text-xs font-bold text-sonic-silver hover:text-salmon-pink bg-transparent border-none cursor-pointer"
         >
-          &larr; {lang === "tr" ? "Sepete Dön" : "Back to Cart"}
+          &larr; {isTr ? "Sepete Dön" : "Back to Cart"}
         </button>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-[11px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">
-          🚚 {lang === "tr" ? "Teslimat Adresi" : "Delivery Address"}
-        </label>
-        {addresses.length > 0 ? (
-          <select
-            value={deliveryAddr}
-            onChange={(e) => setDeliveryAddr(e.target.value)}
-            className="w-full px-3 py-2 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black"
-          >
-            {addresses.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.title} ({a.address_line.substring(0, 30)}...)
-              </option>
-            ))}
-            <option value="custom">{lang === "tr" ? "+ Yeni Adres Girişi" : "+ Enter Custom Address"}</option>
-          </select>
-        ) : (
-          <div className="text-[10px] text-sonic-silver font-medium italic">
-            {lang === "tr" ? "Profilinizde kayıtlı teslimat adresi bulunamadı." : "No saved shipping addresses found."}
-          </div>
-        )}
-        {(deliveryAddr === "custom" || addresses.length === 0) && (
-          <textarea
-            required
-            value={customDeliveryAddr}
-            onChange={(e) => setCustomDeliveryAddr(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2.5 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black resize-none mt-1"
-            placeholder={lang === "tr" ? "Teslimat adresini yazınız..." : "Type delivery address..."}
-          />
-        )}
-      </div>
+      <AddressPicker
+        title={isTr ? "Teslimat Adresi" : "Delivery Address"}
+        icon="🚚"
+        addresses={addresses}
+        selectedAddr={deliveryAddr}
+        onSelectAddr={setDeliveryAddr}
+        customAddr={customDeliveryAddr}
+        onCustomAddrChange={setCustomDeliveryAddr}
+        customPlaceholder={isTr ? "Teslimat adresini yazınız..." : "Type delivery address..."}
+        customOptionLabel={isTr ? "+ Yeni Adres Girişi" : "+ Enter Custom Address"}
+        emptyNotice={isTr ? "Profilinizde kayıtlı teslimat adresi bulunamadı." : "No saved shipping addresses found."}
+      />
 
-      <div className="flex flex-col gap-1">
-        <label className="text-[11px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">
-          📄 {lang === "tr" ? "Fatura Adresi" : "Billing Address"}
-        </label>
-        {addresses.length > 0 ? (
-          <select
-            value={billingAddr}
-            onChange={(e) => setBillingAddr(e.target.value)}
-            className="w-full px-3 py-2 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black"
-          >
-            {addresses.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.title} ({a.address_line.substring(0, 30)}...)
-              </option>
-            ))}
-            <option value="custom">{lang === "tr" ? "+ Yeni Fatura Adresi Girişi" : "+ Enter Custom Billing Address"}</option>
-          </select>
-        ) : (
-          <div className="text-[10px] text-sonic-silver font-medium italic">
-            {lang === "tr" ? "Profilinizde kayıtlı fatura adresi bulunamadı." : "No saved billing addresses found."}
-          </div>
-        )}
-        {(billingAddr === "custom" || addresses.length === 0) && (
-          <textarea
-            required
-            value={customBillingAddr}
-            onChange={(e) => setCustomBillingAddr(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2.5 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black resize-none mt-1"
-            placeholder={lang === "tr" ? "Fatura adresini yazınız..." : "Type billing address..."}
-          />
-        )}
-      </div>
+      <AddressPicker
+        title={isTr ? "Fatura Adresi" : "Billing Address"}
+        icon="📄"
+        addresses={addresses}
+        selectedAddr={billingAddr}
+        onSelectAddr={setBillingAddr}
+        customAddr={customBillingAddr}
+        onCustomAddrChange={setCustomBillingAddr}
+        customPlaceholder={isTr ? "Fatura adresini yazınız..." : "Type billing address..."}
+        customOptionLabel={isTr ? "+ Yeni Fatura Adresi Girişi" : "+ Enter Custom Billing Address"}
+        emptyNotice={isTr ? "Profilinizde kayıtlı fatura adresi bulunamadı." : "No saved billing addresses found."}
+      />
 
-      <div className="bg-[#eff6ff] border border-blue-100 rounded-lg p-3 flex flex-col gap-2.5 text-xs text-blue-900 shadow-sm leading-normal">
-        <div className="font-extrabold uppercase tracking-[0.5px] border-b border-blue-200/50 pb-1 text-[11px] text-blue-800">
-          🏦 {lang === "tr" ? "Banka Havale/EFT Hesapları" : "Bank Transfer IBAN Accounts"}
-        </div>
-        <div className="flex flex-col gap-1.5 font-semibold text-[11px]">
-          <div>
-            <span className="font-bold text-blue-900">Ziraat Bankası:</span>
-            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
-            <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
-          </div>
-          <div>
-            <span className="font-bold text-blue-900">Garanti BBVA:</span>
-            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
-            <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
-          </div>
-          <div>
-            <span className="font-bold text-blue-900">VakıfBank:</span>
-            <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
-            <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
-          </div>
-        </div>
-        <div className="text-[9px] font-bold text-blue-800 italic mt-1 border-t border-blue-200/30 pt-1.5 leading-snug">
-          {lang === "tr"
-            ? "* Lütfen transfere sipariş numaranızı açıklama olarak ekleyiniz. Ödeme sonrası profilinizden bildirim yapmayı unutmayınız."
-            : "* Please add your order number as payment explanation. Submit notification from profile after transfer."}
-        </div>
-      </div>
+      <BankTransferInfo lang={lang} />
 
       <button
         type="submit"
@@ -608,21 +693,57 @@ export default function CartDrawer({
   totalPkgs,
   totalItemsCount,
   totalWeight,
-  fullName,
-  setFullName,
-  companyName,
-  setCompanyName,
-  phoneNumber,
-  setPhoneNumber,
-  emailAddress,
-  setEmailAddress,
-  customerMessage,
-  setCustomerMessage,
   submittingInquiry,
-  onSubmit,
+  onSubmitInquiry,
   displayCurrency = "TRY",
   exchangeRates = [],
 }: Readonly<CartDrawerProps>) {
+  const [fullName, setFullName] = React.useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = JSON.parse(localStorage.getItem("store_user_info") || "{}");
+        return [stored.first_name, stored.last_name].filter(Boolean).join(" ");
+      } catch {
+        return "";
+      }
+    }
+    return "";
+  });
+  const [companyName, setCompanyName] = React.useState<string>("");
+  const [phoneNumber, setPhoneNumber] = React.useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = JSON.parse(localStorage.getItem("store_user_info") || "{}");
+        return stored.phone || "";
+      } catch {
+        return "";
+      }
+    }
+    return "";
+  });
+  const [emailAddress, setEmailAddress] = React.useState<string>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = JSON.parse(localStorage.getItem("store_user_info") || "{}");
+        return stored.email || "";
+      } catch {
+        return "";
+      }
+    }
+    return "";
+  });
+  const [customerMessage, setCustomerMessage] = React.useState<string>("");
+
+  const handleInquirySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmitInquiry({
+      fullName,
+      companyName,
+      phoneNumber,
+      emailAddress,
+      customerMessage,
+    });
+  };
   const [isCheckout, setIsCheckout] = React.useState(false);
   const [forceShowInquiry, setForceShowInquiry] = React.useState(false);
   const [addresses, setAddresses] = React.useState<UserAddress[]>([]);
@@ -666,56 +787,28 @@ export default function CartDrawer({
 
     setSubmittingOrder(true);
     try {
-      const syncRes = await fetch("/api/v1/store/cart/sync", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          items: cart.map((item) => ({
-            product_id: item.product_id,
-            quantity: item.packages_qty * item.units_per_package,
-          })),
-        }),
+      const orderNumber = await submitB2BOrder({
+        token,
+        cart,
+        billingAddress: finalBilling,
+        deliveryAddress: finalDelivery,
+        lang,
       });
 
-      if (!syncRes.ok) {
-        const syncData = await syncRes.json().catch(() => ({}));
-        throw new Error(syncData.error || (lang === "tr" ? "Sepet senkronizasyonu başarısız." : "Failed to sync cart."));
-      }
+      const successNotice = lang === "tr"
+        ? `Siparişiniz başarıyla alındı! Sipariş No: ${orderNumber}\nLütfen sipariş numaranızı belirterek belirtilen IBAN adreslerine banka havalesi gerçekleştiriniz.`
+        : `Your order has been received successfully! Order No: ${orderNumber}\nPlease transfer the amount to the provided IBANs mentioning your order number.`;
 
-      const res = await fetch("/api/v1/store/orders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          billing_address: finalBilling,
-          delivery_address: finalDelivery,
-          payment_method: "BANK_TRANSFER",
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(
-          lang === "tr"
-            ? `Siparişiniz başarıyla alındı! Sipariş No: ${data.order_number}\nLütfen sipariş numaranızı belirterek belirtilen IBAN adreslerine banka havalesi gerçekleştiriniz.`
-            : `Your order has been received successfully! Order No: ${data.order_number}\nPlease transfer the amount to the provided IBANs mentioning your order number.`
-        );
-
-        localStorage.removeItem("merter_b2b_cart");
-        window.dispatchEvent(new Event("merter-cart-update"));
-        onClose();
-        window.location.href = `/${lang}/profile?tab=orders`;
-      } else {
-        showToast(data.error || (lang === "tr" ? "Sipariş verilirken bir hata oluştu." : "Failed to place order."));
-      }
-    } catch (err) {
+      showToast(successNotice);
+      localStorage.removeItem("merter_b2b_cart");
+      window.dispatchEvent(new Event("merter-cart-update"));
+      onClose();
+      window.location.href = `/${lang}/profile?tab=orders`;
+    } catch (err: unknown) {
       console.error(err);
-      showToast(lang === "tr" ? "Bir ağ hatası oluştu." : "A network error occurred.");
+      const fallbackMsg = lang === "tr" ? "Bir ağ hatası oluştu." : "A network error occurred.";
+      const errMsg = err instanceof Error ? err.message : fallbackMsg;
+      showToast(errMsg);
     } finally {
       setSubmittingOrder(false);
     }
@@ -885,7 +978,7 @@ export default function CartDrawer({
                       setForceShowInquiry(false);
                       setIsCheckout(false);
                     }}
-                    onSubmit={onSubmit}
+                    onSubmit={handleInquirySubmit}
                   />
                 )}
 

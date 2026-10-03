@@ -9,16 +9,32 @@ export function getUnitsFromSeriesRatio(seriesRatio?: string): number {
   return total > 0 ? total : 1;
 }
 
-export async function apiFetch<T>(endpoint: string): Promise<T | null> {
+export interface ApiFetchOptions extends RequestInit {
+  revalidate?: number | false;
+  tags?: string[];
+}
+
+export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {}): Promise<T | null> {
   try {
     // Determine target host base path.
-    // On the server (SSR / Metadata generation), we query the local Go backend on port 8081.
-    // In the browser, we use the relative path mapped via Nginx.
+    // On the server (SSR / Metadata generation), we query the backend API.
+    // In the browser, we use relative paths mapped via reverse proxy.
     const isServer = typeof window === "undefined";
-    const baseUrl = isServer ? "https://mertervitrini.com.tr" : "";
-    
-    const separator = endpoint.includes("?") ? "&" : "?";
-    const response = await fetch(`${baseUrl}/api/v1/store${endpoint}${separator}t=${Date.now()}`);
+    const baseUrl = isServer ? (process.env.INTERNAL_API_URL || "https://mertervitrini.com.tr") : "";
+    const url = `${baseUrl}/api/v1/store${endpoint}`;
+
+    const { revalidate = 60, tags, ...fetchOptions } = options;
+    const nextConfig = isServer && revalidate !== false ? { revalidate, tags } : undefined;
+
+    const response = await fetch(url, {
+      ...fetchOptions,
+      next: nextConfig,
+      headers: {
+        Accept: "application/json",
+        ...fetchOptions.headers,
+      },
+    });
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }

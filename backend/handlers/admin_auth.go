@@ -15,6 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/httpclient"
 )
 
 type AdminAuthHandler struct {
@@ -137,8 +138,7 @@ func exchangeKeycloakCode(ctx context.Context, cfg *config.Config, code, redirec
 	}
 	httpReq.Header.Set(headerContentType, mimeFormURLEncoded)
 
-	client := &http.Client{}
-	resp, err := client.Do(httpReq)
+	resp, err := httpclient.FastClient.Do(httpReq)
 	if err != nil {
 		return "", http.StatusBadGateway, fmt.Errorf("keycloak server is unreachable: %w", err)
 	}

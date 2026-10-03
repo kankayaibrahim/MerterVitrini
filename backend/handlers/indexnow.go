@@ -6,7 +6,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
+
+	"mertervitrini/backend/pkg/httpclient"
 )
 
 type IndexNowHandler struct{}
@@ -55,8 +56,7 @@ func NotifyIndexNow(urls []string) {
 			return
 		}
 
-		client := &http.Client{Timeout: 15 * time.Second}
-		resp, err := client.Post("https://api.indexnow.org/IndexNow", "application/json; charset=utf-8", bytes.NewBuffer(jsonData))
+		resp, err := httpclient.DefaultPooledClient.Post("https://api.indexnow.org/IndexNow", "application/json; charset=utf-8", bytes.NewBuffer(jsonData))
 		if err != nil {
 			log.Printf("[IndexNow Error] POST request failed: %v", err)
 			return

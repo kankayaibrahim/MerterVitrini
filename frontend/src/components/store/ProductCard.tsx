@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import Image from "next/image";
 import { Product } from "@/types/store";
 import { getProductTitle, t } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/utils";
 import { Heart, ShoppingBag, Eye } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useWishlistStore } from "@/store/useWishlistStore";
 
 interface ProductCardProps {
   readonly product: Product;
@@ -115,77 +117,16 @@ export default function ProductCard({
   displayCurrency,
   exchangeRates,
 }: Readonly<ProductCardProps>) {
-  const router = useRouter();
   const title = getProductTitle(product, lang);
-
-  const [prevProductId, setPrevProductId] = useState(product.id);
-  const [isFavorite, setIsFavorite] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const favs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]");
-        return Array.isArray(favs) && favs.includes(product.id);
-      } catch {
-        return false;
-      }
-    }
-    return false;
-  });
-
-  if (prevProductId !== product.id) {
-    setPrevProductId(product.id);
-    if (typeof window !== "undefined") {
-      try {
-        const favs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]");
-        setIsFavorite(Array.isArray(favs) && favs.includes(product.id));
-      } catch {
-        setIsFavorite(false);
-      }
-    }
-  }
-
-  useEffect(() => {
-    const handleWishlistUpdate = (e: Event) => {
-      const customEvent = e as CustomEvent<string[]>;
-      if (Array.isArray(customEvent.detail)) {
-        setIsFavorite(customEvent.detail.includes(product.id));
-      }
-    };
-    window.addEventListener("merter-wishlist-update", handleWishlistUpdate);
-    return () => {
-      window.removeEventListener("merter-wishlist-update", handleWishlistUpdate);
-    };
-  }, [product.id]);
+  const isFavorite = useWishlistStore((state) => state.wishlistIds.includes(product.id));
+  const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
 
   const [activeImgIndex, setActiveImgIndex] = useState<number>(0);
 
   const toggleFavorite = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const favs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]");
-    let updated: string[];
-    if (favs.includes(product.id)) {
-      updated = favs.filter((id: string) => id !== product.id);
-      setIsFavorite(false);
-    } else {
-      updated = [...favs, product.id];
-      setIsFavorite(true);
-
-      const newToast = {
-        id: `toast-${Date.now()}-${product.id}`,
-        message: `${title} - ${lang === "tr" ? "Favorilerime Eklendi!" : "Added to Favorites!"}`,
-      };
-      window.dispatchEvent(new CustomEvent("merter-show-toast", { detail: newToast }));
-    }
-    localStorage.setItem("merter_wishlist", JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent("merter-wishlist-update", { detail: updated }));
-  };
-
-  const handleCardClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest("button") || target.closest("a")) {
-      return;
-    }
-    router.push(`/product/${product.slug || product.id}`);
+    toggleWishlist(product.id, title, lang);
   };
 
   const displayImages = getSortedProductImages(product);
@@ -199,41 +140,28 @@ export default function ProductCard({
   );
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={handleCardClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          const target = e.target as HTMLElement;
-          if (!target.closest("button") && !target.closest("a")) {
-            router.push(`/product/${product.slug || product.id}`);
-          }
-        }
-      }}
-      className="bg-white rounded-none overflow-hidden flex flex-col h-full cursor-pointer relative border-none group select-none shadow-none transition-all duration-300 block text-inherit no-underline"
-    >
+    <article className="bg-white rounded-none overflow-hidden flex flex-col h-full cursor-pointer relative border-none group select-none shadow-none transition-all duration-300 block text-inherit no-underline">
       {/* 1. Visual Image Container with segmented hover image switcher */}
       <div
         className="relative aspect-[4/5] overflow-hidden bg-[#fafafa]"
         onMouseLeave={() => setActiveImgIndex(0)}
       >
         {/* Active Image */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={displayImages[activeImgIndex] || "/placeholder.png"}
           alt={title}
-          className="w-full h-full object-contain transition-all duration-300 ease-out group-hover:scale-102"
-          loading={priority ? undefined : "lazy"}
-          fetchPriority={priority ? "high" : undefined}
+          fill
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          priority={priority}
+          className="object-contain transition-all duration-300 ease-out group-hover:scale-102"
         />
 
         {/* Invisible vertical hover zones overlays (z-15) */}
         {displayImages.length > 1 && (
           <div className="absolute inset-0 z-15 flex">
-            {displayImages.map((_, idx) => (
+            {displayImages.map((imgUrl, idx) => (
               <div
-                key={`hover-zone-${idx}`}
+                key={`zone-${product.id}-${imgUrl}`}
                 className="flex-grow h-full cursor-pointer"
                 onMouseEnter={() => setActiveImgIndex(idx)}
               />
@@ -244,9 +172,9 @@ export default function ProductCard({
         {/* Segmented horizontal indicator bars at the bottom (z-20) */}
         {displayImages.length > 1 && (
           <div className="absolute bottom-2.5 left-3.5 right-3.5 flex gap-1 z-20">
-            {displayImages.map((_, idx) => (
+            {displayImages.map((imgUrl, idx) => (
               <div
-                key={`indicator-${idx}`}
+                key={`bar-${product.id}-${imgUrl}`}
                 className="flex-grow h-[2px] bg-[#E0E0E0] relative overflow-hidden"
               >
                 <div
@@ -322,7 +250,9 @@ export default function ProductCard({
         </span>
 
         <h3 className="text-xs font-normal text-onyx line-clamp-2 min-h-[34px] leading-relaxed transition-colors duration-150 group-hover:text-black">
-          {title}
+          <Link href={`/product/${product.slug || product.id}`} className="hover:underline text-inherit after:absolute after:inset-0 after:z-1">
+            {title}
+          </Link>
         </h3>
 
         <div className="flex flex-col gap-1.5 mt-1.5 text-[11px] font-normal text-sonic-silver">
@@ -373,12 +303,12 @@ export default function ProductCard({
               })
             );
           }}
-          className="mt-3 w-full bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-[11px] font-bold uppercase py-2 sm:py-2.5 px-2 sm:px-4 rounded-none transition-all duration-300 flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-none select-none border-none cursor-pointer tracking-wider"
+          className="mt-3 relative z-10 w-full bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-[11px] font-bold uppercase py-2 sm:py-2.5 px-2 sm:px-4 rounded-none transition-all duration-300 flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-none select-none border-none cursor-pointer tracking-wider"
         >
           <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
           <span>{btnText}</span>
         </button>
       </div>
-    </div>
+    </article>
   );
 }

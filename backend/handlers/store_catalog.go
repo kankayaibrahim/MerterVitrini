@@ -230,7 +230,7 @@ func buildCatalogOrderBy(sortBy, sqlPriceInTRY string) string {
 }
 
 func scanCatalogProducts(rows pgx.Rows) ([]*models.Product, error) {
-	products := []*models.Product{}
+	products := make([]*models.Product, 0, 32)
 	for rows.Next() {
 		var p models.Product
 		var imagesBytes, translationsBytes []byte
@@ -254,6 +254,9 @@ func scanCatalogProducts(rows pgx.Rows) ([]*models.Product, error) {
 			_ = json.Unmarshal(translationsBytes, &p.Translations)
 		}
 		products = append(products, &p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("catalog products scan iteration error: %w", err)
 	}
 	return products, nil
 }
@@ -299,6 +302,9 @@ func querySiblingProductMap(ctx context.Context, groupIDs []string) map[string][
 			key := feedID + "_" + groupID
 			siblingsMap[key] = append(siblingsMap[key], &sib)
 		}
+	}
+	if err := sRows.Err(); err != nil {
+		log.Printf("[STORE API WARNING] Sibling color variants scan iteration error: %v", err)
 	}
 	return siblingsMap
 }
@@ -540,6 +546,9 @@ func fetchStoreProductVariants(ctx context.Context, productID string) []*models.
 			variants = append(variants, &v)
 		}
 	}
+	if err := vRows.Err(); err != nil {
+		log.Printf("[STORE API WARNING] Variants scan error for product %s: %v", productID, err)
+	}
 	return variants
 }
 
@@ -562,6 +571,9 @@ func fetchProductAttributes(ctx context.Context, productID string) []*models.Pro
 		if err := aRows.Scan(&attr.Name, &attr.Value); err == nil {
 			attributes = append(attributes, &attr)
 		}
+	}
+	if err := aRows.Err(); err != nil {
+		log.Printf("[STORE API WARNING] Attributes scan error for product %s: %v", productID, err)
 	}
 	return attributes
 }
@@ -609,6 +621,9 @@ func fetchAndInjectAttributeTranslations(ctx context.Context, p *models.Product)
 			p.Translations[lang] = tMap
 		}
 	}
+	if err := taRows.Err(); err != nil {
+		log.Printf("[STORE API WARNING] Attribute translations scan error for product %s: %v", p.ID, err)
+	}
 }
 
 func fetchProductSiblings(ctx context.Context, p *models.Product) {
@@ -634,6 +649,9 @@ func fetchProductSiblings(ctx context.Context, p *models.Product) {
 		if err := sRows.Scan(&sib.ID, &sib.CustomSku, &sib.Slug, &sib.SlugID, &sib.Color, &sib.ImageUrl); err == nil {
 			siblings = append(siblings, &sib)
 		}
+	}
+	if err := sRows.Err(); err != nil {
+		log.Printf("[STORE API WARNING] Product siblings scan error for product %s: %v", p.ID, err)
 	}
 	p.ColorVariants = siblings
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
+	"mertervitrini/backend/pkg/httpclient"
 )
 
 type StoreAuthHandler struct {
@@ -96,8 +97,7 @@ func (h *StoreAuthHandler) getAdminAccessToken(ctx context.Context) (string, err
 	}
 	req.Header.Set(headerContentType, mimeFormURLEncoded)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpclient.FastClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -138,8 +138,7 @@ func (h *StoreAuthHandler) requestKeycloakPasswordToken(ctx context.Context, ema
 	}
 	req.Header.Set(headerContentType, mimeFormURLEncoded)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpclient.FastClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -335,8 +334,7 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	kcReq.Header.Set(headerContentType, mimeApplicationJSON)
 	kcReq.Header.Set("Authorization", authBearerPrefix+adminToken)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	kcResp, err := client.Do(kcReq)
+	kcResp, err := httpclient.FastClient.Do(kcReq)
 	if err != nil {
 		log.Printf("[AUTH ERROR] Failed to make register call to Keycloak: %v", err)
 		http.Error(w, `{"error":"Kimlik sağlayıcı sunucusu yanıt vermedi"}`, http.StatusBadGateway)
@@ -724,8 +722,7 @@ func (h *StoreAuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request)
 		kcReq.Header.Set(headerContentType, mimeApplicationJSON)
 		kcReq.Header.Set("Authorization", authBearerPrefix+adminToken)
 
-		client := &http.Client{Timeout: 8 * time.Second}
-		kcResp, err := client.Do(kcReq)
+		kcResp, err := httpclient.FastClient.Do(kcReq)
 		if err != nil {
 			log.Printf("[PROFILE SYNC WARNING] Failed to make Keycloak update call: %v", err)
 			return
@@ -760,8 +757,7 @@ func (h *StoreAuthHandler) exchangeGoogleCodeForToken(ctx context.Context, code,
 	}
 	req.Header.Set(headerContentType, mimeFormURLEncoded)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := httpclient.FastClient.Do(req)
 	if err != nil {
 		return "", err
 	}

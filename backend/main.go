@@ -121,12 +121,15 @@ func main() {
 	}
 
 	// 4b. Provision Cron Tables and Start Scheduler
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
 	cronInitCtx, cronInitCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := handlers.ProvisionCronTables(cronInitCtx); err != nil {
 		log.Printf("[WARNING] Failed to provision cron tables: %v\n", err)
 	} else {
 		log.Println("Cron scheduler database tables successfully provisioned/verified!")
-		handlers.StartCronScheduler()
+		handlers.StartCronScheduler(appCtx)
 	}
 	cronInitCancel()
 
@@ -140,7 +143,7 @@ func main() {
 	cleanupCancel()
 
 	// 4d. Start background TCMB daily exchange rates worker
-	db.StartRatesWorker(context.Background())
+	db.StartRatesWorker(appCtx)
 
 	// 5. Initialize Route Handlers
 	// Storefront Handlers
@@ -392,6 +395,7 @@ func main() {
 
 	<-stopChan
 	log.Println("Shutting down unified backend service gracefully...")
+	appCancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()

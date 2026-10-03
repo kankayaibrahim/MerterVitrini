@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import { X, ShoppingBag, Plus, Minus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Product } from "@/types/store";
 import { t, getProductTitle, getProductDescription, getProductAttributes, translateColor } from "@/app/i18n";
@@ -165,11 +166,12 @@ export default function ProductDetailsModal({
                 aria-label={lang === "tr" ? "Büyük görseli aç" : "Open lightbox"}
                 className="w-full aspect-[4/5] max-h-[400px] md:max-h-[520px] rounded-[10px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group flex items-center justify-center p-0"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img 
+                <Image 
                   src={getResizedImageUrl(modalMainImg, 600, 800)} 
                   alt={title}
-                  className="max-w-full max-h-full object-contain transition-all duration-300 group-hover:scale-105"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  className="object-contain transition-all duration-300 group-hover:scale-105"
                 />
               </button>
               
@@ -180,14 +182,19 @@ export default function ProductDetailsModal({
                       key={img.id}
                       type="button"
                       onClick={() => setModalMainImg(img.image_url)}
-                      className={`w-14 h-18 rounded-[5px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${
+                      className={`relative w-14 h-18 rounded-[5px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${
                         modalMainImg === img.image_url 
                           ? "border-salmon-pink scale-[1.02]" 
                           : "border-transparent opacity-60 hover:opacity-100"
                       }`}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={getResizedImageUrl(img.image_url, 80, 106)} alt="thumb" className="w-full h-full object-cover" />
+                      <Image
+                        src={getResizedImageUrl(img.image_url, 80, 106)} 
+                        alt="thumb" 
+                        fill
+                        sizes="56px"
+                        className="object-cover" 
+                      />
                     </button>
                   ))}
                 </div>

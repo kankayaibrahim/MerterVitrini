@@ -64,7 +64,7 @@ func ProvisionCronTables(ctx context.Context) error {
 }
 
 // StartCronScheduler starts a background ticker to trigger cron job at specified time
-func StartCronScheduler() {
+func StartCronScheduler(ctx context.Context) {
 	go func() {
 		log.Println("[CRON] Background scheduler thread initiated.")
 		ticker := time.NewTicker(30 * time.Second)
@@ -72,37 +72,39 @@ func StartCronScheduler() {
 
 		var lastCheckedDate string
 
-		for range ticker.C {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			
-			// 1. Fetch settings
-			var isActive bool
-			var runHour, runMinute int
-			var currentStatus string
-			err := db.Pool.QueryRow(ctx, `
-				SELECT is_active, run_hour, run_minute, current_status 
-				FROM integration.cron_settings 
-				LIMIT 1
-			`).Scan(&isActive, &runHour, &runMinute, &currentStatus)
-			
-			cancel()
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("[CRON] Background scheduler thread gracefully stopped.")
+				return
+			case <-ticker.C:
+				func() {
+					queryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+					defer cancel()
 
-			if err != nil {
-				continue
-			}
+					// 1. Fetch settings
+					var isActive bool
+					var runHour, runMinute int
+					var currentStatus string
+					err := db.Pool.QueryRow(queryCtx, `
+						SELECT is_active, run_hour, run_minute, current_status 
+						FROM integration.cron_settings 
+						LIMIT 1
+					`).Scan(&isActive, &runHour, &runMinute, &currentStatus)
+					if err != nil || !isActive {
+						return
+					}
 
-			if !isActive {
-				continue
-			}
+					now := time.Now()
+					currentDate := now.Format("2006-01-02")
 
-			now := time.Now()
-			currentDate := now.Format("2006-01-02")
-
-			// Check if we are in the target hour and minute, and haven't run today yet
-			if now.Hour() == runHour && now.Minute() == runMinute && lastCheckedDate != currentDate && currentStatus != "running" {
-				lastCheckedDate = currentDate
-				log.Printf("[CRON] Scheduled time matched (%02d:%02d). Starting cron job pipeline...", runHour, runMinute)
-				go runCronPipeline(false)
+					// Check if we are in the target hour and minute, and haven't run today yet
+					if now.Hour() == runHour && now.Minute() == runMinute && lastCheckedDate != currentDate && currentStatus != "running" {
+						lastCheckedDate = currentDate
+						log.Printf("[CRON] Scheduled time matched (%02d:%02d). Starting cron job pipeline...", runHour, runMinute)
+						go runCronPipeline(false)
+					}
+				}()
 			}
 		}
 	}()

@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"mertervitrini/backend/pkg/httpclient"
 )
 
 // XML Struct mappings for TCMB today.xml
@@ -71,14 +73,13 @@ func StartRatesWorker(ctx context.Context) {
 }
 
 func fetchTCMBXml(url string) ([]byte, error) {
-	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 
-	resp, err := client.Do(req)
+	resp, err := httpclient.FastClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}

@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/httpclient"
 )
 
 type DownloadTask struct {
@@ -101,8 +102,9 @@ func (pr *progressReader) Read(p []byte) (n int, err error) {
 }
 
 func downloadImageWithSpeedTracking(url string, destPath string, runID string) error {
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	p := getOrCreateProgress(runID)
+
+	resp, err := httpclient.DefaultPooledClient.Get(url)
 	if err != nil {
 		return err
 	}
@@ -121,13 +123,9 @@ func downloadImageWithSpeedTracking(url string, destPath string, runID string) e
 	pr := &progressReader{
 		Reader: resp.Body,
 		onRead: func(n int) {
-			progressMu.Lock()
-			if p, ok := progressMap[runID]; ok {
-				p.mu.Lock()
-				p.BytesInLastSec += int64(n)
-				p.mu.Unlock()
+			if p != nil {
+				atomic.AddInt64(&p.BytesInLastSec, int64(n))
 			}
-			progressMu.Unlock()
 		},
 	}
 
@@ -265,8 +263,8 @@ func processSingleSyncTick(runID string, p *SyncProgress) bool {
 
 	syncRedisProgress(runID, p)
 
-	speedKbps := int(p.BytesInLastSec / 1024)
-	p.BytesInLastSec = 0
+	bytesLastSec := atomic.SwapInt64(&p.BytesInLastSec, 0)
+	speedKbps := int(bytesLastSec / 1024)
 	p.DownloadSpeedKbps = speedKbps
 	p.ActiveWorkers = int(atomic.LoadInt32(&activeWorkers))
 
@@ -367,8 +365,7 @@ func (h *IntegrationHandler) ListFeeds(w http.ResponseWriter, r *http.Request) {
 }
 
 func downloadXMLPreviewBytes(feedURL string) ([]byte, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(feedURL)
+	resp, err := httpclient.FastClient.Get(feedURL)
 	if err != nil {
 		return nil, err
 	}
@@ -946,8 +943,7 @@ func simulateBackgroundSync(runID string, ctx context.Context) {
 		return
 	}
 
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Get(feedURL)
+	resp, err := httpclient.DefaultPooledClient.Get(feedURL)
 	if err != nil {
 		log.Printf("[SYNC-%s] Failed to download XML: %v", runID, err)
 		updateSyncStatus(runID, "failed", map[string]any{"error": "XML indirme hatası: " + err.Error()})
@@ -1380,8 +1376,7 @@ func getUrlHash(url string) string {
 }
 
 func downloadImage(url string, destPath string) error {
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := httpclient.DefaultPooledClient.Get(url)
 	if err != nil {
 		return err
 	}

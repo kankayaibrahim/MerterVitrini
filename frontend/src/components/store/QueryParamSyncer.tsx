@@ -21,23 +21,11 @@ export default function QueryParamSyncer({
       const catParam = searchParams.get("category");
       const qParam = searchParams.get("q") || "";
 
-      console.log(`[Search Log] QueryParamSyncer triggered. qParam: "${qParam}"`);
-
       if (catParam) {
         setActiveCategoryId(catParam);
       }
       
       setSearchQuery(qParam);
-
-      // Safely sync both desktop & mobile input box values in UI
-      const searchInput = document.getElementById("searchInputDesktop") as HTMLInputElement;
-      if (searchInput) {
-        searchInput.value = qParam;
-      }
-      const searchInputMobile = document.getElementById("searchInputMobile") as HTMLInputElement;
-      if (searchInputMobile) {
-        searchInputMobile.value = qParam;
-      }
     }
   }, [mode, searchParams, setSearchQuery, setActiveCategoryId]);
 

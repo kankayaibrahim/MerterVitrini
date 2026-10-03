@@ -1,5 +1,5 @@
 import React from "react";
-import CartDrawer from "@/components/store/CartDrawer";
+import CartDrawer, { InquiryFormData } from "@/components/store/CartDrawer";
 import SuccessModal from "@/components/store/SuccessModal";
 import { CartItem } from "@/types/store";
 import { ExchangeRate } from "@/app/utils";
@@ -15,18 +15,8 @@ interface ProductInquiryCartProps {
   readonly totalPriceCart: number;
   
   // inquiry form state & events
-  readonly fullName: string;
-  readonly setFullName: (v: string) => void;
-  readonly companyName: string;
-  readonly setCompanyName: (v: string) => void;
-  readonly phoneNumber: string;
-  readonly setPhoneNumber: (v: string) => void;
-  readonly emailAddress: string;
-  readonly setEmailAddress: (v: string) => void;
-  readonly customerMessage: string;
-  readonly setCustomerMessage: (v: string) => void;
   readonly submittingInquiry: boolean;
-  readonly handleSubmitInquiry: (e: React.FormEvent) => void;
+  readonly handleSubmitInquiry: (data: InquiryFormData) => void;
   readonly handleAdjustCartItemQty: (idx: number, change: number) => void;
   readonly handleRemoveCartItem: (idx: number) => void;
   
@@ -49,16 +39,6 @@ export default function ProductInquiryCart({
   totalItemsCount,
   totalWeightCart,
   totalPriceCart,
-  fullName,
-  setFullName,
-  companyName,
-  setCompanyName,
-  phoneNumber,
-  setPhoneNumber,
-  emailAddress,
-  setEmailAddress,
-  customerMessage,
-  setCustomerMessage,
   submittingInquiry,
   handleSubmitInquiry,
   handleAdjustCartItemQty,
@@ -83,18 +63,8 @@ export default function ProductInquiryCart({
           totalItemsCount={totalItemsCount}
           totalWeight={totalWeightCart}
           totalPrice={totalPriceCart}
-          fullName={fullName}
-          setFullName={setFullName}
-          companyName={companyName}
-          setCompanyName={setCompanyName}
-          phoneNumber={phoneNumber}
-          setPhoneNumber={setPhoneNumber}
-          emailAddress={emailAddress}
-          setEmailAddress={setEmailAddress}
-          customerMessage={customerMessage}
-          setCustomerMessage={setCustomerMessage}
           submittingInquiry={submittingInquiry}
-          onSubmit={handleSubmitInquiry}
+          onSubmitInquiry={handleSubmitInquiry}
           displayCurrency={displayCurrency}
           exchangeRates={exchangeRates}
         />

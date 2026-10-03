@@ -114,6 +114,7 @@ func ConnectDB(cfg *config.Config) (*pgxpool.Pool, error) {
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE SEQUENCE IF NOT EXISTS catalog.order_number_seq START 1`,
 		`ALTER TABLE catalog.orders ADD COLUMN IF NOT EXISTS billing_address TEXT NULL`,
 		`ALTER TABLE catalog.orders ADD COLUMN IF NOT EXISTS delivery_address TEXT NULL`,
 		`CREATE TABLE IF NOT EXISTS catalog.order_items (

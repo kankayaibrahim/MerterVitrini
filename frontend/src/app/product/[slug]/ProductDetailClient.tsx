@@ -19,6 +19,7 @@ import ColorVariants from "./components/ColorVariants";
 import OrderCalculator from "./components/OrderCalculator";
 import SocialShare from "./components/SocialShare";
 import ProductInquiryCart from "./components/ProductInquiryCart";
+import { InquiryFormData } from "@/components/store/CartDrawer";
 
 interface ProductDetailClientProps {
   readonly product: Product | null;
@@ -97,11 +98,6 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
   });
 
   // --- Quote inquiry form states ---
-  const [fullName, setFullName] = useState<string>("");
-  const [companyName, setCompanyName] = useState<string>("");
-  const [phoneNumber, setPhoneNumber] = useState<string>("");
-  const [emailAddress, setEmailAddress] = useState<string>("");
-  const [customerMessage, setCustomerMessage] = useState<string>("");
   const [submittingInquiry, setSubmittingInquiry] = useState<boolean>(false);
   const [whatsappUrl, setWhatsappUrl] = useState<string>("");
   const [showSuccessOverlay, setShowSuccessOverlay] = useState<boolean>(false);
@@ -325,18 +321,17 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
   };
 
   // Submit Quote Inquiry
-  const handleSubmitInquiry = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmitInquiry = async (formData: InquiryFormData) => {
     if (cart.length === 0) return;
 
     setSubmittingInquiry(true);
     try {
       const payload = {
-        full_name: fullName,
-        company_name: companyName,
-        phone_number: phoneNumber,
-        email_address: emailAddress,
-        customer_message: customerMessage,
+        full_name: formData.fullName,
+        company_name: formData.companyName,
+        phone_number: formData.phoneNumber,
+        email_address: formData.emailAddress,
+        customer_message: formData.customerMessage,
         display_currency: displayCurrency,
         cart_items: cart,
         total_price: totalPriceCart,
@@ -359,9 +354,9 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
       // Generate WhatsApp order message for buyer
       let waMsg = `*MERTER VITRINI B2B SIPARIS TALEBI*\n`;
       waMsg += `Talep No: #${data.inquiry_id || "NEW"}\n`;
-      waMsg += `Yetkili: ${fullName}\n`;
-      waMsg += `Firma: ${companyName || "-"}\n`;
-      waMsg += `Telefon: ${phoneNumber}\n`;
+      waMsg += `Yetkili: ${formData.fullName}\n`;
+      waMsg += `Firma: ${formData.companyName || "-"}\n`;
+      waMsg += `Telefon: ${formData.phoneNumber}\n`;
       waMsg += `Toplam Kalem: ${cart.length} çeşit\n`;
       waMsg += `Toplam Adet: ${totalItemsCount} adet\n`;
       waMsg += `Toplam Tutar: ${totalPriceCart.toFixed(2)} ${displayCurrency}\n`;
@@ -371,8 +366,8 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         const itemTotal = itemPieces * cItem.price_per_unit;
         waMsg += `${i + 1}. ${cItem.title} (${cItem.color}) - ${cItem.packages_qty} Paket (${itemPieces} Adet) -> ${itemTotal.toFixed(2)} ${displayCurrency}\n`;
       });
-      if (customerMessage) {
-        waMsg += `----------------------------\nNot: ${customerMessage}`;
+      if (formData.customerMessage) {
+        waMsg += `----------------------------\nNot: ${formData.customerMessage}`;
       }
 
       const encodedWa = `https://wa.me/905337030883?text=${encodeURIComponent(waMsg)}`;
@@ -559,16 +554,6 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         totalItemsCount={totalItemsCount}
         totalWeightCart={totalWeightCart}
         totalPriceCart={totalPriceCart}
-        fullName={fullName}
-        setFullName={setFullName}
-        companyName={companyName}
-        setCompanyName={setCompanyName}
-        phoneNumber={phoneNumber}
-        setPhoneNumber={setPhoneNumber}
-        emailAddress={emailAddress}
-        setEmailAddress={setEmailAddress}
-        customerMessage={customerMessage}
-        setCustomerMessage={setCustomerMessage}
         submittingInquiry={submittingInquiry}
         handleSubmitInquiry={handleSubmitInquiry}
         handleAdjustCartItemQty={handleAdjustCartItemQty}

@@ -9,7 +9,7 @@ import { getUnitsFromSeriesRatio, apiFetch, showToast, ExchangeRate } from "@/ap
 import Header from "@/components/store/Header";
 import FilterSidebar from "@/components/store/FilterSidebar";
 import ProductDetailsModal from "@/components/store/ProductDetailsModal";
-import CartDrawer from "@/components/store/CartDrawer";
+import CartDrawer, { InquiryFormData } from "@/components/store/CartDrawer";
 import SuccessModal from "@/components/store/SuccessModal";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
@@ -236,11 +236,6 @@ export default function StorefrontLayout({
 
   
   // --- Quote Inquiry Submission States ---
-  const [fullName, setFullName] = useState<string>("");
-  const [companyName, setCompanyName] = useState<string>("");
-  const [phoneNumber, setPhoneNumber] = useState<string>("");
-  const [emailAddress, setEmailAddress] = useState<string>("");
-  const [customerMessage, setCustomerMessage] = useState<string>("");
   const [submittingInquiry, setSubmittingInquiry] = useState<boolean>(false);
   const [whatsappUrl, setWhatsappUrl] = useState<string>("");
   const [showSuccessOverlay, setShowSuccessOverlay] = useState<boolean>(false);
@@ -527,12 +522,6 @@ export default function StorefrontLayout({
     setMaxPrice("");
     setActiveAttributes({});
     setCurrentPage(1);
-
-    // Safely clear search inputs in the UI
-    const searchDesktop = document.getElementById("searchInputDesktop") as HTMLInputElement;
-    if (searchDesktop) searchDesktop.value = "";
-    const searchMobile = document.getElementById("searchInputMobile") as HTMLInputElement;
-    if (searchMobile) searchMobile.value = "";
   };
 
   // --- Modal Controllers ---
@@ -664,8 +653,7 @@ export default function StorefrontLayout({
   const totalPrice = cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package * item.price_per_unit), 0);
 
   // --- Quote Inquiry Form Submission ---
-  const handleSubmitInquiry = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmitInquiry = async (formData: InquiryFormData) => {
     if (cart.length === 0) return;
     
     setSubmittingInquiry(true);
@@ -682,11 +670,11 @@ export default function StorefrontLayout({
     });
     
     const payload = {
-      full_name: fullName,
-      company: companyName || null,
-      phone: phoneNumber,
-      email: emailAddress,
-      message: customerMessage || null,
+      full_name: formData.fullName,
+      company: formData.companyName || null,
+      phone: formData.phoneNumber,
+      email: formData.emailAddress,
+      message: formData.customerMessage || null,
       items: inquiryItems,
     };
     
@@ -708,11 +696,6 @@ export default function StorefrontLayout({
       
       // Clean states
       saveCart([]);
-      setFullName("");
-      setCompanyName("");
-      setPhoneNumber("");
-      setEmailAddress("");
-      setCustomerMessage("");
       setIsCartOpen(false);
       
       setWhatsappUrl(result.whatsapp_url || "#");
@@ -757,6 +740,7 @@ export default function StorefrontLayout({
         setIsLangOpen={setIsLangOpen}
         totalPkgs={totalPkgs}
         setIsCartOpen={setIsCartOpen}
+        searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         setCurrentPage={setCurrentPage}
         setActiveCategoryId={setActiveCategoryId}
@@ -856,17 +840,7 @@ export default function StorefrontLayout({
           totalItemsCount={totalItemsCount}
           totalWeight={totalWeight}
           totalPrice={totalPrice}
-          fullName={fullName}
-          setFullName={setFullName}
-          companyName={companyName}
-          setCompanyName={setCompanyName}
-          phoneNumber={phoneNumber}
-          setPhoneNumber={setPhoneNumber}
-          emailAddress={emailAddress}
-          setEmailAddress={setEmailAddress}
-          customerMessage={customerMessage}
-          setCustomerMessage={setCustomerMessage}
-          onSubmit={handleSubmitInquiry}
+          onSubmitInquiry={handleSubmitInquiry}
           submittingInquiry={submittingInquiry}
           displayCurrency={displayCurrency}
           exchangeRates={exchangeRates}

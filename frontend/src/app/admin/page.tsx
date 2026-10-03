@@ -26,26 +26,35 @@ import { XmlFeed, SyncRun, CategoryNode, Product, UserInfo, Brand } from "@/type
 import { getFlatCategoriesList } from "@/utils/formatters";
 
 // Components
+import dynamic from "next/dynamic";
 import Header from "@/components/admin/layout/Header";
 import MetricCards from "@/components/admin/dashboard/MetricCards";
 import QuickFeedList from "@/components/admin/dashboard/QuickFeedList";
 import ActivityLogs from "@/components/admin/dashboard/ActivityLogs";
-import SuppliersManager from "@/components/admin/integrations/SuppliersManager";
 import CatalogFilters from "@/components/admin/catalog/CatalogFilters";
 import ProductGrid from "@/components/admin/catalog/ProductGrid";
 import ProductDetailModal from "@/components/admin/catalog/ProductDetailModal";
 import LoginScreen from "@/components/admin/auth/LoginScreen";
-import CategoryTreeEditor from "@/components/admin/catalog/CategoryTreeEditor";
-import GeographyManager from "@/components/admin/geography/GeographyManager";
-import PoliciesManager from "@/components/admin/policies/PoliciesManager";
-import TranslationManager from "@/components/admin/translate/TranslationManager";
-import CustomersManager from "@/components/admin/customers/CustomersManager";
-import PagesManager from "@/components/admin/pages/PagesManager";
-import ImageCacheManager from "@/components/admin/catalog/ImageCacheManager";
-import BlogManager from "@/components/admin/catalog/BlogManager";
-import IndexNowManager from "@/components/admin/catalog/IndexNowManager";
-import OrdersManager from "@/components/admin/orders/OrdersManager";
-import CronManager from "@/components/admin/cron/CronManager";
+
+const AdminModuleLoader = () => (
+  <div className="flex flex-col items-center justify-center p-16 text-zinc-400 gap-3 border border-zinc-200/50 rounded-2xl bg-white/50 backdrop-blur-sm animate-pulse">
+    <div className="w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
+    <span className="text-xs font-semibold text-zinc-500">Modül hazırlanıyor...</span>
+  </div>
+);
+
+const SuppliersManager = dynamic(() => import("@/components/admin/integrations/SuppliersManager"), { loading: AdminModuleLoader });
+const CategoryTreeEditor = dynamic(() => import("@/components/admin/catalog/CategoryTreeEditor"), { loading: AdminModuleLoader });
+const GeographyManager = dynamic(() => import("@/components/admin/geography/GeographyManager"), { loading: AdminModuleLoader });
+const PoliciesManager = dynamic(() => import("@/components/admin/policies/PoliciesManager"), { loading: AdminModuleLoader });
+const TranslationManager = dynamic(() => import("@/components/admin/translate/TranslationManager"), { loading: AdminModuleLoader });
+const CustomersManager = dynamic(() => import("@/components/admin/customers/CustomersManager"), { loading: AdminModuleLoader });
+const PagesManager = dynamic(() => import("@/components/admin/pages/PagesManager"), { loading: AdminModuleLoader });
+const ImageCacheManager = dynamic(() => import("@/components/admin/catalog/ImageCacheManager"), { loading: AdminModuleLoader });
+const BlogManager = dynamic(() => import("@/components/admin/catalog/BlogManager"), { loading: AdminModuleLoader });
+const IndexNowManager = dynamic(() => import("@/components/admin/catalog/IndexNowManager"), { loading: AdminModuleLoader });
+const OrdersManager = dynamic(() => import("@/components/admin/orders/OrdersManager"), { loading: AdminModuleLoader });
+const CronManager = dynamic(() => import("@/components/admin/cron/CronManager"), { loading: AdminModuleLoader });
 
 const LABELS = {
   SUB_TAB_PRODUCTS: "Ürün Listesi",

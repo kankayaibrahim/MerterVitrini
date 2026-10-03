@@ -252,26 +252,12 @@ func validateStockAndPrepareVariants(ctx context.Context, tx pgx.Tx, items []ord
 
 func generateNextOrderNumber(ctx context.Context, tx pgx.Tx) (string, error) {
 	datePrefix := time.Now().Format("20060102")
-	var lastOrderNumber string
-	err := tx.QueryRow(ctx, `
-		SELECT order_number 
-		FROM catalog.orders 
-		WHERE order_number LIKE $1 
-		ORDER BY order_number DESC 
-		LIMIT 1 
-		FOR UPDATE
-	`, datePrefix+"-%").Scan(&lastOrderNumber)
-
-	seq := 1
-	if err == nil {
-		parts := strings.Split(lastOrderNumber, "-")
-		if len(parts) == 2 {
-			var lastSeq int
-			fmt.Sscanf(parts[1], "%d", &lastSeq)
-			seq = lastSeq + 1
-		}
+	var seqVal int64
+	err := tx.QueryRow(ctx, `SELECT nextval('catalog.order_number_seq')`).Scan(&seqVal)
+	if err != nil {
+		return "", fmt.Errorf("failed to get next order sequence: %w", err)
 	}
-	return fmt.Sprintf("%s-%04d", datePrefix, seq), nil
+	return fmt.Sprintf("%s-%05d", datePrefix, seqVal), nil
 }
 
 func executeStockDeductionAndOrderItems(ctx context.Context, tx pgx.Tx, orderID, cartID string, items []orderCartItem, variantUpdates []variantStockUpdate) error {
@@ -371,7 +357,11 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	orderNumber, _ := generateNextOrderNumber(ctx, tx)
+	orderNumber, err := generateNextOrderNumber(ctx, tx)
+	if err != nil {
+		http.Error(w, `{"error":"Sipariş numarası üretilemedi"}`, http.StatusInternalServerError)
+		return
+	}
 
 	var orderID string
 	err = tx.QueryRow(ctx, `
