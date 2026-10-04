@@ -354,40 +354,40 @@ export default function B2BClient({
 
   const features = [
     {
-      icon: <Factory size={26} className="text-zinc-900 group-hover:text-white" />,
+      icon: <Factory size={26} className="text-amber-700 group-hover:scale-110 transition-transform" />,
       title: texts.feature1Title,
       desc: texts.feature1Desc,
-      bg: "bg-zinc-100 group-hover:bg-zinc-950"
+      bg: "bg-amber-50/80 border border-amber-100/80 group-hover:bg-amber-100"
     },
     {
-      icon: <Box size={26} className="text-zinc-900 group-hover:text-white" />,
+      icon: <Box size={26} className="text-amber-700 group-hover:scale-110 transition-transform" />,
       title: texts.feature2Title,
       desc: texts.feature2Desc,
-      bg: "bg-zinc-100 group-hover:bg-zinc-950"
+      bg: "bg-amber-50/80 border border-amber-100/80 group-hover:bg-amber-100"
     },
     {
-      icon: <Truck size={26} className="text-zinc-900 group-hover:text-white" />,
+      icon: <Truck size={26} className="text-amber-700 group-hover:scale-110 transition-transform" />,
       title: texts.feature3Title,
       desc: texts.feature3Desc,
-      bg: "bg-zinc-100 group-hover:bg-zinc-950"
+      bg: "bg-amber-50/80 border border-amber-100/80 group-hover:bg-amber-100"
     },
     {
-      icon: <CreditCard size={26} className="text-zinc-900 group-hover:text-white" />,
+      icon: <CreditCard size={26} className="text-amber-700 group-hover:scale-110 transition-transform" />,
       title: texts.feature4Title,
       desc: texts.feature4Desc,
-      bg: "bg-zinc-100 group-hover:bg-zinc-950"
+      bg: "bg-amber-50/80 border border-amber-100/80 group-hover:bg-amber-100"
     },
     {
-      icon: <Tag size={26} className="text-zinc-900 group-hover:text-white" />,
+      icon: <Tag size={26} className="text-amber-700 group-hover:scale-110 transition-transform" />,
       title: texts.feature5Title,
       desc: texts.feature5Desc,
-      bg: "bg-zinc-100 group-hover:bg-zinc-950"
+      bg: "bg-amber-50/80 border border-amber-100/80 group-hover:bg-amber-100"
     },
     {
-      icon: <Headset size={26} className="text-zinc-900 group-hover:text-white" />,
+      icon: <Headset size={26} className="text-amber-700 group-hover:scale-110 transition-transform" />,
       title: texts.feature6Title,
       desc: texts.feature6Desc,
-      bg: "bg-zinc-100 group-hover:bg-zinc-950"
+      bg: "bg-amber-50/80 border border-amber-100/80 group-hover:bg-amber-100"
     }
   ];
 
@@ -540,21 +540,13 @@ export default function B2BClient({
           </div>
         </section>
 
-        {/* Dynamic CMS Custom Section (Managed in Admin -> Sayfa Yönetimi -> b2b) */}
+        {/* Dynamic B2B Terms & Trade Guide Section */}
         {cmsTranslation?.content && (
           <section className="bg-white rounded-3xl p-8 md:p-12 border border-zinc-200/80 shadow-sm flex flex-col gap-6">
-            <div className="border-b border-zinc-100 pb-4 flex items-center justify-between">
-              <div>
-                <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest block mb-1">
-                  Yönetim Paneli İçeriği
-                </span>
-                <h2 className="text-2xl font-bold text-zinc-950">
-                  {cmsTranslation.title || texts.cmsSectionTitle}
-                </h2>
-              </div>
-              <span className="text-xs text-zinc-400 font-medium hidden md:inline">
-                Admin CMS Kontrolü
-              </span>
+            <div className="border-b border-zinc-100 pb-4">
+              <h2 className="text-2xl md:text-3xl font-black text-zinc-950 tracking-tight">
+                {cmsTranslation.title || texts.cmsSectionTitle}
+              </h2>
             </div>
             <div className="prose prose-zinc max-w-none text-sm text-zinc-700 leading-relaxed">
               <SafeHtml html={cmsTranslation.content} />

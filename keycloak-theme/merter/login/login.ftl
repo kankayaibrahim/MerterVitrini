@@ -2,7 +2,7 @@
 
 <@layout.registrationLayout displayMessage=!messagesPerField.existsError('username','password') displayInfo=realm.password && realm.registrationAllowed && !registrationDisabled??; section>
     <#if section = "header">
-        Tedarikçi & Kurumsal Giriş
+        ${msg("mvLoginHeader")}
     <#elseif section = "form">
         <#if realm.password>
             <form id="kc-form-login" onsubmit="login.disabled = true; return true;" action="${url.loginAction}" method="post">
@@ -11,7 +11,7 @@
                 <#if !usernameHidden??>
                     <div class="mv-form-group">
                         <label for="username" class="mv-label">
-                            <#if !realm.loginWithEmailAllowed>Kullanıcı Adı<#elseif !realm.registrationEmailAsUsername>E-posta veya Kullanıcı Adı<#else>Kurumsal E-posta Adresi</#if>
+                            <#if !realm.loginWithEmailAllowed>${msg("username")}<#else>${msg("mvEmailLabel")}</#if>
                         </label>
                         <div class="mv-input-wrapper">
                             <input tabindex="1" id="username" class="mv-input" name="username" 
@@ -32,14 +32,14 @@
 
                 <!-- Password Input -->
                 <div class="mv-form-group">
-                    <label for="password" class="mv-label">Şifre</label>
+                    <label for="password" class="mv-label">${msg("mvPasswordLabel")}</label>
                     <div class="mv-input-wrapper" dir="ltr">
                         <input tabindex="2" id="password" class="mv-input" name="password" type="password" 
                                placeholder="••••••••••••"
                                autocomplete="current-password"
                                aria-invalid="<#if messagesPerField.existsError('username','password')>true</#if>"
                         />
-                        <button type="button" class="mv-pw-toggle" id="mv-toggle-pw" tabindex="3" title="Şifreyi Göster/Gizle" aria-label="Şifreyi Göster">
+                        <button type="button" class="mv-pw-toggle" id="mv-toggle-pw" tabindex="3" title="${msg('mvTogglePassword')}" aria-label="${msg('mvTogglePassword')}">
                             <svg id="mv-eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
                                 <circle cx="12" cy="12" r="3"/>
@@ -53,14 +53,14 @@
                     <#if realm.rememberMe && !usernameHidden??>
                         <label class="mv-checkbox-label">
                             <input tabindex="4" id="rememberMe" name="rememberMe" type="checkbox" class="mv-checkbox" <#if login.rememberMe??>checked</#if>>
-                            <span>Beni Hatırla</span>
+                            <span>${msg("mvRememberMe")}</span>
                         </label>
                     <#else>
                         <div></div>
                     </#if>
 
                     <#if realm.resetPasswordAllowed>
-                        <a tabindex="5" href="${url.loginResetCredentialsUrl}" class="mv-forgot-link">Şifremi Unuttum</a>
+                        <a tabindex="5" href="${url.loginResetCredentialsUrl}" class="mv-forgot-link">${msg("mvForgotPassword")}</a>
                     </#if>
                 </div>
 
@@ -69,7 +69,7 @@
 
                 <!-- Submit Button -->
                 <button tabindex="6" class="mv-btn-primary" name="login" id="kc-login" type="submit">
-                    <span>Güvenli Giriş Yap</span>
+                    <span>${msg("mvSubmitBtn")}</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14"/>
                         <path d="m12 5 7 7-7 7"/>
@@ -101,7 +101,7 @@
     <#elseif section = "info">
         <#if realm.password && realm.registrationAllowed && !registrationDisabled??>
             <div style="text-align: center; margin-top: 1.5rem; font-size: 13px; color: #64748b;">
-                Tedarikçi hesabınız yok mu? <a href="${url.registrationUrl}" class="mv-forgot-link">Hemen Başvurun</a>
+                ${msg("mvNoAccount")} <a href="${url.registrationUrl}" class="mv-forgot-link">${msg("mvApplyNow")}</a>
             </div>
         </#if>
 

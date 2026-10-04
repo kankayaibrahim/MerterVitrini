@@ -46,7 +46,7 @@
             </div>
             <div class="mv-brand-text">
                 <span class="mv-brand-name">MERTER VİTRİNİ</span>
-                <span class="mv-brand-subtitle">Kurumsal IAM</span>
+                <span class="mv-brand-subtitle">${msg("mvBrandSubtitle")}</span>
             </div>
         </a>
 
@@ -83,7 +83,7 @@
                     </svg>
                 </div>
                 <h1 class="mv-card-title"><#nested "header"></h1>
-                <p class="mv-card-desc">Tedarikçi Portalı ve Kurumsal B2B Hesabınıza Erişin</p>
+                <p class="mv-card-desc">${msg("mvCardDesc")}</p>
             </div>
 
             <!-- Global Error / Warning Messages -->
@@ -110,14 +110,14 @@
     <!-- Footer -->
     <footer class="mv-footer">
         <div class="mv-footer-links">
-            <a href="https://mertervitrini.com.tr" class="mv-footer-link">Mağaza Vitrini</a>
+            <a href="https://mertervitrini.com.tr" class="mv-footer-link">${msg("mvFooterStore")}</a>
             <span>•</span>
-            <a href="https://mertervitrini.com.tr/tedarikci-basvuru" class="mv-footer-link">Tedarikçi Başvurusu</a>
+            <a href="https://mertervitrini.com.tr/tedarikci-basvuru" class="mv-footer-link">${msg("mvFooterApply")}</a>
             <span>•</span>
-            <a href="https://mertervitrini.com.tr/iletisim" class="mv-footer-link">Destek & İletişim</a>
+            <a href="https://mertervitrini.com.tr/iletisim" class="mv-footer-link">${msg("mvFooterSupport")}</a>
         </div>
         <div>
-            © 2026 Merter Vitrini B2B E-Ticaret Platformu. Keycloak 26 IAM ile güvence altındadır.
+            ${msg("mvFooterCopyright")}
         </div>
     </footer>
 

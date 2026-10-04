@@ -26,12 +26,22 @@ export default function SupplierLoginClient() {
 
   const getAuthUrl = useCallback(() => {
     const redirectUri = getRedirectUri();
+    let currentLocale = "tr";
+    if (typeof window !== "undefined") {
+      const savedLang = localStorage.getItem("merter_lang");
+      if (savedLang) currentLocale = savedLang;
+      const paramLocale = searchParams.get("kc_locale") || searchParams.get("locale") || searchParams.get("lang");
+      if (paramLocale) currentLocale = paramLocale;
+    }
+
     return `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth` +
       `?client_id=${KEYCLOAK_CLIENT_ID}` +
       `&response_type=code` +
       `&scope=openid%20profile%20email` +
+      `&kc_locale=${encodeURIComponent(currentLocale)}` +
+      `&ui_locales=${encodeURIComponent(currentLocale)}` +
       `&redirect_uri=${encodeURIComponent(redirectUri)}`;
-  }, [KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_CLIENT_ID, getRedirectUri]);
+  }, [KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_CLIENT_ID, getRedirectUri, searchParams]);
 
   // 1. Handle Keycloak Authorization Code Callback
   useEffect(() => {

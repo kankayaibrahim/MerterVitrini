@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { t, getCategoryPrefix } from "../../app/i18n";
 import { apiFetch } from "../../app/utils";
 import SupplierApplicationSection from "./SupplierApplicationSection";
+import { Building2 } from "lucide-react";
 
 interface Settings {
   id: string;
@@ -124,8 +126,14 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = true 
             <li>
               <a href="#tedarikci-basvuru" className="text-amber-600 font-bold hover:text-amber-700 hover:underline transition-colors duration-200 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                <span>Tedarikçimiz Olun (Başvuru)</span>
+                <span>{t("supplier_apply", lang)}</span>
               </a>
+            </li>
+            <li>
+              <Link href="/tedarikci/login" className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>{t("supplier_portal_login", lang)}</span>
+              </Link>
             </li>
           </ul>
         </div>
@@ -226,6 +234,15 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = true 
                   {t("order_tracking", lang)}
                 </a>
               </li>
+              <li className="pt-2 border-t border-cultured">
+                <Link 
+                  href="/tedarikci/login" 
+                  className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5 text-xs"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>{t("supplier_login", lang)}</span>
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -261,7 +278,14 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = true 
             <span>Build {process.env.NEXT_PUBLIC_BUILD_NUMBER ? `#${process.env.NEXT_PUBLIC_BUILD_NUMBER}` : ""} ({process.env.NEXT_PUBLIC_BUILD_TIME || "dev"})</span>
           </span>
         </div>
-        <div className="flex gap-6">
+        <div className="flex flex-wrap gap-4 sm:gap-6 items-center">
+          <Link 
+            href="/tedarikci/login" 
+            className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1"
+          >
+            <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>{t("supplier_portal", lang)}</span>
+          </Link>
           <a 
             href="#privacy" 
             onClick={(e) => {

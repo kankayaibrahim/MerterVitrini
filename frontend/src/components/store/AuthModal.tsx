@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, Lock, Mail, User, Phone, Check, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { X, Lock, Mail, User, Phone, Check, AlertCircle, Building2 } from "lucide-react";
 import { t } from "@/app/i18n";
 
 interface AuthModalProps {
@@ -394,6 +395,17 @@ interface GrecaptchaInstance {
                 </svg>
                 <span>{t("sign_in_with_google", lang)}</span>
               </button>
+
+              <div className="pt-3 text-center border-t border-cultured mt-3">
+                <Link
+                  href="/tedarikci/login"
+                  onClick={onClose}
+                  className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 transition-colors"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>{t("are_you_supplier", lang)}</span>
+                </Link>
+              </div>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-4">

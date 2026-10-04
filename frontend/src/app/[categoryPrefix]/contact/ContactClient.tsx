@@ -387,23 +387,23 @@ export default function ContactClient({
 
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-12 py-10 flex flex-col gap-12">
         
-        {/* Top Hero Section */}
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-950 via-zinc-900 to-violet-950 text-white p-8 md:p-14 shadow-xl border border-zinc-800">
+        {/* Top Hero Section - Clean White Luxury Design */}
+        <section className="relative overflow-hidden rounded-3xl bg-white text-zinc-900 p-8 md:p-14 border border-zinc-200/80 shadow-sm">
           {/* Subtle decorative glow */}
-          <div className="absolute top-0 right-0 -mr-24 -mt-24 w-96 h-96 rounded-full bg-violet-600/20 blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 -ml-24 -mb-24 w-80 h-80 rounded-full bg-fuchsia-600/10 blur-3xl pointer-events-none" />
+          <div className="absolute top-0 right-0 -mr-24 -mt-24 w-96 h-96 rounded-full bg-slate-50/80 blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 -ml-24 -mb-24 w-80 h-80 rounded-full bg-amber-50/40 blur-3xl pointer-events-none" />
 
           <div className="relative z-10 max-w-3xl flex flex-col gap-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-violet-300 text-xs font-bold w-fit tracking-wide uppercase">
-              <Sparkles size={14} className="text-violet-400" />
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-800 text-xs font-bold w-fit tracking-wide uppercase">
+              <Sparkles size={14} className="text-amber-600" />
               {texts.heroBadge}
             </div>
 
-            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white leading-tight">
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-zinc-950 leading-tight">
               {texts.heroTitle}
             </h1>
 
-            <p className="text-sm md:text-base text-zinc-300 leading-relaxed font-normal">
+            <p className="text-sm md:text-base text-zinc-600 leading-relaxed font-normal">
               {texts.heroSubtitle}
             </p>
 
@@ -413,14 +413,14 @@ export default function ContactClient({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-950/40 transition-all hover:scale-105 active:scale-95"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold shadow-md shadow-emerald-900/10 transition-all hover:scale-105 active:scale-95"
               >
                 <MessageSquare size={16} />
                 {texts.chatWhatsappBtn}
               </a>
               <a
                 href={phoneTelUrl}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all hover:scale-105 active:scale-95"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold border border-zinc-200 transition-all hover:scale-105 active:scale-95"
               >
                 <Phone size={16} />
                 {texts.callBtn}
@@ -429,7 +429,7 @@ export default function ContactClient({
                 href={mapDirectionsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/15 backdrop-blur-md transition-all hover:scale-105 active:scale-95"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold border border-zinc-200 transition-all hover:scale-105 active:scale-95"
               >
                 <MapPin size={16} />
                 {texts.directionsBtn}
@@ -486,7 +486,7 @@ export default function ContactClient({
                 </div>
                 <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Canlı / Online
+                  <span>Canlı / Online</span>
                 </span>
               </div>
               <div>

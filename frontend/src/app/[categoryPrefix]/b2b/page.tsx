@@ -4,6 +4,8 @@ import { apiFetch } from "@/app/utils";
 import { Category } from "@/types/store";
 import B2BClient, { StoreSettings, B2BCMSPage, Language } from "./B2BClient";
 
+export const dynamic = "force-dynamic";
+
 interface RawLangItem {
   code: string;
   label: string;
