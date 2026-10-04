@@ -1662,9 +1662,9 @@ type CatalogDeltaItem struct {
 }
 
 type CatalogDeltaResponse struct {
-	Items      []CatalogDeltaItem `json:"items"`
+	Products   []CatalogDeltaItem `json:"products"`
 	Count      int                `json:"count"`
-	ServerTime string             `json:"server_time"`
+	DeltaToken string             `json:"delta_token"`
 }
 
 func parseDeltaSinceTime(sinceStr string) *time.Time {
@@ -1693,9 +1693,9 @@ func (h *StoreCatalogHandler) CatalogDelta(w http.ResponseWriter, r *http.Reques
 
 	query := `
 		SELECT 
-			p.id, p.title, p.slug, COALESCE(p.brand_name, 'Merter Vitrini'), COALESCE(p.category_slug, ''),
+			p.id, p.title, p.slug, COALESCE(p.brand_name, 'Merter Vitrini'), COALESCE(p.category_id::text, ''),
 			p.gender, p.season, p.kumas_fabric, p.price, p.discounted_price, COALESCE(p.currency, 'TRY'),
-			p.stock, p.series_ratio, COALESCE(p.minimum_order_quantity, 1), p.images, p.color, p.updated_at
+			p.stock, p.series_ratio, COALESCE(p.minimum_order_quantity, 1), p.images_json, p.color, p.updated_at
 		FROM catalog.mv_products p
 		WHERE p.is_active = true
 		  AND ($1::timestamptz IS NULL OR p.updated_at >= $1)
@@ -1747,9 +1747,9 @@ func (h *StoreCatalogHandler) CatalogDelta(w http.ResponseWriter, r *http.Reques
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(CatalogDeltaResponse{
-		Items:      items,
+		Products:   items,
 		Count:      len(items),
-		ServerTime: time.Now().UTC().Format(time.RFC3339),
+		DeltaToken: time.Now().UTC().Format(time.RFC3339),
 	})
 }
 

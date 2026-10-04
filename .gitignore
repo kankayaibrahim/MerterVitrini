@@ -25,6 +25,8 @@ temp_merter.conf
 # --- Compiled Binaries & Build Outputs ---
 # Go Build Outputs
 **/bin/config.json
+**/bin/backend
+**/bin/backend.exe
 **/bin/admin-backend
 **/bin/admin-backend.exe
 **/bin/main
