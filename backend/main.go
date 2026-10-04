@@ -167,6 +167,8 @@ func main() {
 	mux.HandleFunc("GET /api/v1/store/auth/google-callback", storeAuthHandler.GoogleCallback)
 	mux.HandleFunc("GET /api/v1/store/profile", storeAuthHandler.GetProfile)
 	mux.HandleFunc("PUT /api/v1/store/profile", storeAuthHandler.UpdateProfile)
+	mux.HandleFunc("GET /api/v1/store/auth/profile", storeAuthHandler.GetProfile)
+	mux.HandleFunc("PUT /api/v1/store/auth/profile", storeAuthHandler.UpdateProfile)
 	mux.HandleFunc("GET /api/v1/store/profile/addresses", storeAuthHandler.ListAddresses)
 	mux.HandleFunc("POST /api/v1/store/profile/addresses", storeAuthHandler.CreateAddress)
 	mux.HandleFunc("PUT /api/v1/store/profile/addresses/{id}", storeAuthHandler.UpdateAddress)
@@ -179,6 +181,7 @@ func main() {
 
 	// Catalog Storefront Endpoints (Public)
 	mux.HandleFunc("GET /api/v1/store/products", storeCatalogHandler.ListProducts)
+	mux.HandleFunc("GET /api/v1/store/catalog/delta", storeCatalogHandler.CatalogDelta)
 	mux.HandleFunc("POST /api/v1/store/supplier-applications", supplierApplicationsHandler.SubmitApplication)
 	mux.HandleFunc("GET /api/v1/store/products/{id}", storeCatalogHandler.GetProductByID)
 	mux.HandleFunc("GET /api/v1/store/categories", storeCatalogHandler.ListCategories)

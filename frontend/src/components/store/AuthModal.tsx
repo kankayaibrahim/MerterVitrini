@@ -170,6 +170,17 @@ interface GrecaptchaInstance {
       return;
     }
 
+    if (!phone.trim()) {
+      setError(t("phone_required_error", lang) || "Cep telefonu numarası zorunludur.");
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 7 || cleanPhone.length > 15) {
+      setError(t("phone_invalid_error", lang) || "Lütfen geçerli bir cep telefonu numarası giriniz (en az 7 haneli).");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -482,7 +493,7 @@ interface GrecaptchaInstance {
 
               <div>
                 <label className="block text-xs font-bold text-eerie-black uppercase tracking-wider mb-2">
-                  {t("phone_label", lang)}
+                  {t("phone_label", lang)} <span className="text-red-500 font-bold">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-spanish-gray">
@@ -490,10 +501,11 @@ interface GrecaptchaInstance {
                   </span>
                   <input
                     type="tel"
+                    required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-cultured border border-cultured rounded-xl text-xs sm:text-sm font-semibold text-onyx placeholder-spanish-gray focus:outline-none focus:border-salmon-pink focus:bg-white transition-all duration-200"
-                    placeholder={t("phone_placeholder", lang)}
+                    placeholder={t("phone_placeholder", lang) || "+90 532 000 00 00"}
                   />
                 </div>
               </div>

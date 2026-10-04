@@ -1446,32 +1446,73 @@ func normalizeGoogleGender(gender *string) string {
 	return "unisex"
 }
 
+func isRatioDelimiter(r rune) bool {
+	return r == '-' || r == ',' || r == '/'
+}
+
+func parseRatioString(ratio string) int {
+	parts := strings.FieldsFunc(strings.TrimSpace(ratio), isRatioDelimiter)
+	total := 0
+	hasNum := false
+	for _, part := range parts {
+		if n, err := strconv.Atoi(strings.TrimSpace(part)); err == nil && n > 0 {
+			total += n
+			hasNum = true
+		}
+	}
+	if hasNum && total > 0 {
+		return total
+	}
+	if len(parts) > 1 {
+		return len(parts)
+	}
+	return 0
+}
+
 func parseSeriesPieces(seriesRatio *string, moq *int) int {
 	if seriesRatio != nil && *seriesRatio != "" {
-		cleaned := strings.TrimSpace(*seriesRatio)
-		parts := strings.FieldsFunc(cleaned, func(r rune) bool {
-			return r == '-' || r == ',' || r == '/'
-		})
-		total := 0
-		hasNum := false
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if n, err := strconv.Atoi(part); err == nil && n > 0 {
-				total += n
-				hasNum = true
-			}
-		}
-		if hasNum && total > 0 {
-			return total
-		}
-		if len(parts) > 1 {
-			return len(parts)
+		if pieces := parseRatioString(*seriesRatio); pieces > 0 {
+			return pieces
 		}
 	}
 	if moq != nil && *moq > 1 {
 		return *moq
 	}
 	return 1
+}
+
+func derefStringOr(ptr *string, fallback string) string {
+	if ptr != nil && *ptr != "" {
+		return *ptr
+	}
+	return fallback
+}
+
+func buildGoogleCustomLabels(seriesRatio, fabric *string, moq *int) (string, string, string) {
+	var label1, label2, label3 string
+	if seriesRatio != nil && *seriesRatio != "" {
+		label1 = fmt.Sprintf("Seri: %s", *seriesRatio)
+	}
+
+	minOrder := 1
+	if moq != nil && *moq > 0 {
+		minOrder = *moq
+	}
+	label2 = fmt.Sprintf("MOQ: %d Paket", minOrder)
+
+	if fabric != nil && *fabric != "" && *fabric != "Polyester" {
+		label3 = *fabric
+	}
+	return label1, label2, label3
+}
+
+func formatGooglePrices(price float64, discountedPrice *float64, currency string) (string, string) {
+	priceStr := fmt.Sprintf("%.2f %s", price, currency)
+	var salePriceStr string
+	if discountedPrice != nil && *discountedPrice > 0 {
+		salePriceStr = fmt.Sprintf("%.2f %s", *discountedPrice, currency)
+	}
+	return priceStr, salePriceStr
 }
 
 func mapRowToGoogleMerchantItem(rows pgx.Rows) (gItem, error) {
@@ -1498,87 +1539,39 @@ func mapRowToGoogleMerchantItem(rows pgx.Rows) (gItem, error) {
 		return gItem{}, err
 	}
 
-	productURL := fmt.Sprintf("%s/product/%s", siteBaseURL, slug)
-	descStr := title
-	if description != nil && *description != "" {
-		descStr = *description
-	}
-
 	mainImage, additionalImages := normalizeGoogleImages(imagesBytes)
-
 	availability := "out_of_stock"
 	if stock > 0 {
 		availability = "in_stock"
 	}
 
-	priceStr := fmt.Sprintf("%.2f %s", price, currency)
-	var salePriceStr string
-	if discountedPrice != nil && *discountedPrice > 0 {
-		salePriceStr = fmt.Sprintf("%.2f %s", *discountedPrice, currency)
-	}
-
-	brand := "Merter Vitrini"
-	if brandName != nil && *brandName != "" {
-		brand = *brandName
-	}
-
-	googleCategory := "Apparel & Accessories > Clothing"
-	if categoryTitle != nil && *categoryTitle != "" {
-		googleCategory = *categoryTitle
-	}
-
-	itemID := id
-	if customSku != nil && *customSku != "" {
-		itemID = *customSku
-	}
-
-	itemGroupID := ""
-	if sourceProductGroupID != nil {
-		itemGroupID = *sourceProductGroupID
-	}
+	priceStr, salePriceStr := formatGooglePrices(price, discountedPrice, currency)
+	customLabel1, customLabel2, customLabel3 := buildGoogleCustomLabels(seriesRatio, fabric, moq)
 
 	packPieces := parseSeriesPieces(seriesRatio, moq)
 	displayTitle := title
-	if packPieces > 1 {
-		displayTitle = fmt.Sprintf("%s [Toptan Seri / %d Adet]", title, packPieces)
-	}
-
-	var customLabel1, customLabel2, customLabel3 string
-	if seriesRatio != nil && *seriesRatio != "" {
-		customLabel1 = fmt.Sprintf("Seri: %s", *seriesRatio)
-	}
-
-	minOrder := 1
-	if moq != nil && *moq > 0 {
-		minOrder = *moq
-	}
-	customLabel2 = fmt.Sprintf("MOQ: %d Paket", minOrder)
-
-	if fabric != nil && *fabric != "" && *fabric != "Polyester" {
-		customLabel3 = *fabric
-	}
-
 	var unitPricingMeasure, unitPricingBaseMeasure string
 	if packPieces > 1 {
+		displayTitle = fmt.Sprintf("%s [Toptan Seri / %d Adet]", title, packPieces)
 		unitPricingMeasure = fmt.Sprintf("%d ct", packPieces)
 		unitPricingBaseMeasure = "1 ct"
 	}
 
 	return gItem{
-		ID:                     itemID,
+		ID:                     derefStringOr(customSku, id),
 		Title:                  displayTitle,
-		Description:            descStr,
-		Link:                   productURL,
+		Description:            derefStringOr(description, title),
+		Link:                   fmt.Sprintf("%s/product/%s", siteBaseURL, slug),
 		ImageLink:              mainImage,
 		AdditionalImageLinks:   additionalImages,
 		Availability:           availability,
 		Price:                  priceStr,
 		SalePrice:              salePriceStr,
-		Brand:                  brand,
-		GoogleProductCategory:  googleCategory,
+		Brand:                  derefStringOr(brandName, "Merter Vitrini"),
+		GoogleProductCategory:  derefStringOr(categoryTitle, "Apparel & Accessories > Clothing"),
 		Condition:              "new",
 		Gender:                 normalizeGoogleGender(gender),
-		ItemGroupID:            itemGroupID,
+		ItemGroupID:            derefStringOr(sourceProductGroupID, ""),
 		Multipack:              packPieces,
 		UnitPricingMeasure:     unitPricingMeasure,
 		UnitPricingBaseMeasure: unitPricingBaseMeasure,
@@ -1645,6 +1638,119 @@ func (h *StoreCatalogHandler) GoogleMerchantFeed(w http.ResponseWriter, r *http.
 	if err := encoder.Encode(rssFeed); err != nil {
 		log.Printf("[STORE API ERROR] Failed to encode Google Merchant XML: %v", err)
 	}
+}
+
+type CatalogDeltaItem struct {
+	ID              string   `json:"id"`
+	Title           string   `json:"title"`
+	Slug            string   `json:"slug"`
+	Brand           string   `json:"brand"`
+	CategorySlug    string   `json:"category_slug"`
+	Gender          *string  `json:"gender,omitempty"`
+	Season          *string  `json:"season,omitempty"`
+	Fabric          *string  `json:"fabric,omitempty"`
+	Price           float64  `json:"price"`
+	DiscountedPrice *float64 `json:"discounted_price,omitempty"`
+	Currency        string   `json:"currency"`
+	Stock           int      `json:"stock"`
+	SeriesRatio     *string  `json:"series_ratio,omitempty"`
+	MOQ             int      `json:"moq"`
+	CoverImage      *string  `json:"cover_image,omitempty"`
+	Colors          string   `json:"colors,omitempty"`
+	Sizes           string   `json:"sizes,omitempty"`
+	UpdatedAt       string   `json:"updated_at"`
+}
+
+type CatalogDeltaResponse struct {
+	Items      []CatalogDeltaItem `json:"items"`
+	Count      int                `json:"count"`
+	ServerTime string             `json:"server_time"`
+}
+
+func parseDeltaSinceTime(sinceStr string) *time.Time {
+	if sinceStr == "" {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, sinceStr)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
+
+// CatalogDelta returns updated products for client-side PGlite IndexedDB cache sync
+func (h *StoreCatalogHandler) CatalogDelta(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	sinceTime := parseDeltaSinceTime(r.URL.Query().Get("since"))
+	limit := 300
+	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 && l <= 1000 {
+		limit = l
+	}
+
+	query := `
+		SELECT 
+			p.id, p.title, p.slug, COALESCE(p.brand_name, 'Merter Vitrini'), COALESCE(p.category_slug, ''),
+			p.gender, p.season, p.kumas_fabric, p.price, p.discounted_price, COALESCE(p.currency, 'TRY'),
+			p.stock, p.series_ratio, COALESCE(p.minimum_order_quantity, 1), p.images, p.color, p.updated_at
+		FROM catalog.mv_products p
+		WHERE p.is_active = true
+		  AND ($1::timestamptz IS NULL OR p.updated_at >= $1)
+		ORDER BY p.updated_at DESC
+		LIMIT $2
+	`
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	rows, err := db.Pool.Query(ctx, query, sinceTime, limit)
+	if err != nil {
+		log.Printf("[DELTA SYNC ERROR] Failed to query mv_products: %v", err)
+		http.Error(w, `{"error":"Senkronizasyon verisi alınamadı"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	items := make([]CatalogDeltaItem, 0, limit)
+	for rows.Next() {
+		var (
+			item        CatalogDeltaItem
+			imagesBytes []byte
+			color       *string
+			updatedAt   time.Time
+		)
+
+		if scanErr := rows.Scan(
+			&item.ID, &item.Title, &item.Slug, &item.Brand, &item.CategorySlug,
+			&item.Gender, &item.Season, &item.Fabric, &item.Price, &item.DiscountedPrice, &item.Currency,
+			&item.Stock, &item.SeriesRatio, &item.MOQ, &imagesBytes, &color, &updatedAt,
+		); scanErr != nil {
+			continue
+		}
+
+		item.UpdatedAt = updatedAt.Format(time.RFC3339)
+		if color != nil && *color != "" {
+			item.Colors = *color
+		}
+
+		_, mainImg := parseRawGoogleImages(imagesBytes)
+		if mainImg != "" {
+			item.CoverImage = &mainImg
+		}
+
+		items = append(items, item)
+	}
+
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(CatalogDeltaResponse{
+		Items:      items,
+		Count:      len(items),
+		ServerTime: time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 

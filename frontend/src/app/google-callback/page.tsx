@@ -3,18 +3,34 @@
 import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, CheckCircle2, Loader2, Home } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Home, Phone } from "lucide-react";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import { Category, CartItem } from "@/types/store";
 import { apiFetch } from "@/app/utils";
 import { t } from "@/app/i18n";
 
+interface CallbackUserInfo {
+  id?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+}
+
 function GoogleCallbackHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
+  const [needsPhone, setNeedsPhone] = useState(false);
+  const [pendingToken, setPendingToken] = useState("");
+  const [pendingUser, setPendingUser] = useState<CallbackUserInfo | null>(null);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [submittingPhone, setSubmittingPhone] = useState(false);
+
   const [lang, setLang] = useState<string>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("preferred_lang") || "tr";
@@ -93,6 +109,14 @@ function GoogleCallbackHandler() {
         // Dispatch auth-change event to update headers
         window.dispatchEvent(new Event("auth-change"));
 
+        const userPhone = data.user?.phone ? String(data.user.phone).trim() : "";
+        if (!userPhone) {
+          setPendingToken(data.token);
+          setPendingUser(data.user);
+          setNeedsPhone(true);
+          return;
+        }
+
         setSuccess(true);
         
         // Redirect to homepage or profile
@@ -107,6 +131,60 @@ function GoogleCallbackHandler() {
 
     void exchangeCode();
   }, [searchParams, router, lang]);
+
+  const handleSavePhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPhoneError(null);
+
+    const trimmed = phoneInput.trim();
+    if (!trimmed) {
+      setPhoneError(t("phone_required_error", lang) || "Cep telefonu numarası zorunludur.");
+      return;
+    }
+
+    const cleanDigits = trimmed.replace(/\D/g, "");
+    if (cleanDigits.length < 7 || cleanDigits.length > 15) {
+      setPhoneError(t("phone_invalid_error", lang) || "Lütfen geçerli bir cep telefonu numarası giriniz (en az 7 haneli).");
+      return;
+    }
+
+    setSubmittingPhone(true);
+    try {
+      const response = await fetch("/api/v1/store/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${pendingToken}`,
+        },
+        body: JSON.stringify({
+          first_name: pendingUser?.first_name || "Müşteri",
+          last_name: pendingUser?.last_name || "",
+          phone: trimmed,
+          preferred_lang: lang,
+          preferred_currency: displayCurrency,
+        }),
+      });
+
+      if (!response.ok) {
+        const resData = await response.json();
+        throw new Error(resData.error || t("profile_update_failed", lang));
+      }
+
+      const updatedUser = pendingUser ? { ...pendingUser, phone: trimmed } : { phone: trimmed };
+      localStorage.setItem("store_user_info", JSON.stringify(updatedUser));
+      window.dispatchEvent(new Event("auth-change"));
+
+      setNeedsPhone(false);
+      setSuccess(true);
+      setTimeout(() => {
+        router.push("/profile/");
+      }, 1500);
+    } catch (err: unknown) {
+      setPhoneError((err as Error).message);
+    } finally {
+      setSubmittingPhone(false);
+    }
+  };
 
   const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
 
@@ -130,7 +208,7 @@ function GoogleCallbackHandler() {
 
       <main className="flex-grow flex flex-col items-center justify-center p-6 sm:p-12 select-none py-24">
         <div className="w-full max-w-md bg-white/95 backdrop-blur-2xl border border-cultured rounded-2xl shadow-2xl p-8 text-center animate-in fade-in zoom-in-95 duration-200">
-          {!error && !success && (
+          {!error && !success && !needsPhone && (
             <div className="flex flex-col items-center gap-4">
               <div className="relative flex items-center justify-center">
                 <Loader2 className="w-12 h-12 text-salmon-pink animate-spin" />
@@ -142,6 +220,54 @@ function GoogleCallbackHandler() {
                 {t("google_signing_in_desc", lang)}
               </p>
             </div>
+          )}
+
+          {needsPhone && (
+            <form onSubmit={handleSavePhone} className="flex flex-col items-center gap-4 animate-in fade-in duration-300 text-left">
+              <div className="w-12 h-12 bg-salmon-pink/10 rounded-full flex items-center justify-center text-salmon-pink mb-1">
+                <Phone className="w-6 h-6" />
+              </div>
+              <h2 className="text-base font-extrabold text-eerie-black text-center">
+                {t("phone_complete_title", lang)}
+              </h2>
+              <p className="text-xs font-semibold text-sonic-silver text-center max-w-xs leading-relaxed">
+                {t("phone_complete_desc", lang)}
+              </p>
+
+              {phoneError && (
+                <div className="w-full bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 text-xs font-semibold animate-shake">
+                  {phoneError}
+                </div>
+              )}
+
+              <div className="w-full">
+                <label className="block text-[10px] font-extrabold text-eerie-black uppercase tracking-wider mb-1.5">
+                  {t("phone_label", lang)} <span className="text-red-500 font-bold">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-spanish-gray">
+                    <Phone className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="tel"
+                    required
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-cultured border border-cultured rounded-xl text-xs sm:text-sm font-semibold text-onyx placeholder-spanish-gray focus:outline-none focus:border-salmon-pink focus:bg-white transition-all duration-200"
+                    placeholder={t("phone_placeholder", lang) || "+90 532 000 00 00"}
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submittingPhone}
+                className="w-full py-3 bg-salmon-pink hover:bg-salmon-pink/90 text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-md flex items-center justify-center gap-2 border-none mt-2"
+              >
+                {submittingPhone ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                <span>{t("save_and_continue", lang)}</span>
+              </button>
+            </form>
           )}
 
           {success && (

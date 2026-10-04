@@ -278,6 +278,23 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Phone == "" {
+		http.Error(w, `{"error":"Cep telefonu numarası zorunludur"}`, http.StatusBadRequest)
+		return
+	}
+
+	cleanPhone := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, req.Phone)
+
+	if len(cleanPhone) < 7 || len(cleanPhone) > 15 {
+		http.Error(w, `{"error":"Lütfen geçerli bir cep telefonu numarası giriniz (en az 7 haneli)"}`, http.StatusBadRequest)
+		return
+	}
+
 	// Verify reCAPTCHA v3
 	captchaValid, captchaErr := h.verifyReCaptchaV3(req.CaptchaToken, "register")
 	if captchaErr != nil {
@@ -637,6 +654,68 @@ type UpdateProfileRequest struct {
 	InstagramUsername string `json:"instagram_username"`
 }
 
+func validateOptionalPhone(phone string) error {
+	if phone == "" {
+		return nil
+	}
+	cleanPhone := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, phone)
+	if len(cleanPhone) < 7 || len(cleanPhone) > 15 {
+		return fmt.Errorf("Lütfen geçerli bir cep telefonu numarası giriniz (en az 7 haneli)")
+	}
+	return nil
+}
+
+func (h *StoreAuthHandler) asyncSyncKeycloakProfile(id, first, last, ph string) {
+	ctxBG, cancelBG := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelBG()
+
+	adminToken, err := h.getAdminAccessToken(ctxBG)
+	if err != nil {
+		log.Printf("[PROFILE SYNC WARNING] Failed to get admin token for Keycloak user sync: %v", err)
+		return
+	}
+
+	updateURL := fmt.Sprintf("%s/admin/realms/%s/users/%s", h.Cfg.KeycloakURL, h.Cfg.KeycloakRealm, id)
+	keycloakUpdate := map[string]any{
+		"firstName": first,
+		"lastName":  last,
+		"attributes": map[string][]string{
+			"phone": {ph},
+		},
+	}
+
+	payload, err := json.Marshal(keycloakUpdate)
+	if err != nil {
+		return
+	}
+
+	kcReq, err := http.NewRequestWithContext(ctxBG, http.MethodPut, updateURL, strings.NewReader(string(payload)))
+	if err != nil {
+		return
+	}
+	kcReq.Header.Set(headerContentType, mimeApplicationJSON)
+	kcReq.Header.Set("Authorization", authBearerPrefix+adminToken)
+
+	kcResp, err := httpclient.FastClient.Do(kcReq)
+	if err != nil {
+		log.Printf("[PROFILE SYNC WARNING] Failed to make Keycloak update call: %v", err)
+		return
+	}
+	defer kcResp.Body.Close()
+
+	if kcResp.StatusCode != http.StatusNoContent && kcResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(kcResp.Body)
+		log.Printf("[PROFILE SYNC WARNING] Keycloak user update returned status %d: %s", kcResp.StatusCode, string(body))
+	} else {
+		log.Printf("[PROFILE SYNC SUCCESS] Keycloak account successfully synchronized for user %s", id)
+	}
+}
+
 func (h *StoreAuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
@@ -668,6 +747,11 @@ func (h *StoreAuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if err := validateOptionalPhone(req.Phone); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
@@ -696,51 +780,7 @@ func (h *StoreAuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request)
 
 	// 2. Synchronize to Keycloak asynchronously
 	safe.Go("Keycloak Async Profile Sync", func() {
-		id, first, last, ph := userID, req.FirstName, req.LastName, req.Phone
-		ctxBG, cancelBG := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancelBG()
-
-		adminToken, err := h.getAdminAccessToken(ctxBG)
-		if err != nil {
-			log.Printf("[PROFILE SYNC WARNING] Failed to get admin token for Keycloak user sync: %v", err)
-			return
-		}
-
-		updateURL := fmt.Sprintf("%s/admin/realms/%s/users/%s", h.Cfg.KeycloakURL, h.Cfg.KeycloakRealm, id)
-		
-		keycloakUpdate := map[string]any{
-			"firstName": first,
-			"lastName":  last,
-			"attributes": map[string][]string{
-				"phone": {ph},
-			},
-		}
-
-		payload, err := json.Marshal(keycloakUpdate)
-		if err != nil {
-			return
-		}
-
-		kcReq, err := http.NewRequestWithContext(ctxBG, http.MethodPut, updateURL, strings.NewReader(string(payload)))
-		if err != nil {
-			return
-		}
-		kcReq.Header.Set(headerContentType, mimeApplicationJSON)
-		kcReq.Header.Set("Authorization", authBearerPrefix+adminToken)
-
-		kcResp, err := httpclient.FastClient.Do(kcReq)
-		if err != nil {
-			log.Printf("[PROFILE SYNC WARNING] Failed to make Keycloak update call: %v", err)
-			return
-		}
-		defer kcResp.Body.Close()
-
-		if kcResp.StatusCode != http.StatusNoContent && kcResp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(kcResp.Body)
-			log.Printf("[PROFILE SYNC WARNING] Keycloak user update returned status %d: %s", kcResp.StatusCode, string(body))
-		} else {
-			log.Printf("[PROFILE SYNC SUCCESS] Keycloak account successfully synchronized for user %s", id)
-		}
+		h.asyncSyncKeycloakProfile(userID, req.FirstName, req.LastName, req.Phone)
 	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)

@@ -10,16 +10,14 @@ import { apiFetch, showToast } from "@/app/utils";
 // Centralized types & translations
 import { addressTranslations, orderTranslations } from "./components/translations";
 import { UserAddress, CountryLookup, StateLookup, CityLookup } from "./components/types";
-import { UserOrder } from "./components/OrderHistory";
-import { RefundOrderItem } from "./components/RefundModal";
 
 // Modular sub-components
 import ProfileDetails from "./components/ProfileDetails";
 import AddressBook from "./components/AddressBook";
 import AddressModal from "./components/AddressModal";
-import OrderHistory from "./components/OrderHistory";
+import OrderHistory, { UserOrder } from "./components/OrderHistory";
 import PaymentModal from "./components/PaymentModal";
-import RefundModal from "./components/RefundModal";
+import RefundModal, { RefundOrderItem } from "./components/RefundModal";
 
 // Reuse global storefront components
 import Header from "@/components/store/Header";
@@ -98,7 +96,6 @@ export default function ProfilePage() {
     }
     return [];
   });
-  const [, setIsCartOpen] = useState<boolean>(false);
 
   // --- Auth states ---
   const [user, setUser] = useState<AuthUser | null>(() => {
@@ -828,6 +825,18 @@ export default function ProfilePage() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    const trimmedPhone = phone.trim();
+    if (!trimmedPhone) {
+      setError(t("phone_required_error", lang) || "Cep telefonu numarası zorunludur.");
+      return;
+    }
+    const cleanDigits = trimmedPhone.replace(/\D/g, "");
+    if (cleanDigits.length < 7 || cleanDigits.length > 15) {
+      setError(t("phone_invalid_error", lang) || "Lütfen geçerli bir cep telefonu numarası giriniz (en az 7 haneli).");
+      return;
+    }
+
     setSavingProfile(true);
 
     try {
@@ -902,7 +911,7 @@ export default function ProfilePage() {
           isLangOpen={isLangOpen}
           setIsLangOpen={setIsLangOpen}
           totalPkgs={totalPkgs}
-          setIsCartOpen={setIsCartOpen}
+          setIsCartOpen={() => {}}
           setSearchQuery={() => {}}
           setCurrentPage={() => {}}
           setActiveCategoryId={setActiveCategoryId}
@@ -932,7 +941,7 @@ export default function ProfilePage() {
           isLangOpen={isLangOpen}
           setIsLangOpen={setIsLangOpen}
           totalPkgs={totalPkgs}
-          setIsCartOpen={setIsCartOpen}
+          setIsCartOpen={() => {}}
           setSearchQuery={() => {}}
           setCurrentPage={() => {}}
           setActiveCategoryId={setActiveCategoryId}
@@ -969,7 +978,7 @@ export default function ProfilePage() {
         isLangOpen={isLangOpen}
         setIsLangOpen={setIsLangOpen}
         totalPkgs={totalPkgs}
-        setIsCartOpen={setIsCartOpen}
+        setIsCartOpen={() => {}}
         setSearchQuery={() => {}}
         setCurrentPage={() => {}}
         setActiveCategoryId={setActiveCategoryId}

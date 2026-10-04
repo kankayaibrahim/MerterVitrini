@@ -163,6 +163,53 @@ func (h *AdminSupplierUsersHandler) CreateSupplierUser(w http.ResponseWriter, r 
 	})
 }
 
+func syncKeycloakUserOnUpdate(ctx context.Context, cfg *config.Config, id string, existingKC *string, existingEmail string, req models.UpdateSupplierUserRequest) {
+	if existingKC != nil && *existingKC != "" {
+		_ = updateKeycloakSupplierUser(ctx, cfg, *existingKC, req.ContactName, req.Password, req.IsActive)
+		return
+	}
+	if existingEmail == "" {
+		return
+	}
+
+	adminToken, tErr := getKeycloakAdminToken(ctx, cfg)
+	if tErr != nil {
+		return
+	}
+	foundID, fErr := findKeycloakUserIDByEmail(ctx, cfg, adminToken, existingEmail)
+	if fErr == nil && foundID != "" {
+		_ = updateKeycloakSupplierUser(ctx, cfg, foundID, req.ContactName, req.Password, req.IsActive)
+		_, _ = db.Pool.Exec(ctx, "UPDATE catalog.supplier_users SET keycloak_id = $1 WHERE id = $2", foundID, id)
+	}
+}
+
+func updateSupplierUserInDB(ctx context.Context, id string, req models.UpdateSupplierUserRequest, phoneVal *string) error {
+	password := strings.TrimSpace(req.Password)
+	if password != "" {
+		if len(password) < 6 {
+			return fmt.Errorf("password_too_short")
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("hash_failed")
+		}
+
+		query := `
+			UPDATE catalog.supplier_users 
+			SET contact_name = $1, phone = $2, is_active = $3, password_hash = $4, updated_at = CURRENT_TIMESTAMP
+			WHERE id = $5`
+		_, err = db.Pool.Exec(ctx, query, req.ContactName, phoneVal, req.IsActive, string(hashed), id)
+		return err
+	}
+
+	query := `
+		UPDATE catalog.supplier_users 
+		SET contact_name = $1, phone = $2, is_active = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4`
+	_, err := db.Pool.Exec(ctx, query, req.ContactName, phoneVal, req.IsActive, id)
+	return err
+}
+
 // UpdateSupplierUser updates contact info, active status, or resets password (synced with Keycloak)
 func (h *AdminSupplierUsersHandler) UpdateSupplierUser(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -196,19 +243,7 @@ func (h *AdminSupplierUsersHandler) UpdateSupplierUser(w http.ResponseWriter, r 
 	}
 
 	// 1. Sync update to Keycloak
-	if existingKC != nil && *existingKC != "" {
-		_ = updateKeycloakSupplierUser(ctx, h.Cfg, *existingKC, req.ContactName, req.Password, req.IsActive)
-	} else if existingEmail != "" {
-		// If keycloak_id was missing, locate user in Keycloak and sync
-		adminToken, tErr := getKeycloakAdminToken(ctx, h.Cfg)
-		if tErr == nil {
-			foundID, fErr := findKeycloakUserIDByEmail(ctx, h.Cfg, adminToken, existingEmail)
-			if fErr == nil && foundID != "" {
-				_ = updateKeycloakSupplierUser(ctx, h.Cfg, foundID, req.ContactName, req.Password, req.IsActive)
-				_, _ = db.Pool.Exec(ctx, "UPDATE catalog.supplier_users SET keycloak_id = $1 WHERE id = $2", foundID, id)
-			}
-		}
-	}
+	syncKeycloakUserOnUpdate(ctx, h.Cfg, id, existingKC, existingEmail, req)
 
 	var phoneVal *string
 	if strings.TrimSpace(req.Phone) != "" {
@@ -216,31 +251,16 @@ func (h *AdminSupplierUsersHandler) UpdateSupplierUser(w http.ResponseWriter, r 
 		phoneVal = &p
 	}
 
-	if strings.TrimSpace(req.Password) != "" {
-		if len(req.Password) < 6 {
+	// 2. Update relational database
+	if err := updateSupplierUserInDB(ctx, id, req, phoneVal); err != nil {
+		if err.Error() == "password_too_short" {
 			http.Error(w, `{"error":"Şifre en az 6 karakter olmalıdır"}`, http.StatusBadRequest)
 			return
 		}
-		hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		if err != nil {
+		if err.Error() == "hash_failed" {
 			http.Error(w, `{"error":"Şifre şifrelenemedi"}`, http.StatusInternalServerError)
 			return
 		}
-
-		query := `
-			UPDATE catalog.supplier_users 
-			SET contact_name = $1, phone = $2, is_active = $3, password_hash = $4, updated_at = CURRENT_TIMESTAMP
-			WHERE id = $5`
-		_, err = db.Pool.Exec(ctx, query, req.ContactName, phoneVal, req.IsActive, string(hashed), id)
-	} else {
-		query := `
-			UPDATE catalog.supplier_users 
-			SET contact_name = $1, phone = $2, is_active = $3, updated_at = CURRENT_TIMESTAMP
-			WHERE id = $4`
-		_, err = db.Pool.Exec(ctx, query, req.ContactName, phoneVal, req.IsActive, id)
-	}
-
-	if err != nil {
 		log.Printf("[SUPPLIER USERS] Update error: %v", err)
 		http.Error(w, `{"error":"Kullanıcı güncellenemedi"}`, http.StatusInternalServerError)
 		return

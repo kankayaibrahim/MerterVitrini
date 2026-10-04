@@ -150,10 +150,11 @@ export default function ProfileDetails({
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                {t("phone_number_field", lang)}
+                {t("phone_number_field", lang)} <span className="text-red-500 font-bold">*</span>
               </label>
               <input
                 type="tel"
+                required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
