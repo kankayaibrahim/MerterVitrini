@@ -192,22 +192,22 @@ export default function ImageCacheManager({ apiUrl, token }: Readonly<ImageCache
     : 0;
 
   return (
-    <div className="flex flex-col gap-6 w-full animate-in fade-in duration-200 text-zinc-800">
+    <div className="flex flex-col gap-6 w-full animate-in fade-in duration-200 text-zinc-800 dark:text-zinc-200">
       {/* Top Banner */}
-      <div className="glass-card bg-white p-6 rounded-3xl border border-zinc-200/50 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+      <div className="glass-card bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200/80 dark:border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 flex items-center gap-2">
-            <ImageIcon className="text-violet-600 animate-pulse" size={24} />
+          <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2">
+            <ImageIcon className="text-violet-600 dark:text-violet-400 animate-pulse" size={24} />
             {LABELS.TITLE}
           </h2>
-          <p className="text-sm text-zinc-500 mt-1">{LABELS.DESC}</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">{LABELS.DESC}</p>
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
           <button
             onClick={handleRefresh}
             disabled={isPending || isScanning || isStopping}
-            className="p-2.5 border border-zinc-200 rounded-xl hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm flex items-center justify-center gap-1.5 text-sm font-semibold cursor-pointer"
+            className="p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors bg-white dark:bg-zinc-900 shadow-xs flex items-center justify-center gap-1.5 text-sm font-semibold cursor-pointer"
             type="button"
           >
             <RefreshCw size={15} className={isPending || status.is_running ? "animate-spin" : ""} />
@@ -217,11 +217,11 @@ export default function ImageCacheManager({ apiUrl, token }: Readonly<ImageCache
           <button
             onClick={handleScan}
             disabled={isPending || isScanning || isStopping || status.is_running}
-            className="p-2.5 border border-zinc-200 rounded-xl hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm flex items-center justify-center gap-1.5 text-sm font-semibold cursor-pointer"
+            className="p-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-colors bg-white dark:bg-zinc-900 shadow-xs flex items-center justify-center gap-1.5 text-sm font-semibold cursor-pointer"
             type="button"
           >
             {isScanning ? (
-              <Loader2 size={15} className="animate-spin text-zinc-500" />
+              <Loader2 size={15} className="animate-spin text-zinc-500 dark:text-zinc-400" />
             ) : (
               <Search size={15} />
             )}
@@ -270,22 +270,22 @@ export default function ImageCacheManager({ apiUrl, token }: Readonly<ImageCache
 
       {/* Scan Result Info Card */}
       {scannedMissingCount !== null && !status.is_running && (
-        <div className="flex items-start justify-between gap-4 bg-violet-50/60 border border-violet-100 p-5 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300 shadow-sm">
+        <div className="flex items-start justify-between gap-4 bg-violet-50/60 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/40 p-5 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300 shadow-xs">
           <div className="flex gap-3">
-            <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center text-violet-600 dark:text-violet-400 shrink-0">
               <Search size={20} />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-violet-950">Önbellek Tarama Sonucu</h4>
-              <p className="text-xs text-violet-700/80 mt-0.5 leading-relaxed">
-                Yapılan taramada, sisteme kayıtlı ürün görsellerinden standart boyutlarda üretilmemiş (cache&apos;de olmayan) toplam <strong className="text-violet-950 font-black">{scannedMissingCount}</strong> adet WebP görsel boyutu tespit edilmiştir. Aşağıdaki butondan eksikleri üretmeye başlayabilirsiniz.
+              <h4 className="text-sm font-bold text-violet-950 dark:text-violet-200">Önbellek Tarama Sonucu</h4>
+              <p className="text-xs text-violet-700/80 dark:text-violet-300/80 mt-0.5 leading-relaxed">
+                Yapılan taramada, sisteme kayıtlı ürün görsellerinden standart boyutlarda üretilmemiş (cache&apos;de olmayan) toplam <strong className="text-violet-950 dark:text-white font-black">{scannedMissingCount}</strong> adet WebP görsel boyutu tespit edilmiştir. Aşağıdaki butondan eksikleri üretmeye başlayabilirsiniz.
               </p>
             </div>
           </div>
           <button 
             type="button" 
             onClick={() => setScannedMissingCount(null)}
-            className="text-xs font-bold text-violet-500 hover:text-violet-800 transition-colors shrink-0 cursor-pointer"
+            className="text-xs font-bold text-violet-500 dark:text-violet-400 hover:text-violet-800 dark:hover:text-violet-200 transition-colors shrink-0 cursor-pointer"
           >
             Temizle
           </button>
@@ -294,18 +294,18 @@ export default function ImageCacheManager({ apiUrl, token }: Readonly<ImageCache
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Status Panel (Left) */}
-        <div className="lg:col-span-2 bg-white border border-zinc-200/50 rounded-3xl p-6 shadow-sm flex flex-col gap-6">
+        <div className="lg:col-span-2 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 shadow-xs flex flex-col gap-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-extrabold uppercase tracking-wider text-zinc-500">
+            <h3 className="text-sm font-extrabold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
               Mevcut İşlem Durumu
             </h3>
             {status.is_running ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 border border-amber-200 text-amber-700 animate-pulse">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-300 animate-pulse">
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
                 {LABELS.STATUS_RUNNING}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-zinc-50 border border-zinc-200 text-zinc-500">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200/80 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
                 <CheckCircle size={14} className="text-emerald-500" />
                 {LABELS.STATUS_IDLE}
               </span>
@@ -314,14 +314,14 @@ export default function ImageCacheManager({ apiUrl, token }: Readonly<ImageCache
 
           {/* Progress Bar */}
           {status.is_running && (
-            <div className="flex flex-col gap-2 bg-zinc-50 border border-zinc-200/50 p-5 rounded-2xl">
+            <div className="flex flex-col gap-2 bg-zinc-50/80 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-800 p-5 rounded-2xl">
               <div className="flex justify-between items-center text-xs font-bold">
-                <span className="text-zinc-500">Kuyruk İlerleme Durumu</span>
-                <span className="text-violet-600 font-mono">{progressPercent}% ({processed} / {status.total_jobs})</span>
+                <span className="text-zinc-500 dark:text-zinc-400">Kuyruk İlerleme Durumu</span>
+                <span className="text-violet-600 dark:text-violet-400 font-mono">{progressPercent}% ({processed} / {status.total_jobs})</span>
               </div>
-              <div className="w-full bg-zinc-200 h-2.5 rounded-full overflow-hidden">
+              <div className="w-full bg-zinc-200 dark:bg-zinc-700 h-2.5 rounded-full overflow-hidden">
                 <div 
-                  className="bg-violet-600 h-full transition-all duration-500 ease-out rounded-full"
+                  className="bg-violet-600 dark:bg-violet-500 h-full transition-all duration-500 ease-out rounded-full"
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
@@ -330,38 +330,38 @@ export default function ImageCacheManager({ apiUrl, token }: Readonly<ImageCache
 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-zinc-50/50 border border-zinc-100 p-4 rounded-2xl flex flex-col gap-1">
-              <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+            <div className="bg-zinc-50/70 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-800 p-4 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-extrabold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                 {LABELS.STAT_COMPLETED}
               </span>
-              <span className="text-2xl font-black text-emerald-600 font-mono">
+              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
                 {status.completed}
               </span>
             </div>
 
-            <div className="bg-zinc-50/50 border border-zinc-100 p-4 rounded-2xl flex flex-col gap-1">
-              <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+            <div className="bg-zinc-50/70 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-800 p-4 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-extrabold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                 {LABELS.STAT_FAILED}
               </span>
-              <span className="text-2xl font-black text-red-500 font-mono">
+              <span className="text-2xl font-black text-red-500 dark:text-red-400 font-mono">
                 {status.failed}
               </span>
             </div>
 
-            <div className="bg-zinc-50/50 border border-zinc-100 p-4 rounded-2xl flex flex-col gap-1">
-              <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+            <div className="bg-zinc-50/70 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-800 p-4 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-extrabold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                 {LABELS.STAT_TOTAL}
               </span>
-              <span className="text-2xl font-black text-zinc-900 font-mono">
+              <span className="text-2xl font-black text-zinc-900 dark:text-white font-mono">
                 {status.total_jobs}
               </span>
             </div>
 
-            <div className="bg-zinc-50/50 border border-zinc-100 p-4 rounded-2xl flex flex-col gap-1">
-              <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+            <div className="bg-zinc-50/70 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-800 p-4 rounded-2xl flex flex-col gap-1">
+              <span className="text-[10px] font-extrabold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
                 {LABELS.STAT_ELAPSED}
               </span>
-              <span className="text-sm font-black text-zinc-700 font-mono flex items-center gap-1 mt-1.5">
+              <span className="text-sm font-black text-zinc-700 dark:text-zinc-300 font-mono flex items-center gap-1 mt-1.5">
                 <Clock size={14} className="text-zinc-400" />
                 {status.elapsed_time || "0s"}
               </span>
@@ -370,34 +370,34 @@ export default function ImageCacheManager({ apiUrl, token }: Readonly<ImageCache
         </div>
 
         {/* Configurations & Dimensions Panel (Right) */}
-        <div className="bg-white border border-zinc-200/50 rounded-3xl p-6 shadow-sm flex flex-col gap-5">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-3xl p-6 shadow-xs flex flex-col gap-5">
           <div>
-            <h3 className="text-sm font-extrabold uppercase tracking-wider text-zinc-500">
+            <h3 className="text-sm font-extrabold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
               {LABELS.ALLOWED_SIZES_TITLE}
             </h3>
-            <p className="text-xs text-zinc-400 mt-0.5">Sistem tarafından otomatik üretilen WebP çözünürlükleri</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">Sistem tarafından otomatik üretilen WebP çözünürlükleri</p>
           </div>
 
           <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2 p-3 rounded-xl border border-zinc-100 text-xs font-bold text-zinc-700 bg-zinc-50/30">
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-zinc-200/60 dark:border-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-50/50 dark:bg-zinc-800/30">
               <span className="w-2 h-2 rounded-full bg-violet-500" />
               {LABELS.SIZE_DETAIL_1}
             </div>
-            <div className="flex items-center gap-2 p-3 rounded-xl border border-zinc-100 text-xs font-bold text-zinc-700 bg-zinc-50/30">
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-zinc-200/60 dark:border-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-50/50 dark:bg-zinc-800/30">
               <span className="w-2 h-2 rounded-full bg-violet-500" />
               {LABELS.SIZE_DETAIL_2}
             </div>
-            <div className="flex items-center gap-2 p-3 rounded-xl border border-zinc-100 text-xs font-bold text-zinc-700 bg-zinc-50/30">
+            <div className="flex items-center gap-2 p-3 rounded-xl border border-zinc-200/60 dark:border-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-300 bg-zinc-50/50 dark:bg-zinc-800/30">
               <span className="w-2 h-2 rounded-full bg-violet-500" />
               {LABELS.SIZE_DETAIL_3}
             </div>
           </div>
 
-          <hr className="border-zinc-100" />
+          <hr className="border-zinc-100 dark:border-zinc-800" />
 
-          <div className="flex gap-2.5 items-start bg-violet-50/50 border border-violet-100 p-4 rounded-2xl">
-            <Info size={16} className="text-violet-600 shrink-0 mt-0.5" />
-            <span className="text-[11px] font-bold text-violet-900 leading-relaxed">
+          <div className="flex gap-2.5 items-start bg-violet-50/50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/40 p-4 rounded-2xl">
+            <Info size={16} className="text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+            <span className="text-[11px] font-bold text-violet-900 dark:text-violet-200 leading-relaxed">
               {LABELS.INFO_THREAD_LIMIT}
             </span>
           </div>

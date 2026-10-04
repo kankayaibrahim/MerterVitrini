@@ -122,21 +122,44 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
         "image": product.images?.map((img) => img.image_url) || [],
         "sku": product.custom_sku || product.source_product_id || product.id,
         "mpn": product.custom_sku || product.source_product_id || product.id,
+        ...(product.kumas_fabric ? { "material": product.kumas_fabric } : {}),
+        ...(product.color ? { "color": product.color } : {}),
         "brand": {
           "@type": "Brand",
-          "name": product.brand_name || "Merter Üretici",
+          "name": product.brand_name || "Merter Vitrini Doğrulanmış Üretici",
         },
         "offers": {
           "@type": "Offer",
           "url": `https://mertervitrini.com.tr/product/${product.slug || product.id}`,
           "priceCurrency": product.currency || "USD",
           "price": (product.discounted_price && product.discounted_price > 0 ? product.discounted_price : product.price || 0).toFixed(2),
+          "eligibleQuantity": {
+            "@type": "QuantitativeValue",
+            "value": product.minimum_order_quantity || 1,
+            "unitCode": "C62",
+          },
+          "priceSpecification": {
+            "@type": "UnitPriceSpecification",
+            "price": (
+              product.single_price && product.single_price > 0 
+                ? product.single_price 
+                : ((product.discounted_price && product.discounted_price > 0 ? product.discounted_price : product.price || 0) / (product.minimum_order_quantity || 1))
+            ).toFixed(2),
+            "priceCurrency": product.currency || "USD",
+            "unitText": "adet / piece",
+            "referenceQuantity": {
+              "@type": "QuantitativeValue",
+              "value": 1,
+              "unitCode": "C62",
+            },
+          },
           "availability": "https://schema.org/InStock",
           "itemCondition": "https://schema.org/NewCondition",
           "priceValidUntil": "2027-12-31",
           "seller": {
             "@type": "Organization",
             "name": "Merter Vitrini B2B",
+            "url": "https://mertervitrini.com.tr",
           },
           "hasMerchantReturnPolicy": {
             "@type": "MerchantReturnPolicy",

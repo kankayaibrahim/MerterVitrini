@@ -10,6 +10,7 @@ interface PageProps {
     readonly categoryPrefix: string;
     readonly slug: string[];
   }>;
+  readonly searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export interface Language {
@@ -294,11 +295,125 @@ function getCategorySuffixAndDesc(title: string, lang: string): { titleSuffix: s
   }
 }
 
+function getCategoryB2BFAQ(catTitle: string, lang: string): { q: string; a: string }[] {
+  const faqData: Record<string, { q: string; a: string }[]> = {
+    tr: [
+      {
+        q: `${catTitle} toptan siparişlerinde minimum alım miktarı (MOQ) nedir?`,
+        a: `${catTitle} modellerimiz toptan seri ve paketler halinde satılmaktadır. Genellikle 1 paket/seri (4-6 adet asortili beden) ile sipariş oluşturabilirsiniz.`,
+      },
+      {
+        q: "Merter toptan tekstil siparişleri kaç günde kargoya teslim edilir?",
+        a: "Siparişleriniz Merter ve üretici depolarımızdan 1-3 iş günü içinde hazırlanarak anlaşmalı uluslararası kargo veya lojistik firmanıza teslim edilir.",
+      },
+      {
+        q: "Yurtdışı ihracat ve gümrükleme işlemleri nasıl yürütülüyor?",
+        a: "Tüm toptan hazır giyim siparişlerinizde ATR, EUR.1, Menşe Şahadetnamesi ve ihracat beyannamesi işlemleri kurumsal ihracat departmanımız tarafından düzenlenmektedir.",
+      },
+    ],
+    en: [
+      {
+        q: `What is the Minimum Order Quantity (MOQ) for wholesale ${catTitle}?`,
+        a: `Our wholesale ${catTitle} collections are sold in size packs/series. Minimum order starts from just 1 pack (typically 4-6 pieces with full size ratio).`,
+      },
+      {
+        q: "How fast is shipping from Istanbul Merter to international destinations?",
+        a: "Orders are prepared within 1-3 business days and dispatched via air express (DHL, UPS, FedEx) or freight cargo arriving in 3-7 days worldwide.",
+      },
+      {
+        q: "Can I order multiple brands and categories in a single combined shipment?",
+        a: "Yes! Merter Vitrini consolidates all your items from multiple Turkish textile manufacturers into one consolidated parcel to minimize international freight costs.",
+      },
+    ],
+    ru: [
+      {
+        q: `Каков минимальный объем заказа (MOQ) на ${catTitle} оптом?`,
+        a: `Все модели ${catTitle} поставляются фабричными сериями/пакетами (обычно 4-6 единиц одного цвета во всех размерах). Минимальный заказ — от 1 серии.`,
+      },
+      {
+        q: "Сколько времени занимает доставка из Стамбула в Россию и СНГ?",
+        a: "Отправка осуществляется карго-компаниями или авиапочтой. Сроки доставки карго в Москву и регионы составляют от 4 до 9 дней.",
+      },
+    ],
+    ar: [
+      {
+        q: `ما هو الحد الأدنى للطلب (MOQ) لمنتجات ${catTitle} بالجملة؟`,
+        a: `تباع منتجاتنا بالجملة بنظام السيري / الباكت المقاسات المتنوعة. الحد الأدنى للطلب يبدأ من باكت واحد فقط (4-6 قطع).`,
+      },
+      {
+        q: "كم تستغرق مدة شحن الطلبات من إسطنبول إلى الدول العربية؟",
+        a: "يتم تجهيز الشحنات خلال 1-3 أيام عمل وشحنها عبر الشحن الجوي السريع أو شركات الكارجو لتصل خلال 3-6 أيام إلى دول الخليج والشرق الأوسط.",
+      },
+    ],
+    de: [
+      {
+        q: `Was ist die Mindestbestellmenge (MOQ) für ${catTitle} im Großhandel?`,
+        a: `Unsere ${catTitle}-Kollektionen werden in Serienpacks (Größenassortiert, üblicherweise 4-6 Stück) verkauft. Mindestbestellmenge ist 1 Pack.`,
+      },
+      {
+        q: "Wie läuft der Versand aus der Türkei nach Deutschland und Europa?",
+        a: "Lieferungen nach Deutschland und EU-Länder dauern per Express-Kurier oder Spedition ca. 3-5 Werktage mit vollständigen Zollpapieren.",
+      },
+    ],
+    fr: [
+      {
+        q: `Quelle est la quantité minimale de commande (MOQ) pour ${catTitle} en gros ?`,
+        a: `Nos collections de ${catTitle} sont vendues en séries/packs assortis de tailles (4-6 pièces par pack). Minimum de commande : 1 pack.`,
+      },
+      {
+        q: "Quels sont les délais d'expédition d'Istanbul vers la France et l'Europe ?",
+        a: "Les commandes sont expédiées en 1 à 3 jours ouvrables et livrées en France en 3 à 5 jours via transporteur express ou cargo.",
+      },
+    ],
+    pl: [
+      {
+        q: `Jakie jest minimalne zamówienie (MOQ) na ${catTitle} w hurcie?`,
+        a: `Produkty ${catTitle} sprzedawane są w pakietach rozmiarowych (zazwyczaj 4-6 sztuk). Minimalne zamówienie to zaledwie 1 seria.`,
+      },
+      {
+        q: "Jak długo trwa wysyłka ze Stambułu do Polski?",
+        a: "Czas dostawy kurierem ekspresowym lub transportem drobnicowym wynosi zazwyczaj 3-5 dni roboczych.",
+      },
+    ],
+    bg: [
+      {
+        q: `Какво е минималното количество за поръчка (MOQ) за ${catTitle} на едро?`,
+        a: `Продуктите се продават в размерни серии/пакети (обикновено 4-6 броя). Минималната поръчка започва от 1 серия.`,
+      },
+      {
+        q: "Какви са сроковете за доставка от Истанбул до България?",
+        a: "Доставката до България отнема само 1-3 работни дни с директен сухопътен или карго транспорт.",
+      },
+    ],
+  };
+
+  return faqData[lang] || faqData.en;
+}
+
+export function getCategoryB2BDefaultDesc(categoryTitle: string, lang: string): string {
+  const descMap: Record<string, string> = {
+    tr: `Merter Vitrini toptan ${categoryTitle} kategorisi, İstanbul Merter ve Güngören tekstil imalatçılarının en güncel butik ve mağaza koleksiyonlarını bir araya getirmektedir. Ürünlerimiz toptan seri ve paketler halinde satılmakta olup, paket içi asortili beden dağılımı sayesinde butiğinizin tüm beden taleplerini karşılar. Doğrudan üretici fiyatlarıyla minimum sipariş (MOQ) avantajından yararlanabilir, siparişlerinizi tek bir konsolide kargo ile dünya geneline güvenle ulaştırabilirsiniz.`,
+    en: `The Merter Vitrini wholesale ${categoryTitle} catalog brings together the latest boutique collections from Istanbul Merter and Gungoren textile manufacturers. All products are supplied in wholesale packs and size runs with full ratio distribution, ensuring balanced inventory for your fashion retail business. Benefit from direct factory pricing, low MOQ, and worldwide express delivery with combined international shipments.`,
+    ru: `Каталог ${categoryTitle} оптом на платформе Merter Vitrini объединяет новейшие коллекции ведущих фабрик Стамбула (Мертер, Гюнгёрен). Все товары поставляются фабричными сериями и размерными пакетами с пропорциональной разбивкой размеров. Покупайте напрямую от турецких производителей по оптовым ценам с минимальным объемом заказа (от 1 серии) и быстрой доставкой карго по всей России и СНГ.`,
+    ar: `يوفر قسم ${categoryTitle} بالجملة على منصة مارتر فيتريني أحدث تشكيلات أزياء البوتيك والمتاجر من مصانع النسيج في إسطنبول (مارتر وجونغوران). تباع جميع المنتجات بنظام السيري والباكت المقاسات المتنوعة. استفد من أسعار المصنع المباشرة والحد الأدنى المرن للطلب مع شحن دولي موحد وسريع إلى كافة الدول العربية.`,
+    de: `Die Großhandelskategorie ${categoryTitle} von Merter Vitrini vereint die neuesten Boutique- und Einzelhandelskollektionen führender Textilhersteller aus Istanbul Merter. Unsere Produkte werden in Großhandelserien und Größenpacks mit ausgewogener Größenverteilung angeboten. Profitieren Sie von direkten Herstellerpreisen, niedrigen Mindestbestellmengen (ab 1 Pack) und sicherem weltweiten Expressversand.`,
+    fr: `Le catalogue de gros ${categoryTitle} de Merter Vitrini rassemble les dernières collections de prêt-à-porter des fabricants textiles d'Istanbul (Merter, Güngören). Tous les articles sont vendus en séries et packs assortis de tailles. Profitez des prix direct fabricant, d'un MOQ réduit et d'une expédition express consolidée vers la France et le monde entier.`,
+    pl: `Kategoria hurtowa ${categoryTitle} na Merter Vitrini łączy najnowsze kolekcje odzieży butikowej od renomowanych producentów ze Stambułu (Merter). Wszystkie produkty sprzedawane są w seriach rozmiarowych z pełną asortymentacją. Skorzystaj z bezpośrednich cen fabrycznych, niskiego MOQ i szybkiej konsolidowanej wysyłki międzynarodowej do Polski.`,
+    bg: `Категорията ${categoryTitle} на едро в Merter Vitrini събира най-актуалните бутикови колекции от текстилни производители в Истанбул (Мертер). Продуктите се предлагат в размерни серии с пълно разпределение на размерите. Възползвайте се от директни фабрични цени, минимални количества за поръчка (от 1 серия) и бърза доставка до България.`,
+  };
+  return descMap[lang] || descMap.en;
+}
+
 // Generate dynamic SEO metadata on the server side using prefix and category slug
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { categoryPrefix, slug: slugArr } = await params;
   const slug = (Array.isArray(slugArr) && slugArr.length > 0 ? slugArr.at(-1) : slugArr) as string;
   
+  const search = searchParams ? await searchParams : {};
+  const hasFilterParams = search && Object.keys(search).some((k) => 
+    ["color", "size", "brand", "brand_id", "gender", "season", "min_price", "max_price", "sort_by", "q", "page"].includes(k)
+  );
+
   const activeLangs = await fetchLanguages();
   const prefixToLangMap = new Map<string, string>();
   activeLangs.forEach((l) => {
@@ -340,6 +455,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
           return {
             title: fullTitle,
             description: finalDesc,
+            robots: hasFilterParams
+              ? { index: false, follow: true }
+              : { index: true, follow: true },
             alternates: {
               canonical: canonicalUrl,
               languages: alternatesLanguages,
@@ -373,6 +491,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title: `Toptan ${cleanTitle} Modelleri ve İmalatçı Fiyatları | Merter Vitrini B2B`,
     description: `Toptan ${cleanTitle} serili ve asortili butik sipariş imkanları. Doğrudan Merter tekstil üreticilerinden en uygun toptan hazır giyim fiyatları. Minimum paket alımı.`,
+    robots: hasFilterParams
+      ? { index: false, follow: true }
+      : { index: true, follow: true },
     alternates: {
       canonical: `https://mertervitrini.com.tr/${categoryPrefix}/${slug}`,
       languages: {
@@ -443,14 +564,17 @@ export default async function CategoryPage({ params }: PageProps) {
     });
   });
 
+  const categoryTitle = catObj ? (catObj.translations?.[defaultLang]?.title || catObj.title) : cleanCategoryTitle;
+  const faqs = getCategoryB2BFAQ(categoryTitle, defaultLang);
+
   const categoryJsonLd = {
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": "CollectionPage",
-        "name": catObj ? (catObj.translations?.[defaultLang]?.title || catObj.title) : cleanCategoryTitle,
+        "name": categoryTitle,
         "url": `https://mertervitrini.com.tr/${categoryPrefix}/${slugPathArr.join("/")}`,
-        "description": `Toptan ${catObj?.title || cleanCategoryTitle} modelleri ve serili sipariş imkanları.`,
+        "description": `Toptan ${categoryTitle} modelleri ve serili sipariş imkanları. Merter B2B toptan hazır giyim tedarik platformu.`,
         "breadcrumb": {
           "@type": "BreadcrumbList",
           "itemListElement": breadcrumbElements,
@@ -459,6 +583,17 @@ export default async function CategoryPage({ params }: PageProps) {
       {
         "@type": "BreadcrumbList",
         "itemListElement": breadcrumbElements,
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": faqs.map((f) => ({
+          "@type": "Question",
+          "name": f.q,
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": f.a,
+          },
+        })),
       },
     ],
   };

@@ -100,5 +100,44 @@ export default async function LocalizedHomePage({ params }: PageProps) {
   
   const defaultLang = langMap[categoryPrefix] || "en";
 
-  return <StorefrontLayout mode="portal" defaultLang={defaultLang} />;
+  const siteJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "name": "Merter Vitrini",
+        "legalName": "Merter Vitrini B2B Toptan Tekstil ve Hazır Giyim",
+        "url": `https://mertervitrini.com.tr/${categoryPrefix}`,
+        "logo": "https://mertervitrini.com.tr/logo.png",
+        "description": desc,
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "telephone": "+90-532-000-0000",
+          "contactType": "sales",
+          "availableLanguage": ["Turkish", "English", "Russian", "Arabic", "French", "German", "Polish", "Bulgarian"],
+          "areaServed": ["TR", "DE", "FR", "PL", "RU", "AE", "SA", "US", "BG"],
+        },
+      },
+      {
+        "@type": "WebSite",
+        "name": "Merter Vitrini",
+        "url": `https://mertervitrini.com.tr/${categoryPrefix}`,
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": `https://mertervitrini.com.tr/${categoryPrefix}/tum-urunler?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}
+      />
+      <StorefrontLayout mode="portal" defaultLang={defaultLang} />
+    </>
+  );
 }

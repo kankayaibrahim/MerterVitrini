@@ -37,6 +37,11 @@ export interface AdminContextType {
   setMobileSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   toggleSidebar: () => void;
 
+  // Theme State
+  theme: "light" | "dark";
+  setTheme: (theme: "light" | "dark") => void;
+  toggleTheme: () => void;
+
   // Feeds & Sync
   feeds: XmlFeed[];
   setFeeds: React.Dispatch<React.SetStateAction<XmlFeed[]>>;
@@ -84,12 +89,32 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
+  // Theme State (default: light)
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("merter_admin_theme");
+      if (saved === "light" || saved === "dark") return saved;
+    }
+    return "light";
+  });
+
+  // Sync theme changes to localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("merter_admin_theme", theme);
+    }
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => (prev === "light" ? "dark" : "light"));
+  }, []);
+
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed(prev => !prev);
   }, []);
 
   // API URL
-  const [apiUrl] = useState(() => {
+  const apiUrl = useMemo(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("merter_api_url");
       if (saved) return saved;
@@ -100,7 +125,7 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
       return `${window.location.protocol}//${window.location.host}`;
     }
     return "http://localhost:8080";
-  });
+  }, []);
 
   // Auth State
   const [token, setToken] = useState<string | null>(null);
@@ -463,7 +488,10 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
     settingsError,
     settingsSuccess,
     handleUpdateSettings,
-    loadStoreSettings
+    loadStoreSettings,
+    theme,
+    setTheme,
+    toggleTheme
   }), [
     apiUrl,
     token,
@@ -476,6 +504,9 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
     sidebarCollapsed,
     mobileSidebarOpen,
     toggleSidebar,
+    theme,
+    setTheme,
+    toggleTheme,
     feeds,
     syncHistory,
     activeSyncing,

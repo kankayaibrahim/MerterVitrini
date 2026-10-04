@@ -10,7 +10,9 @@ import {
   ShieldCheck, 
   RefreshCw, 
   Radio, 
-  CheckCircle2 
+  CheckCircle2,
+  Sun,
+  Moon
 } from "lucide-react";
 import AdminBreadcrumb from "./AdminBreadcrumb";
 import { useAdmin } from "@/context/AdminContext";
@@ -21,7 +23,9 @@ export default function AdminNavbar() {
     dbStatus, 
     handleLogout, 
     setMobileSidebarOpen,
-    activeSyncing
+    activeSyncing,
+    theme,
+    toggleTheme
   } = useAdmin();
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -82,6 +86,27 @@ export default function AdminNavbar() {
           <ExternalLink size={13} />
           <span className="hidden sm:inline">Mağazayı Gör</span>
         </Link>
+
+        {/* Theme Toggle Button */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-zinc-700 hover:text-zinc-950 bg-white hover:bg-zinc-50 border border-zinc-200/80 shadow-xs transition-all dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-800 dark:hover:bg-zinc-800 cursor-pointer"
+          title={theme === "dark" ? "Beyaz (Açık) Temaya Geç" : "Siyah (Koyu) Temaya Geç"}
+          aria-label="Tema Değiştir"
+        >
+          {theme === "dark" ? (
+            <>
+              <Sun size={14} className="text-amber-400" />
+              <span className="hidden sm:inline">Açık Tema</span>
+            </>
+          ) : (
+            <>
+              <Moon size={14} className="text-indigo-600" />
+              <span className="hidden sm:inline">Koyu Tema</span>
+            </>
+          )}
+        </button>
 
         {/* Notification Bell Dropdown */}
         <div className="relative">

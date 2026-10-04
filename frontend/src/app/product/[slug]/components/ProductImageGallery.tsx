@@ -65,6 +65,8 @@ export default function ProductImageGallery({
           <img
             src={getResizedImageUrl(mainImg, 600, 800)}
             alt={title}
+            width={600}
+            height={800}
             loading="eager"
             fetchPriority="high"
             className="max-w-full max-h-full object-contain transition-all duration-300 group-hover:scale-105"
@@ -87,6 +89,9 @@ export default function ProductImageGallery({
                 <img
                   src={getResizedImageUrl(img.image_url, 80, 106)}
                   alt="thumb"
+                  width={80}
+                  height={106}
+                  loading="lazy"
                   className="w-full h-full object-cover"
                 />
               </button>

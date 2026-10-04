@@ -1356,6 +1356,13 @@ type gItem struct {
 	Condition             string   `xml:"g:condition"`
 	Gender                string   `xml:"g:gender,omitempty"`
 	ItemGroupID           string   `xml:"g:item_group_id,omitempty"`
+	Multipack             int      `xml:"g:multipack,omitempty"`
+	UnitPricingMeasure    string   `xml:"g:unit_pricing_measure,omitempty"`
+	UnitPricingBaseMeasure string  `xml:"g:unit_pricing_base_measure,omitempty"`
+	CustomLabel0          string   `xml:"g:custom_label_0,omitempty"`
+	CustomLabel1          string   `xml:"g:custom_label_1,omitempty"`
+	CustomLabel2          string   `xml:"g:custom_label_2,omitempty"`
+	CustomLabel3          string   `xml:"g:custom_label_3,omitempty"`
 }
 
 type gChannel struct {
@@ -1439,6 +1446,34 @@ func normalizeGoogleGender(gender *string) string {
 	return "unisex"
 }
 
+func parseSeriesPieces(seriesRatio *string, moq *int) int {
+	if seriesRatio != nil && *seriesRatio != "" {
+		cleaned := strings.TrimSpace(*seriesRatio)
+		parts := strings.FieldsFunc(cleaned, func(r rune) bool {
+			return r == '-' || r == ',' || r == '/'
+		})
+		total := 0
+		hasNum := false
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if n, err := strconv.Atoi(part); err == nil && n > 0 {
+				total += n
+				hasNum = true
+			}
+		}
+		if hasNum && total > 0 {
+			return total
+		}
+		if len(parts) > 1 {
+			return len(parts)
+		}
+	}
+	if moq != nil && *moq > 1 {
+		return *moq
+	}
+	return 1
+}
+
 func mapRowToGoogleMerchantItem(rows pgx.Rows) (gItem, error) {
 	var (
 		id, title, slug                                          string
@@ -1449,12 +1484,15 @@ func mapRowToGoogleMerchantItem(rows pgx.Rows) (gItem, error) {
 		currency                                                 string
 		stock                                                    int
 		imagesBytes                                              []byte
+		seriesRatio, fabric                                      *string
+		moq                                                      *int
 	)
 
 	err := rows.Scan(
 		&id, &title, &description, &customSku, &slug,
 		&gender, &price, &discountedPrice, &currency, &stock,
 		&brandName, &categoryTitle, &imagesBytes, &sourceProductGroupID,
+		&seriesRatio, &moq, &fabric,
 	)
 	if err != nil {
 		return gItem{}, err
@@ -1499,21 +1537,55 @@ func mapRowToGoogleMerchantItem(rows pgx.Rows) (gItem, error) {
 		itemGroupID = *sourceProductGroupID
 	}
 
+	packPieces := parseSeriesPieces(seriesRatio, moq)
+	displayTitle := title
+	if packPieces > 1 {
+		displayTitle = fmt.Sprintf("%s [Toptan Seri / %d Adet]", title, packPieces)
+	}
+
+	var customLabel1, customLabel2, customLabel3 string
+	if seriesRatio != nil && *seriesRatio != "" {
+		customLabel1 = fmt.Sprintf("Seri: %s", *seriesRatio)
+	}
+
+	minOrder := 1
+	if moq != nil && *moq > 0 {
+		minOrder = *moq
+	}
+	customLabel2 = fmt.Sprintf("MOQ: %d Paket", minOrder)
+
+	if fabric != nil && *fabric != "" && *fabric != "Polyester" {
+		customLabel3 = *fabric
+	}
+
+	var unitPricingMeasure, unitPricingBaseMeasure string
+	if packPieces > 1 {
+		unitPricingMeasure = fmt.Sprintf("%d ct", packPieces)
+		unitPricingBaseMeasure = "1 ct"
+	}
+
 	return gItem{
-		ID:                    itemID,
-		Title:                 title,
-		Description:           descStr,
-		Link:                  productURL,
-		ImageLink:             mainImage,
-		AdditionalImageLinks:  additionalImages,
-		Availability:          availability,
-		Price:                 priceStr,
-		SalePrice:             salePriceStr,
-		Brand:                 brand,
-		GoogleProductCategory: googleCategory,
-		Condition:             "new",
-		Gender:                normalizeGoogleGender(gender),
-		ItemGroupID:           itemGroupID,
+		ID:                     itemID,
+		Title:                  displayTitle,
+		Description:            descStr,
+		Link:                   productURL,
+		ImageLink:              mainImage,
+		AdditionalImageLinks:   additionalImages,
+		Availability:           availability,
+		Price:                  priceStr,
+		SalePrice:              salePriceStr,
+		Brand:                  brand,
+		GoogleProductCategory:  googleCategory,
+		Condition:              "new",
+		Gender:                 normalizeGoogleGender(gender),
+		ItemGroupID:            itemGroupID,
+		Multipack:              packPieces,
+		UnitPricingMeasure:     unitPricingMeasure,
+		UnitPricingBaseMeasure: unitPricingBaseMeasure,
+		CustomLabel0:           "Wholesale B2B",
+		CustomLabel1:           customLabel1,
+		CustomLabel2:           customLabel2,
+		CustomLabel3:           customLabel3,
 	}, nil
 }
 
@@ -1530,7 +1602,8 @@ func (h *StoreCatalogHandler) GoogleMerchantFeed(w http.ResponseWriter, r *http.
 	query := `
 		SELECT p.id, p.title, p.description, p.custom_sku, p.slug, 
 		       p.gender, p.price, p.discounted_price, p.currency, p.stock, 
-		       p.brand_name, p.category_title, p.images_json, p.source_product_group_id
+		       p.brand_name, p.category_title, p.images_json, p.source_product_group_id,
+		       p.series_ratio, p.minimum_order_quantity, p.kumas_fabric
 		FROM catalog.mv_products p
 		WHERE p.is_active = true`
 

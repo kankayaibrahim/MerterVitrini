@@ -21,6 +21,98 @@ interface FooterProps {
   readonly showApplicationForm?: boolean;
 }
 
+interface B2BWholesaleLink {
+  label: string;
+  href: string;
+}
+
+function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
+  const prefix = getCategoryPrefix(lang);
+  const linksMap: Record<string, B2BWholesaleLink[]> = {
+    tr: [
+      { label: "Toptan Kadın Giyim", href: `/${prefix}/kadin` },
+      { label: "Toptan Triko & Kazak", href: `/${prefix}/kadin-triko` },
+      { label: "Toptan Elbise Modelleri", href: `/${prefix}/kadin-elbise` },
+      { label: "Toptan Abiye & Gece Elbisesi", href: `/${prefix}/abiye` },
+      { label: "Toptan Büyük Beden Giyim", href: `/${prefix}/buyuk-beden` },
+      { label: "Toptan Bohem Giyim", href: `/${prefix}/yaz-koleksiyonu` },
+      { label: "Toptan Vintage & Retro", href: `/${prefix}/vintage-retro` },
+      { label: "Toptan Türk Kumaşları", href: `/${prefix}/kumas` },
+      { label: "Merter B2B Alıcı Rehberi", href: `/${prefix}/b2b` },
+    ],
+    en: [
+      { label: "Wholesale Women Clothing", href: `/${prefix}/kadin` },
+      { label: "Wholesale Knitwear & Sweaters", href: `/${prefix}/kadin-triko` },
+      { label: "Wholesale Dresses Turkey", href: `/${prefix}/kadin-elbise` },
+      { label: "Wholesale Evening Dresses", href: `/${prefix}/abiye` },
+      { label: "Wholesale Plus Size Fashion", href: `/${prefix}/buyuk-beden` },
+      { label: "Wholesale Boho Chic Boutique", href: `/${prefix}/yaz-koleksiyonu` },
+      { label: "Wholesale Vintage Clothing", href: `/${prefix}/vintage-retro` },
+      { label: "Turkish Fabrics Wholesale", href: `/${prefix}/kumas` },
+      { label: "Merter B2B Sourcing Guide", href: `/${prefix}/b2b` },
+    ],
+    ru: [
+      { label: "Женская одежда оптом Турция", href: `/${prefix}/kadin` },
+      { label: "Трикотаж и свитера оптом", href: `/${prefix}/kadin-triko` },
+      { label: "Платья оптом Стамбул", href: `/${prefix}/kadin-elbise` },
+      { label: "Вечерние платья оптом", href: `/${prefix}/abiye` },
+      { label: "Одежда больших размеров оптом", href: `/${prefix}/buyuk-beden` },
+      { label: "Бохо шик оптом Мертер", href: `/${prefix}/yaz-koleksiyonu` },
+      { label: "Винтажная одежда оптом", href: `/${prefix}/vintage-retro` },
+      { label: "Турецкие ткани оптом", href: `/${prefix}/kumas` },
+      { label: "Гид по закупкам в Мертер", href: `/${prefix}/b2b` },
+    ],
+    ar: [
+      { label: "ملابس نسائية بالجملة تركيا", href: `/${prefix}/kadin` },
+      { label: "تريكو وكنزات صوفية بالجملة", href: `/${prefix}/kadin-triko` },
+      { label: "فساتين نسائية بالجملة إسطنبول", href: `/${prefix}/kadin-elbise` },
+      { label: "فساتين سهرة وسواريه بالجملة", href: `/${prefix}/abiye` },
+      { label: "مقاسات كبيرة بالجملة تركيا", href: `/${prefix}/buyuk-beden` },
+      { label: "أزياء بوهو شيك بالجملة", href: `/${prefix}/yaz-koleksiyonu` },
+      { label: "ملابس عتيقة وفينتاج بالجملة", href: `/${prefix}/vintage-retro` },
+      { label: "أقمشة تركية بالجملة", href: `/${prefix}/kumas` },
+      { label: "دليل المشتريات من مارتر", href: `/${prefix}/b2b` },
+    ],
+    de: [
+      { label: "Großhandel Damenbekleidung Türkei", href: `/${prefix}/kadin` },
+      { label: "Großhandel Strickwaren & Pullover", href: `/${prefix}/kadin-triko` },
+      { label: "Großhandel Kleider Istanbul", href: `/${prefix}/kadin-elbise` },
+      { label: "Großhandel Abendkleider", href: `/${prefix}/abiye` },
+      { label: "Große Größen Großhandel", href: `/${prefix}/buyuk-beden` },
+      { label: "Türkische Stoffe Großhandel", href: `/${prefix}/kumas` },
+      { label: "Merter B2B Einkaufsführer", href: `/${prefix}/b2b` },
+    ],
+    fr: [
+      { label: "Vêtements Femme en Gros Turquie", href: `/${prefix}/kadin` },
+      { label: "Tricot et Pulls en Gros", href: `/${prefix}/kadin-triko` },
+      { label: "Robes en Gros Istanbul", href: `/${prefix}/kadin-elbise` },
+      { label: "Robes de Soirée en Gros", href: `/${prefix}/abiye` },
+      { label: "Grandes Tailles en Gros", href: `/${prefix}/buyuk-beden` },
+      { label: "Tissus Turcs en Gros", href: `/${prefix}/kumas` },
+      { label: "Guide d'Achat B2B Merter", href: `/${prefix}/b2b` },
+    ],
+    pl: [
+      { label: "Hurtownia Odzieży Damskiej Turcja", href: `/${prefix}/kadin` },
+      { label: "Swetry i Dzianiny Hurt", href: `/${prefix}/kadin-triko` },
+      { label: "Sukienki Hurtownia Stambuł", href: `/${prefix}/kadin-elbise` },
+      { label: "Suknie Wieczorowe Hurt", href: `/${prefix}/abiye` },
+      { label: "Odzież Plus Size Hurt", href: `/${prefix}/buyuk-beden` },
+      { label: "Tureckie Tkaniny Hurt", href: `/${prefix}/kumas` },
+      { label: "Przewodnik Zakupów B2B Merter", href: `/${prefix}/b2b` },
+    ],
+    bg: [
+      { label: "Дамски Дрехи на Едро Турция", href: `/${prefix}/kadin` },
+      { label: "Плетива и Пуловери на Едро", href: `/${prefix}/kadin-triko` },
+      { label: "Рокли на Едро Истанбул", href: `/${prefix}/kadin-elbise` },
+      { label: "Вечерни Рокли на Едро", href: `/${prefix}/abiye` },
+      { label: "Макси Мода на Едро", href: `/${prefix}/buyuk-beden` },
+      { label: "Турски Платове на Едро", href: `/${prefix}/kumas` },
+      { label: "Наръчник за Покупки в Мертер", href: `/${prefix}/b2b` },
+    ],
+  };
+  return linksMap[lang] || linksMap.en;
+}
+
 export default function Footer({ lang, onOpenPolicy, showApplicationForm = true }: Readonly<FooterProps>) {
   const [settings, setSettings] = useState<Settings>({
     id: "",
@@ -266,7 +358,32 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = true 
 
       </div>
 
-      <div className="max-w-[1720px] mx-auto border-t border-cultured mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-sonic-silver">
+      {/* B2B Wholesale SEO & Internal Linking Hub */}
+      <div className="max-w-[1720px] mx-auto border-t border-cultured mt-12 pt-8">
+        <h4 className="text-black font-extrabold text-[11px] tracking-[2px] uppercase mb-4">
+          {lang === "tr" ? "Popüler Toptan Tekstil Kategorileri & Merter Tedarik Ağı" :
+           lang === "ru" ? "Популярные Оптовые Категории и Поставки из Мертер" :
+           lang === "ar" ? "أقسام الأزياء بالجملة وتوريد المنسوجات من مارتر" :
+           lang === "de" ? "Beliebte Großhandelskategorien & Merter Beschaffungsnetzwerk" :
+           lang === "fr" ? "Catégories Populaires de Vente en Gros & Approvisionnement Merter" :
+           lang === "pl" ? "Popularne Kategorie Hurtowe i Dostawy z Merter" :
+           lang === "bg" ? "Популярни Категории на Едро и Доставки от Мертер" :
+           "Top B2B Wholesale Categories & Merter Sourcing Network"}
+        </h4>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {getB2BWholesaleLinks(lang).map((linkItem) => (
+            <Link
+              key={linkItem.href}
+              href={linkItem.href}
+              className="px-3 py-1.5 bg-[#fcfcfc] hover:bg-black hover:text-white border border-cultured rounded-[4px] text-[11px] font-semibold text-onyx transition-all duration-200 no-underline"
+            >
+              {linkItem.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-[1720px] mx-auto border-t border-cultured mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-sonic-silver">
         <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-left">
           <span>© {new Date().getFullYear()} {t("brand_title", lang)}. {t("all_rights_reserved", lang)}</span>
           <span className="hidden sm:inline text-zinc-300">•</span>

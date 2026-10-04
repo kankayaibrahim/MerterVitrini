@@ -1476,7 +1476,46 @@ func updateSyncStatus(runID string, status string, summary map[string]any) {
 				log.Println("[SYNC] Storefront catalog materialized view successfully refreshed!")
 			}
 		})
+
+		// Trigger autonomous IndexNow ping to Yandex & Bing for newly synced products
+		triggerIndexNowForSyncRun(runID)
 	}
+}
+
+// triggerIndexNowForSyncRun queries products updated in the given sync run and submits their URLs to IndexNow
+func triggerIndexNowForSyncRun(runID string) {
+	safe.Go(fmt.Sprintf("IndexNow Auto-Ping Sync %s", runID), func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		query := `
+			SELECT slug 
+			FROM catalog.products 
+			WHERE last_sync_run_id = $1 AND is_active = true AND slug IS NOT NULL AND slug != '' 
+			LIMIT 100`
+
+		rows, err := db.Pool.Query(ctx, query, runID)
+		if err != nil {
+			log.Printf("[IndexNow Auto-Ping] Failed to query synced product slugs: %v", err)
+			return
+		}
+		defer rows.Close()
+
+		var urls []string
+		for rows.Next() {
+			var slug string
+			if err := rows.Scan(&slug); err == nil && slug != "" {
+				urls = append(urls, fmt.Sprintf("https://mertervitrini.com.tr/product/%s", slug))
+			}
+		}
+
+		if len(urls) > 0 {
+			log.Printf("[IndexNow Auto-Ping] Submitting %d updated product URLs to Yandex/Bing for sync run %s", len(urls), runID)
+			NotifyIndexNow(urls)
+		} else {
+			log.Printf("[IndexNow Auto-Ping] No updated product slugs found for sync run %s", runID)
+		}
+	})
 }
 
 // --- Standardized B2B Parser Data Transfer Objects ---

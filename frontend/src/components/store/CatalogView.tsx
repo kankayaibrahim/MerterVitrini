@@ -177,6 +177,20 @@ function CatalogPagination({
   );
 }
 
+function getCategoryB2BFallbackDesc(title: string, l: string): string {
+  const m: Record<string, string> = {
+    tr: `Merter Vitrini toptan ${title} kategorisi, İstanbul Merter ve Güngören tekstil imalatçılarının en güncel butik koleksiyonlarını bir araya getirmektedir. Ürünlerimiz toptan seri ve paketler halinde satılmakta olup, paket içi asortili beden dağılımı sayesinde butiğinizin tüm taleplerini karşılar. Minimum sipariş (MOQ) avantajı ve tek konsolide kargo ile dünya geneline güvenle ulaştırılır.`,
+    en: `The Merter Vitrini wholesale ${title} collection brings together the latest boutique styles directly from Istanbul Merter textile manufacturers. All products are supplied in wholesale packs and size runs with full ratio distribution. Enjoy direct factory pricing, low MOQ, and worldwide express consolidated shipping.`,
+    ru: `Каталог ${title} оптом на Merter Vitrini объединяет новейшие коллекции фабрик Стамбула. Продажа фабричными сериями и пакетами с полным размерным рядом. Прямые поставки от производителей без посредников, минимальный заказ и быстрая доставка карго.`,
+    ar: `يوفر قسم ${title} بالجملة على منصة مارتر فيتريني أحدث تشكيلات أزياء البوتيك من مصانع إسطنبول. تباع المنتجات بنظام السيري والباكت المقاسات المتنوعة مع أسعار المصنع وشحن دولي سريع.`,
+    de: `Die Großhandelskollektion ${title} auf Merter Vitrini bietet die neuesten Boutique-Styles direkt von Istanbuler Herstellern in Größenserien mit schnellem weltweiten Versand.`,
+    fr: `La collection de gros ${title} sur Merter Vitrini rassemble le prêt-à-porter des fabricants d'Istanbul en séries assorties avec expédition internationale consolidée.`,
+    pl: `Kolekcja hurtowa ${title} na Merter Vitrini łączy najnowsze fasony butikowe prosto od producentów ze Stambułu w pełnych seriach rozmiarowych.`,
+    bg: `Колекцията на едро ${title} в Merter Vitrini предлага бутикови модели директно от производители в Истанбул в размерни серии с бърза доставка.`,
+  };
+  return m[l] || m.en;
+}
+
 export default function CatalogView({
   lang,
   categories,
@@ -198,8 +212,9 @@ export default function CatalogView({
   sidebar,
 }: Readonly<CatalogViewProps>) {
   const activeCatObj = activeCategoryId ? findCategory(categories, activeCategoryId) : null;
-  const seoDesc = activeCatObj?.translations?.[lang]?.seo_description;
   const categoryTitle = activeCatObj ? getCategoryTitle(activeCatObj, lang) : "";
+  const rawSeoDesc = activeCatObj?.translations?.[lang]?.seo_description;
+  const effectiveSeoDesc = rawSeoDesc || (categoryTitle ? getCategoryB2BFallbackDesc(categoryTitle, lang) : "");
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -348,10 +363,10 @@ export default function CatalogView({
       </div>
 
       {/* Category SEO Description Block */}
-      {seoDesc && (
+      {effectiveSeoDesc && (
         <SeoDescription
           categoryTitle={categoryTitle}
-          seoDesc={seoDesc}
+          seoDesc={effectiveSeoDesc}
           lang={lang}
         />
       )}

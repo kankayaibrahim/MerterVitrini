@@ -8,7 +8,7 @@ import { useAdmin } from "@/context/AdminContext";
 import { Loader2 } from "lucide-react";
 
 export default function AdminShell({ children }: { readonly children: React.ReactNode }) {
-  const { isInitialized, token } = useAdmin();
+  const { isInitialized, token, theme } = useAdmin();
 
   // 1. Initializing state (checking stored JWT / Keycloak callback)
   if (!isInitialized) {
@@ -34,7 +34,7 @@ export default function AdminShell({ children }: { readonly children: React.Reac
 
   // 3. Authenticated Admin SaaS Shell
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 flex font-sans antialiased">
+    <div className={`min-h-screen ${theme === "dark" ? "dark bg-zinc-950 text-zinc-100" : "bg-slate-50 text-slate-900"} flex font-sans antialiased transition-colors duration-200`}>
       {/* Dynamic Collapsible Sidebar */}
       <AdminSidebar />
 

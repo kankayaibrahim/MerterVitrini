@@ -1,0 +1,141 @@
+================================================================================
+MERTER VİTRİNİ (mertervitrini.com.tr) - B2B TEKNİK SEO & PİYASA RAKİP ANALİZİ NOTLARI
+Tarih: Ekim 2026 | Hazırlayan: @architect & @seo | Kapsam: Global B2B Hazır Giyim & Moda
+================================================================================
+
+1. GİRİŞ VE PAZAR DİNAMİKLERİ
+--------------------------------------------------------------------------------
+Merter Vitrini, İstanbul Merter, Güngören, Laleli ve Osmanbey hazır giyim üreticilerinin
+toptan koleksiyonlarını küresel pazarlara (Türkiye, Avrupa, Rusya/BDT, Körfez/Ortadoğu)
+sunan çok dilli (8 Dil) ve çok para birimli (TRY, USD, EUR, GBP) bir B2B platformudur.
+
+B2B toptan e-ticaret SEO'su, klasik B2C perakende SEO'sundan kökten farklıdır:
+- B2C'de tekil tüketici arama niyeti (Search Intent) "satın al", "indirim", "fiyat" iken;
+- B2B'de satın alma yöneticileri ve butik sahipleri "wholesale", "toptan", "supplier",
+  "manufacturer", "seri", "lot", "MOQ", "export from Turkey" odaklı arama yaparlar.
+- Karar süreleri uzundur; teknik güven sinyalleri, açık fiyatlandırma (paket/seri) ve
+  hızlı teslimat vaatleri arama motorlarının dizinleme algoritmasında birincil önceliktir.
+
+
+2. PİYASADAKİ BAŞLICA RAKİPLER VE DERİNLEMESİNE İNCELEME
+--------------------------------------------------------------------------------
+
+A. LONCA (lonca.co) - Türkiye B2B Tekstil Pazaryeri Öncüsü
+- Profil: Türk toptancılarını ABD, Avrupa ve Avustralya'daki butiklerle buluşturan modern B2B platformu.
+- Güçlü SEO & Optimizasyon Yönleri:
+  * Kategori Hiyerarşisi & Derinlik: Yalnızca ürün listelemesi yapmaz. Kategori sayfalarının
+    altında veya üstünde 150-300 kelimelik zengin B2B içerik blokları barındırır
+    (Örn: "Why buy wholesale dresses from Turkey", kumaş kaliteleri, minimum sipariş adetleri).
+  * Faceted Navigation Çözümü: Renk, beden, üretici filtrelerinin sebep olduğu milyonlarca
+    tekil URL kombinasyonunun crawl budget tüketmesini engellemek için filtreli sayfaları
+    canonical etiketiyle ana kategoriye bağlar.
+  * Mobil Öncelikli Hızlı Arayüz: Butik sahipleri toptan ürünleri sıklıkla mağaza işletirken
+    mobilden incelediği için 2 saniyenin altında açılan hızlı kategori ızgaraları sunar.
+- Merter Vitrini İçin Ders: Kategori sayfalarımızın veritabanındaki SEO açıklamaları (0006 migration)
+  aktif hale getirilmeli ve kategori açılış sayfaları birer "B2B Satın Alma Rehberi" gibi zenginleştirilmelidir.
+
+B. FIMKA STORES (fimkastore.com) - Laleli / Osmanbey Küresel Kadın Giyim Devi
+- Profil: Laleli'den tüm dünyaya (özellikle Rusya, Ortadoğu, Kuzey Afrika) toptan kadın giyim ihracatı.
+- Güçlü SEO & Optimizasyon Yönleri:
+  * Global Anahtar Kelime Hakimiyeti: "wholesale women's clothing Turkey", "Istanbul wholesale fashion",
+    "wholesale boutique clothing" gibi yüksek hacimli global İngilizce terimlerde Google'da 1. sayfada.
+  * Taze Katalog İndeksleme: Haftalık olarak sisteme yüklenen yüzlerce yeni modeli anında sitemap
+    ve arama motoru bildirimleriyle besleyerek Googlebot'un siteyi her gün taramasını sağlar.
+  * Standart Dolar Fiyatlama: Uluslararası toptan ticarette kafa karışıklığını önlemek için USD
+    para birimini standart arayüz dili olarak sunar.
+- Merter Vitrini İçin Ders: IndexNow entegrasyonumuz tam otomatik hale getirilmeli; yeni XML ürünleri
+  geldiğinde Yandex (Rusya pazarı) ve Bing'e anında push edilmelidir.
+
+C. FASHIONTIY & WHOLESALE7 - Küresel B2B Toptan Giyim Ağları
+- Profil: Fabrikadan doğrudan perakendeciye çalışan global toptan platformlar.
+- Güçlü SEO & Optimizasyon Yönleri:
+  * Seri / Paket Yapısı: Ürün başlıklarında ve meta etiketlerinde açıkça "6 pcs/pack",
+    "Size ratio: 1S-2M-2L-1XL" detaylarını vererek arama motorlarının zengin snippet'larında
+    (Rich Snippets) paket fiyatını ve parça başı maliyeti gösterir.
+  * Schema.org Derinliği: `Product`, `AggregateOffer`, `priceSpecification`, `eligibleQuantity`
+    ve `ItemAvailability: InStock` etiketlerini eksiksiz kullanırlar.
+- Merter Vitrini İçin Ders: Ürün detay sayfalarımızdaki JSON-LD bloklarında paket içi adet (pieces_in_pack)
+  ve birim adet maliyeti `priceSpecification` olarak Schema.org standartlarında sunulmalıdır.
+
+D. FAIRE & ANKORSTORE - Avrupa ve ABD Yeni Nesil B2B Devleri
+- Profil: Milyar dolarlık B2B toptan pazaryerleri.
+- Güçlü SEO & Optimizasyon Yönleri:
+  * Core Web Vitals Skoru: LCP < 1.5s, CLS 0.00. Sayfa geçişleri anında gerçekleşir.
+  * Güven Sinyalleri & Tedarikçi Doğrulama: Arama sonuçlarında "Doğrulanmış Üretici",
+    "İade Garantisi", "Gümrük Kolaylığı" gibi başlık ekleriyle CTR (Tıklama Oranı) artırımı.
+- Merter Vitrini İçin Ders: Tedarikçi maskeleme modelimiz (MIMOZA, FLORA, EDUSA) storefront'ta
+  "Doğrulanmış Merter Üreticisi" etiketiyle sunularak güven artırılmalıdır.
+
+
+3. MERTER VİTRİNİ TEKNİK SEO EKSİKLERİ VE GELİŞTİRME YOL HARİTASI
+--------------------------------------------------------------------------------
+
+A. HREFLANG VE 8 DİLLİ METADATA MATRİSİ
+- Durum: Sistem 8 dili (TR, EN, RU, AR, FR, DE, PL, BG) destekliyor.
+- Aksiyon:
+  * Her sayfanın `<head>` bloğunda tüm 8 dil için `alternate` hreflang etiketleri bulunmalı:
+    <link rel="alternate" hreflang="tr" href="https://mertervitrini.com.tr/tr/..." />
+    <link rel="alternate" hreflang="en" href="https://mertervitrini.com.tr/en/..." />
+    <link rel="alternate" hreflang="ru" href="https://mertervitrini.com.tr/ru/..." />
+    <link rel="alternate" hreflang="x-default" href="https://mertervitrini.com.tr/en/..." />
+  * Canonical URL etiketleri her dilin kendi temiz rotasını işaret etmelidir.
+
+B. B2B STRUCTURED DATA (JSON-LD / SCHEMA.ORG)
+- Durum: Temel Product şeması mevcut ancak B2B spesifikasyonları eksik.
+- Aksiyon:
+  * Ürün Detay:
+    - `@type`: "Product"
+    - `offers`: `@type`: "Offer" veya "AggregateOffer"
+    - `price`: Paket fiyatı
+    - `priceCurrency`: Seçili para birimi (TRY, USD, EUR, GBP)
+    - `eligibleQuantity`: Minimum sipariş adedi (örn: 1 paket = 6 adet)
+    - `itemCondition`: "https://schema.org/NewCondition"
+    - `availability`: "https://schema.org/InStock"
+  * BreadcrumbList: Kategori hiyerarşisi `Home > Toptan Kadın Giyim > Elbise > Triko Elbise`
+    şeklinde arama motorlarına eksiksiz iletilmeli.
+  * Organization Şeması: Merter Vitrini toptan merkez adresi, vergi no, müşteri hizmetleri
+    telefonu ve sosyal medya bağlantıları ile Google Knowledge Panel için yapılandırılmalı.
+
+C. CRAWL BUDGET & FACETED NAVIGATION (FİLTRELER)
+- Problem: Renk, beden, fiyat, tedarikçi filtreleri arama botları tarafından tarandığında
+  binlerce gereksiz URL oluşturup sunucu CPU'sunu tüketebilir ve yinelenen içerik (duplicate content) yaratır.
+- Çözüm:
+  * Yalnızca ana kategori ve SEO odaklı iniş sayfaları (`/tr/kadin/elbise`, `/en/women/dresses`) dizine açık olmalı.
+  * Filtre kombinasyonları (`?color=kirmizi&size=M&page=2`) ya canonical ile ana kategoriye bağlanmalı
+    ya da `robots: { index: false, follow: true }` meta etiketi almalıdır.
+
+D. DİNAMİK SİTEMAP & INDEXNOW MOTORU
+- Durum: Sitemap mevcut; IndexNow admin panelinde arayüze bağlandı.
+- Aksiyon:
+  * Kategori ve ürün sitemap'leri XML formatında parçalara bölünmeli (Sitemap Index).
+  * Yeni ürün import edildiğinde Go backend arka plan worker'ı `api.indexnow.org` servisine
+    otomatik HTTP POST atarak Yandex ve Bing botlarını anında çağırmalıdır.
+
+E. CORE WEB VITALS & GÖRSEL FORMATLARI
+- Durum: Görsel boyutlandırma servisi Go seviyesinde WebP formatında çalışıyor.
+- Aksiyon:
+  * Next.js tarafında ürün kartlarında `loading="lazy"` ve `decoding="async"` standart olmalı.
+  * İlk ekrana gelen kahraman (hero) görseller `priority={true}` almalı, böylece LCP < 1.8s hedeflenmelidir.
+  * Görsel boyutları (288x385, 80x106, 600x800) tam piksel oranlarıyla belirtilerek CLS (Cumulative Layout Shift) 0.00 olmalıdır.
+
+F. B2B BLOG & SEKTÖREL İÇERİK STRATEJİSİ (BİLGİDEN SATIŞA DÖNÜŞÜM)
+- Örnek Başlıklar (Yüksek B2B Arama Hacmi):
+  * "How to Buy Wholesale Clothing from Merter Istanbul: Complete 2026 Guide"
+  * "Merter Tekstil Piyasasından Toptan Butik Açmak: Adım Adım Rehber"
+  * "Turkish Wholesale Clothing Suppliers: Top Hubs (Merter vs Laleli vs Osmanbey)"
+  * "Как заказать оптом женскую одежду из Турции в Россию и страны СНГ"
+  * "دليل شراء الملابس بالجملة من ميرتر إسطنبول للتجار العرب"
+- Strateji: Bu blog yazıları doğrudan ilgili kategori ve ürün koleksiyonlarına iç bağlantı (internal link)
+  vererek otoriteyi (PageRank) vitrin sayfalarına aktaracaktır.
+
+
+4. ÖZET VE SONUÇ
+--------------------------------------------------------------------------------
+Merter Vitrini, rakipleri Lonca ve Fimka'nın zayıf kaldığı şu alanlarda büyük bir avantaja sahiptir:
+1. 8 dilde tam çevrilmiş normalleştirilmiş veritabanı altyapısı (PostgreSQL ltree).
+2. Go + Next.js SSR birleşik monorepo mimarisinin getirdiği 50ms altı yanıt süresi.
+3. Tedarikçi maskeleme sistemi sayesinde üreticinin doğrudan bypass edilmesini engelleyen güvenli B2B iş modeli.
+
+Bu notlar doğrultusunda hazırlanan görevler Sanal Yazılım Ekibi Çalışma Panosuna
+(docs/AJANLAR_CALISMA_PANOSU.md) aktarılmış ve otonom döngü başlatılmıştır.
+================================================================================
