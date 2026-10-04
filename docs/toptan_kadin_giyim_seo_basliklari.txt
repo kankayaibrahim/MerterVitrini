@@ -1,0 +1,415 @@
+================================================================================
+MERTER VİTRİNİ - B2B ÇOK DİLLİ SEO BAŞLIKLARI İŞ LİSTESİ (TASK LIST)
+Çalışma Prensibi: Önce Türkçe başlıklar netleştirilecek, ardından sırayla 
+                  diğer 7 dile (EN, RU, AR, DE, FR, PL, BG) çevrilecek.
+================================================================================
+
+LEJANT:
+[ ] = Tamamlanmadı / Bekliyor
+[x] = Onaylandı / Tamamlandı
+
+TOPLAM İLERLEME: 1 / 28 Görev (TASK-027 Tüm 8 Dilde Canlıda Yayında - %100 Tamamlandı)
+
+================================================================================
+BÖLÜM 1: ANA KATEGORİ - TOPTAN KADIN GİYİM (GENEL & POPÜLER)
+================================================================================
+
+--------------------------------------------------------------------------------
+[ ] TASK-001 | Kadın Giyim Genel Kategori Başlığı
+Hedef URL / Slug: /kadin-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Giyim Modelleri & Fiyatları | Merter Vitrini
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-002 | Merter İmalatçı Odaklı Başlık
+Hedef URL / Slug: /kadin-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Merter Toptan Kadın Giyim | İmalatçıdan Yeni Sezon Ürünler
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-003 | Butikler İçin Toptan Satış Başlığı
+Hedef URL / Slug: /kadin-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Butikler İçin Toptan Kadın Giyim | Trend Modeller & Uygun Seri Fiyatı
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-004 | İstanbul Üreticiden Doğrudan Satış Başlığı
+Hedef URL / Slug: /kadin-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Giyim İstanbul Merter | Üreticiden Doğrudan Satış
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-005 | Serili & Paket Toptan Kadın Giyim Başlığı
+Hedef URL / Slug: /kadin-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Serili Toptan Kadın Giyim | Butikler İçin İmalatçı Fiyatları
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-006 | B2B İhracat Kapısı (Global Pazarlar)
+Hedef URL / Slug: /b2b
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Türkiye Toptan Kadın Giyim İhracatı | Güvenli B2B Online Alışveriş
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+================================================================================
+BÖLÜM 2: TOPTAN ELBİSE & ABİYE MODELLERİ
+================================================================================
+
+--------------------------------------------------------------------------------
+[ ] TASK-007 | Kadın Elbise Genel Kategori Başlığı
+Hedef URL / Slug: /elbise-abiye
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Elbise Modelleri & Fiyatları | Merter Vitrini
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-008 | Toptan Abiye & Gece Elbisesi
+Hedef URL / Slug: /abiye
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Abiye & Gece Elbisesi Modelleri | İmalatçıdan Şık Tasarımlar
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-009 | Günlük, Midi & Maxi Elbiseler
+Hedef URL / Slug: /elbise-abiye
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Merter Toptan Elbise Satışı | Günlük, Midi, Maxi & Mini Elbiseler
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-010 | Saten & Şifon Abiye Elbiseler
+Hedef URL / Slug: /elbise-abiye
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Şifon & Saten Elbise | Butikler İçin Trend Elbise Modelleri
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-011 | Yazlık Keten & Çiçekli Elbiseler
+Hedef URL / Slug: /yaz-koleksiyonu
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Yazlık Kadın Elbise | Çiçekli, Keten & Viskon Kumaş Elbiseler
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+================================================================================
+BÖLÜM 3: TOPTAN TRİKO, KAZAK & HIRKA (MEVSİMLİK VE KIŞLIK)
+================================================================================
+
+--------------------------------------------------------------------------------
+[ ] TASK-012 | Kadın Triko Genel Kategori Başlığı
+Hedef URL / Slug: /triko-hirka-kazak
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Triko Modelleri | Merter İmalatçı Kazak & Hırka
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-013 | Kadın Kazak & Balıkçı Yaka
+Hedef URL / Slug: /triko-hirka-kazak
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Kazak Çeşitleri | Balıkçı Yaka, Oversize & Triko Kazak
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-014 | Kadın Hırka Modelleri
+Hedef URL / Slug: /triko-hirka-kazak
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Hırka Modelleri | Uzun, Düğmeli & Peluş Hırkalar
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-015 | Triko İkili Takımlar
+Hedef URL / Slug: /triko-hirka-kazak
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Triko Takım Modelleri | Şık İkili Triko Pantolon Takımları
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+================================================================================
+BÖLÜM 4: TOPTAN BÜYÜK BEDEN KADIN GİYİM (PLUS SIZE / BATTAL BOY)
+================================================================================
+
+--------------------------------------------------------------------------------
+[ ] TASK-016 | Büyük Beden Kadın Giyim Genel
+Hedef URL / Slug: /buyuk-beden
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Büyük Beden Kadın Giyim Modelleri & Fiyatları | Merter Vitrini
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-017 | Battal Boy & Plus Size Seçenekler (XL-5XL)
+Hedef URL / Slug: /buyuk-beden
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Battal Boy Kadın Kıyafetleri | İmalatçıdan XL-5XL Seçenekler
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-018 | Büyük Beden Elbise & Tunik
+Hedef URL / Slug: /buyuk-beden
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Büyük Beden Elbise & Tunik Modelleri | Trend Kesimler
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+================================================================================
+BÖLÜM 5: TOPTAN İKİLİ TAKIM & CEKET TAKIMLARI
+================================================================================
+
+--------------------------------------------------------------------------------
+[ ] TASK-019 | Kadın İkili Takım Genel
+Hedef URL / Slug: /kadin-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın İkili Takım Modelleri | Şık & Günlük Kombinler
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-020 | Ceket Pantolon Takımları (Ofis & Özel Gün)
+Hedef URL / Slug: /kadin-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Ceket Pantolon Takım Kadın | Ofis & Özel Gün Butik Ürünleri
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+================================================================================
+BÖLÜM 6: TOPTAN KADIN DIŞ GİYİM (KABAN, MONT, TRENÇKOT)
+================================================================================
+
+--------------------------------------------------------------------------------
+[ ] TASK-021 | Dış Giyim Genel Kategori Başlığı
+Hedef URL / Slug: /dis-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Dış Giyim Modelleri | Kaban, Mont & Ceket Çeşitleri
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-022 | Kaşe Kaban & Şişme Mont
+Hedef URL / Slug: /dis-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Kaşe Kaban Modelleri | Kaliteli Kumaş & Şık Kesim
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-023 | Trençkot & Blazer Ceket
+Hedef URL / Slug: /dis-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Blazer Ceket & Trençkot | Merter İmalatçı Modelleri
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+================================================================================
+BÖLÜM 7: TOPTAN KADIN ÜST VE ALT GİYİM (BLUZ, PANTOLON, JEAN)
+================================================================================
+
+--------------------------------------------------------------------------------
+[ ] TASK-024 | Bluz, Gömlek & Body
+Hedef URL / Slug: /kadin-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Bluz & Gömlek Modelleri | Şifon, Viskon & Poplin
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[ ] TASK-025 | Pantolon, Jean & Etek
+Hedef URL / Slug: /kadin-giyim
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Kadın Pantolon & Jean Çeşitleri | Palazzo, Kumaş & Kot
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+================================================================================
+BÖLÜM 8: MERTER B2B PLATFORM & BLOG REHBERLERİ
+================================================================================
+
+--------------------------------------------------------------------------------
+[ ] TASK-026 | Merter B2B Tekstil Tedarik Platformu
+Hedef URL / Slug: /b2b
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Merter Toptan Tekstil Piyasası | Güvenilir Toptancı Platformu
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+--------------------------------------------------------------------------------
+[x] TASK-027 | Blog: Butik Açacaklar İçin Satın Alma Rehberi (8 DİLDE YAYIMLANDI)
+Hedef URL / Slug: /blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi
+Durum: [x] Tamamlandı (8/8 Dil Canlıda Yayında)
+  [x] TR: Butik Açacaklar İçin Merter Toptan Kadın Giyim Satın Alma Rehberi (CANLI: /tr/blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi)
+  [x] EN: Merter Wholesale Women's Clothing Sourcing Guide for Boutique Owners (CANLI: /en/blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi)
+  [x] RU: Гид по Оптовым Закупкам Женской Одежды в Мертер для Владельцев Бутиков (CANLI: /ru/blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi)
+  [x] AR: دليل شراء الملابس النسائية بالجملة من مارتر لأصحاب البوتيكات والمتاجر الإلكترونية (CANLI: /ar/blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi)
+  [x] DE: Einkaufsratgeber für Boutiquen: Großhandel Damenbekleidung aus Merter Istanbul (CANLI: /de/blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi)
+  [x] FR: Guide d'Achat en Gros Merter Istanbul : Vêtements Femme pour Boutiques (CANLI: /fr/blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi)
+  [x] PL: Przewodnik Zakupowy w Merter: Hurtownia Odzieży Damskiej dla Właścicieli Butików (CANLI: /pl/blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi)
+  [x] BG: Наръчник за Закупуване на Едро в Мертер: Дамски Дрехи за Собственици на Бутици (CANLI: /bg/blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi)
+
+--------------------------------------------------------------------------------
+[ ] TASK-028 | Blog: Toptan Serili Ürün Satın Alma Rehberi
+Hedef URL / Slug: /blog/toptan-serili-urun-nedir-nasil-alinir
+Durum: [ ] İnceleniyor (0/8)
+  [ ] TR: Toptan Serili Ürün Nedir? Seri Bozma ve Beden Dağılımı Rehberi
+  [ ] EN: 
+  [ ] RU: 
+  [ ] AR: 
+  [ ] DE: 
+  [ ] FR: 
+  [ ] PL: 
+  [ ] BG: 
+
+================================================================================
+SONRAKİ ADIMLAR (İŞ AKIŞI):
+1. Adım: Türkçe (TR) başlıkları inceleyip onaylayacağız / revize edeceğiz.
+2. Adım: Onaylanan her TR başlık için sırayla İngilizce (EN) karşılıklarını yazıp onaylayacağız.
+3. Adım: Sırayla RU, AR, DE, FR, PL ve BG dillerini tamamlayacağız.
+4. Adım: Tamamlanan başlıkları Next.js dinamik SEO metadata sistemine aktaracağız.
+================================================================================

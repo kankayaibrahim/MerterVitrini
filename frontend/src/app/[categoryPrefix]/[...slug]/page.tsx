@@ -3,7 +3,7 @@ import { Metadata } from "next";
 import StorefrontLayout from "@/components/store/StorefrontLayout";
 import { Category } from "@/types/store";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   readonly params: Promise<{
@@ -51,19 +51,6 @@ async function fetchLanguages(): Promise<Language[]> {
     console.error("[SEO] Failed to fetch active languages, using fallback:", err);
   }
   
-  // ==========================================================================
-  // [TR] STATİK YEDEK PLANI (FALLBACK SYSTEM):
-  // Bu yedek dizi, veritabanına kaydedilmiş dillerin aynısıdır. Next.js static build 
-  // (derleme) sırasında veritabanı veya API bağlantısı koparsa derleme işleminin 
-  // çökmesini (crash) önlemek ve SEO sayfalarının hatasız oluşmasını sağlamak amacıyla 
-  // buraya yerleştirilmiştir.
-  // 
-  // [EN] STATIC FALLBACK SYSTEM:
-  // This backup array represents the exact active languages stored in the DB.
-  // It is placed here to prevent Next.js build crashes during static production 
-  // builds (npm run build) if the database or API connection is temporarily offline, 
-  // ensuring the storefront builds successfully under any circumstances.
-  // ==========================================================================
   return [
     { code: "tr", label: "Türkçe", flag: "🇹🇷", categoryPrefix: "tr", isActive: true, sortOrder: 0 },
     { code: "en", label: "English", flag: "🇬🇧", categoryPrefix: "en", isActive: true, sortOrder: 1 },
@@ -76,41 +63,21 @@ async function fetchLanguages(): Promise<Language[]> {
   ];
 }
 
-// Generate static routes for all category prefixes and nested category slugs at compilation time
-export async function generateStaticParams() {
-  if (process.env.NEXT_BUILD_SSR === "true") return [];
-  try {
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/categories", { next: { revalidate: 3600 } });
-    const activeLangs = await fetchLanguages();
-    if (response.ok) {
-      const categories = await response.json();
-      const params: { categoryPrefix: string; slug: string[] }[] = [];
+const SLUG_ALIASES: Record<string, string> = {
+  "kadin": "kadin-giyim",
+  "kadin-triko": "triko-hirka-kazak",
+  "kadin-elbise": "elbise-abiye",
+  "triko": "triko-hirka-kazak",
+  "elbise": "elbise-abiye",
+  "kazak": "triko-hirka-kazak",
+  "erkek": "erkek-giyim",
+  "kumas": "kadin-giyim",
+};
 
-      const extractSlugsForPrefix = (nodes: Category[], prefix: string, parentSlugs: string[] = []) => {
-        if (!Array.isArray(nodes)) return;
-        nodes.forEach((n) => {
-          if (n?.slug) {
-            const currentTrail = [...parentSlugs, String(n.slug)];
-            params.push({ categoryPrefix: prefix, slug: currentTrail });
-            if (Array.isArray(n.children) && n.children.length > 0) {
-              extractSlugsForPrefix(n.children, prefix, currentTrail);
-            }
-          }
-        });
-      };
-
-      if (Array.isArray(categories)) {
-        const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
-        uniquePrefixes.forEach((prefix) => {
-          extractSlugsForPrefix(categories, prefix);
-        });
-      }
-      return params;
-    }
-  } catch (err) {
-    console.error("[SEO] Unified generateStaticParams failed:", err);
-  }
-  return [];
+export function resolveSlugAlias(slug: string): string {
+  if (!slug) return "";
+  const lower = slug.toLowerCase();
+  return SLUG_ALIASES[lower] || lower;
 }
 
 // Helper to find a category recursively in a tree by slug
@@ -483,7 +450,8 @@ function createCategoryMetadata({
 // Generate dynamic SEO metadata on the server side using prefix and category slug
 export async function generateMetadata({ params, searchParams }: MetadataProps): Promise<Metadata> {
   const { categoryPrefix, slug: slugArr } = await params;
-  const slug = (Array.isArray(slugArr) && slugArr.length > 0 ? slugArr.at(-1) : slugArr) as string;
+  const rawSlug = (Array.isArray(slugArr) && slugArr.length > 0 ? slugArr.at(-1) : slugArr) as string;
+  const slug = resolveSlugAlias(rawSlug);
   
   const hasFilterParams = await checkHasFilterParams(searchParams);
   const activeLangs = await fetchLanguages();
@@ -550,7 +518,8 @@ export async function generateMetadata({ params, searchParams }: MetadataProps):
 
 export default async function CategoryPage({ params }: PageProps) {
   const { categoryPrefix, slug: slugArr } = await params;
-  const slug = (Array.isArray(slugArr) && slugArr.length > 0 ? slugArr.at(-1) : slugArr) as string;
+  const rawSlug = (Array.isArray(slugArr) && slugArr.length > 0 ? slugArr.at(-1) : slugArr) as string;
+  const slug = resolveSlugAlias(rawSlug);
   
   const activeLangs = await fetchLanguages();
   const prefixToLangMap = new Map<string, string>();

@@ -23,6 +23,7 @@ interface Language {
 interface BlogPost {
   id: string;
   slug: string;
+  translations?: Record<string, { slug?: string; title?: string }>;
   updated_at?: string;
 }
 
@@ -80,19 +81,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     // 2. Language Root Homepages (e.g. /tr, /en, /ru)
     uniquePrefixes.forEach((prefix) => {
-      sitemapUrls.push({
-        url: `${baseUrl}/${prefix}`,
-        lastModified: new Date(),
-        changeFrequency: "daily",
-        priority: 0.95,
-      });
-      // All products landing
-      sitemapUrls.push({
-        url: `${baseUrl}/${prefix}/tum-urunler`,
-        lastModified: new Date(),
-        changeFrequency: "daily",
-        priority: 0.85,
-      });
+      sitemapUrls.push(
+        {
+          url: `${baseUrl}/${prefix}`,
+          lastModified: new Date(),
+          changeFrequency: "daily",
+          priority: 0.95,
+        },
+        {
+          url: `${baseUrl}/${prefix}/tum-urunler`,
+          lastModified: new Date(),
+          changeFrequency: "daily",
+          priority: 0.85,
+        },
+        {
+          url: `${baseUrl}/${prefix}/tedarikci-basvuru`,
+          lastModified: new Date(),
+          changeFrequency: "monthly",
+          priority: 0.8,
+        }
+      );
     });
 
     // 3. Fetch Active Categories
@@ -171,9 +179,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
           // Blog articles
           blogList.forEach((post) => {
-            if (post.slug) {
+            const trans = post.translations?.[prefix] || post.translations?.["en"] || post.translations?.["tr"];
+            const postSlug = trans?.slug || post.slug;
+            if (postSlug) {
               sitemapUrls.push({
-                url: `${baseUrl}/${prefix}/blog/${post.slug}`,
+                url: `${baseUrl}/${prefix}/blog/${postSlug}`,
                 lastModified: post.updated_at ? new Date(post.updated_at) : new Date(),
                 changeFrequency: "weekly",
                 priority: 0.75,

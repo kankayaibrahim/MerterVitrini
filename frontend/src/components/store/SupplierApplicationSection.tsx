@@ -15,6 +15,7 @@ import {
   FileText,
   ShieldCheck
 } from "lucide-react";
+import { SUPPLIER_TRANSLATIONS, SupplierPageTranslations } from "@/app/[categoryPrefix]/tedarikci-basvuru/translations";
 
 const Instagram = ({ size = 16, ...props }: Readonly<React.SVGProps<SVGSVGElement> & { size?: number }>) => (
   <svg
@@ -44,6 +45,32 @@ interface SupplierApplicationSectionProps {
   readonly className?: string;
 }
 
+interface SuccessViewProps {
+  readonly t: SupplierPageTranslations;
+  readonly onReset: () => void;
+}
+
+function SupplierSuccessView({ t, onReset }: Readonly<SuccessViewProps>) {
+  return (
+    <div className="py-12 px-4 text-center max-w-md mx-auto">
+      <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 mx-auto mb-5">
+        <CheckCircle2 size={36} />
+      </div>
+      <h3 className="text-xl font-black text-zinc-950">{t.success_title}</h3>
+      <p className="text-xs sm:text-sm text-zinc-600 mt-2.5 leading-relaxed">
+        {t.success_desc}
+      </p>
+      <button
+        type="button"
+        onClick={onReset}
+        className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+      >
+        {t.submit_another}
+      </button>
+    </div>
+  );
+}
+
 export default function SupplierApplicationSection({
   lang = "tr",
   className = ""
@@ -62,7 +89,9 @@ export default function SupplierApplicationSection({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load Google reCAPTCHA v3 script dynamically
+  const t: SupplierPageTranslations = SUPPLIER_TRANSLATIONS[lang] || SUPPLIER_TRANSLATIONS.en;
+  const isRtl = lang === "ar";
+
   useEffect(() => {
     const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LfwagMtAAAAAHpF7ID6J-bQmcn92YhFaSH9CX94";
     const scriptId = "recaptcha-v3-script";
@@ -93,12 +122,25 @@ export default function SupplierApplicationSection({
     });
   };
 
+  const handleReset = () => {
+    setSubmitted(false);
+    setCompanyName("");
+    setContactName("");
+    setEmail("");
+    setPhone("");
+    setCity("");
+    setCategory("");
+    setInstagram("");
+    setWebsite("");
+    setNotes("");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (!companyName.trim() || !contactName.trim() || !email.trim() || !phone.trim()) {
-      setError("Lütfen firma adı, yetkili adı, e-posta ve telefon alanlarını doldurun.");
+      setError(t.error_required);
       return;
     }
 
@@ -128,64 +170,38 @@ export default function SupplierApplicationSection({
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || "Başvuru gönderilemedi. Lütfen bilgilerinizi kontrol edip tekrar deneyin.");
+        throw new Error(data.error || t.error_generic);
       }
 
       setSubmitted(true);
     } catch (err: unknown) {
-      setError((err as Error).message || "Bir hata oluştu.");
+      setError((err as Error).message || t.error_generic);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <section id="tedarikci-basvuru" className={`relative bg-zinc-50 border-t border-zinc-200/80 text-zinc-900 py-16 sm:py-20 px-4 sm:px-6 lg:px-8 overflow-hidden ${className}`}>
+    <section id="tedarikci-basvuru" className={`relative bg-zinc-50 border-t border-zinc-200/80 text-zinc-900 py-16 sm:py-20 px-4 sm:px-6 lg:px-8 overflow-hidden ${className}`} dir={isRtl ? "rtl" : "ltr"}>
       <div className="max-w-5xl mx-auto relative z-10">
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto mb-12">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-zinc-200 shadow-xs text-zinc-800 text-xs font-bold tracking-widest uppercase mb-4">
             <Building2 size={14} className="text-zinc-950" />
-            B2B Toptan Tedarikçi Başvurusu
+            {t.form_badge}
           </div>
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-zinc-950">
-            Merter Vitrini Tedarikçisi Olun
+            {t.form_title}
           </h2>
           <p className="mt-3 text-sm sm:text-base text-zinc-600 leading-relaxed">
-            Türkiye ve Merter&apos;in seçkin tekstil üreticileri arasına katılın. Toptan koleksiyonlarınızı ve imalat ürünlerinizi 100&apos;den fazla ülkedeki kurumsal alıcılara güvenle ulaştırın.
+            {t.form_desc}
           </p>
         </div>
 
         {/* Content Box */}
         <div className="bg-white border border-zinc-200/90 rounded-3xl p-6 sm:p-10 shadow-sm">
           {submitted ? (
-            <div className="py-12 px-4 text-center max-w-md mx-auto">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 mx-auto mb-5">
-                <CheckCircle2 size={36} />
-              </div>
-              <h3 className="text-xl font-black text-zinc-950">Başvurunuz Alındı!</h3>
-              <p className="text-xs sm:text-sm text-zinc-600 mt-2.5 leading-relaxed">
-                Tedarikçi başvurunuz başarıyla sistemimize kaydedilmiştir. Kategori yöneticilerimiz başvurunuzu inceledikten sonra belirttiğiniz telefon veya e-posta üzerinden en kısa sürede sizinle iletişime geçecektir.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSubmitted(false);
-                  setCompanyName("");
-                  setContactName("");
-                  setEmail("");
-                  setPhone("");
-                  setCity("");
-                  setCategory("");
-                  setInstagram("");
-                  setWebsite("");
-                  setNotes("");
-                }}
-                className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
-              >
-                Yeni Bir Başvuru Yap
-              </button>
-            </div>
+            <SupplierSuccessView t={t} onReset={handleReset} />
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
@@ -196,11 +212,12 @@ export default function SupplierApplicationSection({
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Firma Adı */}
+                {/* Company Name */}
                 <div>
                   <label htmlFor="supp_company_name" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <Building2 size={13} className="text-zinc-600" />
-                    Firma / Marka Adı <span className="text-red-500">*</span>
+                    <span>{t.company_name_label}</span>
+                    <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="supp_company_name"
@@ -208,16 +225,17 @@ export default function SupplierApplicationSection({
                     required
                     value={companyName}
                     onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="Örn: Stil Moda Tekstil San. Tic."
+                    placeholder={t.company_name_placeholder}
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
                   />
                 </div>
 
-                {/* Yetkili Ad Soyad */}
+                {/* Contact Name */}
                 <div>
                   <label htmlFor="supp_contact_name" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <User size={13} className="text-zinc-600" />
-                    Yetkili Adı Soyadı <span className="text-red-500">*</span>
+                    <span>{t.contact_name_label}</span>
+                    <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="supp_contact_name"
@@ -225,16 +243,17 @@ export default function SupplierApplicationSection({
                     required
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
-                    placeholder="Örn: Mehmet Demir"
+                    placeholder={t.contact_name_placeholder}
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
                   />
                 </div>
 
-                {/* E-posta */}
+                {/* Email */}
                 <div>
                   <label htmlFor="supp_email" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <Mail size={13} className="text-zinc-600" />
-                    Kurumsal E-posta Adresi <span className="text-red-500">*</span>
+                    <span>{t.email_label}</span>
+                    <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="supp_email"
@@ -242,16 +261,17 @@ export default function SupplierApplicationSection({
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="info@markaniz.com"
+                    placeholder={t.email_placeholder}
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
                   />
                 </div>
 
-                {/* Telefon / WhatsApp */}
+                {/* Phone / WhatsApp */}
                 <div>
                   <label htmlFor="supp_phone" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <Phone size={13} className="text-zinc-600" />
-                    Telefon / WhatsApp Numarası <span className="text-red-500">*</span>
+                    <span>{t.phone_label}</span>
+                    <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="supp_phone"
@@ -259,32 +279,32 @@ export default function SupplierApplicationSection({
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+90 532 000 00 00"
+                    placeholder={t.phone_placeholder}
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
                   />
                 </div>
 
-                {/* Şehir / İlçe */}
+                {/* City */}
                 <div>
                   <label htmlFor="supp_city" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <MapPin size={13} className="text-zinc-600" />
-                    Şehir / İlçe
+                    <span>{t.city_label}</span>
                   </label>
                   <input
                     id="supp_city"
                     type="text"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    placeholder="Örn: İstanbul / Güngören - Merter"
+                    placeholder={t.city_placeholder}
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
                   />
                 </div>
 
-                {/* Ürün Kategorisi */}
+                {/* Category Selection */}
                 <div>
                   <label htmlFor="supp_category" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <Tag size={13} className="text-zinc-600" />
-                    Ana Üretim Kategorisi
+                    <span>{t.category_label}</span>
                   </label>
                   <select
                     id="supp_category"
@@ -292,64 +312,64 @@ export default function SupplierApplicationSection({
                     onChange={(e) => setCategory(e.target.value)}
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all cursor-pointer"
                   >
-                    <option value="">Kategori Seçiniz</option>
-                    <option value="Kadın Giyim">Kadın Giyim</option>
-                    <option value="Triko & Örme">Triko &amp; Örme</option>
-                    <option value="Denim & Jean">Denim &amp; Jean</option>
-                    <option value="Abiye & Elbise">Abiye &amp; Elbise</option>
-                    <option value="Dış Giyim / Kaban / Mont">Dış Giyim / Kaban / Mont</option>
-                    <option value="Erkek Giyim">Erkek Giyim</option>
-                    <option value="Takım Elbise & Ceket">Takım Elbise &amp; Ceket</option>
-                    <option value="Büyük Beden">Büyük Beden</option>
-                    <option value="Diğer">Diğer İmalat</option>
+                    <option value="">{t.category_select}</option>
+                    <option value={t.categories.womens_wear}>{t.categories.womens_wear}</option>
+                    <option value={t.categories.knitwear}>{t.categories.knitwear}</option>
+                    <option value={t.categories.denim}>{t.categories.denim}</option>
+                    <option value={t.categories.dresses}>{t.categories.dresses}</option>
+                    <option value={t.categories.outerwear}>{t.categories.outerwear}</option>
+                    <option value={t.categories.mens_wear}>{t.categories.mens_wear}</option>
+                    <option value={t.categories.suits}>{t.categories.suits}</option>
+                    <option value={t.categories.plus_size}>{t.categories.plus_size}</option>
+                    <option value={t.categories.other}>{t.categories.other}</option>
                   </select>
                 </div>
 
-                {/* Instagram / Sosyal Medya */}
+                {/* Instagram / Social Media */}
                 <div>
                   <label htmlFor="supp_instagram" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <Instagram size={13} className="text-zinc-600" />
-                    Instagram / Sosyal Medya Hesabı
+                    <span>{t.social_label}</span>
                   </label>
                   <input
                     id="supp_instagram"
                     type="text"
                     value={instagram}
                     onChange={(e) => setInstagram(e.target.value)}
-                    placeholder="Örn: @markatekstil veya profil linki"
+                    placeholder={t.social_placeholder}
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
                   />
                 </div>
 
-                {/* Web Sitesi */}
+                {/* Website */}
                 <div>
                   <label htmlFor="supp_website" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <Globe size={13} className="text-zinc-600" />
-                    Web Sitesi (Varsa)
+                    <span>{t.website_label}</span>
                   </label>
                   <input
                     id="supp_website"
                     type="url"
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
-                    placeholder="https://www.markatekstil.com"
+                    placeholder={t.website_placeholder}
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
                   />
                 </div>
               </div>
 
-              {/* Ürünler & Kapasite Hakkında Notlar */}
+              {/* Notes */}
               <div>
                 <label htmlFor="supp_notes" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                   <FileText size={13} className="text-zinc-600" />
-                  Üretim Kapasiteniz ve Ürünleriniz Hakkında Kısa Bilgi
+                  <span>{t.notes_label}</span>
                 </label>
                 <textarea
                   id="supp_notes"
                   rows={3}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Koleksiyon adetleri, aylık üretim kapasitesi, toptan satış koşullarınız veya sormak istedikleriniz..."
+                  placeholder={t.notes_placeholder}
                   className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all resize-none"
                 />
               </div>
@@ -358,7 +378,7 @@ export default function SupplierApplicationSection({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-5 border-t border-zinc-100">
                 <div className="flex items-center gap-2 text-[11px] text-zinc-500">
                   <ShieldCheck size={16} className="text-emerald-600 shrink-0" />
-                  <span>Google reCAPTCHA koruması ve KVKK gizlilik güvencesiyle korunmaktadır.</span>
+                  <span>{t.security_note}</span>
                 </div>
 
                 <button
@@ -369,12 +389,12 @@ export default function SupplierApplicationSection({
                   {loading ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Gönderiliyor...</span>
+                      <span>{t.submitting_btn}</span>
                     </>
                   ) : (
                     <>
                       <Send size={16} />
-                      <span>Başvuruyu Gönder</span>
+                      <span>{t.submit_btn}</span>
                     </>
                   )}
                 </button>

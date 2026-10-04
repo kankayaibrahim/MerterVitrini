@@ -59,10 +59,10 @@ export function usePGliteCart() {
 
       const row = res.rows[0];
       setSummary({
-        totalPackages: parseInt(row?.total_packages || "0", 10),
-        totalPieces: parseInt(row?.total_pieces || "0", 10),
-        subtotal: parseFloat(row?.subtotal || "0"),
-        itemCount: parseInt(row?.item_count || "0", 10),
+        totalPackages: Number.parseInt(row?.total_packages || "0", 10),
+        totalPieces: Number.parseInt(row?.total_pieces || "0", 10),
+        subtotal: Number.parseFloat(row?.subtotal || "0"),
+        itemCount: Number.parseInt(row?.item_count || "0", 10),
       });
     } catch (err) {
       console.warn("[PGLITE] Cart summary SQL query failed:", err);

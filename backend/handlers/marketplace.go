@@ -950,7 +950,7 @@ func (h *MarketplaceHandler) ExportB2BXmlFeed(w http.ResponseWriter, r *http.Req
 	rows, err := db.Pool.Query(ctx, `
 		SELECT 
 			p.id, p.custom_sku, p.title, coalesce(p.description, ''),
-			coalesce(b.alias_code, 'M-VITRINI') as brand_alias,
+			coalesce(b.brand_name, 'Merter Vitrini') as brand_alias,
 			coalesce(c.name, 'Tekstil') as cat_name,
 			p.price, p.currency, p.stock, coalesce(p.series_ratio, '1'), coalesce(p.packing_ratio, '1')
 		FROM catalog.products p
@@ -1004,7 +1004,7 @@ func (h *MarketplaceHandler) ExportB2BJsonFeed(w http.ResponseWriter, r *http.Re
 	rows, err := db.Pool.Query(ctx, `
 		SELECT 
 			p.id, p.custom_sku, p.title, coalesce(p.description, ''),
-			coalesce(b.alias_code, 'M-VITRINI') as brand_alias,
+			coalesce(b.brand_name, 'Merter Vitrini') as brand_alias,
 			coalesce(c.name, 'Tekstil') as cat_name,
 			p.price, p.currency, p.stock, coalesce(p.series_ratio, '1'), coalesce(p.packing_ratio, '1')
 		FROM catalog.products p

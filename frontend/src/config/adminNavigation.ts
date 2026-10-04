@@ -216,8 +216,10 @@ export function getBreadcrumbsForPath(pathname: string): Array<{ title: string; 
   for (const group of ADMIN_NAVIGATION) {
     for (const item of group.items) {
       if (pathname === item.href || (pathname.startsWith(item.href) && item.href !== "/admin")) {
-        crumbs.push({ title: group.title });
-        crumbs.push({ title: item.title, href: item.href });
+        crumbs.push(
+          { title: group.title },
+          { title: item.title, href: item.href }
+        );
         return crumbs;
       }
     }

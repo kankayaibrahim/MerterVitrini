@@ -15,32 +15,32 @@ import {
   Trash2, 
   Edit3, 
   Layers, 
-  Tag, 
-  UploadCloud, 
-  X
+  Tag
 } from "lucide-react";
 import { SupplierProductRow } from "@/types/integration";
+import { SupplierProductModal } from "./SupplierProductModal";
 
-interface CategoryOption {
+export interface CategoryOption {
   id: string;
   title: string;
   slug: string;
   node_path: string;
 }
 
-interface AttributeItem {
+export interface AttributeItem {
   id: string;
   name: string;
   code?: string;
 }
 
-interface VariantFormItem {
+export interface VariantFormItem {
+  id?: string;
   size: string;
   stock: number;
   barcode: string;
 }
 
-interface SupplierProfile {
+export interface SupplierProfile {
   sub: string;
   brand_id: string;
   brand_name: string;
@@ -105,10 +105,10 @@ export default function SupplierDashboardClient() {
   const [formIsActive, setFormIsActive] = useState(true);
   const [formImages, setFormImages] = useState<string[]>([]);
   const [formVariants, setFormVariants] = useState<VariantFormItem[]>([
-    { size: "S", stock: 10, barcode: "" },
-    { size: "M", stock: 15, barcode: "" },
-    { size: "L", stock: 15, barcode: "" },
-    { size: "XL", stock: 10, barcode: "" },
+    { id: "var-s", size: "S", stock: 10, barcode: "" },
+    { id: "var-m", size: "M", stock: 15, barcode: "" },
+    { id: "var-l", size: "L", stock: 15, barcode: "" },
+    { id: "var-xl", size: "XL", stock: 10, barcode: "" },
   ]);
   const [imageUploadLoading, setImageUploadLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -267,7 +267,10 @@ export default function SupplierDashboardClient() {
 
   // Add Variant Row
   const handleAddVariantRow = () => {
-    setFormVariants((prev) => [...prev, { size: "", stock: 10, barcode: "" }]);
+    setFormVariants((prev) => [
+      ...prev,
+      { id: `var-${Date.now()}-${prev.length + 1}`, size: "", stock: 10, barcode: "" },
+    ]);
   };
 
   // Remove Variant Row
@@ -352,10 +355,10 @@ export default function SupplierDashboardClient() {
     setFormIsActive(true);
     setFormImages([]);
     setFormVariants([
-      { size: "S", stock: 10, barcode: "" },
-      { size: "M", stock: 15, barcode: "" },
-      { size: "L", stock: 15, barcode: "" },
-      { size: "XL", stock: 10, barcode: "" },
+      { id: "var-s", size: "S", stock: 10, barcode: "" },
+      { id: "var-m", size: "M", stock: 15, barcode: "" },
+      { id: "var-l", size: "L", stock: 15, barcode: "" },
+      { id: "var-xl", size: "XL", stock: 10, barcode: "" },
     ]);
     setModalTab("basic");
     setFormError("");
@@ -396,14 +399,15 @@ export default function SupplierDashboardClient() {
 
         if (data.variants && data.variants.length > 0) {
           setFormVariants(
-            data.variants.map((v: { variant_size?: string; size?: string; stock?: number; barcode?: string }) => ({
+            data.variants.map((v: { id?: string; variant_size?: string; size?: string; stock?: number; barcode?: string }, idx: number) => ({
+              id: v.id || `var-${idx}-${Date.now()}`,
               size: v.variant_size || v.size || "STD",
               stock: v.stock || 0,
               barcode: v.barcode || "",
             }))
           );
         } else {
-          setFormVariants([{ size: "STANDART", stock: prod.total_stock, barcode: "" }]);
+          setFormVariants([{ id: "var-default", size: "STANDART", stock: prod.total_stock, barcode: "" }]);
         }
 
         if (data.images && data.images.length > 0) {
@@ -819,466 +823,55 @@ export default function SupplierDashboardClient() {
 
       {/* CREATE & EDIT PRODUCT MODAL */}
       {(activeModal === "create" || activeModal === "edit") && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl border border-zinc-200 max-w-3xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col my-8 max-h-[92vh]">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 font-bold">
-                  {activeModal === "create" ? <Plus size={18} /> : <Edit3 size={18} />}
-                </div>
-                <div>
-                  <h3 className="font-bold text-zinc-900 text-sm">
-                    {activeModal === "create" ? "Yeni Ürün Ekle ve Vitrinde Yayınla" : "Ürünü Düzenle"}
-                  </h3>
-                  <p className="text-[11px] text-zinc-500">
-                    Tedarikçi: <span className="font-semibold text-zinc-800">{profile?.brand_name}</span> • Maske Kodu: <span className="font-mono font-bold text-violet-700">{profile?.alias_code}</span>
-                  </p>
-                </div>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setActiveModal(null)} 
-                className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Modal Tab Buttons */}
-            <div className="flex border-b border-zinc-200 px-6 gap-6 bg-white">
-              <button
-                type="button"
-                onClick={() => setModalTab("basic")}
-                className={`py-3 text-xs font-bold transition-all relative cursor-pointer ${
-                  modalTab === "basic"
-                    ? "text-amber-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-600"
-                    : "text-zinc-500 hover:text-zinc-900"
-                }`}
-              >
-                1. Temel Bilgiler
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalTab("pricing")}
-                className={`py-3 text-xs font-bold transition-all relative cursor-pointer ${
-                  modalTab === "pricing"
-                    ? "text-amber-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-600"
-                    : "text-zinc-500 hover:text-zinc-900"
-                }`}
-              >
-                2. Fiyat & Toptan Şartlar
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalTab("variants")}
-                className={`py-3 text-xs font-bold transition-all relative cursor-pointer ${
-                  modalTab === "variants"
-                    ? "text-amber-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-600"
-                    : "text-zinc-500 hover:text-zinc-900"
-                }`}
-              >
-                3. Beden & Stok Varyantları ({formVariants.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalTab("images")}
-                className={`py-3 text-xs font-bold transition-all relative cursor-pointer ${
-                  modalTab === "images"
-                    ? "text-amber-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-600"
-                    : "text-zinc-500 hover:text-zinc-900"
-                }`}
-              >
-                4. Fotoğraflar ({formImages.length})
-              </button>
-            </div>
-
-            {/* Modal Body / Form */}
-            <form onSubmit={handleSubmitProduct} className="p-6 overflow-y-auto flex-1 flex flex-col gap-5">
-              {formError && (
-                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
-                  {formError}
-                </div>
-              )}
-
-              {/* TAB 1: BASIC */}
-              {modalTab === "basic" && (
-                <div className="flex flex-col gap-4 animate-in fade-in duration-150">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-zinc-700">Ürün Başlığı / Adı *</label>
-                    <input
-                      type="text"
-                      value={formTitle}
-                      onChange={(e) => setFormTitle(e.target.value)}
-                      placeholder="Örn: Balon Kol Kuşaklı Keten Elbise"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-700">Kategori *</label>
-                      <select
-                        value={formCategoryId}
-                        onChange={(e) => setFormCategoryId(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                        required
-                      >
-                        <option value="">Kategori Seçin</option>
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-700">Cinsiyet / Hedef</label>
-                      <select
-                        value={formGender}
-                        onChange={(e) => setFormGender(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      >
-                        <option value="Kadın">Kadın</option>
-                        <option value="Erkek">Erkek</option>
-                        <option value="Unisex">Unisex</option>
-                        <option value="Çocuk">Çocuk</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-700">Kumaş Türü</label>
-                      <select
-                        value={formFabricId}
-                        onChange={(e) => setFormFabricId(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      >
-                        <option value="">Seçilmedi</option>
-                        {fabrics.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-700">Renk</label>
-                      <select
-                        value={formColorId}
-                        onChange={(e) => setFormColorId(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      >
-                        <option value="">Seçilmedi</option>
-                        {colors.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-zinc-700">Kısa Açıklama (Özet)</label>
-                    <input
-                      type="text"
-                      value={formShortDesc}
-                      onChange={(e) => setFormShortDesc(e.target.value)}
-                      placeholder="Örn: %100 Pamuklu, astarlı, nefes alan kumaş"
-                      className="w-full px-3.5 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-zinc-700">Detaylı Ürün Açıklaması</label>
-                    <textarea
-                      value={formDescription}
-                      onChange={(e) => setFormDescription(e.target.value)}
-                      rows={3}
-                      placeholder="Kalıp özellikleri, yıkama talimatı vb."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: PRICING */}
-              {modalTab === "pricing" && (
-                <div className="flex flex-col gap-4 animate-in fade-in duration-150">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-700">Toptan Satış Fiyatı *</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formPrice}
-                        onChange={(e) => setFormPrice(parseFloat(e.target.value) || 0)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                        required
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-700">Toptan Maliyet (Alış Fiyatı)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formBuyingPrice}
-                        onChange={(e) => setFormBuyingPrice(parseFloat(e.target.value) || 0)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-700">Para Birimi</label>
-                      <select
-                        value={formCurrency}
-                        onChange={(e) => setFormCurrency(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      >
-                        <option value="TRY">TRY (₺ Türk Lirası)</option>
-                        <option value="USD">USD ($ Amerikan Doları)</option>
-                        <option value="EUR">EUR (€ Euro)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-700">Asorti / Paket Oranı</label>
-                      <input
-                        type="text"
-                        value={formPackingRatio}
-                        onChange={(e) => setFormPackingRatio(e.target.value)}
-                        placeholder="Örn: S-M-L-XL 4'lü paket veya 1xS, 2xM, 2xL"
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-700">Minimum Sipariş Adedi (Paket)</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={formMoq}
-                        onChange={(e) => setFormMoq(parseInt(e.target.value, 10) || 1)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Active Switch */}
-                  <label className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-50 border border-zinc-200 cursor-pointer mt-2">
-                    <input
-                      type="checkbox"
-                      checked={formIsActive}
-                      onChange={(e) => setFormIsActive(e.target.checked)}
-                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-zinc-300"
-                    />
-                    <div>
-                      <span className="text-xs font-bold text-zinc-800 block">Ürün Vitrinde Satışta ve Aktif</span>
-                      <span className="text-[11px] text-zinc-400 block">İşareti kaldırırsanız ürün vitrinde gizlenir, sadece sizin panelinizde kalır.</span>
-                    </div>
-                  </label>
-                </div>
-              )}
-
-              {/* TAB 3: VARIANTS */}
-              {modalTab === "variants" && (
-                <div className="flex flex-col gap-4 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold text-zinc-800">Beden & Stok Dağılımı</h4>
-                      <p className="text-[11px] text-zinc-400">Ürünün mevcut bedenlerini ve stok miktarlarını girin.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleAddVariantRow}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-bold cursor-pointer"
-                    >
-                      <Plus size={14} />
-                      Beden Ekle
-                    </button>
-                  </div>
-
-                  <div className="border border-zinc-200 rounded-xl overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase font-semibold">
-                        <tr>
-                          <th className="py-2.5 px-3">Beden / Boyut</th>
-                          <th className="py-2.5 px-3">Mevcut Stok</th>
-                          <th className="py-2.5 px-3">Barkod (İsteğe Bağlı)</th>
-                          <th className="py-2.5 px-3 text-right">İşlem</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 font-medium">
-                        {formVariants.map((v, idx) => (
-                          <tr key={idx}>
-                            <td className="py-2 px-3">
-                              <input
-                                type="text"
-                                value={v.size}
-                                onChange={(e) => handleUpdateVariantRow(idx, "size", e.target.value)}
-                                placeholder="Örn: M, 38, Standart"
-                                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                required
-                              />
-                            </td>
-                            <td className="py-2 px-3">
-                              <input
-                                type="number"
-                                min="0"
-                                value={v.stock}
-                                onChange={(e) => handleUpdateVariantRow(idx, "stock", parseInt(e.target.value, 10) || 0)}
-                                className="w-24 px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-amber-500"
-                                required
-                              />
-                            </td>
-                            <td className="py-2 px-3">
-                              <input
-                                type="text"
-                                value={v.barcode}
-                                onChange={(e) => handleUpdateVariantRow(idx, "barcode", e.target.value)}
-                                placeholder="8690000000000"
-                                className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-amber-500"
-                              />
-                            </td>
-                            <td className="py-2 px-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveVariantRow(idx)}
-                                className="p-1 rounded-lg text-zinc-400 hover:text-red-600 transition-colors cursor-pointer"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 4: IMAGES */}
-              {modalTab === "images" && (
-                <div className="flex flex-col gap-4 animate-in fade-in duration-150">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div>
-                      <h4 className="text-xs font-bold text-zinc-800">Ürün Görselleri</h4>
-                      <p className="text-[11px] text-zinc-400">İlk fotoğraf otomatik olarak kapak görseli yapılır.</p>
-                    </div>
-
-                    <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold shadow-sm cursor-pointer transition-all">
-                      <UploadCloud size={16} />
-                      {imageUploadLoading ? "Yükleniyor..." : "Bilgisayardan Fotoğraf Yükle"}
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={handleUploadImageFile}
-                        disabled={imageUploadLoading}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-
-                  {/* Images Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {formImages.map((imgUrl, idx) => (
-                      <div
-                        key={idx}
-                        className={`relative rounded-xl border overflow-hidden group aspect-[3/4] bg-zinc-100 flex items-center justify-center ${
-                          idx === 0 ? "border-amber-500 ring-2 ring-amber-500/20" : "border-zinc-200"
-                        }`}
-                      >
-                        <Image
-                          src={imgUrl}
-                          alt={`Ürün Görseli ${idx + 1}`}
-                          fill
-                          sizes="(max-width: 640px) 50vw, 25vw"
-                          className="object-cover"
-                        />
-
-                        {idx === 0 && (
-                          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[9px] font-black uppercase shadow-xs">
-                            Kapak
-                          </span>
-                        )}
-
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          {idx !== 0 && (
-                            <button
-                              type="button"
-                              onClick={() => handleSetCoverImage(idx)}
-                              className="px-2 py-1 rounded bg-amber-500 text-zinc-950 text-[10px] font-bold shadow-xs cursor-pointer"
-                            >
-                              Kapak Yap
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveImage(idx)}
-                            className="p-1.5 rounded bg-red-600 text-white shadow-xs cursor-pointer"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                    {formImages.length === 0 && (
-                      <div className="col-span-full py-12 text-center text-zinc-400 border border-dashed border-zinc-200 rounded-2xl">
-                        Henüz ürün görseli yüklenmedi. Yukarıdaki butona tıklayarak fotoğraf ekleyin.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Modal Footer Buttons */}
-              <div className="flex justify-between items-center pt-4 border-t border-zinc-100 mt-auto">
-                <button
-                  type="button"
-                  onClick={() => setActiveModal(null)}
-                  className="px-4 py-2.5 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-600 hover:bg-zinc-50 cursor-pointer"
-                >
-                  Vazgeç
-                </button>
-
-                <div className="flex items-center gap-2">
-                  {modalTab !== "images" && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (modalTab === "basic") setModalTab("pricing");
-                        else if (modalTab === "pricing") setModalTab("variants");
-                        else if (modalTab === "variants") setModalTab("images");
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-bold cursor-pointer"
-                    >
-                      İlerle →
-                    </button>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-xs font-black shadow-md cursor-pointer disabled:opacity-50"
-                  >
-                    {submitting ? "Kaydediliyor..." : "Kaydet ve Vitrinde Yayınla"}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
+        <SupplierProductModal
+          activeModal={activeModal}
+          editingProductId={editingProductId}
+          profile={profile}
+          onClose={() => setActiveModal(null)}
+          onSubmit={handleSubmitProduct}
+          modalTab={modalTab}
+          setModalTab={setModalTab}
+          submitting={submitting}
+          formError={formError}
+          formTitle={formTitle}
+          setFormTitle={setFormTitle}
+          formCategoryId={formCategoryId}
+          setFormCategoryId={setFormCategoryId}
+          categories={categories}
+          formGender={formGender}
+          setFormGender={setFormGender}
+          formFabricId={formFabricId}
+          setFormFabricId={setFormFabricId}
+          fabrics={fabrics}
+          formColorId={formColorId}
+          setFormColorId={setFormColorId}
+          colors={colors}
+          formShortDesc={formShortDesc}
+          setFormShortDesc={setFormShortDesc}
+          formDescription={formDescription}
+          setFormDescription={setFormDescription}
+          formPrice={formPrice}
+          setFormPrice={setFormPrice}
+          formBuyingPrice={formBuyingPrice}
+          setFormBuyingPrice={setFormBuyingPrice}
+          formCurrency={formCurrency}
+          setFormCurrency={setFormCurrency}
+          formPackingRatio={formPackingRatio}
+          setFormPackingRatio={setFormPackingRatio}
+          formMoq={formMoq}
+          setFormMoq={setFormMoq}
+          formIsActive={formIsActive}
+          setFormIsActive={setFormIsActive}
+          formVariants={formVariants}
+          onAddVariantRow={handleAddVariantRow}
+          onUpdateVariantRow={handleUpdateVariantRow}
+          onRemoveVariantRow={handleRemoveVariantRow}
+          formImages={formImages}
+          imageUploadLoading={imageUploadLoading}
+          onUploadImageFile={handleUploadImageFile}
+          onSetCoverImage={handleSetCoverImage}
+          onRemoveImage={handleRemoveImage}
+        />
       )}
 
       {/* DELETE CONFIRMATION MODAL */}

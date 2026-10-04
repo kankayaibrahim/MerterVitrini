@@ -4,7 +4,7 @@ import { formatDateTime, getDuration } from "@/utils/formatters";
 
 // Localized labels dictionary to prevent JSX literal internationalization warnings
 const LABELS = {
-  maskLabel: "Maske: ",
+  maskLabel: "Kod: ",
   activeLabel: "Aktif",
   passiveLabel: "Pasif",
   triggerButton: "Tetikle",

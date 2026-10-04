@@ -54,7 +54,7 @@ export function usePGliteCatalog(options: UsePGliteCatalogOptions = {}) {
 
       // Warm up local database with initial SSR products if available
       if (initialProducts && initialProducts.length > 0) {
-        const localItems = initialProducts.map(mapProductToLocal);
+        const localItems = initialProducts.map((p) => mapProductToLocal(p));
         await batchUpsertLocalProducts(localItems);
         const updatedCount = await getLocalProductCount();
         if (isMounted) setLocalCount(updatedCount);
@@ -132,7 +132,7 @@ export function usePGliteCatalog(options: UsePGliteCatalogOptions = {}) {
       const res = await queryLocalCatalog(filters);
       if (!res) return null;
 
-      const products = res.products.map(mapLocalToProduct);
+      const products = res.products.map((p) => mapLocalToProduct(p));
       return {
         products,
         total: res.totalCount,

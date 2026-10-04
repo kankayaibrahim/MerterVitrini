@@ -15,9 +15,22 @@ interface Settings {
   email: string;
 }
 
+export type PolicyType = "cancellation_and_return" | "terms_of_service" | "privacy_policy";
+
+function triggerPolicyClick(
+  e: React.MouseEvent,
+  type: PolicyType,
+  onOpenPolicy?: (type: PolicyType) => void
+) {
+  if (onOpenPolicy) {
+    e.preventDefault();
+    onOpenPolicy(type);
+  }
+}
+
 interface FooterProps {
   readonly lang: string;
-  readonly onOpenPolicy?: (type: "cancellation_and_return" | "terms_of_service" | "privacy_policy") => void;
+  readonly onOpenPolicy?: (type: PolicyType) => void;
   readonly showApplicationForm?: boolean;
 }
 
@@ -26,94 +39,399 @@ interface B2BWholesaleLink {
   href: string;
 }
 
+const B2B_HUB_TITLES: Record<string, string> = {
+  tr: "Popüler Toptan Tekstil Kategorileri & Merter Tedarik Ağı",
+  ru: "Популярные Оптовые Категории и Поставки из Мертер",
+  ar: "أقسام الأزياء بالجملة وتوريد المنسوجات من مارتر",
+  de: "Beliebte Großhandelskategorien & Merter Beschaffungsnetzwerk",
+  fr: "Catégories Populaires de Vente en Gros & Approvisionnement Merter",
+  pl: "Popularne Kategorie Hurtowe i Dostawy z Merter",
+  bg: "Популярни Категории на Едро и Доставки от Мертер",
+  en: "Top B2B Wholesale Categories & Merter Sourcing Network",
+};
+
+function getB2BHubTitle(lang: string): string {
+  return B2B_HUB_TITLES[lang] || B2B_HUB_TITLES.en;
+}
+
 function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
   const prefix = getCategoryPrefix(lang);
   const linksMap: Record<string, B2BWholesaleLink[]> = {
     tr: [
-      { label: "Toptan Kadın Giyim", href: `/${prefix}/kadin` },
-      { label: "Toptan Triko & Kazak", href: `/${prefix}/kadin-triko` },
-      { label: "Toptan Elbise Modelleri", href: `/${prefix}/kadin-elbise` },
+      { label: "Toptan Kadın Giyim", href: `/${prefix}/kadin-giyim` },
+      { label: "Toptan Triko & Kazak", href: `/${prefix}/triko-hirka-kazak` },
+      { label: "Toptan Elbise Modelleri", href: `/${prefix}/elbise-abiye` },
       { label: "Toptan Abiye & Gece Elbisesi", href: `/${prefix}/abiye` },
       { label: "Toptan Büyük Beden Giyim", href: `/${prefix}/buyuk-beden` },
       { label: "Toptan Bohem Giyim", href: `/${prefix}/yaz-koleksiyonu` },
       { label: "Toptan Vintage & Retro", href: `/${prefix}/vintage-retro` },
-      { label: "Toptan Türk Kumaşları", href: `/${prefix}/kumas` },
+      { label: "Toptan Dış Giyim", href: `/${prefix}/dis-giyim` },
       { label: "Merter B2B Alıcı Rehberi", href: `/${prefix}/b2b` },
     ],
     en: [
-      { label: "Wholesale Women Clothing", href: `/${prefix}/kadin` },
-      { label: "Wholesale Knitwear & Sweaters", href: `/${prefix}/kadin-triko` },
-      { label: "Wholesale Dresses Turkey", href: `/${prefix}/kadin-elbise` },
+      { label: "Wholesale Women Clothing", href: `/${prefix}/kadin-giyim` },
+      { label: "Wholesale Knitwear & Sweaters", href: `/${prefix}/triko-hirka-kazak` },
+      { label: "Wholesale Dresses Turkey", href: `/${prefix}/elbise-abiye` },
       { label: "Wholesale Evening Dresses", href: `/${prefix}/abiye` },
       { label: "Wholesale Plus Size Fashion", href: `/${prefix}/buyuk-beden` },
       { label: "Wholesale Boho Chic Boutique", href: `/${prefix}/yaz-koleksiyonu` },
       { label: "Wholesale Vintage Clothing", href: `/${prefix}/vintage-retro` },
-      { label: "Turkish Fabrics Wholesale", href: `/${prefix}/kumas` },
+      { label: "Wholesale Outerwear", href: `/${prefix}/dis-giyim` },
       { label: "Merter B2B Sourcing Guide", href: `/${prefix}/b2b` },
     ],
     ru: [
-      { label: "Женская одежда оптом Турция", href: `/${prefix}/kadin` },
-      { label: "Трикотаж и свитера оптом", href: `/${prefix}/kadin-triko` },
-      { label: "Платья оптом Стамбул", href: `/${prefix}/kadin-elbise` },
+      { label: "Женская одежда оптом Турция", href: `/${prefix}/kadin-giyim` },
+      { label: "Трикотаж и свитера оптом", href: `/${prefix}/triko-hirka-kazak` },
+      { label: "Платья оптом Стамбул", href: `/${prefix}/elbise-abiye` },
       { label: "Вечерние платья оптом", href: `/${prefix}/abiye` },
       { label: "Одежда больших размеров оптом", href: `/${prefix}/buyuk-beden` },
       { label: "Бохо шик оптом Мертер", href: `/${prefix}/yaz-koleksiyonu` },
       { label: "Винтажная одежда оптом", href: `/${prefix}/vintage-retro` },
-      { label: "Турецкие ткани оптом", href: `/${prefix}/kumas` },
+      { label: "Верхняя одежда оптом", href: `/${prefix}/dis-giyim` },
       { label: "Гид по закупкам в Мертер", href: `/${prefix}/b2b` },
     ],
     ar: [
-      { label: "ملابس نسائية بالجملة تركيا", href: `/${prefix}/kadin` },
-      { label: "تريكو وكنزات صوفية بالجملة", href: `/${prefix}/kadin-triko` },
-      { label: "فساتين نسائية بالجملة إسطنبول", href: `/${prefix}/kadin-elbise` },
+      { label: "ملابس نسائية بالجملة تركيا", href: `/${prefix}/kadin-giyim` },
+      { label: "تريكو وكنزات صوفية بالجملة", href: `/${prefix}/triko-hirka-kazak` },
+      { label: "فساتين نسائية بالجملة إسطنبول", href: `/${prefix}/elbise-abiye` },
       { label: "فساتين سهرة وسواريه بالجملة", href: `/${prefix}/abiye` },
       { label: "مقاسات كبيرة بالجملة تركيا", href: `/${prefix}/buyuk-beden` },
       { label: "أزياء بوهو شيك بالجملة", href: `/${prefix}/yaz-koleksiyonu` },
       { label: "ملابس عتيقة وفينتاج بالجملة", href: `/${prefix}/vintage-retro` },
-      { label: "أقمشة تركية بالجملة", href: `/${prefix}/kumas` },
+      { label: "ملابس خارجية بالجملة", href: `/${prefix}/dis-giyim` },
       { label: "دليل المشتريات من مارتر", href: `/${prefix}/b2b` },
     ],
     de: [
-      { label: "Großhandel Damenbekleidung Türkei", href: `/${prefix}/kadin` },
-      { label: "Großhandel Strickwaren & Pullover", href: `/${prefix}/kadin-triko` },
-      { label: "Großhandel Kleider Istanbul", href: `/${prefix}/kadin-elbise` },
+      { label: "Großhandel Damenbekleidung Türkei", href: `/${prefix}/kadin-giyim` },
+      { label: "Großhandel Strickwaren & Pullover", href: `/${prefix}/triko-hirka-kazak` },
+      { label: "Großhandel Kleider Istanbul", href: `/${prefix}/elbise-abiye` },
       { label: "Großhandel Abendkleider", href: `/${prefix}/abiye` },
       { label: "Große Größen Großhandel", href: `/${prefix}/buyuk-beden` },
-      { label: "Türkische Stoffe Großhandel", href: `/${prefix}/kumas` },
+      { label: "Großhandel Oberbekleidung", href: `/${prefix}/dis-giyim` },
       { label: "Merter B2B Einkaufsführer", href: `/${prefix}/b2b` },
     ],
     fr: [
-      { label: "Vêtements Femme en Gros Turquie", href: `/${prefix}/kadin` },
-      { label: "Tricot et Pulls en Gros", href: `/${prefix}/kadin-triko` },
-      { label: "Robes en Gros Istanbul", href: `/${prefix}/kadin-elbise` },
+      { label: "Vêtements Femme en Gros Turquie", href: `/${prefix}/kadin-giyim` },
+      { label: "Tricot et Pulls en Gros", href: `/${prefix}/triko-hirka-kazak` },
+      { label: "Robes en Gros Istanbul", href: `/${prefix}/elbise-abiye` },
       { label: "Robes de Soirée en Gros", href: `/${prefix}/abiye` },
       { label: "Grandes Tailles en Gros", href: `/${prefix}/buyuk-beden` },
-      { label: "Tissus Turcs en Gros", href: `/${prefix}/kumas` },
+      { label: "Vêtements Extérieurs en Gros", href: `/${prefix}/dis-giyim` },
       { label: "Guide d'Achat B2B Merter", href: `/${prefix}/b2b` },
     ],
     pl: [
-      { label: "Hurtownia Odzieży Damskiej Turcja", href: `/${prefix}/kadin` },
-      { label: "Swetry i Dzianiny Hurt", href: `/${prefix}/kadin-triko` },
-      { label: "Sukienki Hurtownia Stambuł", href: `/${prefix}/kadin-elbise` },
+      { label: "Hurtownia Odzieży Damskiej Turcja", href: `/${prefix}/kadin-giyim` },
+      { label: "Swetry i Dzianiny Hurt", href: `/${prefix}/triko-hirka-kazak` },
+      { label: "Sukienki Hurtownia Stambuł", href: `/${prefix}/elbise-abiye` },
       { label: "Suknie Wieczorowe Hurt", href: `/${prefix}/abiye` },
       { label: "Odzież Plus Size Hurt", href: `/${prefix}/buyuk-beden` },
-      { label: "Tureckie Tkaniny Hurt", href: `/${prefix}/kumas` },
+      { label: "Odzież Wierzchnia Hurt", href: `/${prefix}/dis-giyim` },
       { label: "Przewodnik Zakupów B2B Merter", href: `/${prefix}/b2b` },
     ],
     bg: [
-      { label: "Дамски Дрехи на Едро Турция", href: `/${prefix}/kadin` },
-      { label: "Плетива и Пуловери на Едро", href: `/${prefix}/kadin-triko` },
-      { label: "Рокли на Едро Истанбул", href: `/${prefix}/kadin-elbise` },
+      { label: "Дамски Дрехи на Едро Турция", href: `/${prefix}/kadin-giyim` },
+      { label: "Плетива и Пуловери на Едро", href: `/${prefix}/triko-hirka-kazak` },
+      { label: "Рокли на Едро Истанбул", href: `/${prefix}/elbise-abiye` },
       { label: "Вечерни Рокли на Едро", href: `/${prefix}/abiye` },
       { label: "Макси Мода на Едро", href: `/${prefix}/buyuk-beden` },
-      { label: "Турски Платове на Едро", href: `/${prefix}/kumas` },
+      { label: "Връхни Дрехи на Едро", href: `/${prefix}/dis-giyim` },
       { label: "Наръчник за Покупки в Мертер", href: `/${prefix}/b2b` },
     ],
   };
   return linksMap[lang] || linksMap.en;
 }
 
-export default function Footer({ lang, onOpenPolicy, showApplicationForm = true }: Readonly<FooterProps>) {
+function FooterContactColumn({ settings, lang }: { readonly settings: Settings; readonly lang: string }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col">
+        <span className="text-xl font-bold tracking-tight text-black flex items-center gap-2 font-serif">
+          <span className="bg-black text-white px-2 py-0.5 rounded-none text-xs font-black tracking-widest font-sans">
+            {t("b2b_tag", lang)}
+          </span>
+          {t("brand_title", lang)}
+        </span>
+        <span className="text-[10px] font-bold text-accent-gold uppercase tracking-[1.5px] mt-1">
+          {t("brand_subtitle", lang)}
+        </span>
+      </div>
+
+      <div className="text-sm space-y-3 pt-2 text-onyx">
+        <p className="flex items-start gap-2.5 leading-relaxed">
+          <svg className="w-5 h-5 text-black shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span>{settings.address}</span>
+        </p>
+
+        <p className="flex items-center gap-2.5">
+          <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+          </svg>
+          <a href={`tel:${settings.phone}`} className="hover:text-black transition-colors duration-200">
+            {settings.phone}
+          </a>
+        </p>
+
+        <p className="flex items-center gap-2.5">
+          <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <a href={`mailto:${settings.email}`} className="hover:text-black transition-colors duration-200 break-all">
+            {settings.email}
+          </a>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function FooterAboutColumn({ lang }: { readonly lang: string }) {
+  const prefix = getCategoryPrefix(lang);
+  return (
+    <div>
+      <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
+        {t("about_us", lang)}
+      </h3>
+      <ul className="space-y-3 text-sm">
+        <li>
+          <a href={`/${prefix}/pages/hakkimizda`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+            {t("about_us", lang)}
+          </a>
+        </li>
+        <li>
+          <a href={`/${prefix}/b2b`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+            {t("wholesale_b2b", lang)}
+          </a>
+        </li>
+        <li>
+          <a href={`/${prefix}/contact`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+            {t("contact_us", lang)}
+          </a>
+        </li>
+        <li>
+          <a href={`/${prefix}/blog`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+            {t("blog", lang)}
+          </a>
+        </li>
+        <li>
+          <Link href={`/${prefix}/tedarikci-basvuru`} className="text-amber-600 font-bold hover:text-amber-700 hover:underline transition-colors duration-200 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <span>{t("supplier_apply", lang)}</span>
+          </Link>
+        </li>
+        <li>
+          <Link href="/tedarikci/login" className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>{t("supplier_portal_login", lang)}</span>
+          </Link>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+interface CustomerServiceProps {
+  readonly lang: string;
+  readonly onOpenPolicy?: (type: PolicyType) => void;
+}
+
+function FooterCustomerServiceColumn({ lang, onOpenPolicy }: CustomerServiceProps) {
+  const prefix = getCategoryPrefix(lang);
+
+  return (
+    <div>
+      <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
+        {t("customer_service", lang)}
+      </h3>
+      <ul className="space-y-3 text-sm">
+        <li>
+          <a 
+            href="#shipping" 
+            onClick={(e) => triggerPolicyClick(e, "cancellation_and_return", onOpenPolicy)}
+            className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+          >
+            {t("delivery_returns", lang)}
+          </a>
+        </li>
+        <li>
+          <a href={`/${prefix}/faq`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+            {t("faq", lang)}
+          </a>
+        </li>
+        <li>
+          <a 
+            href="#privacy" 
+            onClick={(e) => triggerPolicyClick(e, "privacy_policy", onOpenPolicy)}
+            className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+          >
+            {t("privacy", lang)}
+          </a>
+        </li>
+        <li>
+          <a 
+            href="#terms" 
+            onClick={(e) => triggerPolicyClick(e, "terms_of_service", onOpenPolicy)}
+            className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+          >
+            {t("terms", lang)}
+          </a>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+function FooterAccountColumn({ lang, whatsappUrl }: { readonly lang: string; readonly whatsappUrl: string }) {
+  const dispatchAuthEvent = (e: React.MouseEvent, mode: "login" | "register") => {
+    e.preventDefault();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode } }));
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
+          {t("my_account", lang)}
+        </h3>
+        <ul className="space-y-3 text-sm mb-4">
+          <li>
+            <a 
+              href="#login" 
+              onClick={(e) => dispatchAuthEvent(e, "login")}
+              className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+            >
+              {t("login", lang)}
+            </a>
+          </li>
+          <li>
+            <a 
+              href="#register" 
+              onClick={(e) => dispatchAuthEvent(e, "register")}
+              className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+            >
+              {t("register", lang)}
+            </a>
+          </li>
+          <li>
+            <a href="#tracking" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+              {t("order_tracking", lang)}
+            </a>
+          </li>
+          <li className="pt-2 border-t border-cultured">
+            <Link 
+              href="/tedarikci/login" 
+              className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5 text-xs"
+            >
+              <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>{t("supplier_login", lang)}</span>
+            </Link>
+          </li>
+        </ul>
+      </div>
+
+      <div className="pt-2">
+        <a 
+          href={whatsappUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-3 px-5 py-3 bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-[5px] shadow-sm transition-all duration-300 group font-bold text-xs tracking-[1.5px] border-none relative overflow-hidden uppercase"
+        >
+          <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.458L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.863-9.73.001-2.595-1.006-5.035-2.836-6.87C16.671 2.16 14.237.986 11.64.985c-5.441 0-9.87 4.372-9.873 9.734-.001 1.709.467 3.376 1.354 4.887l-.982 3.582 3.71-.974zm13.14-5.932c-.3-.15-1.776-.875-2.05-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-1.127-.566-1.929-1.009-2.694-2.321-.202-.347-.202-.656-.051-.951.136-.264.3-.35.45-.5.15-.15.2-.25.3-.45.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.588-.491-.508-.675-.518-.175-.009-.375-.01-.575-.01-.2 0-.525.075-.8 1.025-.275.95-1.05 3.3-1.05 3.4 0 .1.075.2.225.35.15.15 1.75 2.673 4.237 3.743.592.255 1.054.408 1.413.523.595.19 1.137.163 1.564.1.477-.07 1.475-.603 1.675-1.18.2-.578.2-1.075.14-1.18-.06-.1-.225-.15-.525-.3z" />
+          </svg>
+          <span>{t("whatsapp_line", lang)}</span>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function FooterWholesaleHub({ lang }: { readonly lang: string }) {
+  const hubTitle = getB2BHubTitle(lang);
+  const links = getB2BWholesaleLinks(lang);
+
+  return (
+    <div className="max-w-[1720px] mx-auto border-t border-cultured mt-12 pt-8">
+      <h4 className="text-black font-extrabold text-[11px] tracking-[2px] uppercase mb-4">
+        {hubTitle}
+      </h4>
+      <div className="flex flex-wrap gap-2 text-xs">
+        {links.map((linkItem) => (
+          <Link
+            key={linkItem.href}
+            href={linkItem.href}
+            className="px-3 py-1.5 bg-[#fcfcfc] hover:bg-black hover:text-white border border-cultured rounded-[4px] text-[11px] font-semibold text-onyx transition-all duration-200 no-underline"
+          >
+            {linkItem.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface FooterBottomBarProps {
+  readonly lang: string;
+  readonly lastUpdatedTitle: string;
+  readonly onOpenPolicy?: (type: PolicyType) => void;
+}
+
+function FooterBottomBar({ lang, lastUpdatedTitle, onOpenPolicy }: FooterBottomBarProps) {
+  const prefix = getCategoryPrefix(lang);
+  const buildNumber = process.env.NEXT_PUBLIC_BUILD_NUMBER;
+  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME || "dev";
+
+  return (
+    <div className="max-w-[1720px] mx-auto border-t border-cultured mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-sonic-silver">
+      <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-left">
+        <span>© {new Date().getFullYear()} {t("brand_title", lang)}. {t("all_rights_reserved", lang)}</span>
+        <span className="hidden sm:inline text-zinc-300">•</span>
+        <span 
+          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-100/80 border border-zinc-200/80 text-[10px] font-mono text-zinc-500 hover:text-zinc-800 transition-colors"
+          title={lastUpdatedTitle}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Build {buildNumber ? `#${buildNumber}` : ""} ({buildTime})</span>
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-4 sm:gap-6 items-center">
+        <Link 
+          href="/tedarikci/login" 
+          className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1"
+        >
+          <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <span>{t("supplier_portal", lang)}</span>
+        </Link>
+        <a 
+          href="#privacy" 
+          onClick={(e) => triggerPolicyClick(e, "privacy_policy", onOpenPolicy)}
+          className="hover:text-black transition-colors"
+        >
+          {t("privacy", lang)}
+        </a>
+        <a 
+          href="#terms" 
+          onClick={(e) => triggerPolicyClick(e, "terms_of_service", onOpenPolicy)}
+          className="hover:text-black transition-colors"
+        >
+          {t("terms", lang)}
+        </a>
+        <a 
+          href={`/${prefix}/site-haritasi`} 
+          className="hover:text-black transition-colors"
+        >
+          {t("sitemap_title", lang)}
+        </a>
+      </div>
+    </div>
+  );
+}
+
+export default function Footer({ lang, onOpenPolicy, showApplicationForm = false }: Readonly<FooterProps>) {
   const [settings, setSettings] = useState<Settings>({
     id: "",
     address: "AKEVLER MAH. 1076 SOK. REGNUM ASTRUM TOWER 8A C2 NO:204 ESENYURT / İSTANBUL / TÜRKİYE",
@@ -132,7 +450,6 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = true 
     void loadSettings();
   }, []);
 
-  // Format WhatsApp link correctly (digits only, e.g. 905337030883)
   const sanitizedWhatsapp = settings.whatsapp.replace(/\D/g, "");
   const whatsappUrl = `https://wa.me/${sanitizedWhatsapp}`;
 
@@ -145,297 +462,15 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = true 
       {showApplicationForm && <SupplierApplicationSection lang={lang} />}
       <footer className="bg-white border-t border-cultured text-sonic-silver py-16 px-6 md:px-12 mt-0 font-sans">
         <div className="max-w-[1720px] mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-        
-        {/* Column 1: Contact Details */}
-        <div className="space-y-4">
-          <div className="flex flex-col">
-            <span className="text-xl font-bold tracking-tight text-black flex items-center gap-2 font-serif">
-              <span className="bg-black text-white px-2 py-0.5 rounded-none text-xs font-black tracking-widest font-sans">
-                {t("b2b_tag", lang)}
-              </span>
-              {t("brand_title", lang)}
-            </span>
-            <span className="text-[10px] font-bold text-accent-gold uppercase tracking-[1.5px] mt-1">
-              {t("brand_subtitle", lang)}
-            </span>
-          </div>
-          
-          <div className="text-sm space-y-3 pt-2 text-onyx">
-            <p className="flex items-start gap-2.5 leading-relaxed">
-              <svg className="w-5 h-5 text-black shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span>{settings.address}</span>
-            </p>
-            
-            <p className="flex items-center gap-2.5">
-              <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
-              <a href={`tel:${settings.phone}`} className="hover:text-black transition-colors duration-200">
-                {settings.phone}
-              </a>
-            </p>
-
-            <p className="flex items-center gap-2.5">
-              <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              <a href={`mailto:${settings.email}`} className="hover:text-black transition-colors duration-200 break-all">
-                {settings.email}
-              </a>
-            </p>
-          </div>
+          <FooterContactColumn settings={settings} lang={lang} />
+          <FooterAboutColumn lang={lang} />
+          <FooterCustomerServiceColumn lang={lang} onOpenPolicy={onOpenPolicy} />
+          <FooterAccountColumn lang={lang} whatsappUrl={whatsappUrl} />
         </div>
 
-        {/* Column 2: Hakkımızda (Corporate / Info) */}
-        <div>
-          <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
-            {t("about_us", lang)}
-          </h3>
-          <ul className="space-y-3 text-sm">
-            <li>
-              <a href={`/${getCategoryPrefix(lang)}/pages/hakkimizda`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
-                {t("about_us", lang)}
-              </a>
-            </li>
-            <li>
-              <a href={`/${getCategoryPrefix(lang)}/b2b`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
-                {t("wholesale_b2b", lang)}
-              </a>
-            </li>
-            <li>
-              <a href={`/${getCategoryPrefix(lang)}/contact`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
-                {t("contact_us", lang)}
-              </a>
-            </li>
-            <li>
-              <a href={`/${getCategoryPrefix(lang)}/blog`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
-                {t("blog", lang)}
-              </a>
-            </li>
-            <li>
-              <a href="#tedarikci-basvuru" className="text-amber-600 font-bold hover:text-amber-700 hover:underline transition-colors duration-200 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                <span>{t("supplier_apply", lang)}</span>
-              </a>
-            </li>
-            <li>
-              <Link href="/tedarikci/login" className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>{t("supplier_portal_login", lang)}</span>
-              </Link>
-            </li>
-          </ul>
-        </div>
-
-        {/* Column 3: Müşteri Hizmetleri (Customer Service) */}
-        <div>
-          <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
-            {t("customer_service", lang)}
-          </h3>
-          <ul className="space-y-3 text-sm">
-            <li>
-              <a 
-                href="#shipping" 
-                onClick={(e) => {
-                  if (onOpenPolicy) {
-                    e.preventDefault();
-                    onOpenPolicy("cancellation_and_return");
-                  }
-                }}
-                className="text-onyx hover:text-black hover:underline transition-colors duration-200"
-              >
-                {t("delivery_returns", lang)}
-              </a>
-            </li>
-            <li>
-              <a href={`/${getCategoryPrefix(lang)}/faq`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
-                {t("faq", lang)}
-              </a>
-            </li>
-            <li>
-              <a 
-                href="#privacy" 
-                onClick={(e) => {
-                  if (onOpenPolicy) {
-                    e.preventDefault();
-                    onOpenPolicy("privacy_policy");
-                  }
-                }}
-                className="text-onyx hover:text-black hover:underline transition-colors duration-200"
-              >
-                {t("privacy", lang)}
-              </a>
-            </li>
-            <li>
-              <a 
-                href="#terms" 
-                onClick={(e) => {
-                  if (onOpenPolicy) {
-                    e.preventDefault();
-                    onOpenPolicy("terms_of_service");
-                  }
-                }}
-                className="text-onyx hover:text-black hover:underline transition-colors duration-200"
-              >
-                {t("terms", lang)}
-              </a>
-            </li>
-          </ul>
-        </div>
-
-        {/* Column 4: Hesabım (My Account) & WhatsApp support */}
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
-              {t("my_account", lang)}
-            </h3>
-            <ul className="space-y-3 text-sm mb-4">
-              <li>
-                <a 
-                  href="#login" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (typeof window !== "undefined") {
-                      window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode: "login" } }));
-                    }
-                  }}
-                  className="text-onyx hover:text-black hover:underline transition-colors duration-200"
-                >
-                  {t("login", lang)}
-                </a>
-              </li>
-              <li>
-                <a 
-                  href="#register" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (typeof window !== "undefined") {
-                      window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode: "register" } }));
-                    }
-                  }}
-                  className="text-onyx hover:text-black hover:underline transition-colors duration-200"
-                >
-                  {t("register", lang)}
-                </a>
-              </li>
-              <li>
-                <a href="#tracking" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
-                  {t("order_tracking", lang)}
-                </a>
-              </li>
-              <li className="pt-2 border-t border-cultured">
-                <Link 
-                  href="/tedarikci/login" 
-                  className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5 text-xs"
-                >
-                  <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>{t("supplier_login", lang)}</span>
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Premium Interactive WhatsApp support button */}
-          <div className="pt-2">
-            <a 
-              href={whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-3 px-5 py-3 bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-[5px] shadow-sm transition-all duration-300 group font-bold text-xs tracking-[1.5px] border-none relative overflow-hidden uppercase"
-            >
-              <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.458L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.863-9.73.001-2.595-1.006-5.035-2.836-6.87C16.671 2.16 14.237.986 11.64.985c-5.441 0-9.87 4.372-9.873 9.734-.001 1.709.467 3.376 1.354 4.887l-.982 3.582 3.71-.974zm13.14-5.932c-.3-.15-1.776-.875-2.05-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-1.127-.566-1.929-1.009-2.694-2.321-.202-.347-.202-.656-.051-.951.136-.264.3-.35.45-.5.15-.15.2-.25.3-.45.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.588-.491-.508-.675-.518-.175-.009-.375-.01-.575-.01-.2 0-.525.075-.8 1.025-.275.95-1.05 3.3-1.05 3.4 0 .1.075.2.225.35.15.15 1.75 2.673 4.237 3.743.592.255 1.054.408 1.413.523.595.19 1.137.163 1.564.1.477-.07 1.475-.603 1.675-1.18.2-.578.2-1.075.14-1.18-.06-.1-.225-.15-.525-.3z" />
-              </svg>
-              <span>
-                {t("whatsapp_line", lang)}
-              </span>
-            </a>
-          </div>
-        </div>
-
-      </div>
-
-      {/* B2B Wholesale SEO & Internal Linking Hub */}
-      <div className="max-w-[1720px] mx-auto border-t border-cultured mt-12 pt-8">
-        <h4 className="text-black font-extrabold text-[11px] tracking-[2px] uppercase mb-4">
-          {lang === "tr" ? "Popüler Toptan Tekstil Kategorileri & Merter Tedarik Ağı" :
-           lang === "ru" ? "Популярные Оптовые Категории и Поставки из Мертер" :
-           lang === "ar" ? "أقسام الأزياء بالجملة وتوريد المنسوجات من مارتر" :
-           lang === "de" ? "Beliebte Großhandelskategorien & Merter Beschaffungsnetzwerk" :
-           lang === "fr" ? "Catégories Populaires de Vente en Gros & Approvisionnement Merter" :
-           lang === "pl" ? "Popularne Kategorie Hurtowe i Dostawy z Merter" :
-           lang === "bg" ? "Популярни Категории на Едро и Доставки от Мертер" :
-           "Top B2B Wholesale Categories & Merter Sourcing Network"}
-        </h4>
-        <div className="flex flex-wrap gap-2 text-xs">
-          {getB2BWholesaleLinks(lang).map((linkItem) => (
-            <Link
-              key={linkItem.href}
-              href={linkItem.href}
-              className="px-3 py-1.5 bg-[#fcfcfc] hover:bg-black hover:text-white border border-cultured rounded-[4px] text-[11px] font-semibold text-onyx transition-all duration-200 no-underline"
-            >
-              {linkItem.label}
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      <div className="max-w-[1720px] mx-auto border-t border-cultured mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-sonic-silver">
-        <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-left">
-          <span>© {new Date().getFullYear()} {t("brand_title", lang)}. {t("all_rights_reserved", lang)}</span>
-          <span className="hidden sm:inline text-zinc-300">•</span>
-          <span 
-            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-100/80 border border-zinc-200/80 text-[10px] font-mono text-zinc-500 hover:text-zinc-800 transition-colors"
-            title={lastUpdatedTitle}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Build {process.env.NEXT_PUBLIC_BUILD_NUMBER ? `#${process.env.NEXT_PUBLIC_BUILD_NUMBER}` : ""} ({process.env.NEXT_PUBLIC_BUILD_TIME || "dev"})</span>
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-4 sm:gap-6 items-center">
-          <Link 
-            href="/tedarikci/login" 
-            className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1"
-          >
-            <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-            <span>{t("supplier_portal", lang)}</span>
-          </Link>
-          <a 
-            href="#privacy" 
-            onClick={(e) => {
-              if (onOpenPolicy) {
-                e.preventDefault();
-                onOpenPolicy("privacy_policy");
-              }
-            }}
-            className="hover:text-black transition-colors"
-          >
-            {t("privacy", lang)}
-          </a>
-          <a 
-            href="#terms" 
-            onClick={(e) => {
-              if (onOpenPolicy) {
-                e.preventDefault();
-                onOpenPolicy("terms_of_service");
-              }
-            }}
-            className="hover:text-black transition-colors"
-          >
-            {t("terms", lang)}
-          </a>
-          <a 
-            href={`/${getCategoryPrefix(lang)}/site-haritasi`} 
-            className="hover:text-black transition-colors"
-          >
-            {t("sitemap_title", lang)}
-          </a>
-        </div>
-      </div>
-    </footer>
+        <FooterWholesaleHub lang={lang} />
+        <FooterBottomBar lang={lang} lastUpdatedTitle={lastUpdatedTitle} onOpenPolicy={onOpenPolicy} />
+      </footer>
     </>
   );
 }

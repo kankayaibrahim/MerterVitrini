@@ -160,7 +160,7 @@ export default function BlogListClient({
               return (
                 <Link
                   key={post.id}
-                  href={`/${categoryPrefix}/blog/${post.slug}`}
+                  href={`/${categoryPrefix}/blog/${trans?.slug || post.slug}`}
                   className="bg-white border border-cultured rounded-[20px] shadow-sm overflow-hidden flex flex-col group cursor-pointer hover:shadow-md hover:border-zinc-300 transition-all duration-300 no-underline text-inherit"
                 >
                   <article className="flex flex-col flex-grow">

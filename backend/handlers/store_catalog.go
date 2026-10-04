@@ -496,7 +496,7 @@ func fetchProductBase(ctx context.Context, id string) (*models.Product, error) {
 		       p.packing_ratio, p.series_ratio, p.minimum_order_quantity, 
 		       p.price, p.discounted_price, p.single_price, p.buying_price, p.currency, p.tax_rate, COALESCE(col.color_name, 'Standart') as color, p.stock, p.sku, p.barcode,
 		       p.is_active, 
-		       p.created_at, p.updated_at, COALESCE(NULLIF(b.alias_code, ''), b.brand_name) as brand_name, c.title as category_title,
+		       p.created_at, p.updated_at, b.brand_name as brand_name, c.title as category_title,
 		       COALESCE(
 		           (SELECT json_object_agg(t.language_code, json_build_object('title', t.title, 'short_description', t.short_description, 'description', t.description))
 		            FROM catalog.product_translations t
@@ -1184,7 +1184,8 @@ func (h *StoreCatalogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Reque
 
 	query := `
 		SELECT b.id, b.slug, b.cover_image, b.is_active, b.created_at, b.updated_at,
-		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description
+		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description,
+		       COALESCE(t.slug, b.slug) AS trans_slug
 		FROM catalog.blog_posts b
 		LEFT JOIN catalog.blog_post_translations t ON b.id = t.post_id
 		WHERE b.is_active = true
@@ -1209,11 +1210,12 @@ func (h *StoreCatalogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Reque
 			createdAt, updatedAt          time.Time
 			langCode, title, summary      *string
 			content, metaTitle, metaDesc *string
+			transSlug                     *string
 		)
 
 		err := rows.Scan(
 			&postID, &slug, &coverImage, &isActive, &createdAt, &updatedAt,
-			&langCode, &title, &summary, &content, &metaTitle, &metaDesc,
+			&langCode, &title, &summary, &content, &metaTitle, &metaDesc, &transSlug,
 		)
 		if err != nil {
 			log.Printf("[STORE API ERROR] Failed to scan blog post row: %v", err)
@@ -1238,6 +1240,7 @@ func (h *StoreCatalogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Reque
 
 		if langCode != nil && title != nil && content != nil {
 			post.Translations[*langCode] = models.BlogPostTranslation{
+				Slug:            transSlug,
 				Title:           *title,
 				Summary:         summary,
 				Content:         *content,
@@ -1256,7 +1259,7 @@ func (h *StoreCatalogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(blogList)
 }
 
-// GetBlogPostBySlug returns a single active blog post by its slug
+// GetBlogPostBySlug returns a single active blog post by its slug (supports localized slug lookup)
 func (h *StoreCatalogHandler) GetBlogPostBySlug(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
@@ -1274,10 +1277,17 @@ func (h *StoreCatalogHandler) GetBlogPostBySlug(w http.ResponseWriter, r *http.R
 
 	query := `
 		SELECT b.id, b.slug, b.cover_image, b.is_active, b.created_at, b.updated_at,
-		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description
+		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description,
+		       COALESCE(t.slug, b.slug) AS trans_slug
 		FROM catalog.blog_posts b
 		LEFT JOIN catalog.blog_post_translations t ON b.id = t.post_id
-		WHERE b.slug = $1 AND b.is_active = true`
+		WHERE b.is_active = true
+		  AND (
+		      b.slug = $1
+		      OR b.id IN (
+		          SELECT post_id FROM catalog.blog_post_translations WHERE slug = $1
+		      )
+		  )`
 
 	rows, err := db.Pool.Query(ctx, query, slug)
 	if err != nil {
@@ -1297,11 +1307,12 @@ func (h *StoreCatalogHandler) GetBlogPostBySlug(w http.ResponseWriter, r *http.R
 			createdAt, updatedAt          time.Time
 			langCode, title, summary      *string
 			content, metaTitle, metaDesc *string
+			transSlug                     *string
 		)
 
 		err := rows.Scan(
 			&postID, &postSlug, &coverImage, &isActive, &createdAt, &updatedAt,
-			&langCode, &title, &summary, &content, &metaTitle, &metaDesc,
+			&langCode, &title, &summary, &content, &metaTitle, &metaDesc, &transSlug,
 		)
 		if err != nil {
 			log.Printf("[STORE API ERROR] Failed to scan blog post row: %v", err)
@@ -1323,6 +1334,7 @@ func (h *StoreCatalogHandler) GetBlogPostBySlug(w http.ResponseWriter, r *http.R
 
 		if langCode != nil && title != nil && content != nil {
 			post.Translations[*langCode] = models.BlogPostTranslation{
+				Slug:            transSlug,
 				Title:           *title,
 				Summary:         summary,
 				Content:         *content,

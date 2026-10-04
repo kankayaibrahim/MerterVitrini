@@ -237,12 +237,13 @@ export default function BlogDetailClient({
     window.dispatchEvent(new Event("storage"));
   };
 
-  // Redirect on language switch
+  // Redirect on language switch using localized slug
   const handleLangChange = (newLang: string) => {
     setLang(newLang);
     const matchLang = activeLangs.find((l) => l.code === newLang);
     if (matchLang) {
-      router.push(`/${matchLang.categoryPrefix}/blog/${slug}`);
+      const targetSlug = post?.translations[newLang]?.slug || slug;
+      router.push(`/${matchLang.categoryPrefix}/blog/${targetSlug}`);
     }
   };
 

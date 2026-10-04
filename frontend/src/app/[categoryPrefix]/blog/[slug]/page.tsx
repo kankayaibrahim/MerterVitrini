@@ -122,14 +122,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = t?.meta_title || t?.title || "Merter Vitrini";
   const desc = t?.meta_description || t?.summary || translate("seo_fallback_desc", lang);
   
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/${slug}`;
+  const canonicalSlug = t?.slug || slug;
+  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/${canonicalSlug}`;
   
-  // Build Hreflang alternates
+  // Build Hreflang alternates with each language's localized slug
+  const defaultSlug = post.translations["en"]?.slug || post.slug;
   const alternatesLanguages: Record<string, string> = {
-    "x-default": `https://mertervitrini.com.tr/en/blog/${slug}`,
+    "x-default": `https://mertervitrini.com.tr/en/blog/${defaultSlug}`,
   };
   activeLangs.forEach((l) => {
-    alternatesLanguages[l.code] = `https://mertervitrini.com.tr/${l.categoryPrefix}/blog/${slug}`;
+    const langTrans = post.translations[l.code];
+    const targetSlug = langTrans?.slug || post.slug;
+    alternatesLanguages[l.code] = `https://mertervitrini.com.tr/${l.categoryPrefix}/blog/${targetSlug}`;
   });
 
   return {
@@ -172,7 +176,7 @@ export default async function BlogDetailPage({ params }: Readonly<PageProps>) {
   const t = postData ? (postData.translations[lang] || postData.translations["tr"] || postData.translations["en"] || Object.values(postData.translations)[0]) : null;
   const articleTitle = t?.title || "Merter Vitrini B2B Sourcing Blog";
   const articleDesc = t?.meta_description || t?.summary || "Merter toptan tekstil hazır giyim analizleri ve B2B rehberleri.";
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/${slug}`;
+  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/${t?.slug || slug}`;
 
   const articleJsonLd = postData ? {
     "@context": "https://schema.org",

@@ -41,7 +41,8 @@ func (h *BlogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT b.id, b.slug, b.cover_image, b.is_active, b.created_at, b.updated_at,
-		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description
+		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description,
+		       COALESCE(t.slug, b.slug) AS trans_slug
 		FROM catalog.blog_posts b
 		LEFT JOIN catalog.blog_post_translations t ON b.id = t.post_id
 		ORDER BY b.updated_at DESC`
@@ -65,11 +66,12 @@ func (h *BlogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Request) {
 			createdAt, updatedAt          time.Time
 			langCode, title, summary      *string
 			content, metaTitle, metaDesc *string
+			transSlug                     *string
 		)
 
 		err := rows.Scan(
 			&id, &slug, &coverImage, &isActive, &createdAt, &updatedAt,
-			&langCode, &title, &summary, &content, &metaTitle, &metaDesc,
+			&langCode, &title, &summary, &content, &metaTitle, &metaDesc, &transSlug,
 		)
 		if err != nil {
 			log.Printf("Failed to scan blog row: %v", err)
@@ -94,6 +96,7 @@ func (h *BlogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Request) {
 
 		if langCode != nil && title != nil && content != nil {
 			b.Translations[*langCode] = models.BlogPostTranslation{
+				Slug:            transSlug,
 				Title:           *title,
 				Summary:         summary,
 				Content:         *content,
@@ -129,7 +132,8 @@ func (h *BlogHandler) GetBlogPostByID(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT b.id, b.slug, b.cover_image, b.is_active, b.created_at, b.updated_at,
-		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description
+		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description,
+		       COALESCE(t.slug, b.slug) AS trans_slug
 		FROM catalog.blog_posts b
 		LEFT JOIN catalog.blog_post_translations t ON b.id = t.post_id
 		WHERE b.id = $1`
@@ -152,11 +156,12 @@ func (h *BlogHandler) GetBlogPostByID(w http.ResponseWriter, r *http.Request) {
 			createdAt, updatedAt          time.Time
 			langCode, title, summary      *string
 			content, metaTitle, metaDesc *string
+			transSlug                     *string
 		)
 
 		err := rows.Scan(
 			&postID, &slug, &coverImage, &isActive, &createdAt, &updatedAt,
-			&langCode, &title, &summary, &content, &metaTitle, &metaDesc,
+			&langCode, &title, &summary, &content, &metaTitle, &metaDesc, &transSlug,
 		)
 		if err != nil {
 			log.Printf("Failed to scan blog details: %v", err)
@@ -178,6 +183,7 @@ func (h *BlogHandler) GetBlogPostByID(w http.ResponseWriter, r *http.Request) {
 
 		if langCode != nil && title != nil && content != nil {
 			post.Translations[*langCode] = models.BlogPostTranslation{
+				Slug:            transSlug,
 				Title:           *title,
 				Summary:         summary,
 				Content:         *content,
@@ -234,8 +240,15 @@ func validateBlogRequest(req *CreateBlogRequest) error {
 func saveBlogPostTranslations(ctx context.Context, tx pgx.Tx, postID string, translations map[string]models.BlogPostTranslation) (map[string]models.BlogPostTranslation, error) {
 	result := make(map[string]models.BlogPostTranslation, len(translations))
 	insertTranslationQuery := `
-		INSERT INTO catalog.blog_post_translations (post_id, language_code, title, summary, content, meta_title, meta_description)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+		INSERT INTO catalog.blog_post_translations (post_id, language_code, slug, title, summary, content, meta_title, meta_description)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (post_id, language_code) DO UPDATE
+		SET slug = COALESCE(EXCLUDED.slug, catalog.blog_post_translations.slug),
+		    title = EXCLUDED.title,
+		    summary = EXCLUDED.summary,
+		    content = EXCLUDED.content,
+		    meta_title = EXCLUDED.meta_title,
+		    meta_description = EXCLUDED.meta_description`
 
 	for lang, t := range translations {
 		title := strings.TrimSpace(t.Title)
@@ -243,13 +256,15 @@ func saveBlogPostTranslations(ctx context.Context, tx pgx.Tx, postID string, tra
 		summary := cleanBlogMetaField(t.Summary)
 		metaTitle := cleanBlogMetaField(t.MetaTitle)
 		metaDesc := cleanBlogMetaField(t.MetaDescription)
+		slug := cleanBlogMetaField(t.Slug)
 
-		_, err := tx.Exec(ctx, insertTranslationQuery, postID, lang, title, summary, content, metaTitle, metaDesc)
+		_, err := tx.Exec(ctx, insertTranslationQuery, postID, lang, slug, title, summary, content, metaTitle, metaDesc)
 		if err != nil {
 			return nil, fmt.Errorf("failed to insert blog translation for %s: %w", lang, err)
 		}
 
 		result[lang] = models.BlogPostTranslation{
+			Slug:            slug,
 			Title:           title,
 			Summary:         summary,
 			Content:         content,

@@ -7,7 +7,7 @@ import { formatDateTime } from "@/utils/formatters";
 const LABELS = {
   sectionTitle: "Tedarikçi XML Entegrasyonları",
   manageAllButton: "Hepsini Yönet",
-  maskedSuffix: " (Maskeli)",
+  maskedSuffix: "",
   syncingStatusTitle: "Eşleniyor",
   noSyncStatusTitle: "Senkronizasyon Yok",
   lastStatusHeader: "Son Durum:",

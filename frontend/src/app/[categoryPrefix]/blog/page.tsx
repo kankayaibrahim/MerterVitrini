@@ -5,12 +5,13 @@ import { Category } from "@/types/store";
 import BlogListClient from "./BlogListClient";
 
 interface PageProps {
-  params: Promise<{
-    categoryPrefix: string;
+  readonly params: Promise<{
+    readonly categoryPrefix: string;
   }>;
 }
 
 export interface BlogPostTranslation {
+  slug?: string;
   title: string;
   summary?: string | null;
   content: string;
@@ -76,7 +77,7 @@ async function fetchLanguages(): Promise<Language[]> {
 }
 
 // Generate static routes for all active language prefixes at compile time
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [
     { categoryPrefix: "tr" },
     { categoryPrefix: "en" },
@@ -90,7 +91,7 @@ export async function generateStaticParams() {
 }
 
 // Generate dynamic SEO metadata for each language blog list page
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: Readonly<PageProps>): Promise<Metadata> {
   const { categoryPrefix } = await params;
   
   const activeLangs = await fetchLanguages();
@@ -155,7 +156,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function BlogListPage({ params }: PageProps) {
+export default async function BlogListPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
   
   // Parallel fetch on the server side

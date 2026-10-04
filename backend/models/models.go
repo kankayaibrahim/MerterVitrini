@@ -383,6 +383,7 @@ type Page struct {
 }
 
 type BlogPostTranslation struct {
+	Slug            *string `json:"slug,omitempty"`
 	Title           string  `json:"title"`
 	Summary         *string `json:"summary,omitempty"`
 	Content         string  `json:"content"`

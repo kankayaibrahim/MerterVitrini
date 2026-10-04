@@ -752,7 +752,7 @@ SELECT p.id, p.feed_id, p.source_product_id, p.source_product_group_id, p.title,
        p.packing_ratio, p.series_ratio, p.minimum_order_quantity, 
        p.price, p.discounted_price, p.single_price, p.buying_price, p.currency, p.tax_rate, COALESCE(col.color_name, 'Standart') as color, p.stock, p.sku, p.barcode,
        p.is_active, 
-       p.created_at, p.updated_at, COALESCE(NULLIF(b.alias_code, ''), b.brand_name) as brand_name, c.title as category_title, c.node_path,
+       p.created_at, p.updated_at, b.brand_name as brand_name, c.title as category_title, c.node_path,
        COALESCE(
            (SELECT json_agg(json_build_object('id', img.id, 'product_id', img.product_id, 'image_url', img.image_url, 'sort_order', img.sort_order, 'is_cover', img.is_cover) ORDER BY img.sort_order ASC)
             FROM catalog.product_images img

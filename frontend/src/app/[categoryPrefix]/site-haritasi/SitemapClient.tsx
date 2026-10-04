@@ -223,7 +223,7 @@ export default function SitemapClient({
                   const translation = post.translations[lang] || post.translations["tr"] || post.translations["en"] || Object.values(post.translations)[0];
                   return (
                     <li key={post.id}>
-                      <a href={`/${categoryPrefix}/blog/${post.slug}/`} className="hover:text-accent-gold transition-colors font-bold text-zinc-700 line-clamp-2">
+                      <a href={`/${categoryPrefix}/blog/${translation?.slug || post.slug}/`} className="hover:text-accent-gold transition-colors font-bold text-zinc-700 line-clamp-2">
                         {translation?.title}
                       </a>
                     </li>

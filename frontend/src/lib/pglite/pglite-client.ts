@@ -14,11 +14,11 @@ export async function getPGliteClient(): Promise<PGliteWorker | null> {
     return null;
   }
 
-  if (pgliteInstance) {
+  if (pgliteInstance !== null) {
     return pgliteInstance;
   }
 
-  if (initPromise) {
+  if (initPromise !== null) {
     return initPromise;
   }
 
@@ -60,6 +60,68 @@ export interface CatalogQueryResult {
   totalCount: number;
 }
 
+function buildCatalogWhereClause(filters: CatalogFilterQuery): { whereSql: string; params: unknown[] } {
+  const whereClauses: string[] = ["1=1"];
+  const params: unknown[] = [];
+  let paramIdx = 1;
+
+  if (filters.categorySlug) {
+    whereClauses.push(`category_slug = $${paramIdx++}`);
+    params.push(filters.categorySlug);
+  }
+
+  const arrayFilters: Array<[string[] | undefined, string]> = [
+    [filters.brands, "brand"],
+    [filters.genders, "gender"],
+    [filters.seasons, "season"],
+    [filters.fabrics, "fabric"],
+  ];
+
+  for (const [arr, col] of arrayFilters) {
+    if (arr && arr.length > 0) {
+      whereClauses.push(`${col} = ANY($${paramIdx++})`);
+      params.push(arr);
+    }
+  }
+
+  if (filters.minPrice !== undefined && filters.minPrice > 0) {
+    whereClauses.push(`price >= $${paramIdx++}`);
+    params.push(filters.minPrice);
+  }
+
+  if (filters.maxPrice !== undefined && filters.maxPrice > 0) {
+    whereClauses.push(`price <= $${paramIdx++}`);
+    params.push(filters.maxPrice);
+  }
+
+  if (filters.inStockOnly) {
+    whereClauses.push("stock > 0");
+  }
+
+  const search = filters.searchQuery?.trim();
+  if (search) {
+    whereClauses.push(`(title ILIKE $${paramIdx} OR brand ILIKE $${paramIdx})`);
+    params.push(`%${search}%`);
+  }
+
+  return { whereSql: whereClauses.join(" AND "), params };
+}
+
+function getOrderClause(sortBy?: CatalogFilterQuery["sortBy"]): string {
+  switch (sortBy) {
+    case "price_asc":
+      return "ORDER BY price ASC";
+    case "price_desc":
+      return "ORDER BY price DESC";
+    case "name_asc":
+      return "ORDER BY title ASC";
+    case "name_desc":
+      return "ORDER BY title DESC";
+    default:
+      return "ORDER BY updated_at DESC";
+  }
+}
+
 /**
  * Executes high-performance faceted catalog filtering directly in browser WASM PostgreSQL
  */
@@ -68,76 +130,17 @@ export async function queryLocalCatalog(filters: CatalogFilterQuery): Promise<Ca
   if (!pg) return null;
 
   try {
-    const whereClauses: string[] = ["1=1"];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    if (filters.categorySlug) {
-      whereClauses.push(`category_slug = $${paramIdx++}`);
-      params.push(filters.categorySlug);
-    }
-
-    if (filters.brands && filters.brands.length > 0) {
-      whereClauses.push(`brand = ANY($${paramIdx++})`);
-      params.push(filters.brands);
-    }
-
-    if (filters.genders && filters.genders.length > 0) {
-      whereClauses.push(`gender = ANY($${paramIdx++})`);
-      params.push(filters.genders);
-    }
-
-    if (filters.seasons && filters.seasons.length > 0) {
-      whereClauses.push(`season = ANY($${paramIdx++})`);
-      params.push(filters.seasons);
-    }
-
-    if (filters.fabrics && filters.fabrics.length > 0) {
-      whereClauses.push(`fabric = ANY($${paramIdx++})`);
-      params.push(filters.fabrics);
-    }
-
-    if (filters.minPrice !== undefined && filters.minPrice > 0) {
-      whereClauses.push(`price >= $${paramIdx++}`);
-      params.push(filters.minPrice);
-    }
-
-    if (filters.maxPrice !== undefined && filters.maxPrice > 0) {
-      whereClauses.push(`price <= $${paramIdx++}`);
-      params.push(filters.maxPrice);
-    }
-
-    if (filters.inStockOnly) {
-      whereClauses.push("stock > 0");
-    }
-
-    if (filters.searchQuery && filters.searchQuery.trim() !== "") {
-      whereClauses.push(`(title ILIKE $${paramIdx} OR brand ILIKE $${paramIdx})`);
-      params.push(`%${filters.searchQuery.trim()}%`);
-      paramIdx++;
-    }
-
-    const whereSql = whereClauses.join(" AND ");
+    const { whereSql, params } = buildCatalogWhereClause(filters);
 
     // Count query
     const countRes = await pg.query<{ count: string }>(
       `SELECT COUNT(*)::text as count FROM catalog_products WHERE ${whereSql}`,
       params
     );
-    const totalCount = parseInt(countRes.rows[0]?.count || "0", 10);
+    const totalCount = Number.parseInt(countRes.rows[0]?.count || "0", 10);
 
     // Sorting
-    let orderSql = "ORDER BY updated_at DESC";
-    if (filters.sortBy === "price_asc") {
-      orderSql = "ORDER BY price ASC";
-    } else if (filters.sortBy === "price_desc") {
-      orderSql = "ORDER BY price DESC";
-    } else if (filters.sortBy === "name_asc") {
-      orderSql = "ORDER BY title ASC";
-    } else if (filters.sortBy === "name_desc") {
-      orderSql = "ORDER BY title DESC";
-    }
-
+    const orderSql = getOrderClause(filters.sortBy);
     const limit = filters.limit || 48;
     const offset = filters.offset || 0;
 
@@ -198,28 +201,30 @@ export async function batchUpsertLocalProducts(products: LocalCatalogProduct[]):
         updated_at = CURRENT_TIMESTAMP
     `;
 
-    for (const p of products) {
-      await pg.query(upsertSql, [
-        p.id,
-        p.title,
-        p.slug,
-        p.brand,
-        p.category_slug,
-        p.gender || null,
-        p.season || null,
-        p.fabric || null,
-        p.price,
-        p.discounted_price || null,
-        p.currency || "TRY",
-        p.stock || 0,
-        p.series_ratio || null,
-        p.moq || 1,
-        p.cover_image || null,
-        p.colors || null,
-        p.sizes || null,
-        p.raw_json || null,
-      ]);
-    }
+    await Promise.all(
+      products.map((p) =>
+        pg.query(upsertSql, [
+          p.id,
+          p.title,
+          p.slug,
+          p.brand,
+          p.category_slug,
+          p.gender || null,
+          p.season || null,
+          p.fabric || null,
+          p.price,
+          p.discounted_price || null,
+          p.currency || "TRY",
+          p.stock || 0,
+          p.series_ratio || null,
+          p.moq || 1,
+          p.cover_image || null,
+          p.colors || null,
+          p.sizes || null,
+          p.raw_json || null,
+        ])
+      )
+    );
 
     return true;
   } catch (err) {
@@ -323,7 +328,7 @@ export async function getLocalProductCount(): Promise<number> {
   if (!pg) return 0;
   try {
     const res = await pg.query<{ count: string }>("SELECT COUNT(*)::text as count FROM catalog_products");
-    return parseInt(res.rows[0]?.count || "0", 10);
+    return Number.parseInt(res.rows[0]?.count || "0", 10);
   } catch {
     return 0;
   }
