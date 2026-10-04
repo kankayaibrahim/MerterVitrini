@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { t, getCategoryPrefix } from "../../app/i18n";
 import { apiFetch } from "../../app/utils";
+import SupplierApplicationSection from "./SupplierApplicationSection";
 
 interface Settings {
   id: string;
@@ -15,9 +16,10 @@ interface Settings {
 interface FooterProps {
   readonly lang: string;
   readonly onOpenPolicy?: (type: "cancellation_and_return" | "terms_of_service" | "privacy_policy") => void;
+  readonly showApplicationForm?: boolean;
 }
 
-export default function Footer({ lang, onOpenPolicy }: Readonly<FooterProps>) {
+export default function Footer({ lang, onOpenPolicy, showApplicationForm = true }: Readonly<FooterProps>) {
   const [settings, setSettings] = useState<Settings>({
     id: "",
     address: "AKEVLER MAH. 1076 SOK. REGNUM ASTRUM TOWER 8A C2 NO:204 ESENYURT / İSTANBUL / TÜRKİYE",
@@ -40,9 +42,15 @@ export default function Footer({ lang, onOpenPolicy }: Readonly<FooterProps>) {
   const sanitizedWhatsapp = settings.whatsapp.replace(/\D/g, "");
   const whatsappUrl = `https://wa.me/${sanitizedWhatsapp}`;
 
+  const commitSuffix = process.env.NEXT_PUBLIC_GIT_COMMIT ? ` (${process.env.NEXT_PUBLIC_GIT_COMMIT})` : "";
+  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME || "Yerel Geliştirme";
+  const lastUpdatedTitle = `Son Güncelleme: ${buildTime}${commitSuffix}`;
+
   return (
-    <footer className="bg-white border-t border-cultured text-sonic-silver py-16 px-6 md:px-12 mt-16 font-sans">
-      <div className="max-w-[1720px] mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
+    <>
+      {showApplicationForm && <SupplierApplicationSection lang={lang} />}
+      <footer className="bg-white border-t border-cultured text-sonic-silver py-16 px-6 md:px-12 mt-0 font-sans">
+        <div className="max-w-[1720px] mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
         
         {/* Column 1: Contact Details */}
         <div className="space-y-4">
@@ -99,18 +107,24 @@ export default function Footer({ lang, onOpenPolicy }: Readonly<FooterProps>) {
               </a>
             </li>
             <li>
-              <a href="#b2b" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+              <a href={`/${getCategoryPrefix(lang)}/b2b`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("wholesale_b2b", lang)}
               </a>
             </li>
             <li>
-              <a href="#contact" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+              <a href={`/${getCategoryPrefix(lang)}/contact`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("contact_us", lang)}
               </a>
             </li>
             <li>
               <a href={`/${getCategoryPrefix(lang)}/blog`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("blog", lang)}
+              </a>
+            </li>
+            <li>
+              <a href="#tedarikci-basvuru" className="text-amber-600 font-bold hover:text-amber-700 hover:underline transition-colors duration-200 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                <span>Tedarikçimiz Olun (Başvuru)</span>
               </a>
             </li>
           </ul>
@@ -137,7 +151,7 @@ export default function Footer({ lang, onOpenPolicy }: Readonly<FooterProps>) {
               </a>
             </li>
             <li>
-              <a href="#faq" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+              <a href={`/${getCategoryPrefix(lang)}/faq`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
                 {t("faq", lang)}
               </a>
             </li>
@@ -236,8 +250,16 @@ export default function Footer({ lang, onOpenPolicy }: Readonly<FooterProps>) {
       </div>
 
       <div className="max-w-[1720px] mx-auto border-t border-cultured mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-sonic-silver">
-        <div>
-          © {new Date().getFullYear()} {t("brand_title", lang)}. {t("all_rights_reserved", lang)}
+        <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-left">
+          <span>© {new Date().getFullYear()} {t("brand_title", lang)}. {t("all_rights_reserved", lang)}</span>
+          <span className="hidden sm:inline text-zinc-300">•</span>
+          <span 
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-100/80 border border-zinc-200/80 text-[10px] font-mono text-zinc-500 hover:text-zinc-800 transition-colors"
+            title={lastUpdatedTitle}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Build {process.env.NEXT_PUBLIC_BUILD_NUMBER ? `#${process.env.NEXT_PUBLIC_BUILD_NUMBER}` : ""} ({process.env.NEXT_PUBLIC_BUILD_TIME || "dev"})</span>
+          </span>
         </div>
         <div className="flex gap-6">
           <a 
@@ -273,5 +295,6 @@ export default function Footer({ lang, onOpenPolicy }: Readonly<FooterProps>) {
         </div>
       </div>
     </footer>
+    </>
   );
 }

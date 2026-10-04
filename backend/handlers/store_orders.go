@@ -125,6 +125,7 @@ func getLocalImagePath(imgURL string) string {
 
 type orderCartItem struct {
 	ProductID       string
+	BrandID         string
 	Quantity        int
 	Title           string
 	CustomSku       string
@@ -142,7 +143,7 @@ type variantStockUpdate struct {
 
 func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, float64, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT ci.product_id, ci.quantity, p.title, p.custom_sku, p.price, p.discounted_price, p.series_ratio, p.stock,
+		SELECT ci.product_id, COALESCE(p.brand_id::text, ''), ci.quantity, p.title, p.custom_sku, p.price, p.discounted_price, p.series_ratio, p.stock,
 		       COALESCE(
 		           (SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY sort_order ASC, is_cover DESC LIMIT 1),
 		           '/placeholder.png'
@@ -162,7 +163,7 @@ func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, fl
 	for rows.Next() {
 		var item orderCartItem
 		err := rows.Scan(
-			&item.ProductID, &item.Quantity, &item.Title, &item.CustomSku, &item.Price, &item.DiscountedPrice,
+			&item.ProductID, &item.BrandID, &item.Quantity, &item.Title, &item.CustomSku, &item.Price, &item.DiscountedPrice,
 			&item.SeriesRatio, &item.CurrentStock, &item.ImageUrl,
 		)
 		if err != nil {
@@ -377,6 +378,11 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 	if err := executeStockDeductionAndOrderItems(ctx, tx, orderID, cartID, items, variantUpdates); err != nil {
 		http.Error(w, `{"error":"Stok düşümü başarısız"}`, http.StatusInternalServerError)
 		return
+	}
+
+	// Split order items to supplier sub-orders and allocate pending balances
+	if err := splitOrderIntoSupplierSubOrders(ctx, tx, orderID, orderNumber, items); err != nil {
+		log.Printf("[ORDER_SPLIT_WARNING] Failed to split sub-orders: %v", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

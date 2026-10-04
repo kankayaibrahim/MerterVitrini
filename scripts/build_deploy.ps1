@@ -111,17 +111,18 @@ if ($Project -eq "backend" -or $Project -eq "all" -or $Project -eq "admin" -or $
 # 2. UNIFIED NEXT.JS FRONTEND (SSR Mağaza + /admin Yönetim Paneli)
 if ($Project -eq "frontend" -or $Project -eq "all" -or $Project -eq "admin" -or $Project -eq "shop") {
     Write-Host "`n--------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "Building Unified Next.js Frontend (SSR Mağaza + /admin)" -ForegroundColor DarkCyan
+    Write-Host "Verifying Unified Next.js Frontend (SSR Mağaza + /admin)" -ForegroundColor DarkCyan
     Write-Host "--------------------------------------------------" -ForegroundColor DarkCyan
     
     $frontendDir = Join-Path $rootDir "frontend"
     Push-Location $frontendDir
     try {
-        Write-Host "[BUILD] Running Next.js SSR build..." -ForegroundColor White
-        & npm.cmd run build
-        Write-Host "[OK] Next.js Unified Frontend Compilation Success!" -ForegroundColor Green
+        Write-Host "[TYPECHECK] Running TypeScript verification (no local build artifacts)..." -ForegroundColor White
+        & npx.cmd tsc --noEmit
+        Write-Host "[OK] TypeScript validation clean (0 errors)!" -ForegroundColor Green
+        Write-Host "[REMOTE-BUILD POLICY] Yerel statik/derleme dosyası oluşturulmaz. Next.js SSR doğrudan sunucuda derlenir ve çalışır." -ForegroundColor Gray
     } catch {
-        Write-Host "[ERROR] Next.js Frontend Compilation FAILED!" -ForegroundColor Red
+        Write-Host "[ERROR] Next.js TypeScript verification FAILED!" -ForegroundColor Red
         throw $_
     } finally {
         Pop-Location
@@ -130,11 +131,11 @@ if ($Project -eq "frontend" -or $Project -eq "all" -or $Project -eq "admin" -or 
     # Trigger Deploy if flagged
     if ($Deploy) {
         Write-Host "`n--------------------------------------------------" -ForegroundColor Yellow
-        Write-Host "Deploying Unified Suite to AlmaLinux Production..." -ForegroundColor Yellow
+        Write-Host "Deploying Unified Suite to AlmaLinux Production (Remote Build Mode)..." -ForegroundColor Yellow
         Write-Host "--------------------------------------------------" -ForegroundColor Yellow
         Push-Location $rootDir
         try {
-            & python scripts/unified_deployer.py -p unified -c all -a deploy
+            & python scripts/unified_deployer.py -p unified -c all -a deploy --remote-build
         } catch {
             Write-Host "[ERROR] Unified deployment failed!" -ForegroundColor Red
             throw $_

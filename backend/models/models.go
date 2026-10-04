@@ -399,3 +399,233 @@ type BlogPost struct {
 	CreatedAt    time.Time                      `json:"created_at"`
 	UpdatedAt    time.Time                      `json:"updated_at"`
 }
+
+// --- Supplier Portal Models ---
+
+type SupplierUser struct {
+	ID          string     `json:"id"`
+	BrandID     string     `json:"brand_id"`
+	BrandName   string     `json:"brand_name,omitempty"`
+	AliasCode   string     `json:"alias_code,omitempty"`
+	Email       string     `json:"email"`
+	ContactName string     `json:"contact_name"`
+	Phone       *string    `json:"phone,omitempty"`
+	KeycloakID  *string    `json:"keycloak_id,omitempty"`
+	IsActive    bool       `json:"is_active"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+type SupplierLoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type SupplierLoginResponse struct {
+	Token string        `json:"token"`
+	User  *SupplierUser `json:"user"`
+}
+
+type CreateSupplierUserRequest struct {
+	BrandID     string `json:"brand_id"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	ContactName string `json:"contact_name"`
+	Phone       string `json:"phone,omitempty"`
+}
+
+type UpdateSupplierUserRequest struct {
+	ContactName string `json:"contact_name"`
+	Phone       string `json:"phone,omitempty"`
+	Password    string `json:"password,omitempty"`
+	IsActive    bool   `json:"is_active"`
+}
+
+type SupplierProductVariantInput struct {
+	Size     string  `json:"size"`
+	Barcode  string  `json:"barcode,omitempty"`
+	Stock    int     `json:"stock"`
+	IsSingle bool    `json:"is_single"`
+	Price    float64 `json:"price,omitempty"`
+}
+
+type SupplierProductInput struct {
+	Title                string                        `json:"title"`
+	ShortDescription     string                        `json:"short_description,omitempty"`
+	Description          string                        `json:"description,omitempty"`
+	CategoryID           string                        `json:"category_id"`
+	ColorID              *string                       `json:"color_id,omitempty"`
+	FabricID             *string                       `json:"fabric_id,omitempty"`
+	Gender               string                        `json:"gender,omitempty"`
+	Season               string                        `json:"season,omitempty"`
+	BuyingPrice          float64                       `json:"buying_price"`
+	Price                float64                       `json:"price"`
+	Currency             string                        `json:"currency"`
+	PackingRatio         string                        `json:"packing_ratio,omitempty"`
+	SeriesRatio          string                        `json:"series_ratio,omitempty"`
+	MinimumOrderQuantity int                           `json:"minimum_order_quantity"`
+	IsActive             bool                          `json:"is_active"`
+	Images               []string                      `json:"images,omitempty"`
+	Variants             []SupplierProductVariantInput `json:"variants,omitempty"`
+}
+
+type SupplierApplication struct {
+	ID          string    `json:"id"`
+	CompanyName string    `json:"company_name"`
+	ContactName string    `json:"contact_name"`
+	Email       string    `json:"email"`
+	Phone       string    `json:"phone"`
+	City        *string   `json:"city,omitempty"`
+	Category    *string   `json:"category,omitempty"`
+	Instagram   *string   `json:"instagram,omitempty"`
+	Website     *string   `json:"website,omitempty"`
+	Notes       *string   `json:"notes,omitempty"`
+	Status      string    `json:"status"` // 'pending', 'reviewed', 'contacted', 'approved', 'rejected'
+	AdminNotes  *string   `json:"admin_notes,omitempty"`
+	IPAddress   *string   `json:"ip_address,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type CreateSupplierApplicationRequest struct {
+	CompanyName    string `json:"company_name"`
+	ContactName    string `json:"contact_name"`
+	Email          string `json:"email"`
+	Phone          string `json:"phone"`
+	City           string `json:"city,omitempty"`
+	Category       string `json:"category,omitempty"`
+	Instagram      string `json:"instagram,omitempty"`
+	Website        string `json:"website,omitempty"`
+	Notes          string `json:"notes,omitempty"`
+	ReCaptchaToken string `json:"recaptcha_token,omitempty"`
+}
+
+type UpdateSupplierApplicationStatusRequest struct {
+	Status     string `json:"status"`
+	AdminNotes string `json:"admin_notes,omitempty"`
+}
+
+// B2B Multi-Vendor Marketplace Models
+
+type SupplierWallet struct {
+	ID                string    `json:"id"`
+	BrandID           string    `json:"brand_id"`
+	Currency          string    `json:"currency"`
+	PendingBalance    float64   `json:"pending_balance"`
+	AvailableBalance  float64   `json:"available_balance"`
+	WithdrawnBalance  float64   `json:"withdrawn_balance"`
+	CommissionRate    float64   `json:"commission_rate"`
+	IBAN              *string   `json:"iban,omitempty"`
+	BankName          *string   `json:"bank_name,omitempty"`
+	BankAccountHolder *string   `json:"bank_account_holder,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+type UpdateSupplierWalletIbanRequest struct {
+	IBAN              string `json:"iban"`
+	BankName          string `json:"bank_name"`
+	BankAccountHolder string `json:"bank_account_holder"`
+}
+
+type SupplierSubOrderItem struct {
+	ID              string  `json:"id"`
+	SubOrderID      string  `json:"sub_order_id"`
+	ProductID       string  `json:"product_id"`
+	ProductName     string  `json:"product_name"`
+	ProductSKU      string  `json:"product_sku"`
+	Quantity        int     `json:"quantity"`
+	PriceAtPurchase float64 `json:"price_at_purchase"`
+	TotalPrice      float64 `json:"total_price"`
+	ImageURL        *string `json:"image_url,omitempty"`
+	SeriesRatio     *string `json:"series_ratio,omitempty"`
+}
+
+type SupplierSubOrder struct {
+	ID               string                 `json:"id"`
+	OrderID          string                 `json:"order_id"`
+	BrandID          string                 `json:"brand_id"`
+	BrandName        string                 `json:"brand_name,omitempty"`
+	SubOrderNumber   string                 `json:"sub_order_number"`
+	GrossAmount      float64                `json:"gross_amount"`
+	CommissionRate   float64                `json:"commission_rate"`
+	CommissionAmount float64                `json:"commission_amount"`
+	NetPayoutAmount  float64                `json:"net_payout_amount"`
+	Currency         string                 `json:"currency"`
+	Status           string                 `json:"status"` // PENDING, ACCEPTED, PREPARING, SENT_TO_HUB, DELIVERED, CANCELLED
+	TrackingCompany  *string                `json:"tracking_company,omitempty"`
+	TrackingNumber   *string                `json:"tracking_number,omitempty"`
+	Notes            *string                `json:"notes,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
+	Items            []SupplierSubOrderItem `json:"items,omitempty"`
+}
+
+type UpdateSubOrderStatusRequest struct {
+	Status          string `json:"status"`
+	TrackingCompany string `json:"tracking_company,omitempty"`
+	TrackingNumber  string `json:"tracking_number,omitempty"`
+	Notes           string `json:"notes,omitempty"`
+}
+
+type SupplierLedgerEntry struct {
+	ID              string    `json:"id"`
+	BrandID         string    `json:"brand_id"`
+	SubOrderID      *string   `json:"sub_order_id,omitempty"`
+	PayoutRequestID *string   `json:"payout_request_id,omitempty"`
+	TransactionType string    `json:"transaction_type"`
+	Amount          float64   `json:"amount"`
+	BalanceAfter    float64   `json:"balance_after"`
+	Currency        string    `json:"currency"`
+	Description     string    `json:"description"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type SupplierPayoutRequest struct {
+	ID            string     `json:"id"`
+	BrandID       string     `json:"brand_id"`
+	BrandName     string     `json:"brand_name,omitempty"`
+	Amount        float64    `json:"amount"`
+	Currency      string     `json:"currency"`
+	Status        string     `json:"status"` // PENDING, APPROVED, REJECTED, TRANSFERRED
+	IBAN          string     `json:"iban"`
+	BankName      *string    `json:"bank_name,omitempty"`
+	AccountHolder string     `json:"account_holder"`
+	AdminNotes    *string    `json:"admin_notes,omitempty"`
+	ProcessedAt   *time.Time `json:"processed_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+type CreatePayoutRequestInput struct {
+	Amount float64 `json:"amount"`
+}
+
+type ProcessPayoutRequestInput struct {
+	Status     string `json:"status"` // APPROVED, REJECTED, TRANSFERRED
+	AdminNotes string `json:"admin_notes,omitempty"`
+}
+
+type B2BApiKey struct {
+	ID                string     `json:"id"`
+	ClientName        string     `json:"client_name"`
+	APIKey            string     `json:"api_key"`
+	MarginRate        float64    `json:"margin_rate"`
+	Currency          string     `json:"currency"`
+	IsActive          bool       `json:"is_active"`
+	AllowedCategories []string   `json:"allowed_categories,omitempty"`
+	RateLimitMinute   int        `json:"rate_limit_minute"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt        *time.Time `json:"last_used_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
+}
+
+type CreateB2BApiKeyRequest struct {
+	ClientName        string   `json:"client_name"`
+	MarginRate        float64  `json:"margin_rate"`
+	Currency          string   `json:"currency"`
+	AllowedCategories []string `json:"allowed_categories,omitempty"`
+}
+

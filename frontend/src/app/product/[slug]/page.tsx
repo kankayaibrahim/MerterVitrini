@@ -129,7 +129,7 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
         "offers": {
           "@type": "Offer",
           "url": `https://mertervitrini.com.tr/product/${product.slug || product.id}`,
-          "priceCurrency": "USD",
+          "priceCurrency": product.currency || "USD",
           "price": (product.discounted_price && product.discounted_price > 0 ? product.discounted_price : product.price || 0).toFixed(2),
           "availability": "https://schema.org/InStock",
           "itemCondition": "https://schema.org/NewCondition",
@@ -137,6 +137,41 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
           "seller": {
             "@type": "Organization",
             "name": "Merter Vitrini B2B",
+          },
+          "hasMerchantReturnPolicy": {
+            "@type": "MerchantReturnPolicy",
+            "applicableCountry": "TR",
+            "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+            "merchantReturnDays": 14,
+            "returnMethod": "https://schema.org/ReturnByMail",
+            "returnFees": "https://schema.org/ReturnFeesCustomerResponsibility",
+          },
+          "shippingDetails": {
+            "@type": "OfferShippingDetails",
+            "shippingRate": {
+              "@type": "MonetaryAmount",
+              "value": "0.00",
+              "currency": product.currency || "USD",
+            },
+            "shippingDestination": {
+              "@type": "DefinedRegion",
+              "addressCountry": ["TR", "DE", "FR", "PL", "US", "RU", "AE", "SA"],
+            },
+            "deliveryTime": {
+              "@type": "ShippingDeliveryTime",
+              "handlingTime": {
+                "@type": "QuantitativeValue",
+                "minValue": 1,
+                "maxValue": 3,
+                "unitCode": "DAY",
+              },
+              "transitTime": {
+                "@type": "QuantitativeValue",
+                "minValue": 2,
+                "maxValue": 7,
+                "unitCode": "DAY",
+              },
+            },
           },
         },
       },

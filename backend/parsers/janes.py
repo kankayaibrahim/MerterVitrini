@@ -169,9 +169,42 @@ def _parse_env_line(line):
         val = val[1:-1]
     return key, val
 
-# Safe .env loader function
+def _apply_config_json(cfg_path):
+    if not os.path.exists(cfg_path):
+        return
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg_data = json.load(f)
+        key_map = {
+            "db_host": "DB_HOST",
+            "db_port": "DB_PORT",
+            "db_user": "DB_USER",
+            "db_password": "DB_PASSWORD",
+            "db_name": "DB_NAME",
+        }
+        for cfg_key, env_key in key_map.items():
+            if cfg_key in cfg_data and not os.environ.get(env_key):
+                os.environ[env_key] = str(cfg_data[cfg_key])
+    except Exception as e:
+        sys.stderr.write(f"Warning: Failed to load config.json from {cfg_path}: {e}\n")
+
+def _apply_dotenv(env_path):
+    if not os.path.exists(env_path):
+        return False
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                k, v = _parse_env_line(line)
+                if k:
+                    os.environ[k] = v
+        return True
+    except Exception as e:
+        sys.stderr.write(f"Warning: Failed to load .env from {env_path}: {e}\n")
+        return False
+
+# Safe .env & config.json loader function
 def load_env():
-    # search standard locations for .env
+    # search standard locations for .env and config.json
     search_dirs = [
         os.path.dirname(os.path.abspath(__file__)),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."),
@@ -179,18 +212,9 @@ def load_env():
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."),
     ]
     for d in search_dirs:
-        env_path = os.path.join(d, ".env")
-        if not os.path.exists(env_path):
-            continue
-        try:
-            with open(env_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    k, v = _parse_env_line(line)
-                    if k:
-                        os.environ[k] = v
+        _apply_config_json(os.path.join(d, "config.json"))
+        if _apply_dotenv(os.path.join(d, ".env")):
             break
-        except Exception as e:
-            sys.stderr.write(f"Warning: Failed to load .env from {env_path}: {e}\n")
 
 # Load environment settings from .env
 load_env()
@@ -1820,7 +1844,7 @@ def _write_attributes_and_images(cur, products_to_upsert, attributes_by_product,
         timings["7. DB Attributes Insert"] = time.time() - t_db
     if images_insert_rows:
         t_db = time.time()
-        execute_values_psycopg3(cur, "INSERT INTO catalog.product_images (id, product_id, image_url, sort_order, is_cover) VALUES %s ON CONFLICT (product_id, image_url) DO NOTHING", images_insert_rows, page_size=2000)
+        execute_values_psycopg3(cur, "INSERT INTO catalog.product_images (id, product_id, image_url, sort_order, is_cover) VALUES %s", images_insert_rows, page_size=2000)
         timings["9. DB Image Mappings Insert"] = time.time() - t_db
 
 def _bulk_write_batches(conn, parsed_data, timings):

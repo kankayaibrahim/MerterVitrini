@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, useMemo } from "react";
+import { useState, useTransition, useEffect, useMemo, useCallback } from "react";
 import { 
   Plus, 
   Edit3, 
@@ -24,10 +24,14 @@ import {
   CheckSquare,
   Square,
   Filter,
-  ChevronDown
+  ChevronDown,
+  Users,
+  FileText
 } from "lucide-react";
 import { XmlFeed, Brand, CategoryNode } from "@/types/integration";
 import XmlImportWizard from "./XmlImportWizard";
+import SupplierUsersSection from "./SupplierUsersSection";
+import SupplierApplicationsSection from "./SupplierApplicationsSection";
 
 // Strict internationalization safe LABELS dictionary
 const LABELS = {
@@ -178,6 +182,931 @@ function getModalSubmitLabel(modal: string | null): string {
   return LABELS.SAVE;
 }
 
+function getDeleteHistoryConfirmMsg(options: { filenames?: string[]; feedId?: string }): string {
+  if (options.feedId === "all") {
+    return "TÜM XML indirme geçmişini kalıcı olarak silmek istediğinize emin misiniz?";
+  }
+  if (options.feedId) {
+    const feedNames: Record<string, string> = { etika: "Etika", janes: "Jane's" };
+    const supplierName = feedNames[options.feedId] || options.feedId;
+    return `${supplierName} tedarikçisine ait tüm XML geçmişini kalıcı olarak silmek istediğinize emin misiniz?`;
+  }
+  if (options.filenames?.length === 1) {
+    return `"${options.filenames[0]}" dosyasını kalıcı olarak silmek istediğinize emin misiniz?`;
+  }
+  return "Seçilen XML dosyalarını kalıcı olarak silmek istediğinize emin misiniz?";
+}
+
+function getParserScriptForAlias(rawAlias: string): string {
+  const alias = rawAlias.toUpperCase();
+  if (alias === "FLORM") return "parsers/etika.py";
+  if (alias === "EDUSA") return "parsers/janes.py";
+  return "parsers/custom.py";
+}
+
+function resolveTargetFeedId(alias: string, scriptPath: string): string {
+  if (scriptPath.includes("etika.py")) return "etika";
+  if (scriptPath.includes("janes.py")) return "janes";
+  const baseName = scriptPath.split("/").pop()?.split("\\").pop()?.replace(/\.py$/, "");
+  return baseName ? baseName.toLowerCase() : `${alias.toLowerCase()}_feed`;
+}
+
+interface XmlHistoryRecord {
+  filename: string;
+  feed_id: string;
+  supplier_name: string;
+  size_bytes: number;
+  formatted_size: string;
+  created_at: string;
+}
+
+interface HistoryStats {
+  totalSize: string;
+  fileCount: number;
+  latestFile: XmlHistoryRecord | null;
+}
+
+function computeHistoryStats(historyList: XmlHistoryRecord[]): HistoryStats {
+  let totalSize = 0;
+  let latestFile: XmlHistoryRecord | null = null;
+
+  for (const item of historyList) {
+    totalSize += item.size_bytes;
+    if (!latestFile || new Date(item.created_at) > new Date(latestFile.created_at)) {
+      latestFile = item;
+    }
+  }
+
+  return {
+    totalSize: formatBytes(totalSize),
+    fileCount: historyList.length,
+    latestFile
+  };
+}
+
+function filterHistoryItems(historyList: XmlHistoryRecord[], searchQuery: string, filterFeedId: string) {
+  const query = searchQuery.toLowerCase();
+  return historyList.filter(item => {
+    const matchesSearch = !query ||
+      item.filename.toLowerCase().includes(query) ||
+      item.supplier_name.toLowerCase().includes(query);
+    const matchesFeed = filterFeedId === "all" || item.feed_id === filterFeedId;
+    return matchesSearch && matchesFeed;
+  });
+}
+
+function getHistoryBadgeClass(feedId: string): string {
+  if (feedId === "etika") return "bg-violet-50 text-violet-700 border-violet-100";
+  if (feedId === "janes") return "bg-indigo-50 text-indigo-700 border-indigo-100";
+  return "bg-zinc-100 text-zinc-700 border-zinc-200";
+}
+
+function areAllFilesSelected(filenames: string[], selected: string[]): boolean {
+  if (filenames.length === 0) return false;
+  return filenames.every(name => selected.includes(name));
+}
+
+function getToggledAllSelection(filenames: string[], currentSelected: string[]): string[] {
+  const isAllChecked = filenames.length > 0 && filenames.every(name => currentSelected.includes(name));
+  if (isAllChecked) {
+    return currentSelected.filter(name => !filenames.includes(name));
+  }
+  return Array.from(new Set([...currentSelected, ...filenames]));
+}
+
+interface XmlHistoryTableBodyProps {
+  loading: boolean;
+  history: XmlHistoryRecord[];
+  selectedFiles: string[];
+  onToggleFile: (filename: string) => void;
+  onDeleteFile: (filename: string) => void;
+}
+
+function XmlHistoryTableBody({
+  loading,
+  history,
+  selectedFiles,
+  onToggleFile,
+  onDeleteFile
+}: Readonly<XmlHistoryTableBodyProps>) {
+  if (loading) {
+    return (
+      <tr>
+        <td colSpan={6} className="py-12 text-center text-zinc-400">
+          <RefreshCw size={24} className="animate-spin mx-auto text-violet-500 mb-2" />
+          <span className="font-medium">{LABELS.LOADING_HISTORY}</span>
+        </td>
+      </tr>
+    );
+  }
+
+  if (history.length === 0) {
+    return (
+      <tr>
+        <td colSpan={6} className="py-16 text-center text-zinc-400">
+          <FolderX size={32} className="mx-auto text-zinc-300 mb-2" />
+          <span className="font-semibold block text-zinc-500">{LABELS.NO_HISTORY_FOUND}</span>
+          <span className="text-[10px] text-zinc-400 mt-1 block">{LABELS.NO_HISTORY_DESC}</span>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <>
+      {history.map((item) => {
+        const isChecked = selectedFiles.includes(item.filename);
+        const badgeClass = getHistoryBadgeClass(item.feed_id);
+
+        return (
+          <tr
+            key={item.filename}
+            className={`hover:bg-zinc-50/50 transition-colors ${isChecked ? "bg-violet-50/10" : ""}`}
+          >
+            <td className="py-3 px-4">
+              <button
+                type="button"
+                onClick={() => onToggleFile(item.filename)}
+                className="text-zinc-400 hover:text-violet-600 transition-colors cursor-pointer"
+              >
+                {isChecked ? (
+                  <CheckSquare size={16} className="text-violet-600 fill-violet-50" />
+                ) : (
+                  <Square size={16} />
+                )}
+              </button>
+            </td>
+            <td className="py-3 px-4">
+              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}`}>
+                <Building size={10} />
+                {item.supplier_name}
+              </span>
+            </td>
+            <td className="py-3 px-4 font-mono text-[11px] text-zinc-600 truncate max-w-xs" title={item.filename}>
+              {item.filename}
+            </td>
+            <td className="py-3 px-4 font-bold text-zinc-800">
+              {item.formatted_size}
+            </td>
+            <td className="py-3 px-4 text-zinc-500">
+              {new Date(item.created_at).toLocaleString("tr-TR")}
+            </td>
+            <td className="py-3 px-4 text-right">
+              <button
+                type="button"
+                onClick={() => onDeleteFile(item.filename)}
+                className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors inline-flex cursor-pointer"
+                title={LABELS.DELETE_SINGLE_FILE_TOOLTIP}
+              >
+                <Trash2 size={13} />
+              </button>
+            </td>
+          </tr>
+        );
+      })}
+    </>
+  );
+}
+
+interface SupplierCardProps {
+  supplier: Brand;
+  activeSyncing: Record<string, string>;
+  onDeactivateProducts: (supplier: Brand) => void;
+  onDeleteProducts: (supplier: Brand) => void;
+  onEditSupplier: (supplier: Brand) => void;
+  onDeleteSupplier: (supplier: Brand) => void;
+  onOpenWizard: (feed: XmlFeed) => void;
+  onTriggerSync: (feedId: string) => void;
+  onDeleteFeed: (feed: XmlFeed) => void;
+}
+
+function SupplierCard({
+  supplier,
+  activeSyncing,
+  onDeactivateProducts,
+  onDeleteProducts,
+  onEditSupplier,
+  onDeleteSupplier,
+  onOpenWizard,
+  onTriggerSync,
+  onDeleteFeed
+}: Readonly<SupplierCardProps>) {
+  const addresses = (supplier.addresses as SupplierAddress[]) || [];
+  const feeds = supplier.feeds || [];
+
+  return (
+    <div 
+      className={`glass-card bg-white border rounded-3xl p-6 shadow-sm transition-all hover:shadow-md flex flex-col gap-5 ${
+        supplier.is_active ? "border-zinc-200/50" : "border-zinc-200 bg-zinc-50/40 opacity-90"
+      }`}
+    >
+      {/* Supplier Header Info */}
+      <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-3 rounded-2xl ${supplier.is_active ? "bg-violet-50 text-violet-600" : "bg-zinc-100 text-zinc-500"}`}>
+            <Building size={20} />
+          </div>
+          <div>
+            <h3 className="font-bold text-base text-zinc-900 flex items-center gap-2">
+              {supplier.name}
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex ${
+                supplier.is_active 
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
+                  : "bg-zinc-100 text-zinc-600 border border-zinc-200"
+              }`}>
+                {supplier.is_active ? LABELS.ACTIVE : LABELS.PASSIVE}
+              </span>
+            </h3>
+            <p className="text-xs font-mono text-zinc-400 mt-1 uppercase">
+              {LABELS.ALIAS_PREFIX}<span className="font-bold text-zinc-700">{supplier.alias_code || "-"}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Edit & Delete quick buttons */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onDeactivateProducts(supplier)}
+            className="p-2 text-zinc-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
+            title={LABELS.DEACTIVATE_PRODUCTS}
+            type="button"
+          >
+            <EyeOff size={16} />
+          </button>
+          <button
+            onClick={() => onDeleteProducts(supplier)}
+            className="p-2 text-zinc-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+            title={LABELS.DELETE_PRODUCTS}
+            type="button"
+          >
+            <FolderX size={16} />
+          </button>
+          <button
+            onClick={() => onEditSupplier(supplier)}
+            className="p-2 text-zinc-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+            title={LABELS.EDIT_SUPPLIER}
+            type="button"
+          >
+            <Edit3 size={16} />
+          </button>
+          <button
+            onClick={() => onDeleteSupplier(supplier)}
+            className="p-2 text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+            title={LABELS.DELETE_SUPPLIER}
+            type="button"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* CONTACTS & ADDRESSES BLOCK */}
+      <div className="flex flex-col gap-3.5 bg-zinc-50/50 rounded-2xl p-4 border border-zinc-100">
+        <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-200/50 pb-2">
+          <Globe size={13} />
+          {LABELS.CONTACTS_INFO}
+        </h4>
+
+        {/* Website & Phone rows */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          {supplier.website ? (
+            <a 
+              href={supplier.website.startsWith("http") ? supplier.website : `https://${supplier.website}`} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-violet-600 hover:text-violet-700 font-semibold transition-colors"
+            >
+              <Globe size={15} className="text-violet-500 shrink-0" />
+              <span className="truncate">{supplier.website}</span>
+              <ExternalLink size={11} className="shrink-0" />
+            </a>
+          ) : (
+            <div className="flex items-center gap-2 text-zinc-400">
+              <Globe size={15} className="shrink-0" />
+              <span className="italic text-xs">-</span>
+            </div>
+          )}
+
+          {supplier.phone ? (
+            <div className="flex items-center gap-2 text-zinc-700 font-semibold">
+              <Phone size={15} className="text-emerald-500 shrink-0" />
+              <span>{supplier.phone}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-zinc-400">
+              <Phone size={15} className="shrink-0" />
+              <span className="italic text-xs">-</span>
+            </div>
+          )}
+        </div>
+
+        {/* Supplier Multiple Addresses display */}
+        {addresses.length > 0 ? (
+          <div className="flex flex-col gap-2 mt-1">
+            {addresses.map((addr, idx) => {
+              const addrKey = addr.id || `${supplier.id}-addr-${addr.title || idx}`;
+              return (
+                <div key={addrKey} className="flex items-start justify-between border-t border-zinc-200/40 pt-2 gap-3">
+                  <div className="flex items-start gap-2 text-xs">
+                    <MapPin size={14} className="text-red-500 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-zinc-800 block mb-0.5">{addr.title}</span>
+                      <span className="text-zinc-500 block leading-relaxed">{addr.text}</span>
+                    </div>
+                  </div>
+
+                  {/* Coordinates GPS map button */}
+                  {addr.coordinates && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr.coordinates)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100/60 px-2 py-1 rounded border border-violet-100 flex items-center gap-1 shrink-0 transition-colors"
+                      title={LABELS.GO_TO_MAPS}
+                    >
+                      <Map size={10} />
+                      {LABELS.GO_TO_MAPS}
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-xs text-zinc-400 italic pt-1">{LABELS.NO_ADDRESSES}</div>
+        )}
+      </div>
+
+      {/* Connected Feeds List */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Database size={13} />
+            {LABELS.FEEDS_TITLE} ({feeds.length})
+          </h4>
+        </div>
+
+        {/* Feeds Sub-rows */}
+        {feeds.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {feeds.map((feed: XmlFeed) => {
+              const isSyncing = !!Reflect.get(activeSyncing, feed.id);
+              return (
+                <div 
+                  key={feed.id} 
+                  className="flex flex-col sm:flex-row sm:items-center justify-between border border-zinc-100 rounded-2xl p-3 bg-zinc-50/40 hover:bg-zinc-50 transition-all gap-3"
+                >
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <span className="text-sm font-bold text-zinc-800 flex items-center gap-2">
+                      {feed.name}
+                      <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded border ${
+                        feed.is_active 
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-100" 
+                          : "bg-zinc-100 text-zinc-500 border-zinc-200"
+                      }`}>
+                        {feed.is_active ? LABELS.ACTIVE : LABELS.PASSIVE}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Feed Row Actions (Sync & Delete) */}
+                  <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                    {/* Match/Mapping Wizard button */}
+                    <button
+                      onClick={() => onOpenWizard(feed)}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100/60 border border-violet-100 transition-colors shadow-sm"
+                      type="button"
+                      title="XML Haritalama Sihirbazını Aç"
+                    >
+                      <Database size={12} />
+                      Eşleştir
+                    </button>
+
+                    {/* Trigger Senkronize button */}
+                    <button
+                      onClick={() => onTriggerSync(feed.id)}
+                      disabled={isSyncing || !feed.is_active}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all border ${
+                        isSyncing 
+                          ? "bg-violet-50 text-violet-600 border-violet-100" 
+                          : "bg-white hover:bg-zinc-50 text-zinc-700 border-zinc-200"
+                      }`}
+                      type="button"
+                    >
+                      <RefreshCw size={12} className={isSyncing ? "animate-spin text-violet-600" : "text-zinc-500"} />
+                      {isSyncing ? "Senkronize Ediliyor" : LABELS.SYNC_NOW}
+                    </button>
+
+                    {/* Delete feed button */}
+                    <button
+                      onClick={() => onDeleteFeed(feed)}
+                      className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title={LABELS.DELETE}
+                      type="button"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center border border-dashed border-zinc-200 rounded-2xl py-8 text-center bg-zinc-50/20">
+            <p className="text-zinc-400 text-xs font-medium">{LABELS.NO_FEEDS}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type ActiveModalType = "create_supplier" | "edit_supplier" | "delete_supplier" | "delete_feed" | "deactivate_products" | "delete_products" | null;
+
+function getModalTitle(modal: ActiveModalType): string {
+  switch (modal) {
+    case "create_supplier": return LABELS.ADD_SUPPLIER;
+    case "edit_supplier": return LABELS.EDIT_SUPPLIER;
+    case "delete_supplier": return LABELS.DELETE_SUPPLIER;
+    case "delete_feed": return LABELS.DELETE_FEED_CONFIRM;
+    case "deactivate_products": return LABELS.DEACTIVATE_PRODUCTS_CONFIRM;
+    case "delete_products": return LABELS.DELETE_PRODUCTS_CONFIRM;
+    default: return "";
+  }
+}
+
+interface SupplierFormFieldsProps {
+  activeModal: ActiveModalType;
+  supplierName: string;
+  supplierAlias: string;
+  supplierWebsite: string;
+  supplierPhone: string;
+  supplierAddresses: SupplierAddress[];
+  supplierIsActive: boolean;
+  selectedParserScript: string;
+  customParserScript: string;
+  isPending: boolean;
+  onNameChange: (val: string) => void;
+  onAliasChange: (val: string) => void;
+  onWebsiteChange: (val: string) => void;
+  onPhoneChange: (val: string) => void;
+  onIsActiveToggle: () => void;
+  onAddAddressLine: () => void;
+  onRemoveAddressLine: (idx: number) => void;
+  onUpdateAddressLine: (idx: number, field: keyof SupplierAddress, val: string) => void;
+  onParserScriptChange: (val: string) => void;
+  onCustomParserScriptChange: (val: string) => void;
+  onAddFeedDirect: () => void;
+}
+
+function SupplierFormFields({
+  activeModal,
+  supplierName,
+  supplierAlias,
+  supplierWebsite,
+  supplierPhone,
+  supplierAddresses,
+  supplierIsActive,
+  selectedParserScript,
+  customParserScript,
+  isPending,
+  onNameChange,
+  onAliasChange,
+  onWebsiteChange,
+  onPhoneChange,
+  onIsActiveToggle,
+  onAddAddressLine,
+  onRemoveAddressLine,
+  onUpdateAddressLine,
+  onParserScriptChange,
+  onCustomParserScriptChange,
+  onAddFeedDirect
+}: Readonly<SupplierFormFieldsProps>) {
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Supplier Name */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.SUPPLIER_NAME}</label>
+        <input 
+          type="text"
+          value={supplierName}
+          onChange={(e) => onNameChange(e.target.value)}
+          className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
+          placeholder="Örn: Janes Toptan Tekstil, Lustrin"
+          required
+          disabled={isPending}
+        />
+      </div>
+
+      {/* Alias Code & Status row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Alias Code */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.ALIAS_CODE}</label>
+          <input 
+            type="text"
+            value={supplierAlias}
+            onChange={(e) => onAliasChange(e.target.value)}
+            className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
+            placeholder="Örn: EDUSA, MIMOZA, FLORA"
+            disabled={isPending}
+          />
+        </div>
+
+        {/* Status checkbox */}
+        <div className="flex items-center justify-between border border-zinc-100 rounded-2xl px-4 py-2 bg-zinc-50/40">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-bold text-zinc-800">{LABELS.STATUS}</span>
+          </div>
+          
+          <button
+            type="button"
+            onClick={onIsActiveToggle}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              supplierIsActive ? "bg-violet-600" : "bg-zinc-200"
+            }`}
+            disabled={isPending}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                supplierIsActive ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* Website & Phone Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Website */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.WEBSITE}</label>
+          <input 
+            type="text"
+            value={supplierWebsite}
+            onChange={(e) => onWebsiteChange(e.target.value)}
+            className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
+            placeholder="Örn: www.janestoptan.net"
+            disabled={isPending}
+          />
+        </div>
+
+        {/* Phone */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.PHONE}</label>
+          <input 
+            type="text"
+            value={supplierPhone}
+            onChange={(e) => onPhoneChange(e.target.value)}
+            className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
+            placeholder="Örn: +90 212 555 6677"
+            disabled={isPending}
+          />
+        </div>
+      </div>
+
+      {/* ADDRESSES SUB-FORM */}
+      <div className="flex flex-col gap-3.5 border-t border-zinc-150 pt-4">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-extrabold text-zinc-700 uppercase tracking-wider">{LABELS.ADDRESSES_HEADER}</label>
+          <button
+            type="button"
+            onClick={onAddAddressLine}
+            className="text-xs font-bold text-violet-600 hover:text-violet-700 flex items-center gap-1 cursor-pointer"
+            disabled={isPending}
+          >
+            <Plus size={13} />
+            {LABELS.ADD_ADDRESS}
+          </button>
+        </div>
+
+        {/* Address Lines list */}
+        {supplierAddresses.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {supplierAddresses.map((addr, idx) => (
+              <div key={addr.id || `addr-item-${idx}`} className="flex flex-col gap-2 p-3 bg-zinc-50 border border-zinc-200/50 rounded-2xl relative group">
+                {/* Remove address button */}
+                <button
+                  type="button"
+                  onClick={() => onRemoveAddressLine(idx)}
+                  className="absolute right-2 top-2 p-1 text-zinc-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-zinc-200 rounded-lg transition-all cursor-pointer"
+                  disabled={isPending}
+                >
+                  <X size={14} />
+                </button>
+
+                {/* Title Input */}
+                <div className="flex flex-col gap-1 w-[85%]">
+                  <input 
+                    type="text"
+                    value={addr.title}
+                    onChange={(e) => onUpdateAddressLine(idx, "title", e.target.value)}
+                    className="px-3 py-1.5 border border-zinc-200 rounded-lg bg-white text-xs font-bold focus:outline-none focus:border-violet-500"
+                    placeholder={LABELS.ADDRESS_TITLE}
+                    required
+                    disabled={isPending}
+                  />
+                </div>
+
+                {/* Text Input */}
+                <div className="flex flex-col gap-1 mt-1">
+                  <textarea
+                    value={addr.text}
+                    onChange={(e) => onUpdateAddressLine(idx, "text", e.target.value)}
+                    className="px-3 py-1.5 border border-zinc-200 rounded-lg bg-white text-xs focus:outline-none focus:border-violet-500 h-16 resize-none"
+                    placeholder={LABELS.ADDRESS_TEXT}
+                    required
+                    disabled={isPending}
+                  />
+                </div>
+
+                {/* Coordinates Input */}
+                <div className="flex flex-col gap-1 mt-1">
+                  <input 
+                    type="text"
+                    value={addr.coordinates}
+                    onChange={(e) => onUpdateAddressLine(idx, "coordinates", e.target.value)}
+                    className="px-3 py-1.5 border border-zinc-200 rounded-lg bg-white text-[11px] font-mono focus:outline-none focus:border-violet-500"
+                    placeholder={LABELS.COORDINATES}
+                    disabled={isPending}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-zinc-400 italic bg-zinc-50 border border-zinc-150 p-4 text-center rounded-2xl">
+            {LABELS.NO_ADDRESSES}
+          </div>
+        )}
+      </div>
+
+      {/* FEEDS DIRECT MANAGEMENT INSIDE EDIT MODAL */}
+      {activeModal === "edit_supplier" && (
+        <div className="flex flex-col gap-4 border-t border-zinc-150 pt-4 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-extrabold text-zinc-700 uppercase tracking-wider">
+              {LABELS.ACTIVATE_PARSER_TITLE}
+            </label>
+          </div>
+
+          <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 flex flex-col gap-3.5 shadow-sm">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                {LABELS.CHOOSE_PARSER_SCRIPT}
+              </label>
+              
+              <div className="relative">
+                <select
+                  value={selectedParserScript}
+                  onChange={(e) => onParserScriptChange(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 text-xs font-semibold cursor-pointer appearance-none pr-10"
+                >
+                  <option value="parsers/etika.py">{LABELS.OPTION_ETIKA}</option>
+                  <option value="parsers/janes.py">{LABELS.OPTION_JANES}</option>
+                  <option value="parsers/custom.py">{LABELS.OPTION_CUSTOM}</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-zinc-400">
+                  <ChevronDown size={14} />
+                </div>
+              </div>
+            </div>
+
+            {/* Custom manual path input */}
+            {selectedParserScript === "parsers/custom.py" && (
+              <div className="flex flex-col gap-1.5 animate-in fade-in duration-150">
+                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                  {LABELS.CUSTOM_SCRIPT_LABEL}
+                </label>
+                <input
+                  type="text"
+                  value={customParserScript}
+                  onChange={(e) => onCustomParserScriptChange(e.target.value)}
+                  placeholder="Örn: parsers/lustral.py"
+                  className="px-3 py-2 border border-zinc-200 rounded-xl bg-white text-xs font-semibold focus:outline-none focus:border-violet-500 font-mono"
+                />
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={onAddFeedDirect}
+              className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all shadow flex items-center justify-center gap-1.5 cursor-pointer mt-1"
+            >
+              <Plus size={14} />
+              {LABELS.ACTIVATE_SCRIPT_BTN}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SupplierModalsProps {
+  activeModal: ActiveModalType;
+  selectedSupplier: Brand | null;
+  formError: string | null;
+  supplierName: string;
+  supplierAlias: string;
+  supplierWebsite: string;
+  supplierPhone: string;
+  supplierAddresses: SupplierAddress[];
+  supplierIsActive: boolean;
+  selectedParserScript: string;
+  customParserScript: string;
+  deleteImages: boolean;
+  isPending: boolean;
+  onClose: () => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onNameChange: (val: string) => void;
+  onAliasChange: (val: string) => void;
+  onWebsiteChange: (val: string) => void;
+  onPhoneChange: (val: string) => void;
+  onIsActiveToggle: () => void;
+  onAddAddressLine: () => void;
+  onRemoveAddressLine: (idx: number) => void;
+  onUpdateAddressLine: (idx: number, field: keyof SupplierAddress, val: string) => void;
+  onParserScriptChange: (val: string) => void;
+  onCustomParserScriptChange: (val: string) => void;
+  onAddFeedDirect: () => void;
+  onDeleteImagesChange: (val: boolean) => void;
+}
+
+function SupplierModals({
+  activeModal,
+  selectedSupplier,
+  formError,
+  supplierName,
+  supplierAlias,
+  supplierWebsite,
+  supplierPhone,
+  supplierAddresses,
+  supplierIsActive,
+  selectedParserScript,
+  customParserScript,
+  deleteImages,
+  isPending,
+  onClose,
+  onSubmit,
+  onNameChange,
+  onAliasChange,
+  onWebsiteChange,
+  onPhoneChange,
+  onIsActiveToggle,
+  onAddAddressLine,
+  onRemoveAddressLine,
+  onUpdateAddressLine,
+  onParserScriptChange,
+  onCustomParserScriptChange,
+  onAddFeedDirect,
+  onDeleteImagesChange
+}: Readonly<SupplierModalsProps>) {
+  if (!activeModal) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4 animate-in fade-in duration-200 overflow-y-auto">
+      <div className="bg-white rounded-3xl border border-zinc-100 max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col my-8 animate-in zoom-in-95 duration-200 max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100 bg-zinc-50/50 shrink-0">
+          <h3 className="font-bold text-lg text-zinc-900">
+            {getModalTitle(activeModal)}
+          </h3>
+          <button 
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-zinc-200/50 text-zinc-400 hover:text-zinc-600 transition-colors"
+            type="button"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Modal Form */}
+        <form onSubmit={onSubmit} className="flex flex-col overflow-y-auto">
+          {/* Modal Body */}
+          <div className="p-6 flex flex-col gap-5 overflow-y-auto">
+            {formError && (
+              <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-2xl text-xs font-semibold">
+                <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
+                <span>{formError}</span>
+              </div>
+            )}
+
+            {activeModal === "delete_supplier" && (
+              <div className="flex flex-col gap-3">
+                <p className="text-zinc-600 text-sm leading-relaxed">{LABELS.DELETE_SUPPLIER_CONFIRM}</p>
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 flex gap-3 text-xs font-medium">
+                  <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block text-amber-800 mb-0.5">{LABELS.CRITICAL_ACTION}</span>
+                    <span>{LABELS.CRITICAL_SUPPLIER_WARNING}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeModal === "delete_feed" && (
+              <div className="flex flex-col gap-3">
+                <p className="text-zinc-600 text-sm leading-relaxed">{LABELS.DELETE_FEED_CONFIRM}</p>
+              </div>
+            )}
+
+            {activeModal === "deactivate_products" && selectedSupplier && (
+              <div className="flex flex-col gap-3">
+                <p className="text-zinc-600 text-sm leading-relaxed">
+                  <strong>{selectedSupplier.name}</strong>{LABELS.DEACTIVATE_CONFIRM_SUFFIX}
+                </p>
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 flex gap-3 text-xs font-medium">
+                  <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block text-amber-800 mb-0.5">{LABELS.DEACTIVATE_WARNING_TITLE}</span>
+                    <span>{LABELS.DEACTIVATE_WARNING_DESC}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeModal === "delete_products" && selectedSupplier && (
+              <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                <p className="text-zinc-600 text-sm leading-relaxed">
+                  <strong>{selectedSupplier.name}</strong>{LABELS.DELETE_CONFIRM_SUFFIX}
+                </p>
+                <div className="bg-red-50 border border-red-200 text-red-950 rounded-2xl p-4 flex gap-3 text-xs font-medium">
+                  <AlertTriangle size={20} className="text-red-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block text-red-800 mb-0.5">{LABELS.DELETE_WARNING_TITLE}</span>
+                    <span>{LABELS.DELETE_WARNING_DESC}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 border border-zinc-200/60 rounded-2xl p-4 bg-zinc-50/50 hover:bg-zinc-50 transition-all mt-1 shadow-sm">
+                  <input 
+                    type="checkbox"
+                    id="delete-images-checkbox"
+                    checked={deleteImages}
+                    onChange={(e) => onDeleteImagesChange(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-500/20 cursor-pointer accent-violet-600"
+                  />
+                  <label htmlFor="delete-images-checkbox" className="text-xs font-semibold text-zinc-600 cursor-pointer select-none leading-relaxed">
+                    <span className="font-bold text-zinc-900 block mb-0.5">Ürün Görsel Dosyaları da Sunucudan Silinsin mi?</span>
+                    <span className="text-zinc-500 font-medium">Seçerseniz, bu ürünlerin sunucu diskinde depolanan tüm resim dosyaları kalıcı olarak silinecektir. Seçmezseniz, görseller sunucuda kalır ve gelecekte tekrar indirilme süresinden tasarruf edilir.</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {(activeModal === "create_supplier" || activeModal === "edit_supplier") && (
+              <SupplierFormFields
+                activeModal={activeModal}
+                supplierName={supplierName}
+                supplierAlias={supplierAlias}
+                supplierWebsite={supplierWebsite}
+                supplierPhone={supplierPhone}
+                supplierAddresses={supplierAddresses}
+                supplierIsActive={supplierIsActive}
+                selectedParserScript={selectedParserScript}
+                customParserScript={customParserScript}
+                isPending={isPending}
+                onNameChange={onNameChange}
+                onAliasChange={onAliasChange}
+                onWebsiteChange={onWebsiteChange}
+                onPhoneChange={onPhoneChange}
+                onIsActiveToggle={onIsActiveToggle}
+                onAddAddressLine={onAddAddressLine}
+                onRemoveAddressLine={onRemoveAddressLine}
+                onUpdateAddressLine={onUpdateAddressLine}
+                onParserScriptChange={onParserScriptChange}
+                onCustomParserScriptChange={onCustomParserScriptChange}
+                onAddFeedDirect={onAddFeedDirect}
+              />
+            )}
+          </div>
+
+          {/* Modal Footer */}
+          <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50/50 flex items-center justify-end gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm font-semibold hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm"
+              disabled={isPending}
+            >
+              {LABELS.CANCEL}
+            </button>
+            
+            <button
+              type="submit"
+              className={`px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition-all ${getModalSubmitClass(activeModal)}`}
+              disabled={isPending}
+            >
+              {isPending ? LABELS.SUBMITTING : getModalSubmitLabel(activeModal)}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function SuppliersManager({
   suppliers,
   categories,
@@ -188,6 +1117,7 @@ export default function SuppliersManager({
   triggerSync
 }: Readonly<SuppliersManagerProps>) {
   const [isPending, startTransition] = useTransition();
+  const [subTab, setSubTab] = useState<"suppliers" | "users" | "applications">("suppliers");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeWizardFeed, setActiveWizardFeed] = useState<XmlFeed | null>(null);
 
@@ -213,44 +1143,69 @@ export default function SuppliersManager({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // XML History Manager states
-  const [xmlHistory, setXmlHistory] = useState<any[]>([]);
+  const [xmlHistory, setXmlHistory] = useState<XmlHistoryRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedHistoryFiles, setSelectedHistoryFiles] = useState<string[]>([]);
   const [historySearchQuery, setHistorySearchQuery] = useState("");
   const [historyFilterFeedId, setHistoryFilterFeedId] = useState("all");
   const [isDeletingHistory, setIsDeletingHistory] = useState(false);
 
-  const fetchXmlHistory = async () => {
+  // Safe API Request Helper
+  const apiRequest = useCallback(async (path: string, method: string, body?: unknown) => {
+    const headers = new Headers({
+      "Content-Type": "application/json"
+    });
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+
+    const response = await fetch(`${apiUrl}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${response.status}`);
+    }
+
+    if (response.status === 204) return null;
+    return response.json();
+  }, [apiUrl, token]);
+
+  const fetchXmlHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
       const data = await apiRequest("/api/v1/xml-history", "GET");
-      setXmlHistory(data || []);
+      setXmlHistory((data as XmlHistoryRecord[]) || []);
     } catch (err) {
       console.error("Failed to load XML history:", err);
     } finally {
       setLoadingHistory(false);
     }
-  };
+  }, [apiRequest]);
 
   useEffect(() => {
-    void fetchXmlHistory();
-  }, []);
+    let ignore = false;
+    const load = async () => {
+      try {
+        const data = await apiRequest("/api/v1/xml-history", "GET");
+        if (!ignore) setXmlHistory((data as XmlHistoryRecord[]) || []);
+      } catch (err) {
+        if (!ignore) console.error("Failed to load XML history:", err);
+      }
+    };
+    void load();
+    return () => {
+      ignore = true;
+    };
+  }, [apiRequest]);
 
   const handleDeleteHistory = async (options: { filenames?: string[]; feedId?: string }) => {
     if (isDeletingHistory) return;
     
-    // confirm dialog
-    let confirmMsg = "Seçilen XML dosyalarını kalıcı olarak silmek istediğinize emin misiniz?";
-    if (options.feedId === "all") {
-      confirmMsg = "TÜM XML indirme geçmişini kalıcı olarak silmek istediğinize emin misiniz?";
-    } else if (options.feedId) {
-      const feedNames: Record<string, string> = { etika: "Etika", janes: "Jane's" };
-      const supplierName = feedNames[options.feedId] || options.feedId;
-      confirmMsg = `${supplierName} tedarikçisine ait tüm XML geçmişini kalıcı olarak silmek istediğinize emin misiniz?`;
-    } else if (options.filenames?.length === 1) {
-      confirmMsg = `"${options.filenames[0]}" dosyasını kalıcı olarak silmek istediğinize emin misiniz?`;
-    }
-
+    const confirmMsg = getDeleteHistoryConfirmMsg(options);
     if (!window.confirm(confirmMsg)) return;
 
     setIsDeletingHistory(true);
@@ -273,64 +1228,25 @@ export default function SuppliersManager({
 
       // Reload list
       await fetchXmlHistory();
-    } catch (err: any) {
-      setFormError(err.message || "Dosya silinirken bir hata oluştu.");
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Dosya silinirken bir hata oluştu.");
     } finally {
       setIsDeletingHistory(false);
     }
   };
 
-  const stats = useMemo(() => {
-    let totalSize = 0;
-    const fileCount = xmlHistory.length;
-    let latestFile: any = null;
+  const stats = useMemo(() => computeHistoryStats(xmlHistory), [xmlHistory]);
 
-    xmlHistory.forEach(item => {
-      totalSize += item.size_bytes;
-      if (!latestFile || new Date(item.created_at) > new Date(latestFile.created_at)) {
-        latestFile = item;
-      }
-    });
+  const filteredHistory = useMemo(
+    () => filterHistoryItems(xmlHistory, historySearchQuery, historyFilterFeedId),
+    [xmlHistory, historySearchQuery, historyFilterFeedId]
+  );
+  const visibleFilenames = useMemo(() => filteredHistory.map(item => item.filename), [filteredHistory]);
+  const isAllHistorySelected = useMemo(
+    () => areAllFilesSelected(visibleFilenames, selectedHistoryFiles),
+    [visibleFilenames, selectedHistoryFiles]
+  );
 
-    return {
-      totalSize: formatBytes(totalSize),
-      fileCount,
-      latestFile
-    };
-  }, [xmlHistory]);
-
-  const filteredHistory = useMemo(() => {
-    return xmlHistory.filter(item => {
-      const matchesSearch = item.filename.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
-                            item.supplier_name.toLowerCase().includes(historySearchQuery.toLowerCase());
-      const matchesFeed = historyFilterFeedId === "all" || item.feed_id === historyFilterFeedId;
-      return matchesSearch && matchesFeed;
-    });
-  }, [xmlHistory, historySearchQuery, historyFilterFeedId]);
-
-  // Safe API Request Helper
-  const apiRequest = async (path: string, method: string, body?: any) => {
-    const headers = new Headers({
-      "Content-Type": "application/json"
-    });
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
-
-    const response = await fetch(`${apiUrl}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.error || `HTTP ${response.status}`);
-    }
-
-    if (response.status === 204) return null;
-    return response.json();
-  };
 
   // Toast indicator helper
   const showToast = (message: string) => {
@@ -367,14 +1283,7 @@ export default function SuppliersManager({
     setSupplierIsActive(supplier.is_active);
     
     // Determine default select based on alias
-    const alias = (supplier.alias_code || "").toUpperCase();
-    if (alias === "FLORM") {
-      setSelectedParserScript("parsers/etika.py");
-    } else if (alias === "EDUSA") {
-      setSelectedParserScript("parsers/janes.py");
-    } else {
-      setSelectedParserScript("parsers/custom.py");
-    }
+    setSelectedParserScript(getParserScriptForAlias(supplier.alias_code || ""));
     setCustomParserScript("");
     
     setFormError(null);
@@ -423,18 +1332,7 @@ export default function SuppliersManager({
   };
 
   const updateAddressLine = (index: number, field: keyof SupplierAddress, value: string) => {
-    const updated = [...supplierAddresses];
-    const target = updated.find((_, idx) => idx === index);
-    if (target) {
-      if (field === "title") {
-        target.title = value;
-      } else if (field === "text") {
-        target.text = value;
-      } else if (field === "coordinates") {
-        target.coordinates = value;
-      }
-      setSupplierAddresses(updated);
-    }
+    setSupplierAddresses(prev => prev.map((addr, idx) => idx === index ? { ...addr, [field]: value } : addr));
   };
 
   const handleAddFeedDirect = () => {
@@ -451,18 +1349,7 @@ export default function SuppliersManager({
     }
 
     // Determine target feed ID from selected script or fallback
-    let feedId = `${alias.toLowerCase()}_feed`;
-    if (scriptPath.includes("etika.py")) {
-      feedId = "etika";
-    } else if (scriptPath.includes("janes.py")) {
-      feedId = "janes";
-    } else {
-      // For custom scripts, extract base name without extension as the ID
-      const baseName = scriptPath.split("/").pop()?.split("\\").pop()?.replace(/\.py$/, "");
-      if (baseName) {
-        feedId = baseName.toLowerCase();
-      }
-    }
+    const feedId = resolveTargetFeedId(alias, scriptPath);
 
     const feedName = `${selectedSupplier.name} XML Entegrasyonu`;
     const feedPayload = {
@@ -500,13 +1387,13 @@ export default function SuppliersManager({
         } else {
           setActiveModal(null);
         }
-      } catch (err: any) {
-        setFormError(err.message || "Entegrasyon oluşturulurken hata oluştu.");
+      } catch (err: unknown) {
+        setFormError(err instanceof Error ? err.message : "Entegrasyon oluşturulurken hata oluştu.");
       }
     });
   };
 
-  const handleSupplierSave = (payload: any) => {
+  const handleSupplierSave = (payload: Record<string, unknown>) => {
     startTransition(async () => {
       try {
         if (activeModal === "create_supplier") {
@@ -518,8 +1405,8 @@ export default function SuppliersManager({
         }
         setActiveModal(null);
         await onRefresh();
-      } catch (err: any) {
-        setFormError(err.message || "İşlem gerçekleştirilirken hata oluştu.");
+      } catch (err: unknown) {
+        setFormError(err instanceof Error ? err.message : "İşlem gerçekleştirilirken hata oluştu.");
       }
     });
   };
@@ -532,8 +1419,8 @@ export default function SuppliersManager({
         showToast(LABELS.SUCCESS_DELETED);
         setActiveModal(null);
         await onRefresh();
-      } catch (err: any) {
-        setFormError(err.message || "Silme işlemi sırasında hata oluştu.");
+      } catch (err: unknown) {
+        setFormError(err instanceof Error ? err.message : "Silme işlemi sırasında hata oluştu.");
       }
     });
   };
@@ -546,8 +1433,8 @@ export default function SuppliersManager({
         showToast(LABELS.SUCCESS_FEED_DELETED);
         setActiveModal(null);
         await onRefresh();
-      } catch (err: any) {
-        setFormError(err.message || "XML besleme bağlantısı silinirken hata oluştu.");
+      } catch (err: unknown) {
+        setFormError(err instanceof Error ? err.message : "XML besleme bağlantısı silinirken hata oluştu.");
       }
     });
   };
@@ -565,8 +1452,8 @@ export default function SuppliersManager({
         }
         setActiveModal(null);
         await onRefresh();
-      } catch (err: any) {
-        setFormError(err.message || "İşlem sırasında bir hata oluştu.");
+      } catch (err: unknown) {
+        setFormError(err instanceof Error ? err.message : "İşlem sırasında bir hata oluştu.");
       }
     });
   };
@@ -576,41 +1463,36 @@ export default function SuppliersManager({
     e.preventDefault();
     setFormError(null);
 
-    // Supplier CRUD submissions
-    if (activeModal === "create_supplier" || activeModal === "edit_supplier") {
-      if (!supplierName.trim()) {
-        setFormError(LABELS.REQUIRED_FIELDS);
-        return;
-      }
-
-      handleSupplierSave({
-        name: supplierName.trim(),
-        alias_code: supplierAlias.trim() || null,
-        website: supplierWebsite.trim() || null,
-        phone: supplierPhone.trim() || null,
-        addresses: supplierAddresses.filter(addr => addr.title.trim() && addr.text.trim()),
-        is_active: supplierIsActive
-      });
-      return;
-    }
-
-    if (activeModal === "delete_supplier") {
-      handleSupplierDelete();
-      return;
-    }
-
-    if (activeModal === "delete_feed") {
-      handleFeedDelete();
-      return;
-    }
-
-    if (activeModal === "deactivate_products") {
-      handleProductStatusAction("deactivate");
-      return;
-    }
-
-    if (activeModal === "delete_products") {
-      handleProductStatusAction("delete");
+    switch (activeModal) {
+      case "create_supplier":
+      case "edit_supplier":
+        if (!supplierName.trim()) {
+          setFormError(LABELS.REQUIRED_FIELDS);
+          return;
+        }
+        handleSupplierSave({
+          name: supplierName.trim(),
+          alias_code: supplierAlias.trim() || null,
+          website: supplierWebsite.trim() || null,
+          phone: supplierPhone.trim() || null,
+          addresses: supplierAddresses.filter(addr => addr.title.trim() && addr.text.trim()),
+          is_active: supplierIsActive
+        });
+        break;
+      case "delete_supplier":
+        handleSupplierDelete();
+        break;
+      case "delete_feed":
+        handleFeedDelete();
+        break;
+      case "deactivate_products":
+        handleProductStatusAction("deactivate");
+        break;
+      case "delete_products":
+        handleProductStatusAction("delete");
+        break;
+      default:
+        break;
     }
   };
 
@@ -623,87 +1505,6 @@ export default function SuppliersManager({
     setSelectedHistoryFiles(prev => 
       prev.includes(filename) ? prev.filter(name => name !== filename) : [...prev, filename]
     );
-  };
-
-  const renderHistoryTableBody = () => {
-    if (loadingHistory) {
-      return (
-        <tr>
-          <td colSpan={6} className="py-12 text-center text-zinc-400">
-            <RefreshCw size={24} className="animate-spin mx-auto text-violet-500 mb-2" />
-            <span className="font-medium">{LABELS.LOADING_HISTORY}</span>
-          </td>
-        </tr>
-      );
-    }
-
-    if (filteredHistory.length === 0) {
-      return (
-        <tr>
-          <td colSpan={6} className="py-16 text-center text-zinc-400">
-            <FolderX size={32} className="mx-auto text-zinc-300 mb-2" />
-            <span className="font-semibold block text-zinc-500">{LABELS.NO_HISTORY_FOUND}</span>
-            <span className="text-[10px] text-zinc-400 mt-1 block">{LABELS.NO_HISTORY_DESC}</span>
-          </td>
-        </tr>
-      );
-    }
-
-    return filteredHistory.map((item) => {
-      const isChecked = selectedHistoryFiles.includes(item.filename);
-      let badgeClass = "bg-zinc-100 text-zinc-700 border-zinc-200";
-      if (item.feed_id === "etika") {
-        badgeClass = "bg-violet-50 text-violet-700 border-violet-100";
-      } else if (item.feed_id === "janes") {
-        badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-100";
-      }
-
-      return (
-        <tr 
-          key={item.filename}
-          className={`hover:bg-zinc-50/50 transition-colors ${isChecked ? "bg-violet-50/10" : ""}`}
-        >
-          <td className="py-3 px-4">
-            <button
-              type="button"
-              onClick={() => toggleHistoryFile(item.filename)}
-              className="text-zinc-400 hover:text-violet-600 transition-colors cursor-pointer"
-            >
-              {isChecked ? (
-                <CheckSquare size={16} className="text-violet-600 fill-violet-50" />
-              ) : (
-                <Square size={16} />
-              )}
-            </button>
-          </td>
-          <td className="py-3 px-4">
-            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${badgeClass}`}>
-              <Building size={10} />
-              {item.supplier_name}
-            </span>
-          </td>
-          <td className="py-3 px-4 font-mono text-[11px] text-zinc-600 truncate max-w-xs" title={item.filename}>
-            {item.filename}
-          </td>
-          <td className="py-3 px-4 font-bold text-zinc-800">
-            {item.formatted_size}
-          </td>
-          <td className="py-3 px-4 text-zinc-500">
-            {new Date(item.created_at).toLocaleString("tr-TR")}
-          </td>
-          <td className="py-3 px-4 text-right">
-            <button
-              type="button"
-              onClick={() => handleDeleteHistory({ filenames: [item.filename] })}
-              className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors inline-flex cursor-pointer"
-              title={LABELS.DELETE_SINGLE_FILE_TOOLTIP}
-            >
-              <Trash2 size={13} />
-            </button>
-          </td>
-        </tr>
-      );
-    });
   };
 
   return (
@@ -741,8 +1542,60 @@ export default function SuppliersManager({
         </div>
       </div>
 
-      {/* Search Input Bar */}
-      <div className="relative w-full">
+      {/* Sub-tab Navigation */}
+      <div className="flex border-b border-zinc-200/60 gap-6">
+        <button
+          type="button"
+          onClick={() => setSubTab("suppliers")}
+          className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
+            subTab === "suppliers"
+              ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
+              : "text-zinc-500 hover:text-zinc-900"
+          }`}
+        >
+          <Building size={15} />
+          Tedarikçi Firmalar & XML Beslemeleri ({suppliers.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSubTab("users")}
+          className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
+            subTab === "users"
+              ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
+              : "text-zinc-500 hover:text-zinc-900"
+          }`}
+        >
+          <Users size={15} />
+          Tedarikçi Giriş Hesapları (Portal)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSubTab("applications")}
+          className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
+            subTab === "applications"
+              ? "text-amber-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-600"
+              : "text-zinc-500 hover:text-zinc-900"
+          }`}
+        >
+          <FileText size={15} />
+          Tedarikçi Başvuruları (Yeni)
+        </button>
+      </div>
+
+      {subTab === "users" && (
+        <SupplierUsersSection suppliers={suppliers} apiUrl={apiUrl} token={token} />
+      )}
+
+      {subTab === "applications" && (
+        <SupplierApplicationsSection apiUrl={apiUrl} token={token} />
+      )}
+
+      {subTab === "suppliers" && (
+        <>
+          {/* Search Input Bar */}
+          <div className="relative w-full">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-400">
           <Search size={18} />
         </div>
@@ -776,231 +1629,18 @@ export default function SuppliersManager({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredSuppliers.length > 0 ? (
           filteredSuppliers.map(supplier => (
-            <div 
-              key={supplier.id} 
-              className={`glass-card bg-white border rounded-3xl p-6 shadow-sm transition-all hover:shadow-md flex flex-col gap-5 ${
-                supplier.is_active ? "border-zinc-200/50" : "border-zinc-200 bg-zinc-50/40 opacity-90"
-              }`}
-            >
-              {/* Supplier Header Info */}
-              <div className="flex items-start justify-between gap-4 border-b border-zinc-100 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-2xl ${supplier.is_active ? "bg-violet-50 text-violet-600" : "bg-zinc-100 text-zinc-500"}`}>
-                    <Building size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-base text-zinc-900 flex items-center gap-2">
-                      {supplier.name}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex ${
-                        supplier.is_active 
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
-                          : "bg-zinc-100 text-zinc-600 border border-zinc-200"
-                      }`}>
-                        {supplier.is_active ? LABELS.ACTIVE : LABELS.PASSIVE}
-                      </span>
-                    </h3>
-                    <p className="text-xs font-mono text-zinc-400 mt-1 uppercase">
-                      {LABELS.ALIAS_PREFIX}<span className="font-bold text-zinc-700">{supplier.alias_code || "-"}</span>
-                    </p>
-                  </div>
-                </div>
-
-                {/* Edit & Delete quick buttons */}
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => openDeactivateProducts(supplier)}
-                    className="p-2 text-zinc-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
-                    title={LABELS.DEACTIVATE_PRODUCTS}
-                    type="button"
-                  >
-                    <EyeOff size={16} />
-                  </button>
-                  <button
-                    onClick={() => openDeleteProducts(supplier)}
-                    className="p-2 text-zinc-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
-                    title={LABELS.DELETE_PRODUCTS}
-                    type="button"
-                  >
-                    <FolderX size={16} />
-                  </button>
-                  <button
-                    onClick={() => openEditSupplier(supplier)}
-                    className="p-2 text-zinc-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                    title={LABELS.EDIT_SUPPLIER}
-                    type="button"
-                  >
-                    <Edit3 size={16} />
-                  </button>
-                  <button
-                    onClick={() => openDeleteSupplier(supplier)}
-                    className="p-2 text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                    title={LABELS.DELETE_SUPPLIER}
-                    type="button"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-
-              {/* CONTACTS & ADDRESSES BLOCK */}
-              <div className="flex flex-col gap-3.5 bg-zinc-50/50 rounded-2xl p-4 border border-zinc-100">
-                <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-200/50 pb-2">
-                  <Globe size={13} />
-                  {LABELS.CONTACTS_INFO}
-                </h4>
-
-                {/* Website & Phone rows */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  {supplier.website ? (
-                    <a 
-                      href={supplier.website.startsWith("http") ? supplier.website : `https://${supplier.website}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-violet-600 hover:text-violet-700 font-semibold transition-colors"
-                    >
-                      <Globe size={15} className="text-violet-500 shrink-0" />
-                      <span className="truncate">{supplier.website}</span>
-                      <ExternalLink size={11} className="shrink-0" />
-                    </a>
-                  ) : (
-                    <div className="flex items-center gap-2 text-zinc-400">
-                      <Globe size={15} className="shrink-0" />
-                      <span className="italic text-xs">-</span>
-                    </div>
-                  )}
-
-                  {supplier.phone ? (
-                    <div className="flex items-center gap-2 text-zinc-700 font-semibold">
-                      <Phone size={15} className="text-emerald-500 shrink-0" />
-                      <span>{supplier.phone}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-zinc-400">
-                      <Phone size={15} className="shrink-0" />
-                      <span className="italic text-xs">-</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Supplier Multiple Addresses display */}
-                {supplier.addresses && supplier.addresses.length > 0 ? (
-                  <div className="flex flex-col gap-2 mt-1">
-                    {supplier.addresses.map((addr: any, idx: number) => {
-                      const addrKey = addr.id || `${supplier.id}-addr-${addr.title || idx}`;
-                      return (
-                        <div key={addrKey} className="flex items-start justify-between border-t border-zinc-200/40 pt-2 gap-3">
-                        <div className="flex items-start gap-2 text-xs">
-                          <MapPin size={14} className="text-red-500 shrink-0 mt-0.5" />
-                          <div>
-                            <span className="font-bold text-zinc-800 block mb-0.5">{addr.title}</span>
-                            <span className="text-zinc-500 block leading-relaxed">{addr.text}</span>
-                          </div>
-                        </div>
-
-                        {/* Coordinates GPS map button */}
-                        {addr.coordinates && (
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr.coordinates)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100/60 px-2 py-1 rounded border border-violet-100 flex items-center gap-1 shrink-0 transition-colors"
-                            title={LABELS.GO_TO_MAPS}
-                          >
-                            <Map size={10} />
-                            {LABELS.GO_TO_MAPS}
-                          </a>
-                        )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-xs text-zinc-400 italic pt-1">{LABELS.NO_ADDRESSES}</div>
-                )}
-              </div>
-
-              {/* Connected Feeds List */}
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Database size={13} />
-                    {LABELS.FEEDS_TITLE} ({supplier.feeds?.length || 0})
-                  </h4>
-                </div>
-
-                {/* Feeds Sub-rows */}
-                {supplier.feeds && supplier.feeds.length > 0 ? (
-                  <div className="flex flex-col gap-2">
-                    {supplier.feeds.map((feed: XmlFeed) => {
-                      const isSyncing = !!Reflect.get(activeSyncing, feed.id);
-                      return (
-                        <div 
-                          key={feed.id} 
-                          className="flex flex-col sm:flex-row sm:items-center justify-between border border-zinc-100 rounded-2xl p-3 bg-zinc-50/40 hover:bg-zinc-50 transition-all gap-3"
-                        >
-                          <div className="flex flex-col gap-1 min-w-0">
-                            <span className="text-sm font-bold text-zinc-800 flex items-center gap-2">
-                              {feed.name}
-                              <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded border ${
-                                feed.is_active 
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-100" 
-                                  : "bg-zinc-100 text-zinc-500 border-zinc-200"
-                              }`}>
-                                {feed.is_active ? LABELS.ACTIVE : LABELS.PASSIVE}
-                              </span>
-                            </span>
-                            
-                          </div>
-
-                          {/* Feed Row Actions (Sync & Delete) */}
-                          <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
-                            {/* Match/Mapping Wizard button */}
-                            <button
-                              onClick={() => setActiveWizardFeed(feed)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100/60 border border-violet-100 transition-colors shadow-sm"
-                              type="button"
-                              title="XML Haritalama Sihirbazını Aç"
-                            >
-                              <Database size={12} />
-                              Eşleştir
-                            </button>
-
-                            {/* Trigger Senkronize button */}
-                            <button
-                              onClick={() => triggerSync(feed.id)}
-                              disabled={isSyncing || !feed.is_active}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all border ${
-                                isSyncing 
-                                  ? "bg-violet-50 text-violet-600 border-violet-100" 
-                                  : "bg-white hover:bg-zinc-50 text-zinc-700 border-zinc-200"
-                              }`}
-                              type="button"
-                            >
-                              <RefreshCw size={12} className={isSyncing ? "animate-spin text-violet-600" : "text-zinc-500"} />
-                              {isSyncing ? "Senkronize Ediliyor" : LABELS.SYNC_NOW}
-                            </button>
-
-                            {/* Delete feed button */}
-                            <button
-                              onClick={() => openDeleteFeed(feed)}
-                              className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title={LABELS.DELETE}
-                              type="button"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center border border-dashed border-zinc-200 rounded-2xl py-8 text-center bg-zinc-50/20">
-                    <p className="text-zinc-400 text-xs font-medium">{LABELS.NO_FEEDS}</p>
-                  </div>
-                )}
-              </div>
-            </div>
+            <SupplierCard
+              key={supplier.id}
+              supplier={supplier}
+              activeSyncing={activeSyncing}
+              onDeactivateProducts={openDeactivateProducts}
+              onDeleteProducts={openDeleteProducts}
+              onEditSupplier={openEditSupplier}
+              onDeleteSupplier={openDeleteSupplier}
+              onOpenWizard={setActiveWizardFeed}
+              onTriggerSync={triggerSync}
+              onDeleteFeed={openDeleteFeed}
+            />
           ))
         ) : (
           <div className="col-span-full flex flex-col items-center justify-center border border-dashed border-zinc-200 rounded-3xl py-20 text-center bg-white">
@@ -1188,20 +1828,10 @@ export default function SuppliersManager({
                 <th className="py-3 px-4 w-10">
                   <button
                     type="button"
-                    onClick={() => {
-                      const allVisibleNames = filteredHistory.map(item => item.filename);
-                      const isAllChecked = allVisibleNames.every(name => selectedHistoryFiles.includes(name));
-                      if (isAllChecked) {
-                        // Deselect all visible
-                        setSelectedHistoryFiles(prev => prev.filter(name => !allVisibleNames.includes(name)));
-                      } else {
-                        // Select all visible
-                        setSelectedHistoryFiles(prev => Array.from(new Set([...prev, ...allVisibleNames])));
-                      }
-                    }}
+                    onClick={() => setSelectedHistoryFiles(prev => getToggledAllSelection(visibleFilenames, prev))}
                     className="text-zinc-400 hover:text-violet-600 transition-colors cursor-pointer"
                   >
-                    {filteredHistory.length > 0 && filteredHistory.map(item => item.filename).every(name => selectedHistoryFiles.includes(name)) ? (
+                    {isAllHistorySelected ? (
                       <CheckSquare size={16} className="text-violet-600 fill-violet-50" />
                     ) : (
                       <Square size={16} />
@@ -1216,368 +1846,50 @@ export default function SuppliersManager({
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200/50 text-xs font-semibold text-zinc-700">
-              {renderHistoryTableBody()}
+              <XmlHistoryTableBody
+                loading={loadingHistory}
+                history={filteredHistory}
+                selectedFiles={selectedHistoryFiles}
+                onToggleFile={toggleHistoryFile}
+                onDeleteFile={(filename) => handleDeleteHistory({ filenames: [filename] })}
+              />
             </tbody>
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* -------------------- DYNAMIC MODALS & OVERLAYS -------------------- */}
-      {activeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4 animate-in fade-in duration-200 overflow-y-auto">
-          
-          <div className="bg-white rounded-3xl border border-zinc-100 max-w-2xl w-full overflow-hidden shadow-2xl flex flex-col my-8 animate-in zoom-in-95 duration-200 max-h-[90vh]">
-            
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100 bg-zinc-50/50 shrink-0">
-              <h3 className="font-bold text-lg text-zinc-900">
-                {activeModal === "create_supplier" && LABELS.ADD_SUPPLIER}
-                {activeModal === "edit_supplier" && LABELS.EDIT_SUPPLIER}
-                {activeModal === "delete_supplier" && LABELS.DELETE_SUPPLIER}
-                {activeModal === "delete_feed" && LABELS.DELETE_FEED_CONFIRM}
-                {activeModal === "deactivate_products" && LABELS.DEACTIVATE_PRODUCTS_CONFIRM}
-                {activeModal === "delete_products" && LABELS.DELETE_PRODUCTS_CONFIRM}
-              </h3>
-              <button 
-                onClick={() => setActiveModal(null)}
-                className="p-1.5 rounded-lg hover:bg-zinc-200/50 text-zinc-400 hover:text-zinc-600 transition-colors"
-                type="button"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="flex flex-col overflow-y-auto">
-              
-              {/* Modal Body */}
-              <div className="p-6 flex flex-col gap-5 overflow-y-auto">
-                
-                {/* General Alerts / Error Display */}
-                {formError && (
-                  <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-2xl text-xs font-semibold">
-                    <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
-                    <span>{formError}</span>
-                  </div>
-                )}
-
-                {/* 1. Delete Supplier Warning */}
-                {activeModal === "delete_supplier" && (
-                  <div className="flex flex-col gap-3">
-                    <p className="text-zinc-600 text-sm leading-relaxed">{LABELS.DELETE_SUPPLIER_CONFIRM}</p>
-                    <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 flex gap-3 text-xs font-medium">
-                      <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-bold block text-amber-800 mb-0.5">{LABELS.CRITICAL_ACTION}</span>
-                        <span>{LABELS.CRITICAL_SUPPLIER_WARNING}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Delete Feed Warning */}
-                {activeModal === "delete_feed" && (
-                  <div className="flex flex-col gap-3">
-                    <p className="text-zinc-600 text-sm leading-relaxed">{LABELS.DELETE_FEED_CONFIRM}</p>
-                  </div>
-                )}
-
-                {/* 3. Deactivate Supplier Products Warning */}
-                {activeModal === "deactivate_products" && selectedSupplier && (
-                  <div className="flex flex-col gap-3">
-                    <p className="text-zinc-600 text-sm leading-relaxed">
-                      <strong>{selectedSupplier.name}</strong>{LABELS.DEACTIVATE_CONFIRM_SUFFIX}
-                    </p>
-                    <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 flex gap-3 text-xs font-medium">
-                      <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-bold block text-amber-800 mb-0.5">{LABELS.DEACTIVATE_WARNING_TITLE}</span>
-                        <span>{LABELS.DEACTIVATE_WARNING_DESC}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 4. Delete Supplier Products Warning */}
-                {activeModal === "delete_products" && selectedSupplier && (
-                  <div className="flex flex-col gap-4 animate-in fade-in duration-200">
-                    <p className="text-zinc-600 text-sm leading-relaxed">
-                      <strong>{selectedSupplier.name}</strong>{LABELS.DELETE_CONFIRM_SUFFIX}
-                    </p>
-                    <div className="bg-red-50 border border-red-200 text-red-950 rounded-2xl p-4 flex gap-3 text-xs font-medium">
-                      <AlertTriangle size={20} className="text-red-600 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-bold block text-red-800 mb-0.5">{LABELS.DELETE_WARNING_TITLE}</span>
-                        <span>{LABELS.DELETE_WARNING_DESC}</span>
-                      </div>
-                    </div>
-
-                    {/* Physical Image Files Deletion Option Checkbox */}
-                    <div className="flex items-start gap-3 border border-zinc-200/60 rounded-2xl p-4 bg-zinc-50/50 hover:bg-zinc-50 transition-all mt-1 shadow-sm">
-                      <input 
-                        type="checkbox"
-                        id="delete-images-checkbox"
-                        checked={deleteImages}
-                        onChange={(e) => setDeleteImages(e.target.checked)}
-                        className="mt-1 h-4 w-4 rounded border-zinc-300 text-violet-600 focus:ring-violet-500/20 cursor-pointer accent-violet-600"
-                      />
-                      <label htmlFor="delete-images-checkbox" className="text-xs font-semibold text-zinc-600 cursor-pointer select-none leading-relaxed">
-                        <span className="font-bold text-zinc-900 block mb-0.5">Ürün Görsel Dosyaları da Sunucudan Silinsin mi?</span>
-                        <span className="text-zinc-500 font-medium">Seçerseniz, bu ürünlerin sunucu diskinde depolanan tüm resim dosyaları kalıcı olarak silinecektir. Seçmezseniz, görseller sunucuda kalır ve gelecekte tekrar indirilme süresinden tasarruf edilir.</span>
-                      </label>
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. Create / Edit Supplier Form */}
-                {(activeModal === "create_supplier" || activeModal === "edit_supplier") && (
-                  <div className="flex flex-col gap-4">
-                    {/* Supplier Name */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.SUPPLIER_NAME}</label>
-                      <input 
-                        type="text"
-                        value={supplierName}
-                        onChange={(e) => setSupplierName(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
-                        placeholder="Örn: Janes Toptan Tekstil, Lustrin"
-                        required
-                        disabled={isPending}
-                      />
-                    </div>
-
-                    {/* Alias Code & Status row */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Alias Code */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.ALIAS_CODE}</label>
-                        <input 
-                          type="text"
-                          value={supplierAlias}
-                          onChange={(e) => setSupplierAlias(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
-                          placeholder="Örn: EDUSA, MIMOZA, FLORA"
-                          disabled={isPending}
-                        />
-                      </div>
-
-                      {/* Status checkbox */}
-                      <div className="flex items-center justify-between border border-zinc-100 rounded-2xl px-4 py-2 bg-zinc-50/40">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-sm font-bold text-zinc-800">{LABELS.STATUS}</span>
-                        </div>
-                        
-                        <button
-                          type="button"
-                          onClick={() => setSupplierIsActive(!supplierIsActive)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            supplierIsActive ? "bg-violet-600" : "bg-zinc-200"
-                          }`}
-                          disabled={isPending}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              supplierIsActive ? "translate-x-5" : "translate-x-0"
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Website & Phone Row */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Website */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.WEBSITE}</label>
-                        <input 
-                          type="text"
-                          value={supplierWebsite}
-                          onChange={(e) => setSupplierWebsite(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
-                          placeholder="Örn: www.janestoptan.net"
-                          disabled={isPending}
-                        />
-                      </div>
-
-                      {/* Phone */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.PHONE}</label>
-                        <input 
-                          type="text"
-                          value={supplierPhone}
-                          onChange={(e) => setSupplierPhone(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
-                          placeholder="Örn: +90 212 555 6677"
-                          disabled={isPending}
-                        />
-                      </div>
-                    </div>
-
-                    {/* ADDRESSES SUB-FORM */}
-                    <div className="flex flex-col gap-3.5 border-t border-zinc-150 pt-4">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-extrabold text-zinc-700 uppercase tracking-wider">{LABELS.ADDRESSES_HEADER}</label>
-                        <button
-                          type="button"
-                          onClick={addAddressLine}
-                          className="text-xs font-bold text-violet-600 hover:text-violet-700 flex items-center gap-1"
-                          disabled={isPending}
-                        >
-                          <Plus size={13} />
-                          {LABELS.ADD_ADDRESS}
-                        </button>
-                      </div>
-
-                      {/* Address Lines list */}
-                      {supplierAddresses.length > 0 ? (
-                        <div className="flex flex-col gap-3">
-                          {supplierAddresses.map((addr, idx) => (
-                            <div key={addr.id || `addr-item-${idx}`} className="flex flex-col gap-2 p-3 bg-zinc-50 border border-zinc-200/50 rounded-2xl relative group">
-                              {/* Remove address button */}
-                              <button
-                                type="button"
-                                onClick={() => removeAddressLine(idx)}
-                                className="absolute right-2 top-2 p-1 text-zinc-400 hover:text-red-500 hover:bg-white border border-transparent hover:border-zinc-200 rounded-lg transition-all"
-                                disabled={isPending}
-                              >
-                                <X size={14} />
-                              </button>
-
-                              {/* Title Input */}
-                              <div className="flex flex-col gap-1 w-[85%]">
-                                <input 
-                                  type="text"
-                                  value={addr.title}
-                                  onChange={(e) => updateAddressLine(idx, "title", e.target.value)}
-                                  className="px-3 py-1.5 border border-zinc-200 rounded-lg bg-white text-xs font-bold focus:outline-none focus:border-violet-500"
-                                  placeholder={LABELS.ADDRESS_TITLE}
-                                  required
-                                  disabled={isPending}
-                                />
-                              </div>
-
-                              {/* Text Input */}
-                              <div className="flex flex-col gap-1 mt-1">
-                                <textarea
-                                  value={addr.text}
-                                  onChange={(e) => updateAddressLine(idx, "text", e.target.value)}
-                                  className="px-3 py-1.5 border border-zinc-200 rounded-lg bg-white text-xs focus:outline-none focus:border-violet-500 h-16 resize-none"
-                                  placeholder={LABELS.ADDRESS_TEXT}
-                                  required
-                                  disabled={isPending}
-                                />
-                              </div>
-
-                              {/* Coordinates Input */}
-                              <div className="flex flex-col gap-1 mt-1">
-                                <input 
-                                  type="text"
-                                  value={addr.coordinates}
-                                  onChange={(e) => updateAddressLine(idx, "coordinates", e.target.value)}
-                                  className="px-3 py-1.5 border border-zinc-200 rounded-lg bg-white text-[11px] font-mono focus:outline-none focus:border-violet-500"
-                                  placeholder={LABELS.COORDINATES}
-                                  disabled={isPending}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-zinc-400 italic bg-zinc-50 border border-zinc-150 p-4 text-center rounded-2xl">
-                          {LABELS.NO_ADDRESSES}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* FEEDS DIRECT MANAGEMENT INSIDE EDIT MODAL */}
-                    {activeModal === "edit_supplier" && (
-                      <div className="flex flex-col gap-4 border-t border-zinc-150 pt-4 animate-in fade-in duration-200">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-extrabold text-zinc-700 uppercase tracking-wider">
-                            {LABELS.ACTIVATE_PARSER_TITLE}
-                          </label>
-                        </div>
-
-                        <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 flex flex-col gap-3.5 shadow-sm">
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-                              {LABELS.CHOOSE_PARSER_SCRIPT}
-                            </label>
-                            
-                            <div className="relative">
-                              <select
-                                value={selectedParserScript}
-                                onChange={(e) => setSelectedParserScript(e.target.value)}
-                                className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 text-xs font-semibold cursor-pointer appearance-none pr-10"
-                              >
-                                <option value="parsers/etika.py">{LABELS.OPTION_ETIKA}</option>
-                                <option value="parsers/janes.py">{LABELS.OPTION_JANES}</option>
-                                <option value="parsers/custom.py">{LABELS.OPTION_CUSTOM}</option>
-                              </select>
-                              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-zinc-400">
-                                <ChevronDown size={14} />
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Custom manual path input (renders only if custom selected) */}
-                          {selectedParserScript === "parsers/custom.py" && (
-                            <div className="flex flex-col gap-1.5 animate-in fade-in duration-150">
-                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-                                {LABELS.CUSTOM_SCRIPT_LABEL}
-                              </label>
-                              <input
-                                type="text"
-                                value={customParserScript}
-                                onChange={(e) => setCustomParserScript(e.target.value)}
-                                placeholder="Örn: parsers/lustral.py"
-                                className="px-3 py-2 border border-zinc-200 rounded-xl bg-white text-xs font-semibold focus:outline-none focus:border-violet-500 font-mono"
-                              />
-                            </div>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={handleAddFeedDirect}
-                            className="w-full py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold transition-all shadow flex items-center justify-center gap-1.5 cursor-pointer mt-1"
-                          >
-                            <Plus size={14} />
-                            {LABELS.ACTIVATE_SCRIPT_BTN}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                  </div>
-                )}
-
-              </div>
-
-              {/* Modal Footer */}
-              <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50/50 flex items-center justify-end gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setActiveModal(null)}
-                  className="px-4 py-2.5 border border-zinc-200 rounded-xl text-sm font-semibold hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm"
-                  disabled={isPending}
-                >
-                  {LABELS.CANCEL}
-                </button>
-                
-                <button
-                  type="submit"
-                  className={`px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition-all ${getModalSubmitClass(activeModal)}`}
-                  disabled={isPending}
-                >
-                  {isPending ? LABELS.SUBMITTING : getModalSubmitLabel(activeModal)}
-                </button>
-              </div>
-
-            </form>
-          </div>
-
-        </div>
-      )}
+      <SupplierModals
+        activeModal={activeModal}
+        selectedSupplier={selectedSupplier}
+        formError={formError}
+        supplierName={supplierName}
+        supplierAlias={supplierAlias}
+        supplierWebsite={supplierWebsite}
+        supplierPhone={supplierPhone}
+        supplierAddresses={supplierAddresses}
+        supplierIsActive={supplierIsActive}
+        selectedParserScript={selectedParserScript}
+        customParserScript={customParserScript}
+        deleteImages={deleteImages}
+        isPending={isPending}
+        onClose={() => setActiveModal(null)}
+        onSubmit={handleSubmit}
+        onNameChange={setSupplierName}
+        onAliasChange={setSupplierAlias}
+        onWebsiteChange={setSupplierWebsite}
+        onPhoneChange={setSupplierPhone}
+        onIsActiveToggle={() => setSupplierIsActive(!supplierIsActive)}
+        onAddAddressLine={addAddressLine}
+        onRemoveAddressLine={removeAddressLine}
+        onUpdateAddressLine={updateAddressLine}
+        onParserScriptChange={setSelectedParserScript}
+        onCustomParserScriptChange={setCustomParserScript}
+        onAddFeedDirect={handleAddFeedDirect}
+        onDeleteImagesChange={setDeleteImages}
+      />
 
       {/* DYNAMIC XML FIELD & CATEGORY MAPPING WIZARD */}
       {activeWizardFeed && (

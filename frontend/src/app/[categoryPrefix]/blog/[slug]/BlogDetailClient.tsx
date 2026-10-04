@@ -145,12 +145,12 @@ function renderMarkdown(md: string) {
         </h2>
       );
     }
-    // Heading 1
+    // Heading 1 in markdown body mapped to h2 to preserve single h1 rule
     if (trimmed.startsWith("# ")) {
       return (
-        <h1 key={`h1-${trimmed.slice(2, 35)}`} className="font-sans font-extrabold text-2xl md:text-3xl text-eerie-black mt-10 mb-6 leading-tight">
+        <h2 key={`h2-top-${trimmed.slice(2, 35)}`} className="font-sans font-extrabold text-xl md:text-2xl text-eerie-black mt-8 mb-4 leading-tight">
           {parseInline(trimmed.substring(2))}
-        </h1>
+        </h2>
       );
     }
 

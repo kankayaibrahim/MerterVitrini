@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Info, Trash2, Loader2 } from "lucide-react";
+import { Clock, Info, Trash2, Loader2, AlertTriangle } from "lucide-react";
 import { XmlFeed, SyncRun } from "@/types/integration";
 import { formatDateTime, getDuration } from "@/utils/formatters";
 
@@ -42,6 +42,34 @@ function getStatusBadge(status: string) {
     className: "bg-blue-100 text-blue-800 animate-pulse",
     label: LABELS.statusRunning
   };
+}
+
+function RunSummaryDetails({ run }: { readonly run: SyncRun }) {
+  if (run.status === "failed" && run.summary?.error) {
+    return (
+      <div className="mt-1.5 border-t border-rose-200/80 pt-1.5 flex flex-col gap-1 text-[11px] text-rose-800 bg-rose-50/70 p-2 rounded-lg border border-rose-100">
+        <div className="flex items-center gap-1 text-rose-900 font-bold text-[10px]">
+          <AlertTriangle size={12} className="text-rose-600 shrink-0" />
+          <span>Hata Nedeni:</span>
+        </div>
+        <span className="font-mono text-[10px] text-rose-700 leading-relaxed line-clamp-3 hover:line-clamp-none transition-all cursor-pointer select-all whitespace-pre-wrap">
+          {run.summary.error}
+        </span>
+      </div>
+    );
+  }
+
+  if (run.summary) {
+    return (
+      <div className="mt-1.5 border-t border-zinc-200/80 pt-1.5 flex flex-wrap gap-2 text-[10px] text-zinc-600">
+        <span>{LABELS.addedLabel}<b className="text-zinc-800 font-bold">{run.summary.items_added || 0}</b></span>
+        <span>{LABELS.updatedLabel}<b className="text-zinc-800 font-bold">{run.summary.items_updated || 0}</b></span>
+        <span>{LABELS.variantLabel}<b className="text-zinc-800 font-bold">{run.summary.variants_aligned || 0}</b></span>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default function ActivityLogs({ feeds, syncHistory, onClearHistory }: Readonly<ActivityLogsProps>) {
@@ -114,13 +142,7 @@ export default function ActivityLogs({ feeds, syncHistory, onClearHistory }: Rea
                   <span>{LABELS.dateLabel}</span>
                   <span>{formatDateTime(run.started_at)}</span>
                 </div>
-                {run.summary && (
-                  <div className="mt-1.5 border-t border-zinc-200/80 pt-1.5 flex flex-wrap gap-2 text-[10px] text-zinc-600">
-                    <span>{LABELS.addedLabel}<b className="text-zinc-800 font-bold">{run.summary.items_added || 0}</b></span>
-                    <span>{LABELS.updatedLabel}<b className="text-zinc-800 font-bold">{run.summary.items_updated || 0}</b></span>
-                    <span>{LABELS.variantLabel}<b className="text-zinc-800 font-bold">{run.summary.variants_aligned || 0}</b></span>
-                  </div>
-                )}
+                <RunSummaryDetails run={run} />
               </div>
             </div>
           );

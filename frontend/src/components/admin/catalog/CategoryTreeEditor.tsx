@@ -111,7 +111,7 @@ export default function CategoryTreeEditor({
   };
 
   // Safe API Request Helper
-  const apiRequest = async (path: string, method: string, body?: any) => {
+  const apiRequest = async (path: string, method: string, body?: unknown) => {
     const headers = new Headers({
       "Content-Type": "application/json"
     });
@@ -143,7 +143,7 @@ export default function CategoryTreeEditor({
     setFormError(null);
 
     // Initialize translations
-    const initialTrans: any = {};
+    const initialTrans: Record<string, { title: string; seo_description: string }> = {};
     LANGUAGES.forEach(l => {
       initialTrans[l.code] = { title: "", seo_description: "" };
     });
@@ -162,12 +162,12 @@ export default function CategoryTreeEditor({
     setFormError(null);
 
     // Populate translations
-    const editTrans: any = {};
+    const editTrans: Record<string, { title: string; seo_description: string }> = {};
     LANGUAGES.forEach(l => {
       const existing = node.translations?.[l.code];
       editTrans[l.code] = {
-        title: existing?.title || (l.code === "tr" ? node.title : ""),
-        seo_description: existing?.seo_description || "",
+        title: (typeof existing?.title === "string" ? existing.title : null) || (l.code === "tr" ? node.title : ""),
+        seo_description: typeof existing?.seo_description === "string" ? existing.seo_description : "",
       };
     });
     setTranslations(editTrans);
@@ -205,8 +205,8 @@ export default function CategoryTreeEditor({
           showToast(LABELS.SUCCESS_DELETED);
           setActiveModal(null);
           await onRefresh();
-        } catch (err: any) {
-          setFormError(err.message || "Bir hata oluştu.");
+        } catch (err: unknown) {
+          setFormError(err instanceof Error ? err.message : "Bir hata oluştu.");
         }
       });
       return;
@@ -241,8 +241,8 @@ export default function CategoryTreeEditor({
         }
         setActiveModal(null);
         await onRefresh();
-      } catch (err: any) {
-        setFormError(err.message || "Bir hata oluştu.");
+      } catch (err: unknown) {
+        setFormError(err instanceof Error ? err.message : "Bir hata oluştu.");
       }
     });
   };
@@ -359,7 +359,7 @@ export default function CategoryTreeEditor({
   // Get eligible parent categories to prevent loops (filtering out current node and its kids)
   const getEligibleParents = () => {
     if (!selectedNode) return flatCategories;
-    return flatCategories.filter((cat: any) => {
+    return flatCategories.filter((cat) => {
       if (cat.id === selectedNode.id) return false;
       // If parent has a path starting with selectedNode path, it's a child. Prevent loop
       if (cat.node_path.startsWith(selectedNode.node_path + ".")) return false;
@@ -506,7 +506,7 @@ export default function CategoryTreeEditor({
                           disabled={isPending}
                         >
                           <option value="">{LABELS.ROOT_LEVEL}</option>
-                          {getEligibleParents().map((cat: any) => (
+                          {getEligibleParents().map((cat) => (
                             <option key={cat.id} value={cat.id}>
                               {"\u00A0".repeat(cat.depth * 2)} {cat.title}
                             </option>

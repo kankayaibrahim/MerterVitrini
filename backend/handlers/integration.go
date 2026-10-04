@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/httpclient"
@@ -316,10 +317,15 @@ func updateSyncStatusLive(runID string, status string, summary map[string]any) {
 	}
 }
 
-type IntegrationHandler struct{}
+type IntegrationHandler struct {
+	Cfg *config.Config
+}
 
-func NewIntegrationHandler() *IntegrationHandler {
-	return &IntegrationHandler{}
+var globalConfig *config.Config
+
+func NewIntegrationHandler(cfg *config.Config) *IntegrationHandler {
+	globalConfig = cfg
+	return &IntegrationHandler{Cfg: cfg}
 }
 
 // ListFeeds lists all wholesale integration XML feeds with mapping configurations
@@ -1531,6 +1537,15 @@ func startPythonProcess(ctx context.Context, scriptPath, runID string, stderrBuf
 	buildCmd := func(cmdName string) (*exec.Cmd, io.ReadCloser, error) {
 		cmd := exec.CommandContext(ctx, cmdName, scriptPath, "--sync-run-id", runID, "--production")
 		cmd.Env = append(os.Environ(), "SYNC_RUN_ID="+runID)
+		if globalConfig != nil {
+			cmd.Env = append(cmd.Env,
+				"DB_HOST="+globalConfig.DBHost,
+				"DB_PORT="+globalConfig.DBPort,
+				"DB_USER="+globalConfig.DBUser,
+				"DB_PASSWORD="+globalConfig.DBPassword,
+				"DB_NAME="+globalConfig.DBName,
+			)
+		}
 		cmd.Stderr = stderrBuf
 		pipe, err := cmd.StdoutPipe()
 		if err != nil {

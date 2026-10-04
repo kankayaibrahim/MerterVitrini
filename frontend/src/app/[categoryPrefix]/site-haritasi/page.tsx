@@ -6,8 +6,8 @@ import SitemapClient from "./SitemapClient";
 import { BlogPost, Language } from "../blog/page";
 
 interface PageProps {
-  params: Promise<{
-    categoryPrefix: string;
+  readonly params: Promise<{
+    readonly categoryPrefix: string;
   }>;
 }
 
@@ -18,7 +18,7 @@ async function fetchLanguages(): Promise<Language[]> {
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data)) {
-        return data.map((l: any) => {
+        return data.map((l: Language) => {
           let code = l.code;
           if (code.startsWith("en_")) code = "en";
           else if (code.startsWith("tr_")) code = "tr";
@@ -49,7 +49,7 @@ async function fetchLanguages(): Promise<Language[]> {
 }
 
 // Generate static routes for all active language prefixes
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [
     { categoryPrefix: "tr" },
     { categoryPrefix: "en" },
@@ -91,12 +91,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = titles[categoryPrefix] || titles.en;
   const desc = descs[categoryPrefix] || descs.en;
   
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/site-haritasi/`;
+  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/site-haritasi`;
   const languagesList = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
   const alternatesLanguages = Object.fromEntries(
     languagesList
       .filter((code) => code !== "__proto__" && code !== "constructor")
-      .map((code) => [code, `https://mertervitrini.com.tr/${code}/site-haritasi/`])
+      .map((code) => [code, `https://mertervitrini.com.tr/${code}/site-haritasi`])
   );
 
   return {
@@ -116,7 +116,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function SitemapPage({ params }: PageProps) {
+export default async function SitemapPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
   
   // Parallel fetches on the server side

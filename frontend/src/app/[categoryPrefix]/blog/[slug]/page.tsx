@@ -7,9 +7,9 @@ import BlogDetailClient from "./BlogDetailClient";
 import { BlogPost, Language } from "../page";
 
 interface PageProps {
-  params: Promise<{
-    categoryPrefix: string;
-    slug: string;
+  readonly params: Promise<{
+    readonly categoryPrefix: string;
+    readonly slug: string;
   }>;
 }
 
@@ -151,7 +151,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function BlogDetailPage({ params }: PageProps) {
+export default async function BlogDetailPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix, slug } = await params;
   
   // Parallel fetches on the server side
@@ -161,13 +161,96 @@ export default async function BlogDetailPage({ params }: PageProps) {
   
   const categories = categoriesData || [];
   
+  // Resolve localized text for JSON-LD
+  const prefixToLangMap = new Map<string, string>();
+  activeLangs.forEach((l) => {
+    if (!prefixToLangMap.has(l.categoryPrefix) || l.code === "tr" || l.code === "en") {
+      prefixToLangMap.set(l.categoryPrefix, l.code);
+    }
+  });
+  const lang = prefixToLangMap.get(categoryPrefix) || "en";
+  const t = postData ? (postData.translations[lang] || postData.translations["tr"] || postData.translations["en"] || Object.values(postData.translations)[0]) : null;
+  const articleTitle = t?.title || "Merter Vitrini B2B Sourcing Blog";
+  const articleDesc = t?.meta_description || t?.summary || "Merter toptan tekstil hazır giyim analizleri ve B2B rehberleri.";
+  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/${slug}`;
+
+  const articleJsonLd = postData ? {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BlogPosting",
+        "@id": `${canonicalUrl}#article`,
+        "isPartOf": {
+          "@type": "WebPage",
+          "@id": canonicalUrl,
+        },
+        "headline": articleTitle,
+        "description": articleDesc,
+        "image": postData.cover_image ? [postData.cover_image] : ["https://mertervitrini.com.tr/og-image.jpg"],
+        "datePublished": postData.created_at || "2026-01-01T00:00:00Z",
+        "dateModified": postData.updated_at || postData.created_at || "2026-01-01T00:00:00Z",
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": canonicalUrl,
+        },
+        "author": {
+          "@type": "Organization",
+          "name": "Merter Vitrini B2B Editör Ekibi",
+          "url": "https://mertervitrini.com.tr",
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Merter Vitrini",
+          "url": "https://mertervitrini.com.tr",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://mertervitrini.com.tr/placeholder.png",
+          },
+        },
+        "inLanguage": lang,
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${canonicalUrl}#breadcrumb`,
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Ana Sayfa",
+            "item": `https://mertervitrini.com.tr/${categoryPrefix}`,
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "B2B Blog",
+            "item": `https://mertervitrini.com.tr/${categoryPrefix}/blog`,
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": articleTitle,
+            "item": canonicalUrl,
+          },
+        ],
+      },
+    ],
+  } : null;
+
   return (
-    <BlogDetailClient 
-      categoryPrefix={categoryPrefix}
-      slug={slug}
-      post={postData}
-      categories={categories}
-      activeLangs={activeLangs}
-    />
+    <>
+      {articleJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+        />
+      )}
+      <BlogDetailClient 
+        categoryPrefix={categoryPrefix}
+        slug={slug}
+        post={postData}
+        categories={categories}
+        activeLangs={activeLangs}
+      />
+    </>
   );
 }

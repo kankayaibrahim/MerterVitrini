@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/logger"
 	"mertervitrini/backend/pkg/safe"
@@ -412,6 +413,112 @@ func RequireRole(roles ...models.UserRole) func(http.Handler) http.Handler {
 			}
 
 			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+const SupplierContextKey contextKey = "supplier"
+
+type SupplierClaims struct {
+	UserID      string `json:"sub"`
+	BrandID     string `json:"brand_id"`
+	BrandName   string `json:"brand_name"`
+	AliasCode   string `json:"alias_code"`
+	Email       string `json:"email"`
+	ContactName string `json:"contact_name"`
+	Role        string `json:"role"`
+	jwt.RegisteredClaims
+}
+
+func GetSupplierFromContext(ctx context.Context) (*SupplierClaims, bool) {
+	s, ok := ctx.Value(SupplierContextKey).(*SupplierClaims)
+	return s, ok
+}
+
+// SupplierAuthMiddleware validates JWT Bearer tokens issued to suppliers (both RS256 Keycloak and HS256 Local)
+func SupplierAuthMiddleware(jwtSecret string, keycloakPublicKey string) func(http.Handler) http.Handler {
+	keyProvider := &keycloakKeyProvider{rawKey: keycloakPublicKey}
+	if keycloakPublicKey != "" {
+		safe.Go("Keycloak Key Provider Supplier", func() {
+			keyProvider.GetKey()
+		})
+	}
+	keyFunc := makeKeyFunc(jwtSecret, keyProvider)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			tokenStr, err := extractBearerToken(authHeader)
+			if err != nil {
+				w.Header().Set(headerContentType, mimeApplicationJSON)
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]string{"error": "Yetkilendirme başlığı eksik veya geçersiz."})
+				return
+			}
+
+			token, err := jwt.Parse(tokenStr, keyFunc)
+			if err != nil || !token.Valid {
+				w.Header().Set(headerContentType, mimeApplicationJSON)
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]string{"error": "Geçersiz veya süresi dolmuş tedarikçi oturumu."})
+				return
+			}
+
+			claimsMap, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				w.Header().Set(headerContentType, mimeApplicationJSON)
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]string{"error": "Geçersiz token yapısı."})
+				return
+			}
+
+			brandID, _ := claimsMap["brand_id"].(string)
+			userID, _ := claimsMap["sub"].(string)
+			email, _ := claimsMap["email"].(string)
+			brandName, _ := claimsMap["brand_name"].(string)
+			aliasCode, _ := claimsMap["alias_code"].(string)
+			contactName, _ := claimsMap["contact_name"].(string)
+
+			// If brandID is missing in token claims (Keycloak token), dynamically resolve it from catalog.supplier_users
+			if brandID == "" {
+				ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+				defer cancel()
+
+				var resolvedBrandID, resolvedBrandName, resolvedAlias, resolvedContactName, resolvedUserID string
+				query := `
+					SELECT u.id, u.brand_id, b.brand_name, coalesce(b.alias_code, ''), u.contact_name
+					FROM catalog.supplier_users u
+					JOIN catalog.brands b ON u.brand_id = b.id
+					WHERE (u.keycloak_id = $1 OR lower(u.email) = lower($2)) AND u.is_active = true AND b.is_active = true
+					LIMIT 1`
+				err := db.Pool.QueryRow(ctx, query, userID, email).Scan(
+					&resolvedUserID, &resolvedBrandID, &resolvedBrandName, &resolvedAlias, &resolvedContactName,
+				)
+				if err != nil {
+					w.Header().Set(headerContentType, mimeApplicationJSON)
+					w.WriteHeader(http.StatusForbidden)
+					json.NewEncoder(w).Encode(map[string]string{"error": "Bu Keycloak hesabı ile ilişkili aktif bir tedarikçi markası bulunamadı."})
+					return
+				}
+				brandID = resolvedBrandID
+				brandName = resolvedBrandName
+				aliasCode = resolvedAlias
+				contactName = resolvedContactName
+				userID = resolvedUserID
+			}
+
+			claims := &SupplierClaims{
+				UserID:      userID,
+				BrandID:     brandID,
+				BrandName:   brandName,
+				AliasCode:   aliasCode,
+				Email:       email,
+				ContactName: contactName,
+				Role:        "supplier",
+			}
+
+			ctx := context.WithValue(r.Context(), SupplierContextKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

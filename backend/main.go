@@ -98,8 +98,10 @@ func main() {
 	adminAuthHandler := handlers.NewAdminAuthHandler(cfg)
 	adminCatalogHandler := handlers.NewAdminCatalogHandler()
 	adminOrdersHandler := handlers.NewAdminOrdersHandler(cfg)
-	integrationHandler := handlers.NewIntegrationHandler()
+	integrationHandler := handlers.NewIntegrationHandler(cfg)
 	suppliersHandler := handlers.NewSuppliersHandler()
+	adminSupplierUsersHandler := handlers.NewAdminSupplierUsersHandler(cfg)
+	supplierPortalHandler := handlers.NewSupplierPortalHandler(cfg)
 	countriesHandler := handlers.NewCountriesHandler()
 	policiesHandler := handlers.NewPoliciesHandler()
 	translateHandler := handlers.NewTranslateHandler()
@@ -109,15 +111,18 @@ func main() {
 	imageHandler := handlers.NewImageHandler()
 	cronHandler := handlers.NewCronHandler()
 	customersHandler := handlers.NewCustomersHandler(cfg)
+	supplierApplicationsHandler := handlers.NewSupplierApplicationsHandler(cfg)
 
 	// 6. Register HTTP Router using Go 1.22+ ServeMux
 	mux := http.NewServeMux()
 
 	// Health Check (Public)
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	healthHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(headerContentType, "application/json")
 		w.Write([]byte(`{"status":"healthy","database":"connected","service":"unified-backend"}`))
-	})
+	}
+	mux.HandleFunc("GET /health", healthHandler)
+	mux.HandleFunc("GET /api/v1/health", healthHandler)
 
 	// Swagger UI Endpoints (Public)
 	mux.HandleFunc("GET /swagger.yaml", func(w http.ResponseWriter, r *http.Request) {
@@ -174,6 +179,7 @@ func main() {
 
 	// Catalog Storefront Endpoints (Public)
 	mux.HandleFunc("GET /api/v1/store/products", storeCatalogHandler.ListProducts)
+	mux.HandleFunc("POST /api/v1/store/supplier-applications", supplierApplicationsHandler.SubmitApplication)
 	mux.HandleFunc("GET /api/v1/store/products/{id}", storeCatalogHandler.GetProductByID)
 	mux.HandleFunc("GET /api/v1/store/categories", storeCatalogHandler.ListCategories)
 	mux.HandleFunc("GET /api/v1/store/brands", storeCatalogHandler.ListBrands)
@@ -242,6 +248,17 @@ func main() {
 	mux.Handle("POST /api/v1/suppliers/{id}/products/deactivate", authMiddleware(http.HandlerFunc(suppliersHandler.DeactivateSupplierProducts)))
 	mux.Handle("DELETE /api/v1/suppliers/{id}/products", authMiddleware(http.HandlerFunc(suppliersHandler.DeleteSupplierProducts)))
 
+	// Admin Supplier Login Accounts
+	mux.Handle("GET /api/v1/admin/supplier-users", authMiddleware(http.HandlerFunc(adminSupplierUsersHandler.ListSupplierUsers)))
+	mux.Handle("POST /api/v1/admin/supplier-users", authMiddleware(http.HandlerFunc(adminSupplierUsersHandler.CreateSupplierUser)))
+	mux.Handle("PUT /api/v1/admin/supplier-users/{id}", authMiddleware(http.HandlerFunc(adminSupplierUsersHandler.UpdateSupplierUser)))
+	mux.Handle("DELETE /api/v1/admin/supplier-users/{id}", authMiddleware(http.HandlerFunc(adminSupplierUsersHandler.DeleteSupplierUser)))
+
+	// Admin Prospective Supplier Applications
+	mux.Handle("GET /api/v1/admin/supplier-applications", authMiddleware(http.HandlerFunc(supplierApplicationsHandler.ListApplications)))
+	mux.Handle("PATCH /api/v1/admin/supplier-applications/{id}/status", authMiddleware(http.HandlerFunc(supplierApplicationsHandler.UpdateStatus)))
+	mux.Handle("DELETE /api/v1/admin/supplier-applications/{id}", authMiddleware(http.HandlerFunc(supplierApplicationsHandler.DeleteApplication)))
+
 	// Admin Geography / Localization
 	mux.Handle("GET /api/v1/countries", authMiddleware(http.HandlerFunc(countriesHandler.ListCountries)))
 	mux.Handle("POST /api/v1/countries", authMiddleware(http.HandlerFunc(countriesHandler.CreateCountry)))
@@ -308,6 +325,21 @@ func main() {
 	mux.Handle("GET /api/v1/customers", authMiddleware(http.HandlerFunc(customersHandler.ListCustomers)))
 	mux.Handle("PUT /api/v1/customers/{id}/block", authMiddleware(http.HandlerFunc(customersHandler.ToggleBlockCustomer)))
 	mux.Handle("DELETE /api/v1/customers/{id}", authMiddleware(http.HandlerFunc(customersHandler.DeleteCustomer)))
+
+	// ==========================================
+	// SUPPLIER PORTAL ROUTES (/api/v1/supplier/...)
+	// ==========================================
+	supplierAuthMiddleware := middleware.SupplierAuthMiddleware(cfg.JWTSecret, cfg.KeycloakPublicKey)
+	mux.HandleFunc("POST /api/v1/supplier/auth/login", supplierPortalHandler.Login)
+	mux.Handle("GET /api/v1/supplier/profile", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.GetProfile)))
+	mux.Handle("GET /api/v1/supplier/products", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.ListProducts)))
+	mux.Handle("GET /api/v1/supplier/products/{id}", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.GetProduct)))
+	mux.Handle("POST /api/v1/supplier/products", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.CreateProduct)))
+	mux.Handle("PUT /api/v1/supplier/products/{id}", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.UpdateProduct)))
+	mux.Handle("DELETE /api/v1/supplier/products/{id}", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.DeleteProduct)))
+	mux.Handle("POST /api/v1/supplier/upload-image", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.UploadImage)))
+	mux.Handle("GET /api/v1/supplier/categories", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.ListCategories)))
+	mux.Handle("GET /api/v1/supplier/attributes", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.ListAttributes)))
 
 	// 7. Wrap global middlewares (Recovery, Logging, RateLimit, CORS)
 	var handler http.Handler = mux

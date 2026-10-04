@@ -1,7 +1,10 @@
 User-agent: *
 Allow: /
+Allow: /api/v1/store/feeds/
 Disallow: /api/
 Disallow: /admin/
+Disallow: /tedarikci/
+Disallow: /supplier/
 Disallow: /profile
 Disallow: /cart
 Disallow: /checkout

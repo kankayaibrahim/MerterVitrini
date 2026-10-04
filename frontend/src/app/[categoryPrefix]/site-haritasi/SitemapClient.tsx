@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Compass, BookOpen, ChevronRight, Info } from "lucide-react";
 import Header from "@/components/store/Header";
@@ -8,13 +8,27 @@ import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import { Category } from "@/types/store";
 import { BlogPost, Language } from "../blog/page";
-import { t, getCategoryPrefix, getCategoryTitle, getCategoryUrl } from "@/app/i18n";
+import { t, getCategoryTitle, getCategoryUrl } from "@/app/i18n";
+
+function subscribeCurrency(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function getCurrencySnapshot(): string {
+  if (typeof window === "undefined") return "TRY";
+  return localStorage.getItem("merter_preferred_currency") || "TRY";
+}
+
+function getCurrencyServerSnapshot(): string {
+  return "TRY";
+}
 
 interface SitemapClientProps {
-  categoryPrefix: string;
-  categories: Category[];
-  blogPosts: BlogPost[];
-  activeLangs: Language[];
+  readonly categoryPrefix: string;
+  readonly categories: readonly Category[];
+  readonly blogPosts: readonly BlogPost[];
+  readonly activeLangs: readonly Language[];
 }
 
 export default function SitemapClient({
@@ -22,7 +36,7 @@ export default function SitemapClient({
   categories,
   blogPosts,
   activeLangs,
-}: SitemapClientProps) {
+}: Readonly<SitemapClientProps>) {
   const router = useRouter();
 
   // Determine current active language code matching the URL prefix
@@ -38,23 +52,15 @@ export default function SitemapClient({
   // --- UI States ---
   const [lang, setLang] = useState<string>(initialLang);
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
-  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
   const [policyModalType, setPolicyModalType] = useState<"cancellation_and_return" | "terms_of_service" | "privacy_policy" | "">("");
 
-  // --- Multi-Currency States ---
-  const [displayCurrency, setDisplayCurrency] = useState<string>("TRY");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const preferredCurr = localStorage.getItem("merter_preferred_currency");
-      if (preferredCurr) setDisplayCurrency(preferredCurr);
-    }
-  }, []);
+  // --- Multi-Currency Store ---
+  const displayCurrency = useSyncExternalStore(subscribeCurrency, getCurrencySnapshot, getCurrencyServerSnapshot);
 
   const handleCurrencyChange = (curr: string) => {
-    setDisplayCurrency(curr);
     localStorage.setItem("merter_preferred_currency", curr);
+    window.dispatchEvent(new Event("storage"));
   };
 
   // Redirect on language switch
@@ -75,7 +81,7 @@ export default function SitemapClient({
     setIsPolicyModalOpen(true);
   };
 
-  function renderCategoryTree(cats: Category[]) {
+  function renderCategoryTree(cats: readonly Category[]) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cats.map((parent) => {
@@ -133,7 +139,7 @@ export default function SitemapClient({
         isLangOpen={isLangOpen}
         setIsLangOpen={setIsLangOpen}
         totalPkgs={0}
-        setIsCartOpen={setIsCartOpen}
+        setIsCartOpen={() => router.push(`/${categoryPrefix}/cart`)}
         setSearchQuery={() => {}}
         setCurrentPage={() => {}}
         setActiveCategoryId={() => {}}

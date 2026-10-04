@@ -17,8 +17,48 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://mertervitrini.com.tr"),
-  title: "Merter Vitrini - Toptan B2B Tekstil E-Ticaret",
-  description: "Merter'in en seçkin üreticilerinden doğrudan toptan hazır giyim alımı yapabileceğiniz B2B dijital showroom.",
+  title: {
+    default: "Merter Vitrini | Türkiye Toptan B2B Tekstil & Moda Showroom",
+    template: "%s | Merter Vitrini B2B",
+  },
+  description: "Merter'in en seçkin üreticilerinden doğrudan toptan hazır giyim ve moda alımı yapabileceğiniz çok dilli B2B dijital showroom.",
+  keywords: [
+    "merter toptan giyim",
+    "istanbul b2b tekstil",
+    "toptan kadın giyim",
+    "merter vitrini",
+    "wholesale clothing turkey",
+    "turkish fashion wholesale",
+    "merter showroom"
+  ],
+  authors: [{ name: "Merter Vitrini" }],
+  creator: "Merter Vitrini",
+  publisher: "Merter Vitrini",
+  openGraph: {
+    type: "website",
+    locale: "tr_TR",
+    url: "https://mertervitrini.com.tr",
+    siteName: "Merter Vitrini B2B",
+    title: "Merter Vitrini | Türkiye Toptan B2B Tekstil & Moda Showroom",
+    description: "Merter'in en seçkin üreticilerinden doğrudan toptan hazır giyim ve moda alımı yapabileceğiniz çok dilli B2B dijital showroom.",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Merter Vitrini B2B Toptan Tekstil Showroom",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Merter Vitrini | Türkiye Toptan B2B Tekstil & Moda Showroom",
+    description: "Merter'in en seçkin üreticilerinden doğrudan toptan hazır giyim ve moda alımı yapabileceğiniz çok dilli B2B dijital showroom.",
+    images: ["/og-image.jpg"],
+  },
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({

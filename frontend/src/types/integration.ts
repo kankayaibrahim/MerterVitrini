@@ -18,6 +18,7 @@ export interface SyncRun {
   completed_at: string | null;
   status: string; // 'running', 'success', 'failed'
   summary: {
+    error?: string;
     items_parsed?: number;
     items_added?: number;
     items_updated?: number;
@@ -137,6 +138,39 @@ export interface Brand {
   feeds?: XmlFeed[];
 }
 
+export interface SupplierUser {
+  id: string;
+  brand_id: string;
+  brand_name?: string;
+  alias_code?: string;
+  email: string;
+  contact_name: string;
+  phone?: string | null;
+  keycloak_id?: string | null;
+  is_active: boolean;
+  last_login_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupplierProductRow {
+  id: string;
+  title: string;
+  custom_sku: string;
+  category_title: string;
+  buying_price: number;
+  price: number;
+  currency: string;
+  packing_ratio?: string | null;
+  minimum_order_quantity: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  cover_image: string;
+  total_stock: number;
+  variants_count: number;
+}
+
 export interface CountryGroup {
   id: string;
   code: string;
@@ -210,6 +244,24 @@ export interface Page {
   slug: string;
   is_active: boolean;
   translations: Record<string, PageTranslation>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupplierApplication {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  email: string;
+  phone: string;
+  city?: string | null;
+  category?: string | null;
+  instagram?: string | null;
+  website?: string | null;
+  notes?: string | null;
+  status: "pending" | "reviewed" | "contacted" | "approved" | "rejected";
+  admin_notes?: string | null;
+  ip_address?: string | null;
   created_at: string;
   updated_at: string;
 }

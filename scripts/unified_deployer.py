@@ -89,7 +89,7 @@ PROJECTS_CONFIG["shop"] = PROJECTS_CONFIG["unified"]
 # PIPELINE RUNNER LOGIC (COMPILATION & SFTP DEPLOYMENT)
 # ==============================================================================
 class DeployPipeline:
-    def __init__(self, log_callback=print, remote_build=False, ssr_mode=True):
+    def __init__(self, log_callback=print, remote_build=True, ssr_mode=True):
         self.log = log_callback
         self.remote_build = remote_build
         self.ssr_mode = ssr_mode
@@ -1108,7 +1108,7 @@ def run_cli_headless(args):
     projects = ["unified"]
     components = [args.component] if args.component != "all" else ["backend", "frontend"]
     action = args.action
-    remote_build = getattr(args, "remote_build", False)
+    remote_build = getattr(args, "remote_build", True)
     
     pipeline = DeployPipeline(log_callback=print, remote_build=remote_build, ssr_mode=True)
     
@@ -1167,8 +1167,16 @@ def main():
         )
         parser.add_argument(
             "--remote-build",
+            dest="remote_build",
             action="store_true",
-            help="Build the frontend on the remote server via SSH (saves upload bandwidth)."
+            default=True,
+            help="Build the frontend on the remote server via SSH (default: True, no local static build)."
+        )
+        parser.add_argument(
+            "--local-build",
+            dest="remote_build",
+            action="store_false",
+            help="Build frontend locally (disabled by default)."
         )
         parser.add_argument(
             "--ssr",

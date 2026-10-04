@@ -3,13 +3,13 @@ import { Metadata } from "next";
 import StorefrontLayout from "@/components/store/StorefrontLayout";
 
 interface PageProps {
-  params: Promise<{
-    categoryPrefix: string;
+  readonly params: Promise<{
+    readonly categoryPrefix: string;
   }>;
 }
 
 // Generate static routes for all active language prefixes at compile time
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [
     { categoryPrefix: "tr" },
     { categoryPrefix: "en" },
@@ -51,12 +51,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = titles[categoryPrefix] || titles.en;
   const desc = descs[categoryPrefix] || descs.en;
 
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/tum-urunler/`;
+  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/tum-urunler`;
   const languagesList = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
   const alternatesLanguages = Object.fromEntries(
     languagesList
       .filter((code) => code !== "__proto__" && code !== "constructor")
-      .map((code) => [code, `https://mertervitrini.com.tr/${code}/tum-urunler/`])
+      .map((code) => [code, `https://mertervitrini.com.tr/${code}/tum-urunler`])
   );
 
   return {
@@ -77,7 +77,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function LocalizedTumUrunlerPage({ params }: PageProps) {
+export default async function LocalizedTumUrunlerPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
 
   // Map categoryPrefix to defaultLang

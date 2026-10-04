@@ -7,10 +7,12 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
+        allow: ["/", "/api/v1/store/feeds/"],
         disallow: [
           "/api/",
           "/admin/",
+          "/tedarikci/",
+          "/supplier/",
           "/profile",
           "/cart",
           "/checkout",

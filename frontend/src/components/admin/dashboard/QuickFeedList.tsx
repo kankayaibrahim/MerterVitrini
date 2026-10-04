@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Database, RefreshCw, ChevronRight, XCircle } from "lucide-react";
+import { Database, RefreshCw, ChevronRight, XCircle, AlertTriangle } from "lucide-react";
 import { XmlFeed, SyncRun } from "@/types/integration";
 import { formatDateTime } from "@/utils/formatters";
 
@@ -179,6 +179,18 @@ function QuickFeedCard({
               <span>{lastRun.summary.items_parsed ?? 0}</span>
             </div>
             <FeedSyncProgress summary={lastRun.summary} />
+          </div>
+        )}
+
+        {!isSyncing && lastRun?.status === "failed" && lastRun?.summary?.error && (
+          <div className="flex flex-col gap-1 mt-2 bg-rose-50 border border-rose-200/80 rounded-xl p-2.5 text-[11px] text-rose-800 animate-in fade-in duration-200">
+            <div className="flex items-center gap-1.5 font-bold text-rose-900">
+              <AlertTriangle size={13} className="shrink-0 text-rose-600" />
+              <span>Hata Ayrıntısı</span>
+            </div>
+            <p className="text-[10px] text-rose-700 leading-relaxed font-mono line-clamp-3 hover:line-clamp-none transition-all cursor-pointer whitespace-pre-wrap select-all">
+              {lastRun.summary.error}
+            </p>
           </div>
         )}
       </div>

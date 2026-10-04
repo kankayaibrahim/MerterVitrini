@@ -123,6 +123,11 @@ Bu projede tek bir jenerik asistan yerine, kendi içinde koordine olan **Özerk 
    - `/admin` rotası arama motorlarına karşı `robots: { index: false, follow: false }` ile korunur.
 6. **LINUX BINARY UYUMLULUĞU:**
    - Sunucu AlmaLinux 9.7 (Linux AMD64) mimarisindedir. Sunucuya aktarılacak Go backend çalıştırılabilir dosyaları MUTLAKA `$env:GOOS="linux"; $env:GOARCH="amd64"` çevre değişkenleriyle derlenmeli ve `backend/bin/backend` olarak konuşlandırılmalıdır.
+7. **YERELDE FRONTEND STATİK VEYA DERLEME DOSYASI OLUŞTURULMAZ (Kalıcı Kural):**
+   - Frontend için yerel geliştirici ortamında statik export (`out/`) veya yerel `.next` derleme dosyaları oluşturulup sunucuya yüklenmez.
+   - Next.js SSR uygulaması doğrudan AlmaLinux sunucusu üzerinde (`systemd: merter-frontend`, Port `3000`) çalışır.
+   - Dağıtım işleminde yalnızca saf kaynak kodlar (`src/`, `public/`, `package.json` vb.) sunucuya aktarılır; derleme işlemi doğrudan sunucu ortamında (`npm run build`) gerçekleştirilir.
+   - Tüm deployment araçlarında (`unified_deployer.py`, `build_deploy.ps1`) `--remote-build` kalıcı olarak varsayılandır (default: true).
 
 ---
 

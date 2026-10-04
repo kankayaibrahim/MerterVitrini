@@ -4960,7 +4960,7 @@ export function getProductAttributes(product: Product, lang: string): ProductAtt
   return product.attributes || [];
 }
 
-export function getCategoryTrail(tree: Category[] | undefined | null, targetIdOrSlug: string, trail: Category[] = []): Category[] | null {
+export function getCategoryTrail(tree: readonly Category[] | Category[] | undefined | null, targetIdOrSlug: string, trail: Category[] = []): Category[] | null {
   if (!tree) return null;
   for (const cat of tree) {
     if (cat.id === targetIdOrSlug || cat.slug === targetIdOrSlug) {
@@ -4974,7 +4974,7 @@ export function getCategoryTrail(tree: Category[] | undefined | null, targetIdOr
   return null;
 }
 
-export function getCategoryUrl(tree: Category[] | undefined | null, target: Category | string, lang: string): string {
+export function getCategoryUrl(tree: readonly Category[] | Category[] | undefined | null, target: Category | string, lang: string): string {
   if (!target) return "/";
   const targetIdOrSlug = typeof target === "string" ? target : (target.slug || target.id);
   const prefix = getCategoryPrefix(lang);

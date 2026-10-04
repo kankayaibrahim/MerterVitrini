@@ -6,9 +6,9 @@ import PagesClient from "./PagesClient";
 import { t as translate } from "@/app/i18n";
 
 interface PageProps {
-  params: Promise<{
-    categoryPrefix: string;
-    slug: string;
+  readonly params: Promise<{
+    readonly categoryPrefix: string;
+    readonly slug: string;
   }>;
 }
 
@@ -45,7 +45,7 @@ async function fetchLanguages(): Promise<Language[]> {
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data)) {
-        return data.map((l: any) => {
+        return data.map((l: Language) => {
           let code = l.code;
           if (code.startsWith("en_")) code = "en";
           else if (code.startsWith("tr_")) code = "tr";
@@ -90,7 +90,7 @@ export async function generateStaticParams() {
         const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
         
         uniquePrefixes.forEach((prefix) => {
-          pages.forEach((page: any) => {
+          pages.forEach((page: Page) => {
             if (page.slug) {
               params.push({
                 categoryPrefix: prefix,
@@ -173,7 +173,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function CMSPage({ params }: PageProps) {
+export default async function CMSPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix, slug } = await params;
   
   // Parallel fetches on the server side

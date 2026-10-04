@@ -29,6 +29,7 @@ CAT_DIGER = "kadin-giyim/diger"
 CAT_TAKIM_IKILI = "kadin-giyim/takim-tulum/ikili-takim"
 CAT_TULUM_SALOPET = "kadin-giyim/takim-tulum/tulum-salopet"
 CAT_ELBISE = "kadin-giyim/elbise-abiye/elbise"
+CAT_CEKET_BLAZER = "kadin-giyim/dis-giyim/ceket-blazer"
 
 COLOR_SUTLU_KAHVE = "Sütlü Kahve"
 COLOR_ZUMRUT = "Zümrüt"
@@ -155,7 +156,12 @@ CATEGORY_MAPPING = {
     "KOT TULUM > MİDİ ELBİSE": CAT_TULUM_SALOPET,
     "TRİKO TAKIM > MİDİ ELBİSE": CAT_TAKIM_IKILI,
     "Elbiseler > Midi Boy Elbiseler": CAT_ELBISE,
-    "Elbiseler > Mini Boy Elbiseler": CAT_ELBISE
+    "Elbiseler > Mini Boy Elbiseler": CAT_ELBISE,
+    "Ceket > CEKET": CAT_CEKET_BLAZER,
+    "Ceket": CAT_CEKET_BLAZER,
+    "CEKET": CAT_CEKET_BLAZER,
+    "Ceket > Blazer Ceket": CAT_CEKET_BLAZER,
+    "Blazer Ceket": CAT_CEKET_BLAZER
 }
 
 # Dynamic Environment and Directory Settings
@@ -192,7 +198,40 @@ def _parse_env_line(line):
         val = val[1:-1]
     return key, val
 
-# Safe .env loader function
+def _apply_config_json(cfg_path):
+    if not os.path.exists(cfg_path):
+        return
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            cfg_data = json.load(f)
+        key_map = {
+            "db_host": "DB_HOST",
+            "db_port": "DB_PORT",
+            "db_user": "DB_USER",
+            "db_password": "DB_PASSWORD",
+            "db_name": "DB_NAME",
+        }
+        for cfg_key, env_key in key_map.items():
+            if cfg_key in cfg_data and not os.environ.get(env_key):
+                os.environ[env_key] = str(cfg_data[cfg_key])
+    except Exception as e:
+        sys.stderr.write(f"Warning: Failed to load config.json from {cfg_path}: {e}\n")
+
+def _apply_dotenv(env_path):
+    if not os.path.exists(env_path):
+        return False
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                k, v = _parse_env_line(line)
+                if k:
+                    os.environ[k] = v
+        return True
+    except Exception as e:
+        sys.stderr.write(f"Warning: Failed to load .env from {env_path}: {e}\n")
+        return False
+
+# Safe .env & config.json loader function
 def load_env():
     search_dirs = [
         os.path.dirname(os.path.abspath(__file__)),
@@ -201,18 +240,9 @@ def load_env():
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."),
     ]
     for d in search_dirs:
-        env_path = os.path.join(d, ".env")
-        if not os.path.exists(env_path):
-            continue
-        try:
-            with open(env_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    k, v = _parse_env_line(line)
-                    if k:
-                        os.environ[k] = v
+        _apply_config_json(os.path.join(d, "config.json"))
+        if _apply_dotenv(os.path.join(d, ".env")):
             break
-        except Exception as e:
-            sys.stderr.write(f"Warning: Failed to load .env from {env_path}: {e}\n")
 
 # Load environment settings from .env
 load_env()
@@ -1373,6 +1403,8 @@ def _detect_category_from_title(title_lower, default_path):
         return "kadin-giyim/triko-hirka-kazak/kazak-suveter"
     if any(k in title_lower for k in ["hırka", "hirka"]):
         return "kadin-giyim/triko-hirka-kazak/hirka"
+    if any(k in title_lower for k in ["ceket", "blazer"]):
+        return CAT_CEKET_BLAZER
     if "tunik" in title_lower:
         return "kadin-giyim/triko-hirka-kazak/tunik"
     return default_path
@@ -1458,27 +1490,47 @@ def _clean_iterparse_element(elem):
     while elem.getprevious() is not None:
         del elem.getparent()[0]
 
+def _should_skip_product(product_id, title_raw, buying_price, stats):
+    if not product_id or not title_raw:
+        stats["errors_skipped"] += 1
+        return True
+    title_lower = title_raw.lower()
+    if "hediye kart" in title_lower or "gift card" in title_lower:
+        return True
+    if buying_price <= 0.0:
+        stats["errors_skipped"] += 1
+        return True
+    return False
+
+def _determine_gender(gender_xml, title_lower):
+    is_male = (gender_xml and gender_xml.strip().upper() == 'M') or ("erkek" in title_lower)
+    return "Erkek" if is_male else "Kadın"
+
+def _get_or_create_product_identity(product_id, title_tr_cleaned, products_cache, stats):
+    if product_id in products_cache:
+        product_uuid, product_slug = products_cache[product_id]
+        stats["items_updated"] += 1
+    else:
+        product_uuid = str(uuid.uuid4())
+        product_slug = slugify(title_tr_cleaned)
+        products_cache[product_id] = (product_uuid, product_slug)
+        stats["items_added"] += 1
+    return product_uuid, product_slug
+
 def _process_product_element(elem, brand_id, diger_category_id, plus_size_mapping, caches, yasakli_gorseller, sync_run_id, parsed_data, stats):
     products_cache, variants_cache, colors_cache, fabrics_cache, category_path_to_id = caches
     
     product_id = elem.findtext('id')
     title_raw = elem.findtext('title')
-    if not product_id or not title_raw:
-        stats["errors_skipped"] += 1
+    buying_price = _extract_buying_price(elem.findtext('salePrice'), elem.findtext('costPrice'))
+    
+    if _should_skip_product(product_id, title_raw, buying_price, stats):
         return
         
     title_lower = title_raw.lower()
-    if "hediye kart" in title_lower or "gift card" in title_lower:
-        return
-        
     category_path_xml = (elem.findtext('categoryPath') or "").strip()
-    if category_path_xml not in CATEGORY_MAPPING:
-        raise ValueError(f"XML içerisinde eşleşmeyen kategori yolu bulundu: '{category_path_xml}' (Ürün ID: {product_id}). Lütfen bu kategoriyi etika.py içerisindeki CATEGORY_MAPPING sözlüğüne ekleyin!")
-
-    buying_price = _extract_buying_price(elem.findtext('salePrice'), elem.findtext('costPrice'))
-    if buying_price <= 0.0:
-        stats["errors_skipped"] += 1
-        return
+    if category_path_xml and category_path_xml not in CATEGORY_MAPPING:
+        sys.stderr.write(f"Uyarı: Bilinmeyen kategori yolu: '{category_path_xml}' (Ürün ID: {product_id}). Otomatik eşleniyor.\n")
 
     sku = elem.findtext('sku')
     ean = elem.findtext('ean')
@@ -1488,7 +1540,7 @@ def _process_product_element(elem, brand_id, diger_category_id, plus_size_mappin
     
     detail_cleaned = clean_html_to_plain_text(detail_raw)
     title_tr_cleaned = clean_title(title_raw)
-    gender = "Erkek" if (gender_xml and gender_xml.strip().upper() == 'M') or "erkek" in title_lower else "Kadın"
+    gender = _determine_gender(gender_xml, title_lower)
     
     color_uuid, v_color = _resolve_color(elem, sku, title_raw, colors_cache, parsed_data["colors_to_upsert"])
     fabric_uuid, v_fabric = _resolve_fabric(detail_raw, fabrics_cache, parsed_data["fabrics_to_upsert"])
@@ -1498,14 +1550,7 @@ def _process_product_element(elem, brand_id, diger_category_id, plus_size_mappin
     v_tax = _parse_tax_rate(elem.findtext('tax'))
     total_stock = _parse_stock(elem.findtext('stock'))
     
-    if product_id in products_cache:
-        product_uuid, product_slug = products_cache[product_id]
-        stats["items_updated"] += 1
-    else:
-        product_uuid = str(uuid.uuid4())
-        product_slug = slugify(title_tr_cleaned)
-        products_cache[product_id] = (product_uuid, product_slug)
-        stats["items_added"] += 1
+    product_uuid, product_slug = _get_or_create_product_identity(product_id, title_tr_cleaned, products_cache, stats)
         
     parsed_data["attributes_by_product"][product_uuid] = {"Cinsiyet": gender, "Kumaş Tipi": v_fabric, "Renk": v_color}
     parsed_data["images_by_product"][product_uuid] = _collect_product_images(
@@ -1518,9 +1563,10 @@ def _process_product_element(elem, brand_id, diger_category_id, plus_size_mappin
     sku_val = f"FL-{sku}" if sku else f"FL-{product_id}"
     barcode_val = ean if ean else product_id
     meta_attr_val = json.dumps({"original_brand": "Etika Fashion"})
+    mpn_val = mpn if mpn else product_id
     
     parsed_data["products_to_upsert"][product_id] = (
-        product_uuid, FEED_ID, product_id, mpn if mpn else product_id, title_tr_cleaned, product_slug,
+        product_uuid, FEED_ID, product_id, mpn_val, title_tr_cleaned, product_slug,
         category_id, gender, sync_run_id, True, brand_id,
         "2-2-2", "S,M,L", 0.35, 6, "Tüm Sezonlar",
         buying_price, v_price, None, v_price, "TRY", v_tax, total_stock, sku_val, barcode_val,

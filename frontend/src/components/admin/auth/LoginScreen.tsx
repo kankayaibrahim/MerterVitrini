@@ -28,8 +28,8 @@ export default function LoginScreen() {
       setLoading(true);
 
       // Construct OIDC Authorization flow parameters
-      // Automatically detect absolute frontend browser origin to form redirect_uri
-      const redirectUri = encodeURIComponent(window.location.origin + "/");
+      // Automatically detect absolute frontend browser origin to form redirect_uri to /admin
+      const redirectUri = encodeURIComponent(window.location.origin + "/admin");
       const authUrl = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth` +
         `?client_id=${KEYCLOAK_CLIENT_ID}` +
         `&redirect_uri=${redirectUri}` +

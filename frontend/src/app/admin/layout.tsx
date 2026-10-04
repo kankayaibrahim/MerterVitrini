@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { AdminProvider } from "@/context/AdminContext";
+import AdminShell from "@/components/admin/layout/AdminShell";
 
 export const metadata: Metadata = {
   title: "Yönetim Paneli | Merter Vitrini Admin Suite",
@@ -14,5 +16,9 @@ export default function AdminLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return <div className="admin-root">{children}</div>;
+  return (
+    <AdminProvider>
+      <AdminShell>{children}</AdminShell>
+    </AdminProvider>
+  );
 }

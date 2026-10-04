@@ -68,7 +68,7 @@ export default function ProductGrid({
             <div className="relative w-full aspect-[4/5] bg-zinc-100 flex items-center justify-center overflow-hidden border-b border-zinc-100">
               {product.images && product.images.length > 0 ? (
                 <img 
-                  src={product.images.find((img: any) => img.is_cover)?.image_url || product.images[0].image_url} 
+                  src={product.images.find(img => img.is_cover)?.image_url || product.images[0].image_url} 
                   alt={product.title}
                   className="w-full h-full object-cover hover:scale-105 transition-all duration-300"
                 />

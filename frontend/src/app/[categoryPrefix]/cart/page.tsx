@@ -5,11 +5,11 @@ import { Category } from "@/types/store";
 import CartClient from "./CartClient";
 
 interface PageProps {
-  params: Promise<{ categoryPrefix: string }>;
+  readonly params: Promise<{ readonly categoryPrefix: string }>;
 }
 
 // Generate static routes for all active language prefixes at compile time (essential for static export mode)
-export async function generateStaticParams() {
+export function generateStaticParams() {
   return [
     { categoryPrefix: "tr" },
     { categoryPrefix: "en" },
@@ -51,12 +51,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const title = titles[categoryPrefix] || titles.en;
   const desc = descs[categoryPrefix] || descs.en;
 
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/cart/`;
+  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/cart`;
   const languagesList = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
   const alternatesLanguages = Object.fromEntries(
     languagesList
       .filter((code) => code !== "__proto__" && code !== "constructor")
-      .map((code) => [code, `https://mertervitrini.com.tr/${code}/cart/`])
+      .map((code) => [code, `https://mertervitrini.com.tr/${code}/cart`])
   );
 
   return {
@@ -77,7 +77,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function CartPage({ params }: PageProps) {
+export default async function CartPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
 
   // Server-side fetching of categories for Header navigation rendering

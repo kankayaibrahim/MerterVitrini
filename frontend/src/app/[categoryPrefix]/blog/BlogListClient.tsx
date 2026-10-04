@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, Search, ArrowRight, BookOpen, FileText } from "lucide-react";
+import Link from "next/link";
+import Image from "next/image";
+import { Calendar, Search, ArrowRight, BookOpen } from "lucide-react";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
@@ -10,11 +12,25 @@ import { Category } from "@/types/store";
 import { BlogPost, Language } from "./page";
 import { t } from "@/app/i18n";
 
+function subscribeCurrency(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function getCurrencySnapshot(): string {
+  if (typeof window === "undefined") return "TRY";
+  return localStorage.getItem("merter_preferred_currency") || "TRY";
+}
+
+function getCurrencyServerSnapshot(): string {
+  return "TRY";
+}
+
 interface BlogListClientProps {
-  categoryPrefix: string;
-  blogPosts: BlogPost[];
-  categories: Category[];
-  activeLangs: Language[];
+  readonly categoryPrefix: string;
+  readonly blogPosts: readonly BlogPost[];
+  readonly categories: readonly Category[];
+  readonly activeLangs: readonly Language[];
 }
 
 export default function BlogListClient({
@@ -22,7 +38,7 @@ export default function BlogListClient({
   blogPosts,
   categories,
   activeLangs
-}: BlogListClientProps) {
+}: Readonly<BlogListClientProps>) {
   const router = useRouter();
 
   // Determine current active language code matching the URL prefix
@@ -38,24 +54,16 @@ export default function BlogListClient({
   // --- UI States ---
   const [lang, setLang] = useState<string>(initialLang);
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
-  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
   const [policyModalType, setPolicyModalType] = useState<"cancellation_and_return" | "terms_of_service" | "privacy_policy" | "">("");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // --- Multi-Currency States ---
-  const [displayCurrency, setDisplayCurrency] = useState<string>("TRY");
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const preferredCurr = localStorage.getItem("merter_preferred_currency");
-      if (preferredCurr) setDisplayCurrency(preferredCurr);
-    }
-  }, []);
+  // --- Multi-Currency Store ---
+  const displayCurrency = useSyncExternalStore(subscribeCurrency, getCurrencySnapshot, getCurrencyServerSnapshot);
 
   const handleCurrencyChange = (curr: string) => {
-    setDisplayCurrency(curr);
     localStorage.setItem("merter_preferred_currency", curr);
+    window.dispatchEvent(new Event("storage"));
   };
 
   // Redirect on language switch
@@ -86,7 +94,7 @@ export default function BlogListClient({
     // Search query matching title or summary
     const matchesSearch = searchQuery
       ? trans.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        (trans.summary && trans.summary.toLowerCase().includes(searchQuery.toLowerCase()))
+        Boolean(trans.summary?.toLowerCase().includes(searchQuery.toLowerCase()))
       : true;
 
     return matchesSearch;
@@ -101,7 +109,7 @@ export default function BlogListClient({
         isLangOpen={isLangOpen}
         setIsLangOpen={setIsLangOpen}
         totalPkgs={0}
-        setIsCartOpen={setIsCartOpen}
+        setIsCartOpen={() => router.push(`/${categoryPrefix}/cart`)}
         setSearchQuery={() => {}}
         setCurrentPage={() => {}}
         setActiveCategoryId={() => {}}
@@ -150,60 +158,62 @@ export default function BlogListClient({
               const coverImg = post.cover_image || "/placeholder.png";
 
               return (
-                <article
+                <Link
                   key={post.id}
-                  onClick={() => router.push(`/${categoryPrefix}/blog/${post.slug}`)}
-                  className="bg-white border border-cultured rounded-[20px] shadow-sm overflow-hidden flex flex-col group cursor-pointer hover:shadow-md hover:border-zinc-300 transition-all duration-300"
+                  href={`/${categoryPrefix}/blog/${post.slug}`}
+                  className="bg-white border border-cultured rounded-[20px] shadow-sm overflow-hidden flex flex-col group cursor-pointer hover:shadow-md hover:border-zinc-300 transition-all duration-300 no-underline text-inherit"
                 >
-                  {/* Aspect Ratio Controlled Cover Image Container */}
-                  <div className="relative aspect-[16/10] w-full overflow-hidden bg-zinc-100">
-                    <img
-                      src={coverImg}
-                      alt={title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                      onError={(e) => {
-                        e.currentTarget.src = "/placeholder.png";
-                      }}
-                    />
-                    {/* Dark gradient shadow */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60" />
-                  </div>
-
-                  {/* Card Body */}
-                  <div className="p-6 flex-grow flex flex-col">
-                    {/* Meta Fields */}
-                    <div className="flex items-center gap-3 text-[10px] font-extrabold uppercase tracking-wider text-sonic-silver mb-3">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar size={12} className="text-salmon-pink" />
-                        <span>{formatDate(post.created_at)}</span>
-                      </div>
-                      <span>•</span>
-                      <div className="px-2 py-0.5 bg-cultured text-eerie-black rounded-[5px] text-[9px] font-bold">
-                        {lang === "tr" ? "Rehber" : "Guide"}
-                      </div>
+                  <article className="flex flex-col flex-grow">
+                    {/* Aspect Ratio Controlled Cover Image Container */}
+                    <div className="relative aspect-[16/10] w-full overflow-hidden bg-zinc-100">
+                      <Image
+                        src={coverImg}
+                        alt={title}
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                        unoptimized
+                      />
+                      {/* Dark gradient shadow */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60" />
                     </div>
 
-                    {/* Title */}
-                    <h2 className="font-sans font-extrabold text-base md:text-lg text-eerie-black leading-snug tracking-tight mb-3 line-clamp-2 group-hover:text-salmon-pink transition-colors">
-                      {title}
-                    </h2>
+                    {/* Card Body */}
+                    <div className="p-6 flex-grow flex flex-col">
+                      {/* Meta Fields */}
+                      <div className="flex items-center gap-3 text-[10px] font-extrabold uppercase tracking-wider text-sonic-silver mb-3">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={12} className="text-salmon-pink" />
+                          <span>{formatDate(post.created_at)}</span>
+                        </div>
+                        <span>•</span>
+                        <div className="px-2 py-0.5 bg-cultured text-eerie-black rounded-[5px] text-[9px] font-bold">
+                          {lang === "tr" ? "Rehber" : "Guide"}
+                        </div>
+                      </div>
 
-                    {/* Summary */}
-                    {summary && (
-                      <p className="text-xs text-sonic-silver font-semibold leading-relaxed mb-6 line-clamp-3">
-                        {summary}
-                      </p>
-                    )}
+                      {/* Title */}
+                      <h2 className="font-sans font-extrabold text-base md:text-lg text-eerie-black leading-snug tracking-tight mb-3 line-clamp-2 group-hover:text-salmon-pink transition-colors">
+                        {title}
+                      </h2>
 
-                    {/* Bottom Action Footer */}
-                    <div className="mt-auto pt-4 border-t border-cultured flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-salmon-pink flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                        {lang === "tr" ? "Devamını Oku" : "Read More"}
-                        <ArrowRight size={12} />
-                      </span>
+                      {/* Summary */}
+                      {summary && (
+                        <p className="text-xs text-sonic-silver font-semibold leading-relaxed mb-6 line-clamp-3">
+                          {summary}
+                        </p>
+                      )}
+
+                      {/* Bottom Action Footer */}
+                      <div className="mt-auto pt-4 border-t border-cultured flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-salmon-pink flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                          {lang === "tr" ? "Devamını Oku" : "Read More"}
+                          <ArrowRight size={12} />
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </article>
+                  </article>
+                </Link>
               );
             })}
           </div>
