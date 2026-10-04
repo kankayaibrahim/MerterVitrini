@@ -10,6 +10,9 @@ interface PageProps {
     readonly categoryPrefix: string;
     readonly slug: string[];
   }>;
+}
+
+interface MetadataProps extends PageProps {
   readonly searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
@@ -86,7 +89,7 @@ export async function generateStaticParams() {
       const extractSlugsForPrefix = (nodes: Category[], prefix: string, parentSlugs: string[] = []) => {
         if (!Array.isArray(nodes)) return;
         nodes.forEach((n) => {
-          if (n && n.slug) {
+          if (n?.slug) {
             const currentTrail = [...parentSlugs, String(n.slug)];
             params.push({ categoryPrefix: prefix, slug: currentTrail });
             if (Array.isArray(n.children) && n.children.length > 0) {
@@ -128,13 +131,13 @@ function findCategoryBySlug(tree: Category[], slug: string): Category | null {
 function getCategorySlugPath(tree: Category[], targetSlug: string, path: string[] = []): string[] | null {
   if (!Array.isArray(tree) || !targetSlug) return null;
   for (const cat of tree) {
-    if (!cat) continue;
-    const currentSlug = cat.slug || "";
-    if (currentSlug && currentSlug === targetSlug) {
-      return [...path, currentSlug];
+    if (!cat?.slug) continue;
+    const currentTrail = [...path, cat.slug];
+    if (cat.slug === targetSlug) {
+      return currentTrail;
     }
-    if (Array.isArray(cat.children) && cat.children.length > 0) {
-      const found = getCategorySlugPath(cat.children, targetSlug, currentSlug ? [...path, currentSlug] : path);
+    if (Array.isArray(cat.children)) {
+      const found = getCategorySlugPath(cat.children, targetSlug, currentTrail);
       if (found) return found;
     }
   }
@@ -404,82 +407,116 @@ export function getCategoryB2BDefaultDesc(categoryTitle: string, lang: string): 
   return descMap[lang] || descMap.en;
 }
 
+const FILTER_KEYS = new Set([
+  "color", "size", "brand", "brand_id", "gender", "season",
+  "min_price", "max_price", "sort_by", "q", "page"
+]);
+
+async function checkHasFilterParams(searchParamsPromise?: Promise<{ [key: string]: string | string[] | undefined }>): Promise<boolean> {
+  if (!searchParamsPromise) return false;
+  const search = await searchParamsPromise;
+  if (!search) return false;
+  return Object.keys(search).some((k) => FILTER_KEYS.has(k));
+}
+
+function resolveLangForPrefix(prefix: string, activeLangs: Language[]): string {
+  const matched = activeLangs.find((l) => l.categoryPrefix === prefix);
+  return matched?.code || "en";
+}
+
+function buildAlternatesLanguages(nestedPath: string, activeLangs: Language[]): Record<string, string> {
+  const alternatesLanguages: Record<string, string> = {
+    "x-default": `https://mertervitrini.com.tr/en/${nestedPath}`,
+  };
+  activeLangs.forEach((l) => {
+    alternatesLanguages[l.code] = `https://mertervitrini.com.tr/${l.categoryPrefix}/${nestedPath}`;
+  });
+  return alternatesLanguages;
+}
+
+function createCategoryMetadata({
+  fullTitle,
+  finalDesc,
+  canonicalUrl,
+  alternatesLanguages,
+  hasFilterParams,
+  categoryTitle,
+  lang,
+}: {
+  fullTitle: string;
+  finalDesc: string;
+  canonicalUrl: string;
+  alternatesLanguages: Record<string, string>;
+  hasFilterParams: boolean;
+  categoryTitle: string;
+  lang: string;
+}): Metadata {
+  return {
+    title: fullTitle,
+    description: finalDesc,
+    robots: hasFilterParams
+      ? { index: false, follow: true }
+      : { index: true, follow: true },
+    alternates: {
+      canonical: canonicalUrl,
+      languages: alternatesLanguages,
+    },
+    openGraph: {
+      title: fullTitle,
+      description: finalDesc,
+      url: canonicalUrl,
+      siteName: "Merter Vitrini",
+      images: [
+        {
+          url: "https://mertervitrini.com.tr/placeholder.png",
+          width: 800,
+          height: 600,
+          alt: categoryTitle,
+        }
+      ],
+      locale: lang === "tr" ? "tr_TR" : "en_US",
+      type: "website",
+    }
+  };
+}
+
 // Generate dynamic SEO metadata on the server side using prefix and category slug
-export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: MetadataProps): Promise<Metadata> {
   const { categoryPrefix, slug: slugArr } = await params;
   const slug = (Array.isArray(slugArr) && slugArr.length > 0 ? slugArr.at(-1) : slugArr) as string;
   
-  const search = searchParams ? await searchParams : {};
-  const hasFilterParams = search && Object.keys(search).some((k) => 
-    ["color", "size", "brand", "brand_id", "gender", "season", "min_price", "max_price", "sort_by", "q", "page"].includes(k)
-  );
-
+  const hasFilterParams = await checkHasFilterParams(searchParams);
   const activeLangs = await fetchLanguages();
-  const prefixToLangMap = new Map<string, string>();
-  activeLangs.forEach((l) => {
-    if (!prefixToLangMap.has(l.categoryPrefix) || l.code === "tr" || l.code === "en") {
-      prefixToLangMap.set(l.categoryPrefix, l.code);
-    }
-  });
-  
-  const lang = prefixToLangMap.get(categoryPrefix) || "en";
+  const lang = resolveLangForPrefix(categoryPrefix, activeLangs);
   
   try {
     const response = await fetch("https://mertervitrini.com.tr/api/v1/store/categories", { next: { revalidate: 300 } });
     if (response.ok) {
       const categories = await response.json();
-      if (Array.isArray(categories)) {
-        const catObj = findCategoryBySlug(categories, slug);
-        const slugPathArr = getCategorySlugPath(categories, slug);
-        
-        if (catObj && slugPathArr) {
-          const nestedPath = slugPathArr.join("/");
-          const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/${nestedPath}`;
-          
-          const alternatesLanguages: Record<string, string> = {
-            "x-default": `https://mertervitrini.com.tr/en/${nestedPath}`,
-          };
-          activeLangs.forEach((l) => {
-            alternatesLanguages[l.code] = `https://mertervitrini.com.tr/${l.categoryPrefix}/${nestedPath}`;
-          });
+      const catObj = findCategoryBySlug(categories, slug);
+      const slugPathArr = getCategorySlugPath(categories, slug);
+      
+      if (catObj && slugPathArr) {
+        const nestedPath = slugPathArr.join("/");
+        const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/${nestedPath}`;
+        const alternatesLanguages = buildAlternatesLanguages(nestedPath, activeLangs);
 
-          const categoryTitle = catObj.translations?.[lang]?.title || catObj.title;
-          const { titleSuffix, descTemplate: defaultDesc } = getCategorySuffixAndDesc(categoryTitle, lang);
+        const categoryTitle = catObj.translations?.[lang]?.title || catObj.title;
+        const { titleSuffix, descTemplate: defaultDesc } = getCategorySuffixAndDesc(categoryTitle, lang);
+        const customSeo = getCustomSeoOverride(String(slug).toLowerCase(), lang);
 
-          const cleanSlug = String(slug).toLowerCase();
-          const customSeo = getCustomSeoOverride(cleanSlug, lang);
+        const fullTitle = customSeo ? customSeo.title : `${categoryTitle} | Merter Vitrini ${titleSuffix}`;
+        const finalDesc = customSeo ? customSeo.description : defaultDesc;
 
-          const fullTitle = customSeo ? customSeo.title : `${categoryTitle} | Merter Vitrini ${titleSuffix}`;
-          const finalDesc = customSeo ? customSeo.description : defaultDesc;
-          
-          return {
-            title: fullTitle,
-            description: finalDesc,
-            robots: hasFilterParams
-              ? { index: false, follow: true }
-              : { index: true, follow: true },
-            alternates: {
-              canonical: canonicalUrl,
-              languages: alternatesLanguages,
-            },
-            openGraph: {
-              title: fullTitle,
-              description: finalDesc,
-              url: canonicalUrl,
-              siteName: "Merter Vitrini",
-              images: [
-                {
-                  url: "https://mertervitrini.com.tr/placeholder.png",
-                  width: 800,
-                  height: 600,
-                  alt: categoryTitle,
-                }
-              ],
-              locale: lang === "tr" ? "tr_TR" : "en_US",
-              type: "website",
-            }
-          };
-        }
+        return createCategoryMetadata({
+          fullTitle,
+          finalDesc,
+          canonicalUrl,
+          alternatesLanguages,
+          hasFilterParams,
+          categoryTitle,
+          lang,
+        });
       }
     }
   } catch (err) {

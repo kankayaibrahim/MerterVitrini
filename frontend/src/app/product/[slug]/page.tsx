@@ -112,6 +112,19 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
   const { slug } = await params;
   const product = await apiFetch<Product>(`/products/${slug}`);
 
+  let effectiveOfferPrice = 0;
+  let unitPiecePrice = 0;
+  if (product) {
+    const hasDiscount = Boolean(product.discounted_price && product.discounted_price > 0);
+    effectiveOfferPrice = hasDiscount ? (product.discounted_price || 0) : (product.price || 0);
+    const moq = (product.minimum_order_quantity && product.minimum_order_quantity > 0)
+      ? product.minimum_order_quantity
+      : 1;
+    unitPiecePrice = (product.single_price && product.single_price > 0)
+      ? product.single_price
+      : effectiveOfferPrice / moq;
+  }
+
   const jsonLd = product ? {
     "@context": "https://schema.org",
     "@graph": [
@@ -132,7 +145,7 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
           "@type": "Offer",
           "url": `https://mertervitrini.com.tr/product/${product.slug || product.id}`,
           "priceCurrency": product.currency || "USD",
-          "price": (product.discounted_price && product.discounted_price > 0 ? product.discounted_price : product.price || 0).toFixed(2),
+          "price": effectiveOfferPrice.toFixed(2),
           "eligibleQuantity": {
             "@type": "QuantitativeValue",
             "value": product.minimum_order_quantity || 1,
@@ -140,11 +153,7 @@ export default async function ProductDetailPage({ params, searchParams }: PagePr
           },
           "priceSpecification": {
             "@type": "UnitPriceSpecification",
-            "price": (
-              product.single_price && product.single_price > 0 
-                ? product.single_price 
-                : ((product.discounted_price && product.discounted_price > 0 ? product.discounted_price : product.price || 0) / (product.minimum_order_quantity || 1))
-            ).toFixed(2),
+            "price": unitPiecePrice.toFixed(2),
             "priceCurrency": product.currency || "USD",
             "unitText": "adet / piece",
             "referenceQuantity": {
