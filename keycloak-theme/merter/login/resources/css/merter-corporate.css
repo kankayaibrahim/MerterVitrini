@@ -1,0 +1,393 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+/* ==============================================================================
+   MERTER VITRINI B2B - MINIMAL KURUMSAL AÇIK TEMA (CLEAN WHITE / SLATE)
+   Keycloak 26 Quarkus Authentication Theme
+   ============================================================================== */
+
+:root {
+  --mv-primary: #0f172a;
+  --mv-primary-hover: #1e293b;
+  --mv-accent: #f59e0b;
+  --mv-bg: #f8fafc;
+  --mv-card-bg: #ffffff;
+  --mv-border: #e2e8f0;
+  --mv-text-main: #0f172a;
+  --mv-text-muted: #64748b;
+  --mv-text-subtle: #94a3b8;
+  --mv-input-bg: #ffffff;
+  --mv-input-border: #cbd5e1;
+  --mv-input-focus: #0f172a;
+  --mv-error-bg: #fef2f2;
+  --mv-error-border: #fecaca;
+  --mv-error-text: #991b1b;
+  --mv-radius-lg: 24px;
+  --mv-radius-md: 12px;
+  --mv-radius-sm: 8px;
+  --mv-shadow-card: 0 20px 40px -15px rgba(15, 23, 42, 0.07), 0 0 1px 1px rgba(15, 23, 42, 0.05);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  background-color: var(--mv-bg) !important;
+  background-image: 
+    radial-gradient(#e2e8f0 1px, transparent 1px),
+    linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%) !important;
+  background-size: 24px 24px, 100% 100% !important;
+  color: var(--mv-text-main) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Master Page Container */
+.mv-login-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 1rem;
+}
+
+/* Top Navigation Bar */
+.mv-navbar {
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+}
+
+.mv-brand-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.mv-brand-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--mv-radius-md);
+  background: var(--mv-primary);
+  border: 1px solid #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mv-accent);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
+  transition: transform 0.2s ease;
+}
+
+.mv-brand-badge:hover {
+  transform: scale(1.05);
+}
+
+.mv-brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.mv-brand-name {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.05em;
+  color: var(--mv-text-main);
+  text-transform: uppercase;
+}
+
+.mv-brand-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #d97706;
+}
+
+/* Language Selector */
+.mv-lang-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #ffffff;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--mv-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.mv-lang-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mv-text-muted);
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  transition: all 0.15s ease;
+}
+
+.mv-lang-btn:hover {
+  color: var(--mv-text-main);
+  background: #f1f5f9;
+}
+
+.mv-lang-btn.active {
+  background: var(--mv-primary);
+  color: #ffffff;
+}
+
+/* Card Container */
+.mv-card-wrapper {
+  width: 100%;
+  max-width: 440px;
+  margin: auto;
+  padding: 1rem 0;
+}
+
+.mv-login-card {
+  background: var(--mv-card-bg);
+  border: 1px solid var(--mv-border);
+  border-radius: var(--mv-radius-lg);
+  padding: 2.25rem 2rem;
+  box-shadow: var(--mv-shadow-card);
+  position: relative;
+  overflow: hidden;
+}
+
+.mv-card-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.mv-card-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: #f1f5f9;
+  border: 1px solid var(--mv-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mv-primary);
+  margin: 0 auto 1rem auto;
+}
+
+.mv-card-title {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--mv-text-main);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.mv-card-desc {
+  font-size: 13px;
+  color: var(--mv-text-muted);
+  margin-top: 0.5rem;
+  line-height: 1.5;
+}
+
+/* Error & Alert Messages */
+.mv-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--mv-radius-md);
+  margin-bottom: 1.5rem;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.mv-alert-error {
+  background: var(--mv-error-bg);
+  border: 1px solid var(--mv-error-border);
+  color: var(--mv-error-text);
+}
+
+.mv-alert-info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
+/* Form Groups & Inputs */
+.mv-form-group {
+  margin-bottom: 1.25rem;
+}
+
+.mv-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.4rem;
+}
+
+.mv-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mv-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 1rem;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--mv-text-main);
+  background: var(--mv-input-bg);
+  border: 1px solid var(--mv-input-border);
+  border-radius: var(--mv-radius-md);
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.mv-input:focus {
+  border-color: var(--mv-input-focus);
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
+}
+
+.mv-input[aria-invalid="true"] {
+  border-color: #ef4444;
+}
+
+.mv-input-error-msg {
+  display: block;
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 0.35rem;
+  font-weight: 500;
+}
+
+/* Options (Remember Me & Forgot Password) */
+.mv-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 13px;
+}
+
+.mv-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--mv-text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.mv-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--mv-primary);
+  cursor: pointer;
+}
+
+.mv-forgot-link {
+  color: var(--mv-primary);
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.mv-forgot-link:hover {
+  text-decoration: underline;
+}
+
+/* Primary Submit Button */
+.mv-btn-primary {
+  width: 100%;
+  height: 46px;
+  background: var(--mv-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--mv-radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.15);
+  transition: all 0.15s ease;
+}
+
+.mv-btn-primary:hover {
+  background: var(--mv-primary-hover);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.2);
+  transform: translateY(-1px);
+}
+
+.mv-btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Password Toggle Icon */
+.mv-pw-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--mv-text-subtle);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.mv-pw-toggle:hover {
+  color: var(--mv-text-main);
+}
+
+/* Footer Section */
+.mv-footer {
+  width: 100%;
+  max-width: 1100px;
+  text-align: center;
+  padding: 1rem 0;
+  font-size: 12px;
+  color: var(--mv-text-subtle);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.mv-footer-links {
+  display: flex;
+  gap: 1rem;
+}
+
+.mv-footer-link {
+  color: var(--mv-text-muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.mv-footer-link:hover {
+  color: var(--mv-text-main);
+  text-decoration: underline;
+}
+
+/* Hide unneeded default Keycloak tags */
+#kc-header, #kc-header-wrapper, .login-pf-page-header, #kc-locale {
+  display: none !important;
+}
