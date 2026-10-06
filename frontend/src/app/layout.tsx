@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Playfair_Display, Outfit } from "next/font/google";
 import Script from "next/script";
+import { AnalyticsTracker } from "@/components/analytics/AnalyticsTracker";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -87,6 +89,9 @@ export default function RootLayout({
         </Script>
       </head>
       <body className="min-h-full flex flex-col bg-white font-sans antialiased text-onyx">
+        <Suspense fallback={null}>
+          <AnalyticsTracker />
+        </Suspense>
         {children}
       </body>
     </html>

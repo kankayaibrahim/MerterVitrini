@@ -112,6 +112,29 @@ function getCategorySlugPath(tree: Category[], targetSlug: string, path: string[
 }
 
 function getCustomSeoOverride(cleanSlug: string, lang: string): { title: string; description: string } | null {
+  if (cleanSlug === "kadin-giyim" || cleanSlug === "kadin") {
+    const kadinTitles: Record<string, string> = {
+      tr: "Merter Toptan Kadın Giyim | İmalatçıdan Yeni Sezon Ürünler",
+      en: "Merter Wholesale Women's Clothing | Factory Direct New Season",
+      ru: "Одежда Оптом из Мертера | Напрямую от Фабрик Стамбула",
+      ar: "ملابس نسائية بالجملة من مصانع مارتر إسطنبول | Merter Vitrini",
+      de: "Merter Großhandel Damenmode | Direkt vom Hersteller Istanbul",
+      fr: "Vêtements Femme en Gros Merter | En Direct des Fabricants",
+      pl: "Hurtownia Odzieży Merter | Bezpośrednio od Producenta",
+      bg: "Дамски Дрехи на Едро от Мертер | Директно от Производител",
+    };
+    const kadinDescs: Record<string, string> = {
+      tr: "Doğrudan Merter tekstil imalatçılarından en yeni sezon toptan kadın giyim ürünleri. Aracısız fabrika fiyatları, butikler için serili paketler ve hızlı teslimat.",
+      en: "Buy new season wholesale women's apparel directly from Merter Istanbul manufacturers. No middlemen, factory prices, boutique packs, and express global shipping.",
+      ru: "Женская одежда оптом напрямую от фабрик и производителей Мертер (Стамбул). Новые коллекции без посредников, фабричные цены для бутиков и быстрая доставка карго.",
+      ar: "تسوق ملابس نسائية بالجملة مباشرة من مصانع مارتر في إسطنبول بدون وسطاء. أحدث موديلات الموسم بأسعار المصنع المباشرة، سيري للبوتيكات مع شحن جوي سريع لكافة الدول.",
+      de: "Damenmode im Großhandel direkt von Herstellern aus Merter Istanbul kaufen. Ohne Zwischenhändler, Fabrikpreise, Serien für Boutiquen und schneller EU-Versand.",
+      fr: "Achetez la nouvelle collection de vêtements femme en gros directement auprès des fabricants de Merter Istanbul. Prix d'usine, sans intermédiaire et livraison rapide.",
+      pl: "Hurt damskiej odzieży nowej kolekcji bezpośrednio od producentów z Merter Stambuł. Ceny fabryczne bez pośredników, pakiety rozmiarowe dla butików i szybka dostawa.",
+      bg: "Дамска мода нова колекция на едро директно от производители в Мертер, Истанбул. Фабрични цени без посредници, серии за бутици и бърз транспорт до България.",
+    };
+    return { title: kadinTitles[lang] || kadinTitles.en, description: kadinDescs[lang] || kadinDescs.en };
+  }
   if (cleanSlug === "yaz-koleksiyonu" || cleanSlug.includes("boho") || cleanSlug.includes("bohem")) {
     const bohoTitles: Record<string, string> = {
       tr: "Toptan Bohem Giyim Tarzı - Butik Elbiseler Türkiye",
@@ -158,28 +181,143 @@ function getCustomSeoOverride(cleanSlug: string, lang: string): { title: string;
     };
     return { title: vintageTitles[lang] || vintageTitles.en, description: vintageDescs[lang] || vintageDescs.en };
   }
-  if (cleanSlug === "abiye" || cleanSlug === "gece-elbesi" || cleanSlug === "elbise-abiye" || cleanSlug.includes("night-dress")) {
+  if (cleanSlug === "elbise-abiye" || cleanSlug === "elbise") {
+    const elbiseTitles: Record<string, string> = {
+      tr: "Toptan Kadın Elbise Modelleri & Fiyatları | Merter Vitrini",
+      en: "Wholesale Women's Dresses from Turkey | Factory Direct Prices",
+      ru: "Женские Платья Оптом из Турции | Каталог Фабрик Стамбул",
+      ar: "فساتين نسائية بالجملة من تركيا | تصاميم راقية وأسعار المصنع",
+      de: "Großhandel Damenkleider Türkei | Trendige Kleider B2B Istanbul",
+      fr: "Robes Femme en Gros Turquie | Fournisseur Prêt-à-Porter Merter",
+      pl: "Hurtownia Sukienek Damskich Turcja | Sukienki z Merter Stambuł",
+      bg: "Дамски Рокли на Едро от Турция | Модели и Фабрични Цени",
+    };
+    const elbiseDescs: Record<string, string> = {
+      tr: "En şık toptan kadın elbise modelleri Merter Vitrini'nde. Günlük, şifon, mini, midi ve maxi boy elbiseler doğrudan üretici fiyatlarıyla toptan satışta.",
+      en: "Discover stunning wholesale women's dresses direct from Istanbul manufacturers. Casual, floral, midi and maxi dresses with low MOQ and worldwide cargo.",
+      ru: "Купить женские платья оптом напрямую от турецких фабрик. Повседневные, шифоновые, вечерние и летние платья по ценам производителя с доставкой карго.",
+      ar: "أجمل تشكيلة فساتين نسائية بالجملة مباشرة من مصانع تركيا. فساتين يومية، ماكسي وميدي للبوتيكات بأفضل الأسعار وشحن جوي سريع لكافة الدول.",
+      de: "Damenkleider im Großhandel direkt aus Istanbul Merter bestellen. Elegante Alltags-, Midi- und Maxikleider zu Werkspreisen mit schnellem EU-Versand.",
+      fr: "Achetez des robes femme tendance en gros auprès des fabricants textiles d'Istanbul. Robes décontractées, midi et maxi avec expédition rapide en Europe.",
+      pl: "Modne sukienki damskie w hurcie prosto od tureckich producentów. Sukienki codzienne, midi i maxi w atrakcyjnych pakietach dla butików.",
+      bg: "Богат избор на дамски рокли на едро от производители в Истанбул. Ежедневни, миди и макси рокли на топ цени с бърза доставка до България.",
+    };
+    return { title: elbiseTitles[lang] || elbiseTitles.en, description: elbiseDescs[lang] || elbiseDescs.en };
+  }
+  if (cleanSlug === "abiye" || cleanSlug === "gece-elbesi" || cleanSlug.includes("night-dress")) {
     const nightTitles: Record<string, string> = {
-      tr: "Toptan Abiye ve Gece Elbisesi Türkiye - İstanbul İmalat",
-      en: "Wholesale Night Dress Turkey - Evening Gowns Istanbul",
-      ru: "Вечерние Платья Оптом Турция - Выпускные и Вечерние Наряды",
-      de: "Großhandel Abendkleider Türkei - Abendmode Istanbul",
-      pl: "Hurt Sukienek Wieczorowych Turcja - Suknie Balowe Stambuł",
-      bg: "Абитуриентски и Вечерни Рокли на Едро Турция - Истанбул",
-      ar: "فساتين سهرة وسواريه بالجملة تركيا - مصانع اسطنبول",
-      fr: "Robes de Soirée en Gros Turquie - Robes de Bal Istanbul Importer",
+      tr: "Toptan Abiye & Gece Elbisesi Modelleri | Merter İmalatçı",
+      en: "Wholesale Evening Dresses & Gowns | Istanbul Fashion Direct",
+      ru: "Вечерние Платья Оптом из Турции | Роскошный Выпускной и Праздник",
+      ar: "فساتين سهرة وأعراس بالجملة تركيا | تصاميم فخمة وأقمشة فاخرة",
+      de: "Großhandel Abendkleider Türkei | Elegante Festmode Istanbul",
+      fr: "Robes de Soirée en Gros Turquie | Robes de Fête Istanbul B2B",
+      pl: "Hurt Sukienek Wieczorowych Turcja | Suknie Balowe Stambuł",
+      bg: "Официални и Вечерни Рокли на Едро | Бални Тоалети Турция",
     };
     const nightDescs: Record<string, string> = {
-      tr: "İstanbul abiye imalatçılarından doğrudan toptan gece elbisesi, şifon abiyeler ve balo kıyafetleri sipariş edin.",
-      en: "Order premium wholesale night dresses and evening gowns directly from Istanbul manufacturers.",
-      ru: "Вечерние платья оптом от стамбульских производителей. Прямые поставки без посредников.",
-      de: "Bestellen Sie Abendkleider und festliche Mode im Großhandel direkt bei den Herstellern in Istanbul.",
-      pl: "Zamawiaj suknie wieczorowe i wizytowe w hurcie bezpośrednio od producentów ze Stambułu.",
-      bg: "Поръчайте вечерни и официални рокли на едро директно от производители в Истанбул.",
-      ar: "اطلب فساتين السهرة والسواريه بالجملة مباشرة من المصانع والمصممين في اسطنبول.",
-      fr: "Commandez des robes de soirée de qualité supérieure en gros directement des fabricants d'Istanbul.",
+      tr: "Özel günler ve davetler için toptan abiye ve gece elbiseleri. Saten, şifon, simli ve işlemeli abiyeler İstanbul üreticilerinden doğrudan toptan satışta.",
+      en: "Premium wholesale evening dresses, prom gowns, and cocktail outfits from Istanbul designers. Luxurious fabrics, factory prices, and express boutique delivery.",
+      ru: "Элегантные вечерние платья оптом от ведущих стамбульских дизайнеров. Атласные, шифоновые и праздничные наряды для свадеб и торжеств по фабричным ценам.",
+      ar: "أرقى موديلات فساتين السهرة والأعراس بالجملة من مصانع إسطنبول مباشرة. فساتين ساتان وشيفون فخمة للبوتيكات بأسعار الجملة وشحن دولي سريع.",
+      de: "Exklusive Abendkleider und Cocktailkleider im Großhandel aus Istanbul. Hochwertige Seiden- und Chiffonstoffe zu Fabrikpreisen für Modehäuser.",
+      fr: "Collection de robes de soirée chic et robes de cocktail en gros. Matières satinées, dentelle raffinée et finitions soignées en direct des créateurs turcs.",
+      pl: "Eleganckie suknie wieczorowe i balowe w hurcie bezpośrednio ze Stambułu. Luksusowe satyny, szyfony i kreacje wizytowe w cenach fabrycznych.",
+      bg: "Елегантни вечерни и бални рокли на едро от производители в Истанбул. Сатен, шифон и луксозни кройки за бутици с директна доставка.",
     };
     return { title: nightTitles[lang] || nightTitles.en, description: nightDescs[lang] || nightDescs.en };
+  }
+  if (cleanSlug === "triko-hirka-kazak" || cleanSlug === "triko" || cleanSlug === "kazak-suveter" || cleanSlug === "hirka") {
+    const trikoTitles: Record<string, string> = {
+      tr: "Toptan Kadın Triko Modelleri | Merter İmalatçı Kazak & Hırka",
+      en: "Wholesale Women's Knitwear from Turkey | Sweaters & Cardigans",
+      ru: "Женский Трикотаж Оптом из Турции | Свитера и Кардиганы Мертер",
+      ar: "تريكو نسائي بالجملة من تركيا | كنزات وكارديجان مصانع مارتر",
+      de: "Großhandel Damenstrickwaren Türkei | Pullover & Strickjacken",
+      fr: "Tricots Femme en Gros Turquie | Pulls et Gilets Merter B2B",
+      pl: "Hurtownia Dzianin Damskich Turcja | Swetry i Kardigany Merter",
+      bg: "Дамско Трикотаж и Плетиво на Едро | Пуловери и Жилетки Турция",
+    };
+    const trikoDescs: Record<string, string> = {
+      tr: "Merter triko imalatçılarından kaliteli kadın kazak, hırka ve triko takımlar. Sonbahar-kış sezonunun en trend örgü modelleri toptan fiyatlarla.",
+      en: "High-quality wholesale women's knitwear, pullovers, and cardigans from Merter manufacturers. Warm yarns, trendy stitches, and low MOQ series.",
+      ru: "Качественный турецкий женский трикотаж оптом напрямую с фабрик Мертера. Вязаные свитера, джемперы и кардиганы по низким ценам производителя.",
+      ar: "أفخم تشكيلات التريكو النسائي والكنزات الشتوية بالجملة من مصانع مارتر إسطنبول. غرز متقنة وخامات دافئة للبوتيكات بأسعار الجملة.",
+      de: "Erstklassige Damen-Strickwaren, Pullover und Cardigans im Großhandel aus Istanbul Merter. Weiche Garne, moderne Muster und Fabrikpreise.",
+      fr: "Maille et tricots femme de qualité supérieure en gros. Pulls chauds, gilets tendance et cardigans doux directement des fabricants turcs.",
+      pl: "Wysokogatunkowa dzianina damska, modne swetry i kardigany w hurcie ze Stambułu. Ciepłe przędze, nowoczesne fasony i szybka wysyłka.",
+      bg: "Качествено дамско плетиво, жилетки и пуловери на едро директно от Мертер, Истанбул. Меки прежди, топли зимни модели и отлични цени.",
+    };
+    return { title: trikoTitles[lang] || trikoTitles.en, description: trikoDescs[lang] || trikoDescs.en };
+  }
+  if (cleanSlug === "buyuk-beden" || cleanSlug.startsWith("buyuk-beden")) {
+    const plusTitles: Record<string, string> = {
+      tr: "Toptan Büyük Beden Kadın Giyim Modelleri & Fiyatları | Merter",
+      en: "Wholesale Plus Size Women's Apparel Turkey | Curvy Fashion B2B",
+      ru: "Женская Одежда Больших Размеров Оптом | Батал из Турции",
+      ar: "ملابس نسائية مقاسات كبيرة بالجملة تركيا | بلس سايز وباطال",
+      de: "Großhandel Plus Size Damenmode Türkei | Große Größen B2B Merter",
+      fr: "Vêtements Grande Taille Femme en Gros | Mode Curvy Istanbul B2B",
+      pl: "Hurtownia Odzieży Plus Size Turcja | Duże Rozmiary Damskie Merter",
+      bg: "Дамски Дрехи Големи Размери на Едро | Плюс Сайз и Макси Мода",
+    };
+    const plusDescs: Record<string, string> = {
+      tr: "Türkiye'nin lider üreticilerinden toptan büyük beden kadın kıyafetleri. 44-58 beden aralığında şık, dökümlü ve trend modeller imalatçı fiyatlarıyla.",
+      en: "Source trend-forward wholesale plus size women's clothing from Istanbul. Flattering cuts, EU sizes 44-58, premium stretch fabrics, and worldwide cargo.",
+      ru: "Стильная женская одежда больших размеров (батал, plus size) оптом от производителей Стамбула. Размерные ряды 48-64, идеальная посадка и качество.",
+      ar: "أفضل تشكيلة ملابس نسائية مقاسات كبيرة (بلس سايز) بالجملة من مصانع مارتر. تصاميم عصرية تخفي العيوب وخامات مرنة بأسعار الجملة.",
+      de: "Modische Übergrößen-Damenbekleidung (Größen 44-58) im Großhandel direkt aus Istanbul. Bequeme Passformen und vorteilhafte Einkaufskonditionen.",
+      fr: "Collection prêt-à-porter grande taille femme (du 44 au 58) en gros. Coupes flatteuses, matières extensibles et prix direct fabricant.",
+      pl: "Modna odzież damska w dużych rozmiarach (Plus Size, rozmiary 44-58) w hurcie ze Stambułu. Fasony maskujące, elastyczne tkaniny i świetne ceny.",
+      bg: "Дамска макси мода и големи размери (44-58) на едро директно от турски производители. Удобни кройки, стилни визии и бърз транспорт.",
+    };
+    return { title: plusTitles[lang] || plusTitles.en, description: plusDescs[lang] || plusDescs.en };
+  }
+  if (cleanSlug === "dis-giyim" || cleanSlug === "kaban-palto" || cleanSlug === "trenckot") {
+    const coatTitles: Record<string, string> = {
+      tr: "Toptan Kadın Dış Giyim Modelleri | Kaban, Mont & Trençkot",
+      en: "Wholesale Women's Outerwear Turkey | Coats, Jackets & Trench",
+      ru: "Женская Верхняя Одежда Оптом из Турции | Пальто, Куртки, Пуховики",
+      ar: "ملابس خارجية نسائية بالجملة تركيا | معاطف، جواكت وترنشكوت",
+      de: "Großhandel Damen-Oberbekleidung Türkei | Mäntel, Jacken & Trench",
+      fr: "Vêtements d'Extérieur Femme en Gros | Manteaux et Vestes Merter",
+      pl: "Hurtownia Odzieży Wierzchniej Damskiej | Płaszcze i Kurtki Merter",
+      bg: "Дамски Връхни Дрехи на Едро | Палта, Якета и Тренчкоти Турция",
+    };
+    const coatDescs: Record<string, string> = {
+      tr: "En yeni sezon toptan kadın dış giyim ürünleri Merter Vitrini'nde. Kaşe kabanlar, şişme montlar, trençkotlar ve ceketler doğrudan üreticiden toptan satışta.",
+      en: "Source premium wholesale women's outerwear from Istanbul manufacturers. Woolen coats, puffer jackets, trenches, and blazers with worldwide delivery.",
+      ru: "Широкий выбор женской верхней одежды оптом из Стамбула (Мертер). Кашемировые пальто, тренчи, пуховики и куртки напрямую от производителей.",
+      ar: "أحدث تشكيلات الملابس الخارجية النسائية بالجملة من مصانع مارتر إسطنبول. معاطف كشمير، جاكيتات منفوخة وترنشكوت بأفضل أسعار الجملة.",
+      de: "Hochwertige Damen-Outdoorbekleidung im Großhandel aus Merter Istanbul. Wollmäntel, Pufferjacken, Trenchcoats und Übergangsjacken zu Werkspreisen.",
+      fr: "Grossiste en manteaux chauds, vestes matelassées, doudounes et trench-coats pour femmes. Fabrication turque haut de gamme pour vos rayons.",
+      pl: "Ciepłe płaszcze wełniane, kurtki puchowe i klasyczne trencze w hurcie z Turcji. Niezbędne w każdym butiku na chłodniejsze miesiące.",
+      bg: "Богат асортимент от дамски връхни дрехи на едро от Мертер, Истанбул. Вълнени палта, пухенки и стилни тренчкоти на достъпни складови цени.",
+    };
+    return { title: coatTitles[lang] || coatTitles.en, description: coatDescs[lang] || coatDescs.en };
+  }
+  if (cleanSlug === "ikili-takim" || cleanSlug === "takim-tulum") {
+    const suitTitles: Record<string, string> = {
+      tr: "Toptan Kadın İkili Takım Modelleri | Şık & Günlük Kombinler",
+      en: "Wholesale Women's Two-Piece Co-ord Sets | Casual & Chic Outfits",
+      ru: "Женские Костюмы-Двойки Оптом из Турции | Стильные Комплекты",
+      ar: "أطقم نسائية قطعتين بالجملة تركيا | ملابس كاجوال ورسمية مارتر",
+      de: "Großhandel Zweiteiler Damen-Sets | Trendige Co-Ord Ensembles",
+      fr: "Ensembles Coordonnés Femme 2 Pièces en Gros | Mode Istanbul",
+      pl: "Komplety Dwuczęściowe Damskie Hurt | Modne Zestawy ze Stambułu",
+      bg: "Дамски Комплекти от Две Части на Едро | Ежедневни и Елегантни",
+    };
+    const suitDescs: Record<string, string> = {
+      tr: "En popüler kadın ikili takım modelleri toptan satışta. Gömlek-pantolon, bluz-etek ve spor-şık takımlar Merter Vitrini imalatçı fiyatlarıyla.",
+      en: "Trend-setting wholesale women's two-piece matching sets and coordinated outfits. Shirt-pant and top-skirt ensembles direct from Turkey.",
+      ru: "Широкий выбор женских костюмов-двоек оптом: повседневные комплекты с брюками, шортами и юбками по фабричным ценам из Стамбула.",
+      ar: "تشكيلة أطقم نسائية قطعتين (بلوزة وبنطلون / قميص وتنانير) بالجملة من مصانع مارتر إسطنبول. أناقة يومية متكاملة وسهلة البيع للمتاجر.",
+      de: "Moderne zweiteilige Damen-Sets (Hose mit Bluse/Top) im Großhandel aus Merter. Gefragte Co-Ord Ensembles zu attraktiven Serienpreisen.",
+      fr: "Grossiste d'ensembles coordonnés 2 pièces pour femmes : chemise-pantalon, top-jupe et looks décontractés en direct des ateliers turcs.",
+      pl: "Modne komplety dwuczęściowe damskie (spodnie + koszula/top) w hurcie z Turcji. Gotowe, chętnie kupowane stylizacje dla każdego butiku.",
+      bg: "Тенденции в дамските сетове от две части (риза с панталон/пола) на едро от Мертер, Истанбул. Бързооборотни стоки на топ фабрични цени.",
+    };
+    return { title: suitTitles[lang] || suitTitles.en, description: suitDescs[lang] || suitDescs.en };
   }
   if (cleanSlug === "kumas" || cleanSlug.includes("fabric") || cleanSlug.includes("tekstil")) {
     const fabricTitles: Record<string, string> = {

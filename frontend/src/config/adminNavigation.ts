@@ -16,6 +16,7 @@ import {
   Languages,
   ShieldAlert,
   FileCode2,
+  BarChart3,
   LucideIcon
 } from "lucide-react";
 
@@ -50,6 +51,15 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
         href: "/admin/dashboard",
         icon: LayoutDashboard,
         description: "Entegrasyon durumu, ürün metrikleri ve sistem akışı"
+      },
+      {
+        id: "analytics",
+        title: "Ziyaretçi & Trafik Analitiği",
+        href: "/admin/analytics",
+        icon: BarChart3,
+        badge: "Canlı",
+        badgeColor: "emerald",
+        description: "Günlük tekil ziyaretçiler, yönlendiren URL'ler ve 7x24 ısı haritası"
       }
     ]
   },

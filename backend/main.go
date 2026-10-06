@@ -112,6 +112,8 @@ func main() {
 	cronHandler := handlers.NewCronHandler()
 	customersHandler := handlers.NewCustomersHandler(cfg)
 	supplierApplicationsHandler := handlers.NewSupplierApplicationsHandler(cfg)
+	analyticsHandler := handlers.NewAnalyticsHandler(cfg)
+	adminDashboardHandler := handlers.NewAdminDashboardHandler(cfg)
 
 	// 6. Register HTTP Router using Go 1.22+ ServeMux
 	mux := http.NewServeMux()
@@ -193,6 +195,10 @@ func main() {
 	mux.HandleFunc("GET /api/v1/store/policies/{type}/active", policiesHandler.GetActivePolicyByType)
 	mux.HandleFunc("GET /api/v1/store/pages/{slug}", storeCatalogHandler.GetPageBySlug)
 	mux.HandleFunc("GET /api/v1/store/pages", storeCatalogHandler.ListPages)
+
+	// Visitor Tracking (Public Storefront)
+	mux.HandleFunc("POST /api/v1/store/track", analyticsHandler.TrackPageView)
+	mux.HandleFunc("OPTIONS /api/v1/store/track", analyticsHandler.TrackPageView)
 	mux.HandleFunc("GET /api/v1/store/blog", storeCatalogHandler.ListBlogPosts)
 	mux.HandleFunc("GET /api/v1/store/blog/{slug}", storeCatalogHandler.GetBlogPostBySlug)
 	mux.HandleFunc("GET /api/v1/store/feeds/google-merchant.xml", storeCatalogHandler.GoogleMerchantFeed)
@@ -328,6 +334,12 @@ func main() {
 	mux.Handle("GET /api/v1/customers", authMiddleware(http.HandlerFunc(customersHandler.ListCustomers)))
 	mux.Handle("PUT /api/v1/customers/{id}/block", authMiddleware(http.HandlerFunc(customersHandler.ToggleBlockCustomer)))
 	mux.Handle("DELETE /api/v1/customers/{id}", authMiddleware(http.HandlerFunc(customersHandler.DeleteCustomer)))
+
+	// Visitor Analytics & Heatmap
+	mux.Handle("GET /api/v1/admin/analytics/stats", authMiddleware(http.HandlerFunc(analyticsHandler.GetAnalyticsStats)))
+
+	// Executive Dashboard Stats
+	mux.Handle("GET /api/v1/admin/dashboard/stats", authMiddleware(http.HandlerFunc(adminDashboardHandler.GetDashboardStats)))
 
 	// ==========================================
 	// SUPPLIER PORTAL ROUTES (/api/v1/supplier/...)

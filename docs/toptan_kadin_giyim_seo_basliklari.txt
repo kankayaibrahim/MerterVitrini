@@ -8,378 +8,560 @@ LEJANT:
 [ ] = Tamamlanmadı / Bekliyor
 [x] = Onaylandı / Tamamlandı
 
-TOPLAM İLERLEME: 1 / 28 Görev (TASK-027 Tüm 8 Dilde Canlıda Yayında - %100 Tamamlandı)
+TOPLAM İLERLEME: 28 / 28 Görev (Tüm 28 Görev 8 Dilde Tamamlandı & Canlıda Yayında - %100)
 
 ================================================================================
 BÖLÜM 1: ANA KATEGORİ - TOPTAN KADIN GİYİM (GENEL & POPÜLER)
 ================================================================================
 
 --------------------------------------------------------------------------------
-[ ] TASK-001 | Kadın Giyim Genel Kategori Başlığı
+[x] TASK-001 | Kadın Giyim Genel Kategori Başlığı
 Hedef URL / Slug: /kadin-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Giyim Modelleri & Fiyatları | Merter Vitrini
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Giyim Modelleri & Fiyatları | Merter Vitrini
+      Meta: İstanbul Merter üreticilerinden en yeni sezon toptan kadın giyim modelleri. Butikler için serili ve paketli satış, doğrudan imalatçı fiyatları ve hızlı kargo avantajı.
+  [x] EN: Wholesale Women's Clothing from Turkey | Merter Vitrini B2B
+      Meta: Source high quality wholesale women's apparel directly from Istanbul Merter manufacturers. Trend styles, factory direct prices, low MOQ, and worldwide express shipping.
+  [x] RU: Женская Одежда Оптом из Турции | Каталог Фабрик Мертер Стамбул
+      Meta: Купить женскую одежду оптом из Стамбула (Мертер) напрямую от турецких производителей. Фабричные серии, низкие цены, поставки для бутиков и быстрая доставка карго.
+  [x] AR: ملابس نسائية بالجملة من تركيا | مصانع مارتر إسطنبول | Merter Vitrini
+      Meta: تسوقي أحدث تشكيلات الملابس النسائية بالجملة مباشرة من مصانع مارتر إسطنبول. أسعار المصنع المباشرة، باكت وسيري متكامل للبوتيكات مع شحن جوي سريع لكافة الدول العربية.
+  [x] DE: Großhandel Damenbekleidung Türkei | Merter Istanbul Mode B2B
+      Meta: Damenmode im Großhandel direkt von Textilherstellern aus Istanbul Merter kaufen. Neueste Trends, Fabrikpreise, Serienpakete für Boutiquen und schneller EU-Versand.
+  [x] FR: Vêtements Femme en Gros Turquie | Fournisseur Merter Istanbul B2B
+      Meta: Achetez des vêtements femme en gros directement des fabricants textiles de Merter Istanbul. Prêt-à-porter tendance, prix d'usine, packs assortis et livraison rapide vers l'Europe.
+  [x] PL: Hurtownia Odzieży Damskiej Turcja | Producenci Merter Stambuł
+      Meta: Kupuj odzież damską w hurcie bezpośrednio od producentów ze Stambułu (Merter). Najnowsze trendy, pakiety rozmiarowe dla butików, ceny fabryczne i szybka wysyłka do Polski.
+  [x] BG: Дамски Дрехи на Едро от Турция | Производители Мертер Истанбул
+      Meta: Дамска мода на едро директно от турски производители в Мертер, Истанбул. Нови колекции, фабрични цени, размерни серии за бутици и експресна сухопътна доставка до България.
 --------------------------------------------------------------------------------
-[ ] TASK-002 | Merter İmalatçı Odaklı Başlık
+[x] TASK-002 | Merter İmalatçı Odaklı Başlık
 Hedef URL / Slug: /kadin-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Merter Toptan Kadın Giyim | İmalatçıdan Yeni Sezon Ürünler
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Merter Toptan Kadın Giyim | İmalatçıdan Yeni Sezon Ürünler
+      Meta: Doğrudan Merter tekstil imalatçılarından en yeni sezon toptan kadın giyim ürünleri. Aracısız fabrika fiyatları, butikler için serili paketler ve hızlı teslimat.
+  [x] EN: Merter Wholesale Women's Clothing | Factory Direct New Season
+      Meta: Buy new season wholesale women's apparel directly from Merter Istanbul manufacturers. No middlemen, factory prices, boutique packs, and express global shipping.
+  [x] RU: Одежда Оптом из Мертера | Напрямую от Фабрик Стамбула
+      Meta: Женская одежда оптом напрямую от фабрик и производителей Мертер (Стамбул). Новые коллекции без посредников, фабричные цены для бутиков и быстрая доставка карго.
+  [x] AR: ملابس نسائية بالجملة من مصانع مارتر إسطنبول | Merter Vitrini
+      Meta: تسوق ملابس نسائية بالجملة مباشرة من مصانع مارتر في إسطنبول بدون وسطاء. أحدث موديلات الموسم بأسعار المصنع المباشرة، سيري للبوتيكات مع شحن جوي سريع لكافة الدول.
+  [x] DE: Merter Großhandel Damenmode | Direkt vom Hersteller Istanbul
+      Meta: Damenmode im Großhandel direkt von Herstellern aus Merter Istanbul kaufen. Ohne Zwischenhändler, Fabrikpreise, Serien für Boutiquen und schneller EU-Versand.
+  [x] FR: Vêtements Femme en Gros Merter | En Direct des Fabricants
+      Meta: Achetez la nouvelle collection de vêtements femme en gros directement auprès des fabricants de Merter Istanbul. Prix d'usine, sans intermédiaire et livraison rapide.
+  [x] PL: Hurtownia Odzieży Merter | Bezpośrednio od Producenta
+      Meta: Hurt damskiej odzieży nowej kolekcji bezpośrednio od producentów z Merter Stambuł. Ceny fabryczne bez pośredników, pakiety rozmiarowe dla butików i szybka dostawa.
+  [x] BG: Дамски Дрехи на Едро от Мертер | Директно от Производител
+      Meta: Дамска мода нова колекция на едро директно от производители в Мертер, Истанбул. Фабрични цени без посредници, серии за бутици и бърз транспорт до България.
 --------------------------------------------------------------------------------
-[ ] TASK-003 | Butikler İçin Toptan Satış Başlığı
+[x] TASK-003 | Butikler İçin Toptan Satış Başlığı
 Hedef URL / Slug: /kadin-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Butikler İçin Toptan Kadın Giyim | Trend Modeller & Uygun Seri Fiyatı
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Butikler İçin Toptan Kadın Giyim | Trend Modeller & Seri Fiyatı
+      Meta: Kadın giyim butikleri için Merter'den trend ve hızlı satan modeller. Düşük seri adetleri, avantajlı toptan fiyatlar ve butiklere özel hızlı kargo desteği.
+  [x] EN: Wholesale Women's Clothing for Boutiques | Merter Vitrini B2B
+      Meta: Trendy wholesale women's fashion curated for fashion boutiques. Factory direct pack prices, low MOQ series, fast-selling styles, and worldwide express delivery.
+  [x] RU: Женская Одежда Оптом для Бутиков | Тренды из Стамбула
+      Meta: Стильная женская одежда оптом из Турции для бутиков и шоурумов. Трендовые новинки, удобные размерные серии, выгодные фабричные цены и доставка карго.
+  [x] AR: ملابس نسائية بالجملة للبوتيكات | أحدث صيحات الموضة التركية
+      Meta: أفضل تشكيلة ملابس نسائية بالجملة مخصصة للبوتيكات والمتاجر الإلكترونية من مارتر. موديلات سريعة البيع، أسعار منافسة وسيري متكامل مع شحن جوي سريع.
+  [x] DE: Großhandel Damenmode für Boutiquen | Neueste Trends Merter
+      Meta: Damenbekleidung im Großhandel speziell für Mode-Boutiquen. Trendige Kollektionen aus Merter, vorteilhafte Serienpreise und zuverlässiger EU-Expressversand.
+  [x] FR: Vêtements Femme en Gros pour Boutiques | Tendances Istanbul
+      Meta: Prêt-à-porter femme en gros pour boutiques de mode. Nouveautés tendance de Merter Istanbul, packs assortis, prix attractifs et expédition express vers l'Europe.
+  [x] PL: Hurtownia Odzieży dla Butików | Modna Odzież Damska Turcja
+      Meta: Modna odzież damska w hurcie stworzona z myślą o butikach. Nowe trendy z Merter Stambuł, wygodne pakiety rozmiarowe, fabryczne ceny i szybka wysyłka do Polski.
+  [x] BG: Дамски Дрехи на Едро за Бутици | Модни Трендове Истанбул
+      Meta: Тенденции в дамската мода на едро за бутици и модни магазини. Нови модели от Мертер Истанбул, серии с отлично качество, добри цени и бърза доставка до България.
 --------------------------------------------------------------------------------
-[ ] TASK-004 | İstanbul Üreticiden Doğrudan Satış Başlığı
+[x] TASK-004 | İstanbul Üreticiden Doğrudan Satış Başlığı
 Hedef URL / Slug: /kadin-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Giyim İstanbul Merter | Üreticiden Doğrudan Satış
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Giyim İstanbul Merter | Üreticiden Doğrudan Satış
+      Meta: İstanbul Merter kadın giyim üreticilerinden doğrudan toptan satış platformu. Butikler için güvenilir tedarik, kaliteli kumaş ve imalatçı fiyatları.
+  [x] EN: Istanbul Wholesale Women's Clothing | Direct Factory Sourcing
+      Meta: Source wholesale women's apparel directly from Istanbul Merter garment manufacturers. Reliable B2B supply, premium fabrics, and genuine factory prices.
+  [x] RU: Женская Одежда Оптом Стамбул Мертер | Напрямую от Фабрик
+      Meta: Прямые оптовые поставки женской одежды от стамбульских производителей (Мертер). Гарантированное качество, выгодный опт для бутиков и карго доставка.
+  [x] AR: ملابس نسائية بالجملة إسطنبول مارتر | شراء مباشر من المعمل
+      Meta: منصة التوريد المباشر للملابس النسائية بالجملة من مصانع إسطنبول مارتر. جودة أقمشة عالية، أسعار تصنيع تنافسية وشحن دولي موثوق للتجار.
+  [x] DE: Istanbul Großhandel Damenbekleidung | Direkt vom Textilwerk
+      Meta: Kaufen Sie Damenbekleidung im Großhandel direkt von Istanbuler Textilproduzenten in Merter. Zuverlässige B2B-Lieferkette und günstige Werkspreise.
+  [x] FR: Grossiste Vêtements Femme Istanbul | Vente Directe d'Usine
+      Meta: Plateforme d'approvisionnement direct auprès des usines textiles de Merter Istanbul. Vêtements femme en gros de qualité, prix d'usine et expédition fiable.
+  [x] PL: Hurtownia Odzieży Damskiej Stambuł | Prosto z Fabryki Merter
+      Meta: Bezpośredni hurt odzieży damskiej od producentów ze Stambułu (Merter). Pewne dostawy dla butików, modne fasony i najlepsze ceny fabryczne.
+  [x] BG: Дамски Дрехи на Едро Истанбул | Директни Доставки от Завод
+      Meta: Дамска мода на едро директно от текстилните фабрики в Мертер, Истанбул. Надеждни B2B доставки, високо качество на платовете и топ цени за търговци.
 --------------------------------------------------------------------------------
-[ ] TASK-005 | Serili & Paket Toptan Kadın Giyim Başlığı
+[x] TASK-005 | Serili & Paket Toptan Kadın Giyim Başlığı
 Hedef URL / Slug: /kadin-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Serili Toptan Kadın Giyim | Butikler İçin İmalatçı Fiyatları
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Serili Toptan Kadın Giyim | Butikler İçin İmalatçı Fiyatları
+      Meta: Paketli ve serili toptan kadın giyim modelleri. Beden dağılımı garantili hazır seriler, toptan alımlarda en uygun fiyatlar ve hızlı sevkiyat.
+  [x] EN: Pack & Series Wholesale Women's Apparel | Pre-packed Bundles
+      Meta: Buy pre-packed wholesale women's clothing series for retail boutiques. Standard size distribution packs, volume discounts, and express worldwide dispatch.
+  [x] RU: Серийная Женская Одежда Оптом | Фабричные Размерные Ряды
+      Meta: Купить женскую одежду оптом размерными рядами и пакетами из Турции. Полные серии (S-M-L-XL), оптовые скидки от производителей и быстрая отправка.
+  [x] AR: ملابس نسائية بالجملة سيري وباكت | خصومات المصنع للكميات
+      Meta: تسوق أحدث تشكيلات الملابس النسائية بالجملة بنظام السيري والباكت المقسم قياسات. أفضل الأسعار للكميات وشحن سريع ومضمون لكافة المتاجر.
+  [x] DE: Serienpack Großhandel Damenmode | Größenläufe für Boutiquen
+      Meta: Damenmode in Serien und Paketen im Großhandel kaufen. Perfekt sortierte Größenläufe (S-XL), Mengenrabatte ab Werk und schneller Versand nach Europa.
+  [x] FR: Packs et Séries Vêtements Femme en Gros | Tailles Assorties
+      Meta: Achetez des séries complètes de vêtements pour femmes en gros. Tailles assorties (S-XL) pour boutiques, remises par volume et expédition sécurisée.
+  [x] PL: Odzież Damska w Pakietach Hurt | Pełne Rozmiarówki z Turcji
+      Meta: Kupuj pakiety i serie rozmiarowe odzieży damskiej w hurcie. Standardowe rozmiarówki (S-XL) dla butików, rabaty hurtowe i szybka dostawa z Merter.
+  [x] BG: Размерни Серии Дамски Дрехи на Едро | Пакети за Бутици
+      Meta: Дамски дрехи на едро в готови размерни серии и пакети. Пълна номерация (S-XL) за бутици, изгодни цени на едро и бързо изпращане до България.
 --------------------------------------------------------------------------------
-[ ] TASK-006 | B2B İhracat Kapısı (Global Pazarlar)
+[x] TASK-006 | B2B İhracat Kapısı (Global Pazarlar)
 Hedef URL / Slug: /b2b
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Türkiye Toptan Kadın Giyim İhracatı | Güvenli B2B Online Alışveriş
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Türkiye Toptan Kadın Giyim İhracatı | Güvenli B2B Alışveriş
+      Meta: Türkiye'den dünya pazarlarına toptan kadın giyim ihracatı. Güvenli online B2B ödeme, gümrük ve kargo desteği, Merter Vitrini güvencesiyle toptan sipariş.
+  [x] EN: Turkey Wholesale Women's Apparel Export | Global B2B Hub
+      Meta: Export wholesale women's apparel from Turkey to worldwide destinations. Secure B2B payments, full customs assistance, and direct Istanbul sourcing.
+  [x] RU: Экспорт Женской Одежды из Турции | Международный B2B Портал
+      Meta: Официальный экспорт турецкой женской одежды по всему миру. Безопасные B2B платежи, помощь с таможней и карго, оптовые поставки из Merter Vitrini.
+  [x] AR: تصدير ملابس نسائية بالجملة من تركيا | منصة B2B العالمية
+      Meta: بوابة تصدير الملابس النسائية بالجملة من تركيا إلى جميع أنحاء العالم. دفع إلكتروني آمن، تخليص جمركي وشحن دولي سريع للتجار وأصحاب البوتيكات.
+  [x] DE: Türkei Textil-Export Großhandel | B2B Modeplattform Merter
+      Meta: Damenmode-Export aus der Türkei weltweit. Sichere B2B-Zahlungen, Zoll- und Frachtunterstützung, Direktbezug von Top-Herstellern aus Istanbul.
+  [x] FR: Exportation Vêtements Femme Turquie | Hub B2B International
+      Meta: Exportez des vêtements féminins en gros de Turquie vers le monde entier. Paiements B2B sécurisés, assistance douanière et livraison express garantie.
+  [x] PL: Eksport Odzieży Damskiej z Turcji | Globalna Platforma B2B
+      Meta: Hurtowy eksport odzieży damskiej z Turcji do Europy i na świat. Bezpieczne płatności B2B, wsparcie celno-logistyczne i pewne źródło z Merter.
+  [x] BG: Износ на Дамски Дрехи от Турция | Официален B2B Портал
+      Meta: Експорт на дамска мода на едро от Турция към цял свят. Сигурни B2B разплащания, пълно съдействие при транспорт и директен внос от производител.
 ================================================================================
 BÖLÜM 2: TOPTAN ELBİSE & ABİYE MODELLERİ
 ================================================================================
 
 --------------------------------------------------------------------------------
-[ ] TASK-007 | Kadın Elbise Genel Kategori Başlığı
+[x] TASK-007 | Kadın Elbise Genel Kategori Başlığı
 Hedef URL / Slug: /elbise-abiye
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Elbise Modelleri & Fiyatları | Merter Vitrini
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Elbise Modelleri & Fiyatları | Merter Vitrini
+      Meta: En şık toptan kadın elbise modelleri Merter Vitrini'nde. Günlük, şifon, mini, midi ve maxi boy elbiseler doğrudan üretici fiyatlarıyla toptan satışta.
+  [x] EN: Wholesale Women's Dresses from Turkey | Factory Direct Prices
+      Meta: Discover stunning wholesale women's dresses direct from Istanbul manufacturers. Casual, floral, midi and maxi dresses with low MOQ and worldwide cargo.
+  [x] RU: Женские Платья Оптом из Турции | Каталог Фабрик Стамбул
+      Meta: Купить женские платья оптом напрямую от турецких фабрик. Повседневные, шифоновые, вечерние и летние платья по ценам производителя с доставкой карго.
+  [x] AR: فساتين نسائية بالجملة من تركيا | تصاميم راقية وأسعار المصنع
+      Meta: أجمل تشكيلة فساتين نسائية بالجملة مباشرة من مصانع تركيا. فساتين يومية، ماكسي وميدي للبوتيكات بأفضل الأسعار وشحن جوي سريع لكافة الدول.
+  [x] DE: Großhandel Damenkleider Türkei | Trendige Kleider B2B Istanbul
+      Meta: Damenkleider im Großhandel direkt aus Istanbul Merter bestellen. Elegante Alltags-, Midi- und Maxikleider zu Werkspreisen mit schnellem EU-Versand.
+  [x] FR: Robes Femme en Gros Turquie | Fournisseur Prêt-à-Porter Merter
+      Meta: Achetez des robes femme tendance en gros auprès des fabricants textiles d'Istanbul. Robes décontractées, midi et maxi avec expédition rapide en Europe.
+  [x] PL: Hurtownia Sukienek Damskich Turcja | Sukienki z Merter Stambuł
+      Meta: Modne sukienki damskie w hurcie prosto od tureckich producentów. Sukienki codzienne, midi i maxi w atrakcyjnych pakietach dla butików.
+  [x] BG: Дамски Рокли на Едро от Турция | Модели и Фабрични Цени
+      Meta: Богат избор на дамски рокли на едро от производители в Истанбул. Ежедневни, миди и макси рокли на топ цени с бърза доставка до България.
 --------------------------------------------------------------------------------
-[ ] TASK-008 | Toptan Abiye & Gece Elbisesi
+[x] TASK-008 | Toptan Abiye & Gece Elbisesi
 Hedef URL / Slug: /abiye
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Abiye & Gece Elbisesi Modelleri | İmalatçıdan Şık Tasarımlar
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Abiye & Gece Elbisesi Modelleri | Merter İmalatçı
+      Meta: Özel günler ve davetler için toptan abiye ve gece elbiseleri. Saten, şifon, simli ve işlemeli abiyeler İstanbul üreticilerinden doğrudan toptan satışta.
+  [x] EN: Wholesale Evening Dresses & Gowns | Istanbul Fashion Direct
+      Meta: Premium wholesale evening dresses, prom gowns, and cocktail outfits from Istanbul designers. Luxurious fabrics, factory prices, and express boutique delivery.
+  [x] RU: Вечерние Платья Оптом из Турции | Роскошный Выпускной и Праздник
+      Meta: Элегантные вечерние платья оптом от ведущих стамбульских дизайнеров. Атласные, шифоновые и праздничные наряды для свадеб и торжеств по фабричным ценам.
+  [x] AR: فساتين سهرة وأعراس بالجملة تركيا | تصاميم فخمة وأقمشة فاخرة
+      Meta: أرقى موديلات فساتين السهرة والأعراس بالجملة من مصانع إسطنبول مباشرة. فساتين ساتان وشيفون فخمة للبوتيكات بأسعار الجملة وشحن دولي سريع.
+  [x] DE: Großhandel Abendkleider Türkei | Elegante Festmode Istanbul
+      Meta: Exklusive Abendkleider und Cocktailkleider im Großhandel aus Istanbul. Hochwertige Seiden- und Chiffonstoffe zu Fabrikpreisen für Modehäuser.
+  [x] FR: Robes de Soirée en Gros Turquie | Robes de Fête Istanbul B2B
+      Meta: Collection de robes de soirée chic et robes de cocktail en gros. Matières satinées, dentelle raffinée et finitions soignées en direct des créateurs turcs.
+  [x] PL: Hurt Sukienek Wieczorowych Turcja | Suknie Balowe Stambuł
+      Meta: Eleganckie suknie wieczorowe i balowe w hurcie bezpośrednio ze Stambułu. Luksusowe satyny, szyfony i kreacje wizytowe w cenach fabrycznych.
+  [x] BG: Официални и Вечерни Рокли на Едро | Бални Тоалети Турция
+      Meta: Елегантни вечерни и бални рокли на едро от производители в Истанбул. Сатен, шифон и луксозни кройки за бутици с директна доставка.
 --------------------------------------------------------------------------------
-[ ] TASK-009 | Günlük, Midi & Maxi Elbiseler
+[x] TASK-009 | Günlük, Midi & Maxi Elbiseler
 Hedef URL / Slug: /elbise-abiye
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Merter Toptan Elbise Satışı | Günlük, Midi, Maxi & Mini Elbiseler
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Günlük, Midi & Maxi Elbiseler | Merter Vitrini B2B
+      Meta: Butikler için en çok satan günlük, midi ve maxi boy kadın elbiseleri. Rahat kalıp, pamuk ve viskon kumaşlarla toptan fiyatına serili satış.
+  [x] EN: Wholesale Casual, Midi & Maxi Dresses | Merter Vitrini Sourcing
+      Meta: Best-selling wholesale casual, midi, and maxi dresses for retail boutiques. Breathable cotton and viscose fabrics, direct manufacturer pricing.
+  [x] RU: Повседневные, Миди и Макси Платья Оптом | Турция Мертер
+      Meta: Популярные повседневные женские платья длины миди и макси оптом. Натуральные хлопковые и вискозные ткани, удобные фасоны и прямые цены от фабрик.
+  [x] AR: فساتين يومية ميدي وماكسي بالجملة | خامات قطنية راقية مارتر
+      Meta: تشكيلة مميزة من الفساتين اليومية القصيرة والطويلة (ميدي وماكسي) بالجملة. أقمشة مريحة وعملية للمتاجر بأسعار تنافسية وشحن فوري.
+  [x] DE: Großhandel Alltags-, Midi- & Maxikleider | Mode aus Merter
+      Meta: Kompakte Kollektionen an Alltags-, Midi- und Maxikleidern im Großhandel. Bequeme Schnitte, Viskose- und Baumwollstoffe für Boutiquen in Europa.
+  [x] FR: Robes Décontractées, Midi & Maxi en Gros | Fournisseur Istanbul
+      Meta: Les robes casual, midi et maxi les plus vendues pour boutiques. Tissus légers, finitions impeccables et commandes en gros avantageuses.
+  [x] PL: Sukienki Codzienne, Midi i Maxi w Hurcie | Odzież z Merter
+      Meta: Bestsellery sukienek na co dzień: fasony midi oraz maxi w hurcie. Przewiewne materiały, modne wzory i natychmiastowa wysyłka dla butików.
+  [x] BG: Ежедневни, Миди и Макси Рокли на Едро | Търговия от Турция
+      Meta: Удобни и модерни ежедневни рокли миди и макси на едро. Естествени материи, красиви принтове и изгодни условия за зареждане на магазини.
 --------------------------------------------------------------------------------
-[ ] TASK-010 | Saten & Şifon Abiye Elbiseler
+[x] TASK-010 | Saten & Şifon Abiye Elbiseler
 Hedef URL / Slug: /elbise-abiye
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Şifon & Saten Elbise | Butikler İçin Trend Elbise Modelleri
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Saten & Şifon Elbise Modelleri | Şık Butik Tasarımları
+      Meta: Işıltılı saten ve uçuşan şifon kumaş elbiseler toptan satışta. Mezuniyet, nişan ve özel davetler için butiklerin aradığı zarif modeller Merter'de.
+  [x] EN: Wholesale Satin & Chiffon Dresses | Elegant Boutique Outfits
+      Meta: Lustrous satin and flowing chiffon dresses wholesale. High-demand styles for proms, weddings, and galas sourced directly from Istanbul apparel makers.
+  [x] RU: Атласные и Шифоновые Платья Оптом | Наряды для Бутиков
+      Meta: Шикарные атласные и летящие шифоновые платья оптом из Турции. Идеальные модели для выпускных, свадеб и вечеринок по прямым ценам из Мертера.
+  [x] AR: فساتين ساتان وشيفون ناعمة بالجملة | تصاميم مناسبات راقية
+      Meta: فساتين ساتان لامعة وشيفون انسيابي بالجملة من مصانع إسطنبول. موديلات استثنائية للمناسبات والحفلات مع شحن جوي سريع لجميع الدول العربية.
+  [x] DE: Großhandel Satin- & Chiffonkleider | Elegante Kleider Türkei
+      Meta: Glänzende Satin- und fließende Chiffonkleider im Großhandel kaufen. Gefragte Modelle für Bälle, Hochzeiten und Events direkt ab Istanbul.
+  [x] FR: Robes en Satin et Mousseline en Gros | Élégance Turque B2B
+      Meta: Élégantes robes en satin fluide et mousseline en gros. Idéales pour cérémonies et soirées habillées, livrées directement depuis les ateliers d'Istanbul.
+  [x] PL: Sukienki Satynowe i Szyfonowe Hurt | Kreacje Wizytowe Merter
+      Meta: Luksusowe sukienki z satyny i szyfonu w hurcie. Niezbędne w każdym butiku na wesela i imprezy okolicznościowe, bezpośrednio od producenta.
+  [x] BG: Сатенени и Шифонени Рокли на Едро | Изискани Модели Истанбул
+      Meta: Ефирни рокли от сатен и шифон на едро от производители в Мертер. Перфектни за балове, сватби и официални събития с бърза доставка.
 --------------------------------------------------------------------------------
-[ ] TASK-011 | Yazlık Keten & Çiçekli Elbiseler
+[x] TASK-011 | Yazlık Keten & Çiçekli Elbiseler
 Hedef URL / Slug: /yaz-koleksiyonu
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Yazlık Kadın Elbise | Çiçekli, Keten & Viskon Kumaş Elbiseler
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Yazlık Keten & Çiçekli Elbise | Serin Tutan Kumaşlar
+      Meta: Yaz sezonunun en popüler çiçekli, keten ve viskon elbiseleri toptan satışta. Nefes alan kumaşlar, canlı renkler ve uygun paket fiyatları.
+  [x] EN: Wholesale Summer Linen & Floral Dresses | Lightweight Fashion
+      Meta: Summer season floral, pure linen, and rayon dresses wholesale. Breathable fabrics, vibrant tropical patterns, and factory bundle pricing.
+  [x] RU: Летние Льняные и Цветочные Платья Оптом | Каталог из Турции
+      Meta: Хит летнего сезона: легкие платья из натурального льна, хлопка и вискозы с цветочными принтами оптом напрямую от турецких фабрик.
+  [x] AR: فساتين صيفية كتان ومشجرة بالجملة | تشكيلات صيفية منعشة
+      Meta: أروع الفساتين الصيفية بأقمشة الكتان الطبيعي والنقشات الموردة بالجملة. أقمشة مريحة وباردة للبوتيكات الصيفية بأسعار متميزة.
+  [x] DE: Großhandel Sommerliche Leinen- & Blumenkleider | Türkei B2B
+      Meta: Luftige Sommerkleider aus Leinen und florale Printkleider im Großhandel. Frische Farben, atmungsaktive Stoffe und Top-Boutiquepreise.
+  [x] FR: Robes d'Été en Lin et Imprimé Fleuri en Gros | Mode Légère
+      Meta: Collection estivale de robes en lin naturel et imprimés fleuris en gros. Tissus respirants et coupes tendance expédiés directement de Merter.
+  [x] PL: Letnie Sukienki Lnianie i w Kwiaty Hurt | Kolekcja z Merter
+      Meta: Letnie sukienki lniane, wiskozowe oraz w modne kwiatowe wzory w hurcie. Przewiewne tkaniny i najlepsze serie dla butików na sezon letni.
+  [x] BG: Летни Ленени Рокли и Модели на Цветя на Едро | Истанбул
+      Meta: Свежи летни рокли от лен и памук с цветни десени на едро. Дишащи материи и модерни кройки за успешни продажби в летния сезон.
 ================================================================================
 BÖLÜM 3: TOPTAN TRİKO, KAZAK & HIRKA (MEVSİMLİK VE KIŞLIK)
 ================================================================================
 
 --------------------------------------------------------------------------------
-[ ] TASK-012 | Kadın Triko Genel Kategori Başlığı
+[x] TASK-012 | Kadın Triko Genel Kategori Başlığı
 Hedef URL / Slug: /triko-hirka-kazak
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Triko Modelleri | Merter İmalatçı Kazak & Hırka
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Triko Modelleri | Merter İmalatçı Kazak & Hırka
+      Meta: Merter triko imalatçılarından kaliteli kadın kazak, hırka ve triko takımlar. Sonbahar-kış sezonunun en trend örgü modelleri toptan fiyatlarla.
+  [x] EN: Wholesale Women's Knitwear from Turkey | Sweaters & Cardigans
+      Meta: High-quality wholesale women's knitwear, pullovers, and cardigans from Merter manufacturers. Warm yarns, trendy stitches, and low MOQ series.
+  [x] RU: Женский Трикотаж Оптом из Турции | Свитера и Кардиганы Мертер
+      Meta: Качественный турецкий женский трикотаж оптом напрямую с фабрик Мертера. Вязаные свитера, джемперы и кардиганы по низким ценам производителя.
+  [x] AR: تريكو نسائي بالجملة من تركيا | كنزات وكارديجان مصانع مارتر
+      Meta: أفخم تشكيلات التريكو النسائي والكنزات الشتوية بالجملة من مصانع مارتر إسطنبول. غرز متقنة وخامات دافئة للبوتيكات بأسعار الجملة.
+  [x] DE: Großhandel Damenstrickwaren Türkei | Pullover & Strickjacken
+      Meta: Erstklassige Damen-Strickwaren, Pullover und Cardigans im Großhandel aus Istanbul Merter. Weiche Garne, moderne Muster und Fabrikpreise.
+  [x] FR: Tricots Femme en Gros Turquie | Pulls et Gilets Merter B2B
+      Meta: Maille et tricots femme de qualité supérieure en gros. Pulls chauds, gilets tendance et cardigans doux directement des fabricants turcs.
+  [x] PL: Hurtownia Dzianin Damskich Turcja | Swetry i Kardigany Merter
+      Meta: Wysokogatunkowa dzianina damska, modne swetry i kardigany w hurcie ze Stambułu. Ciepłe przędze, nowoczesne fasony i szybka wysyłka.
+  [x] BG: Дамско Трикотаж и Плетиво на Едро | Пуловери и Жилетки Турция
+      Meta: Качествено дамско плетиво, жилетки и пуловери на едро директно от Мертер, Истанбул. Меки прежди, топли зимни модели и отлични цени.
 --------------------------------------------------------------------------------
-[ ] TASK-013 | Kadın Kazak & Balıkçı Yaka
+[x] TASK-013 | Kadın Kazak & Balıkçı Yaka
 Hedef URL / Slug: /triko-hirka-kazak
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Kazak Çeşitleri | Balıkçı Yaka, Oversize & Triko Kazak
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Kazak Çeşitleri | Balıkçı Yaka & Oversize Triko
+      Meta: Butikler için toptan kadın balıkçı yaka, bisiklet yaka ve oversize kazak modelleri. Yumuşak dokulu trikolar doğrudan fabrika fiyatlarıyla yayında.
+  [x] EN: Wholesale Women's Sweaters | Turtleneck & Oversized Knits
+      Meta: Shop wholesale women's turtleneck, crewneck, and oversized knitted sweaters. Soft touch yarns, contemporary cuts, and bulk supply from Istanbul.
+  [x] RU: Женские Свитера Оптом | Водолазки и Оверсайз Трикотаж Мертер
+      Meta: Оптовая продажа женских свитеров: стильные водолазки, модели оверсайз и джемперы из Турции. Мягкая пряжа и выгодные цены для оптовиков.
+  [x] AR: كنزات شتوية نسائية بالجملة | ياقة عالية واوفرسايز تركي
+      Meta: كنزات وبلوفرات نسائية بالجملة بياقة عالية وقصات أوفرسايز عصرية. خامات ناعمة ودافئة للمتاجر بأفضل عروض الشتاء من تركيا.
+  [x] DE: Großhandel Damenpullover | Rollkragen & Oversize Strickmode
+      Meta: Beliebte Damenpullover mit Rollkragen, Rundhals und Oversize-Passform im Großhandel. Weiche Strickqualitäten direkt ab Istanbuler Werk.
+  [x] FR: Pulls Femme en Gros | Cols Roulés et Modèles Oversize Istanbul
+      Meta: Large sélection de pulls femme en gros : cols roulés élégants, cols ronds et coupes oversize. Douceur et chaleur garanties pour vos clientes.
+  [x] PL: Swetry Damskie w Hurcie | Golfy i Swetry Oversize ze Stambułu
+      Meta: Damskie golfy, swetry z dekoltem i modne fasony oversize w hurcie. Miękkie, trwałe materiały i atrakcyjne pakiety dla butików.
+  [x] BG: Дамски Пуловери на Едро | Поло Яки и Оувърсайз Плетива
+      Meta: Разнообразие от дамски пуловери с поло яка и модерни оувърсайз кройки на едро от Турция. Качествени материи за есенно-зимния сезон.
 --------------------------------------------------------------------------------
-[ ] TASK-014 | Kadın Hırka Modelleri
+[x] TASK-014 | Kadın Hırka Modelleri
 Hedef URL / Slug: /triko-hirka-kazak
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Hırka Modelleri | Uzun, Düğmeli & Peluş Hırkalar
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Hırka Modelleri | Uzun, Düğmeli & Peluş Hırkalar
+      Meta: Mevsimlik ve kışlık toptan kadın hırka çeşitleri. Düğmeli, cepli, uzun boy ve salaş hırkalar Merter imalatçı fiyatlarıyla toptan satışta.
+  [x] EN: Wholesale Women's Cardigans | Long, Buttoned & Chunky Knits
+      Meta: Source wholesale women's cardigans: chunky knits, longline styles, and button-up cardigans. Premium finishing and prompt worldwide shipping.
+  [x] RU: Женские Кардиганы Оптом | Длинные и Вязаные Модели из Турции
+      Meta: Купить женские кардиганы оптом от фабрик Стамбула. Длинные теплые кардиганы на пуговицах, объемная вязка и модные фасоны для бутиков.
+  [x] AR: كارديجان وجواكت صوف نسائية بالجملة | موديلات طويلة وعصرية
+      Meta: تشكيلة كارديجان نسائي شتوي وطويل بأزرار وتصاميم فخمة بالجملة. منتجات عالية الطلب للمتاجر الإلكترونية بأسعار الجملة المباشرة.
+  [x] DE: Großhandel Strickjacken Damen | Lange & Geknöpfte Cardigans
+      Meta: Stilvolle Damen-Strickjacken und Cardigans im Großhandel aus Merter. Kuschelige Long-Cardigans, Knopfformen und schnelle EU-Lieferung.
+  [x] FR: Gilets et Cardigans Femme en Gros | Maille Confortable Turquie
+      Meta: Approvisionnez votre boutique en cardigans longs, gilets boutonnés et mailles tendance. Tarifs d'usine avantageux et expédition rapide.
+  [x] PL: Kardigany Damskie Hurt | Długie Rozpinane Swetry z Turcji
+      Meta: Hurt damskich kardiganów: długie fasony, modele zapinane na guziki oraz grube sploty. Niezawodny towar dla butików odzieżowych.
+  [x] BG: Дамски Жилетки на Едро | Дълги Жилетки с Копчета Истанбул
+      Meta: Дамски плетени жилетки на едро от производители в Мертер. Дълги модели, практични копчета и стилни цветове за вашия бутик.
 --------------------------------------------------------------------------------
-[ ] TASK-015 | Triko İkili Takımlar
+[x] TASK-015 | Triko İkili Takımlar
 Hedef URL / Slug: /triko-hirka-kazak
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Triko Takım Modelleri | Şık İkili Triko Pantolon Takımları
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Triko Takım Modelleri | Şık İkili Pantolon Takımları
+      Meta: Sonbahar ve kış aylarının vazgeçilmezi toptan kadın triko takımları. Pantolonlu ve etekli ikili kombinler Merter üreticilerinden doğrudan satışta.
+  [x] EN: Wholesale Women's Knitwear Sets | 2-Piece Pant & Skirt Suits
+      Meta: Cozy and chic wholesale knitwear two-piece matching sets. Comfy trousers and sweater combos manufactured in Istanbul with global delivery.
+  [x] RU: Вязаные Костюмы Оптом из Турции | Стильные Двойки с Брюками
+      Meta: Популярные женские вязаные костюмы-двойки оптом (брюки + свитер/кардиган). Идеальный комфорт, трендовые расцветки и прямые фабричные цены.
+  [x] AR: أطقم تريكو نسائية شتوية بالجملة | طقم بنطلون وكنزة أنيق
+      Meta: أحدث موديلات أطقم التريكو النسائية قطعتين (بنطلون وبلوفر) بالجملة من مصانع تركيا. راحة مطلقة وأناقة شتوية مطلوبة جداً للمتاجر.
+  [x] DE: Großhandel Damen-Stricksets | Zweiteilige Hosenanzüge Merter
+      Meta: Kuschelige zweiteilige Strick-Kombinationen (Hose & Pullover) im Großhandel. Modische Streetwear-Trends aus Merter zu echten Werkspreisen.
+  [x] FR: Ensembles en Maille Femme en Gros | Ensembles 2 Pièces Confort
+      Meta: Pantalons et pulls coordonnés en maille en gros pour boutiques. Le look cocooning chic incontournable, confectionné avec soin à Istanbul.
+  [x] PL: Dzianinowe Komplety Damskie Hurt | Dwuczęściowe Zestawy z Merter
+      Meta: Wygodne komplety z dzianiny (spodnie + sweter) w hurcie. Hity sprzedaży sezonu jesień-zima prosto od tureckich szwalni dla Twojego butiku.
+  [x] BG: Дамски Плетени Комплекти на Едро | Стилен Сет от Две Части
+      Meta: Търсени дамски плетени комплекти с панталон и пуловер на едро от Турция. Удобство, топлина и стил на най-добрите търговски цени.
 ================================================================================
 BÖLÜM 4: TOPTAN BÜYÜK BEDEN KADIN GİYİM (PLUS SIZE / BATTAL BOY)
 ================================================================================
 
 --------------------------------------------------------------------------------
-[ ] TASK-016 | Büyük Beden Kadın Giyim Genel
+[x] TASK-016 | Büyük Beden Kadın Giyim Genel
 Hedef URL / Slug: /buyuk-beden
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Büyük Beden Kadın Giyim Modelleri & Fiyatları | Merter Vitrini
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Büyük Beden Kadın Giyim Modelleri & Fiyatları | Merter
+      Meta: Türkiye'nin lider üreticilerinden toptan büyük beden kadın kıyafetleri. 44-58 beden aralığında şık, dökümlü ve trend modeller imalatçı fiyatlarıyla.
+  [x] EN: Wholesale Plus Size Women's Apparel Turkey | Curvy Fashion B2B
+      Meta: Source trend-forward wholesale plus size women's clothing from Istanbul. Flattering cuts, EU sizes 44-58, premium stretch fabrics, and worldwide cargo.
+  [x] RU: Женская Одежда Больших Размеров Оптом | Батал из Турции
+      Meta: Стильная женская одежда больших размеров (батал, plus size) оптом от производителей Стамбула. Размерные ряды 48-64, идеальная посадка и качество.
+  [x] AR: ملابس نسائية مقاسات كبيرة بالجملة تركيا | بلس سايز وباطال
+      Meta: أفضل تشكيلة ملابس نسائية مقاسات كبيرة (بلس سايز) بالجملة من مصانع مارتر. تصاميم عصرية تخفي العيوب وخامات مرنة بأسعار الجملة.
+  [x] DE: Großhandel Plus Size Damenmode Türkei | Große Größen B2B Merter
+      Meta: Modische Übergrößen-Damenbekleidung (Größen 44-58) im Großhandel direkt aus Istanbul. Bequeme Passformen und vorteilhafte Einkaufskonditionen.
+  [x] FR: Vêtements Grande Taille Femme en Gros | Mode Curvy Istanbul B2B
+      Meta: Collection prêt-à-porter grande taille femme (du 44 au 58) en gros. Coupes flatteuses, matières extensibles et prix direct fabricant.
+  [x] PL: Hurtownia Odzieży Plus Size Turcja | Duże Rozmiary Damskie Merter
+      Meta: Modna odzież damska w dużych rozmiarach (Plus Size, rozmiary 44-58) w hurcie ze Stambułu. Fasony maskujące, elastyczne tkaniny i świetne ceny.
+  [x] BG: Дамски Дрехи Големи Размери на Едро | Плюс Сайз и Макси Мода
+      Meta: Дамска макси мода и големи размери (44-58) на едро директно от турски производители. Удобни кройки, стилни визии и бърз транспорт.
 --------------------------------------------------------------------------------
-[ ] TASK-017 | Battal Boy & Plus Size Seçenekler (XL-5XL)
+[x] TASK-017 | Battal Boy & Plus Size Seçenekler (XL-5XL)
 Hedef URL / Slug: /buyuk-beden
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Battal Boy Kadın Kıyafetleri | İmalatçıdan XL-5XL Seçenekler
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Battal Boy Kadın Kıyafetleri | İmalatçıdan XL-5XL Seçenek
+      Meta: XL, 2XL, 3XL, 4XL ve 5XL seçenekli battal boy toptan kadın giyim. Rahat kalıplar, terletmeyen kumaşlar ve Merter imalatçı fiyatlarıyla toptan sipariş.
+  [x] EN: Wholesale Curvy & Extended Sizes (XL-5XL) | Merter Manufacturers
+      Meta: Extended sizes women's apparel wholesale (XL to 5XL). Ergonomic fit, breathable stretch fabrics, and volume factory deals for fashion retailers.
+  [x] RU: Одежда Батал XL-5XL Оптом из Стамбула | Фабричный Plus Size
+      Meta: Качественная женская одежда батал (размеры от XL до 5XL) оптом из Мертера. Удобный крой, натуральные ткани и поставки для магазинов больших размеров.
+  [x] AR: ملابس نسائية بطال XL حتى 5XL بالجملة | خامات مريحة وقصات واسعة
+      Meta: ملابس نسائية بقياسات خاصة وبطال من XL إلى 5XL بالجملة. أقمشة مريحة وقصات فضفاضة ومتقنة تلبي طلب عملائكم بأفضل أسعار التصدير.
+  [x] DE: Großhandel Übergrößen XL-5XL Damen | Merter Textilhersteller
+      Meta: Damenmode in erweiterten Größen (XL bis 5XL) im Großhandel. Bequeme Schnitte, hochwertige Baumwollstoffe und verlässlicher Versand nach Deutschland.
+  [x] FR: Vêtements Femme Tailles Spéciales XL-5XL en Gros | Confort B2B
+      Meta: Prêt-à-porter femme en tailles étendues (XL à 5XL) en gros. Des pièces confortables et élégantes confectionnées dans les usines d'Istanbul.
+  [x] PL: Odzież Damska Duże Rozmiary XL-5XL Hurt | Szwalnie ze Stambułu
+      Meta: Hurt odzieży damskiej w rozmiarach od XL do 5XL. Doskonała konstrukcja ubrań, oddychające materiały i pewny zarobek dla butików z modą plus size.
+  [x] BG: Макси Размери XL-5XL Дамски Облекла на Едро | Фабрика Турция
+      Meta: Специализирана дамска конфекция в размери от XL до 5XL на едро от производител. Удобство и свобода на движение на изгодни складови цени.
 --------------------------------------------------------------------------------
-[ ] TASK-018 | Büyük Beden Elbise & Tunik
+[x] TASK-018 | Büyük Beden Elbise & Tunik
 Hedef URL / Slug: /buyuk-beden
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Büyük Beden Elbise & Tunik Modelleri | Trend Kesimler
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Büyük Beden Elbise & Tunik Modelleri | Trend Kesimler
+      Meta: Büyük beden kadın elbise ve tunik modellerinde toptan satış fırsatları. Dökümlü kumaşlar, modern desenler ve serili paketlerle butiklere özel avantajlar.
+  [x] EN: Wholesale Plus Size Dresses & Tunics | Flattering Modern Fits
+      Meta: Wholesale women's plus size dresses, flowing tunics, and kaftans. Flattering silhouette cuts designed by Istanbul apparel manufacturers.
+  [x] RU: Платья и Туники Больших Размеров Оптом | Батал Модели из Турции
+      Meta: Оптовые продажи женских платьев и туник больших размеров. Свободные фасоны, модные принты и фабричное качество напрямую из Стамбула.
+  [x] AR: فساتين وتونيكات مقاسات كبيرة بالجملة | قصات مريحة وألوان مميزة
+      Meta: أحدث تصاميم الفساتين الفضفاضة والتونيكات الطويلة مقاسات كبيرة بالجملة من مارتر. أقمشة منسدلة وجميلة تلائم جميع الأذواق بأسعار منافسة.
+  [x] DE: Großhandel Übergrößen-Kleider & Tuniken | Mode für Mollige
+      Meta: Elegante Kleider und Tuniken in großen Größen im Großhandel kaufen. Fließende Stoffe, vorteilhafte Längen und beste Fabrikpreise aus Istanbul.
+  [x] FR: Robes et Tuniques Grande Taille en Gros | Collections Fluides
+      Meta: Grossiste en robes fluides et tuniques grande taille pour femmes. Des modèles élégants et amples expédiés directement des fabricants d'Istanbul.
+  [x] PL: Sukienki i Tuniki Plus Size Hurt | Modne Fasony dla Puszystych
+      Meta: Hurtownia sukienek i tunik w dużych rozmiarach ze Stambułu. Wyszczuplające kroje, piękne wzory i materiały najwyższej próby dla butików.
+  [x] BG: Рокли и Туники Големи Размери на Едро | Удобни Кройки Истанбул
+      Meta: Дамски макси рокли и елегантни туники на едро от производители в Мертер. Свободни кройки и модерни десени за сигурен търговски успех.
 ================================================================================
 BÖLÜM 5: TOPTAN İKİLİ TAKIM & CEKET TAKIMLARI
 ================================================================================
 
 --------------------------------------------------------------------------------
-[ ] TASK-019 | Kadın İkili Takım Genel
+[x] TASK-019 | Kadın İkili Takım Genel
 Hedef URL / Slug: /kadin-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın İkili Takım Modelleri | Şık & Günlük Kombinler
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın İkili Takım Modelleri | Şık & Günlük Kombinler
+      Meta: En popüler kadın ikili takım modelleri toptan satışta. Gömlek-pantolon, bluz-etek ve spor-şık takımlar Merter Vitrini imalatçı fiyatlarıyla.
+  [x] EN: Wholesale Women's Two-Piece Co-ord Sets | Casual & Chic Outfits
+      Meta: Trend-setting wholesale women's two-piece matching sets and coordinated outfits. Shirt-pant and top-skirt ensembles direct from Turkey.
+  [x] RU: Женские Костюмы-Двойки Оптом из Турции | Стильные Комплекты
+      Meta: Широкий выбор женских костюмов-двоек оптом: повседневные комплекты с брюками, шортами и юбками по фабричным ценам из Стамбула.
+  [x] AR: أطقم نسائية قطعتين بالجملة تركيا | ملابس كاجوال ورسمية مارتر
+      Meta: تشكيلة أطقم نسائية قطعتين (بلوزة وبنطلون / قميص وتنانير) بالجملة من مصانع مارتر إسطنبول. أناقة يومية متكاملة وسهلة البيع للمتاجر.
+  [x] DE: Großhandel Zweiteiler Damen-Sets | Trendige Co-Ord Ensembles
+      Meta: Moderne zweiteilige Damen-Sets (Hose mit Bluse/Top) im Großhandel aus Merter. Gefragte Co-Ord Ensembles zu attraktiven Serienpreisen.
+  [x] FR: Ensembles Coordonnés Femme 2 Pièces en Gros | Mode Istanbul
+      Meta: Grossiste d'ensembles coordonnés 2 pièces pour femmes : chemise-pantalon, top-jupe et looks décontractés en direct des ateliers turcs.
+  [x] PL: Komplety Dwuczęściowe Damskie Hurt | Modne Zestawy ze Stambułu
+      Meta: Modne komplety dwuczęściowe damskie (spodnie + koszula/top) w hurcie z Turcji. Gotowe, chętnie kupowane stylizacje dla każdego butiku.
+  [x] BG: Дамски Комплекти от Две Части на Едро | Ежедневни и Елегантни
+      Meta: Тенденции в дамските сетове от две части (риза с панталон/пола) на едро от Мертер, Истанбул. Бързооборотни стоки на топ фабрични цени.
 --------------------------------------------------------------------------------
-[ ] TASK-020 | Ceket Pantolon Takımları (Ofis & Özel Gün)
+[x] TASK-020 | Ceket Pantolon Takımları (Ofis & Özel Gün)
 Hedef URL / Slug: /kadin-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Ceket Pantolon Takım Kadın | Ofis & Özel Gün Butik Ürünleri
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Ceket Pantolon Takım Kadın | Ofis & Davet Butik Ürünleri
+      Meta: Kadın blazer ceket ve kumaş pantolon takımları toptan satışta. İş hayatı, ofis şıklığı ve özel davetler için kaliteli astarlı takımlar Merter'de.
+  [x] EN: Wholesale Women's Blazer & Pant Suits | Office & Event Suits
+      Meta: Sophisticated wholesale women's trouser suits and tailored blazer sets. Sharp tailoring, lined fabrics, and premium office wear from Istanbul.
+  [x] RU: Брючные Костюмы с Жакетом Оптом | Деловой Стиль из Турции
+      Meta: Женские классические брючные костюмы с жакетом/пиджаком оптом от производителей Стамбула. Идеальный пошив для офиса и деловых встреч.
+  [x] AR: أطقم بليزر وبنطلون نسائية رسمية بالجملة | ملابس عمل وأناقة مكتبية
+      Meta: أرقى أطقم البدلات النسائية الرسمية (بليزر مع بنطلون) بالجملة من مصانع إسطنبول. تفصيل متقن وبطانة فاخرة للمناسبات وبيئات العمل.
+  [x] DE: Großhandel Damen Hosenanzüge | Blazer & Business-Anzüge Merter
+      Meta: Elegante Damen-Hosenanzüge und maßgeschneiderte Blazer-Sets im Großhandel. Perfekt für Business, Office und Events direkt aus Istanbul.
+  [x] FR: Tailleurs Pantalon Femme en Gros | Costumes Blazer Chic Istanbul
+      Meta: Tailleurs pantalon femme et ensembles blazer élégants en gros. Des coupes tailleur impeccables pour le bureau et les réceptions professionnelles.
+  [x] PL: Damskie Garnitury ze Spodniami Hurt | Marynarki i Spodnie Merter
+      Meta: Eleganckie garnitury damskie i komplety z marynarką w hurcie ze Stambułu. Perfekcyjne kroje biurowe i wizytowe w cenach fabrycznych.
+  [x] BG: Дамски Костюми със Сако и Панталон на Едро | Офис Мода Турция
+      Meta: Официални дамски костюми със сако и панталон на едро от производители в Мертер. Прецизна кройка, качествени платове и представителен вид.
 ================================================================================
 BÖLÜM 6: TOPTAN KADIN DIŞ GİYİM (KABAN, MONT, TRENÇKOT)
 ================================================================================
 
 --------------------------------------------------------------------------------
-[ ] TASK-021 | Dış Giyim Genel Kategori Başlığı
+[x] TASK-021 | Dış Giyim Genel Kategori Başlığı
 Hedef URL / Slug: /dis-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Dış Giyim Modelleri | Kaban, Mont & Ceket Çeşitleri
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Dış Giyim Modelleri | Kaban, Mont & Trençkot
+      Meta: En yeni sezon toptan kadın dış giyim ürünleri Merter Vitrini'nde. Kaşe kabanlar, şişme montlar, trençkotlar ve ceketler doğrudan üreticiden toptan satışta.
+  [x] EN: Wholesale Women's Outerwear Turkey | Coats, Jackets & Trench
+      Meta: Source premium wholesale women's outerwear from Istanbul manufacturers. Woolen coats, puffer jackets, trenches, and blazers with worldwide delivery.
+  [x] RU: Женская Верхняя Одежда Оптом из Турции | Пальто, Куртки, Пуховики
+      Meta: Широкий выбор женской верхней одежды оптом из Стамбула (Мертер). Кашемировые пальто, тренчи, пуховики и куртки напрямую от производителей.
+  [x] AR: ملابس خارجية نسائية بالجملة تركيا | معاطف، جواكت وترنشكوت
+      Meta: أحدث تشكيلات الملابس الخارجية النسائية بالجملة من مصانع مارتر إسطنبول. معاطف كشمير، جاكيتات منفوخة وترنشكوت بأفضل أسعار الجملة.
+  [x] DE: Großhandel Damen-Oberbekleidung Türkei | Mäntel, Jacken & Trench
+      Meta: Hochwertige Damen-Outdoorbekleidung im Großhandel aus Merter Istanbul. Wollmäntel, Pufferjacken, Trenchcoats und Übergangsjacken zu Werkspreisen.
+  [x] FR: Vêtements d'Extérieur Femme en Gros | Manteaux et Vestes Merter
+      Meta: Grossiste en manteaux chauds, vestes matelassées, doudounes et trench-coats pour femmes. Fabrication turque haut de gamme pour vos rayons.
+  [x] PL: Hurtownia Odzieży Wierzchniej Damskiej | Płaszcze i Kurtki Merter
+      Meta: Ciepłe płaszcze wełniane, kurtki puchowe i klasyczne trencze w hurcie z Turcji. Niezbędne w każdym butiku na chłodniejsze miesiące.
+  [x] BG: Дамски Връхни Дрехи на Едро | Палта, Якета и Тренчкоти Турция
+      Meta: Богат асортимент от дамски връхни дрехи на едро от Мертер, Истанбул. Вълнени палта, пухенки и стилни тренчкоти на достъпни складови цени.
 --------------------------------------------------------------------------------
-[ ] TASK-022 | Kaşe Kaban & Şişme Mont
+[x] TASK-022 | Kaşe Kaban & Şişme Mont
 Hedef URL / Slug: /dis-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Kaşe Kaban Modelleri | Kaliteli Kumaş & Şık Kesim
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Kaşe Kaban & Şişme Mont | Sıcak Tutan Kışlıklar
+      Meta: Kış sezonu için kaliteli kaşe kaban ve su tutmaz şişme mont modelleri toptan satışta. Kürk detaylı, kapüşonlu ve şık kesimlerle imalatçı fiyatları.
+  [x] EN: Wholesale Cashmere Coats & Puffer Jackets | Winter Apparel
+      Meta: Wholesale women's warm cashmere-blend coats and water-resistant puffer jackets. Quilted designs, stylish silhouettes, and direct factory supply.
+  [x] RU: Кашемировые Пальто и Зимние Пуховики Оптом | Мертер Турция
+      Meta: Женские кашемировые и драповые пальто, теплые пуховики и куртки оптом от производителей Стамбула. Отличная защита от холода и модный дизайн.
+  [x] AR: معاطف جوخ وجواكت منفوخة شتوية بالجملة | دفء وأناقة من إسطنبول
+      Meta: أفخم معاطف الجوخ والكشمير والجواكت المنفوخة المقاومة للماء بالجملة من مارتر. تصاميم شتوية راقية تلبي احتياجات متاجرك بأسعار الجملة.
+  [x] DE: Großhandel Wollmäntel & Pufferjacken | Warme Wintermode Merter
+      Meta: Damen-Wollmäntel und warme Steppjacken im Großhandel direkt aus der Türkei. Wetterfeste Materialien, moderne Farben und rascher Versand.
+  [x] FR: Manteaux en Laine et Doudounes en Gros | Mode d'Hiver Istanbul
+      Meta: Manteaux d'hiver en drap de laine et doudounes matelassées en gros pour boutiques. Excellente isolation thermique et finitions qualitatives.
+  [x] PL: Płaszcze Wełniane i Kurtki Puchowe Hurt | Zimowa Kolekcja Merter
+      Meta: Hurt damskich płaszczy z flauszu i wełny oraz kurtek puchowych z Turcji. Modny wygląd, ciepłe wypełnienia i konkurencyjne ceny fabryczne.
+  [x] BG: Вълнени Палта и Зимни Пухенки на Едро | Зимна Мода Истанбул
+      Meta: Дамски вълнени палта и олекотени топли пухенки на едро от производител в Турция. Перфектна защита от студ и модерен зимен силует.
 --------------------------------------------------------------------------------
-[ ] TASK-023 | Trençkot & Blazer Ceket
+[x] TASK-023 | Trençkot & Blazer Ceket
 Hedef URL / Slug: /dis-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Blazer Ceket & Trençkot | Merter İmalatçı Modelleri
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Blazer Ceket & Trençkot | Merter İmalatçı Modelleri
+      Meta: Bahar ve mevsim geçişlerinin kurtarıcısı kadın trençkot ve blazer ceketler toptan satışta. Kuşaklı, kruvaze ve oversize modeller üretici fiyatlarıyla.
+  [x] EN: Wholesale Trench Coats & Blazer Jackets | Seasonal Sourcing B2B
+      Meta: Shop wholesale women's double-breasted trench coats and tailored blazers. The quintessential trans-seasonal boutique pieces direct from Istanbul.
+  [x] RU: Тренчи и Блейзеры Оптом из Стамбула | Весенняя Верхняя Одежда
+      Meta: Женские классические двубортные тренчкоты и стильные пиджаки-блейзеры оптом от фабрик Мертера. Идеальные модели для весеннего сезона.
+  [x] AR: ترنشكوت وبليزر نسائي بالجملة | ملابس ربيعية وموسمية من مارتر
+      Meta: أحدث موديلات الترنشكوت الطويل بأحزمة والبليزر الكلاسيكي النسائي بالجملة من مصانع إسطنبول. قطع أساسية لكل متجر بأسعار تنافسية.
+  [x] DE: Großhandel Trenchcoats & Blazer | Übergangsmode für Boutiquen
+      Meta: Klassische zweireihige Damen-Trenchcoats und modische Blazer im Großhandel aus Merter. Zeitlose Bestseller für Frühling und Herbst.
+  [x] FR: Trench-Coats et Blazers Femme en Gros | Indispensables de Saison
+      Meta: Grossiste en trenchs ceinturés classiques et vestes blazer structurées pour femmes. Les pièces maîtresses de mi-saison directement d'Istanbul.
+  [x] PL: Trencze i Marynarki Damskie Hurt | Modna Odzież Przejściowa
+      Meta: Stylowe trencze z paskiem i marynarki blazer w hurcie z Turcji. Niezbędna odzież przejściowa o wysokiej rotacji w każdym butiku.
+  [x] BG: Дамски Тренчкоти и Блейзъри на Едро | Преходна Мода от Мертер
+      Meta: Класически тренчкоти с колан и дамски сака блейзър на едро от производители в Истанбул. Вечни модели за успешни пролетни и есенни продажби.
 ================================================================================
 BÖLÜM 7: TOPTAN KADIN ÜST VE ALT GİYİM (BLUZ, PANTOLON, JEAN)
 ================================================================================
 
 --------------------------------------------------------------------------------
-[ ] TASK-024 | Bluz, Gömlek & Body
+[x] TASK-024 | Bluz, Gömlek & Body
 Hedef URL / Slug: /kadin-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Bluz & Gömlek Modelleri | Şifon, Viskon & Poplin
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Bluz & Gömlek Modelleri | Şifon, Viskon & Poplin
+      Meta: En şık kadın gömlek, bluz ve body modelleri toptan satışta. Poplin, saten ve şifon kumaşlı trend üst giyim ürünleri Merter imalatçı fiyatlarıyla.
+  [x] EN: Wholesale Women's Blouses & Shirts | Chiffon, Poplin & Bodies
+      Meta: Source wholesale women's blouses, button-down shirts, and bodysuit tops. Premium poplin and silky chiffon fabrics direct from Istanbul factories.
+  [x] RU: Женские Блузки и Рубашки Оптом | Шифон, Хлопок и Боди Мертер
+      Meta: Оптовые поставки стильных женских блузок, хлопковых рубашек и облегающих боди из Турции. Богатая палитра цветов и прямые цены от фабрик.
+  [x] AR: بلوزات وقمصان وبودي نسائي بالجملة | شيفون وبوبلين فاخر
+      Meta: أحدث تصاميم البلوزات النسائية الأنيقة، القمصان الرسمية والبودي بالجملة من مصانع مارتر. أقمشة باردة ومريحة بأفضل أسعار الجملة للبوتيكات.
+  [x] DE: Großhandel Damenblusen & Hemden | Chiffon, Baumwolle & Bodys
+      Meta: Elegante Damenblusen, Baumwollhemden und figurbetonte Bodys im Großhandel aus Merter Istanbul. Beliebte Bestseller zu echten Fabrikpreisen.
+  [x] FR: Blouses, Chemises et Bodys Femme en Gros | Hauts Tendance B2B
+      Meta: Grossiste en blouses fluides, chemisiers en popeline et bodys féminins. Des hauts élégants pour le quotidien et le bureau au meilleur prix d'usine.
+  [x] PL: Bluzki, Koszule i Body Damskie Hurt | Szyfon i Bawełna z Turcji
+      Meta: Hurt damskich bluzek szyfonowych, koszul popelinowych i wygodnych body ze Stambułu. Modne fasony górnej odzieży o natychmiastowej rotacji.
+  [x] BG: Дамски Блузи, Ризи и Бодита на Едро | Шифон и Памук Истанбул
+      Meta: Елегантни дамски ризи, ефирни блузи и практични бодита на едро от производители в Мертер. Високо качество и изгодни цени за зареждане.
 --------------------------------------------------------------------------------
-[ ] TASK-025 | Pantolon, Jean & Etek
+[x] TASK-025 | Pantolon, Jean & Etek
 Hedef URL / Slug: /kadin-giyim
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Kadın Pantolon & Jean Çeşitleri | Palazzo, Kumaş & Kot
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Kadın Pantolon & Jean Çeşitleri | Palazzo, Kumaş & Kot
+      Meta: En trend kadın palazzo pantolonlar, mom fit jeanler ve şık etekler toptan satışta. Kaliteli denim ve dökümlü kumaşlar Merter Vitrini güvencesiyle.
+  [x] EN: Wholesale Women's Pants, Jeans & Skirts | Denim & Palazzo B2B
+      Meta: Shop wholesale women's trousers: wide-leg palazzo pants, mom jeans, and trendy skirts. Turkish denim and premium tailoring direct from Istanbul.
+  [x] RU: Женские Брюки, Джинсы и Юбки Оптом | Палаццо и Деним из Турции
+      Meta: Оптовая продажа женских брюк палаццо, классических моделей, качественных турецких джинсов и стильных юбок по ценам производителей Мертера.
+  [x] AR: بناطيل وجينز وتنانير نسائية بالجملة | بالازو ودنيم تركي فاخر
+      Meta: أفضل تشكيلة بناطيل نسائية واسعة (بالازو)، جينزات تركية أصلية وتنانير أنيقة بالجملة من مارتر. جودة قماش فائقة وأسعار مناسبة للكميات.
+  [x] DE: Großhandel Damenhosen, Jeans & Röcke | Palazzo & Denim Merter
+      Meta: Moderne Palazzo-Hosen, stylische Mom-Jeans und Röcke im Großhandel aus Istanbul. Strapazierfähiger türkischer Denim zu besten Konditionen.
+  [x] FR: Pantalons, Jeans et Jupes Femme en Gros | Denim Turc & Palazzo
+      Meta: Grossiste en pantalons palazzo fluides, jeans en denim turc réputé et jupes tendance. Le basique indispensable pour fidéliser vos clientes.
+  [x] PL: Spodnie Damskie, Jeansy i Spódnice Hurt | Turecki Denim Merter
+      Meta: Hurt damskich spodni materiałowych, fasonów palazzo, spódnic oraz słynnego tureckiego jeansu ze Stambułu. Trwałe tkaniny i modne kroje.
+  [x] BG: Дамски Панталони, Дънки и Поли на Едро | Палацо и Деним Турция
+      Meta: Дамски панталони тип палацо, качествен турски деним и модерни поли на едро от Мертер, Истанбул. Бързооборотни модели за вашия магазин.
 ================================================================================
 BÖLÜM 8: MERTER B2B PLATFORM & BLOG REHBERLERİ
 ================================================================================
 
 --------------------------------------------------------------------------------
-[ ] TASK-026 | Merter B2B Tekstil Tedarik Platformu
+[x] TASK-026 | Merter B2B Tekstil Tedarik Platformu
 Hedef URL / Slug: /b2b
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Merter Toptan Tekstil Piyasası | Güvenilir Toptancı Platformu
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Merter Toptan Tekstil Piyasası | Güvenilir B2B Tedarik Platformu
+      Meta: Türkiye tekstilinin kalbi Merter üreticilerini tek çatı altında toplayan B2B pazar yeri. Binlerce toptan ürün, doğrudan imalatçı fiyatları ve güvenli ticaret.
+  [x] EN: Merter Wholesale Textile Market | Trusted Global B2B Platform
+      Meta: The official B2B marketplace uniting Istanbul Merter garment manufacturers. Thousands of wholesale products, transparent factory prices, and secure trade.
+  [x] RU: Оптовый Рынок Текстиля Мертер | Надежная B2B Платформа Стамбул
+      Meta: Официальная B2B платформа производителей текстиля в Мертер (Стамбул). Прямой доступ к фабрикам, тысячи моделей женской одежды и безопасные сделки.
+  [x] AR: سوق مارتر للنسيج والملابس بالجملة | منصة B2B الموثوقة بإسطنبول
+      Meta: السوق الرقمي المعتمد لربط تجار العالم بأفضل مصانع النسيج في مارتر إسطنبول. آلاف المنتجات بأسعار المصنع المباشرة وتجارة آمنة ومضمونة.
+  [x] DE: Merter Textil-Großhandelsmarkt | Vertrauenswürdige B2B-Plattform
+      Meta: Die führende B2B-Plattform für Textilhersteller aus Istanbul Merter. Tausende Großhandelsprodukte, transparente Werkspreise und sichere Bestellungen.
+  [x] FR: Marché Textile de Merter Istanbul | Plateforme B2B de Confiance
+      Meta: Le marché de gros B2B réunissant les fabricants textiles de Merter Istanbul. Des milliers d'articles de mode, prix d'usine et approvisionnement sécurisé.
+  [x] PL: Hurtowy Rynek Tekstylny Merter | Sprawdzona Platforma B2B
+      Meta: Oficjalna platforma B2B zrzeszająca tureckich producentów odzieży z Merter Stambuł. Tysiące artykułów, ceny fabryczne i bezpieczne transakcje.
+  [x] BG: Текстилен Пазар на Едро Мертер | Надеждна B2B Платформа Истанбул
+      Meta: Официална B2B платформа за директна търговия с текстилни фабрики в Мертер, Истанбул. Хиляди артикули на едро, фабрични цени и сигурност.
 --------------------------------------------------------------------------------
 [x] TASK-027 | Blog: Butik Açacaklar İçin Satın Alma Rehberi (8 DİLDE YAYIMLANDI)
 Hedef URL / Slug: /blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi
@@ -394,18 +576,25 @@ Durum: [x] Tamamlandı (8/8 Dil Canlıda Yayında)
   [x] BG: Наръчник за Закупуване на Едро в Мертер: Дамски Дрехи за Собственици на Бутици (CANLI: /bg/blog/butik-acacaklar-icin-merter-toptan-kadin-giyim-rehberi)
 
 --------------------------------------------------------------------------------
-[ ] TASK-028 | Blog: Toptan Serili Ürün Satın Alma Rehberi
+[x] TASK-028 | Blog: Toptan Serili Ürün Satın Alma Rehberi
 Hedef URL / Slug: /blog/toptan-serili-urun-nedir-nasil-alinir
-Durum: [ ] İnceleniyor (0/8)
-  [ ] TR: Toptan Serili Ürün Nedir? Seri Bozma ve Beden Dağılımı Rehberi
-  [ ] EN: 
-  [ ] RU: 
-  [ ] AR: 
-  [ ] DE: 
-  [ ] FR: 
-  [ ] PL: 
-  [ ] BG: 
-
+Durum: [x] Tamamlandı (8/8 Dil Onaylandı & Canlıda Yayında)
+  [x] TR: Toptan Serili Ürün Nedir? Seri Bozma ve Beden Dağılımı Rehberi
+      Meta: Toptan kadın giyimde seri ve asorti nedir? Seri bozma kuralları, beden dağılımları ve butiklerin toptan alımlarda dikkat etmesi gereken kritik püf noktaları.
+  [x] EN: What is a Wholesale Pack/Series? Size Distribution Sourcing Guide
+      Meta: Learn how wholesale pre-packed series work in the apparel industry. Size distribution ratios, bundle rules, and smart inventory tips for boutique owners.
+  [x] RU: Что Такое Размерный Ряд Оптом? Гид по Сериям Одежды из Турции
+      Meta: Подробный гид по покупке одежды сериями (размерными рядами): как формируются серии, правила деления размеров и советы для закупщиков бутиков.
+  [x] AR: ما هو نظام السيري والباكت في تجارة الملابس بالجملة؟ دليل شامل
+      Meta: دليل كامل لأصحاب البوتيكات حول شراء الملابس بنظام السيري وتوزيع القياسات. كيف تختار السيري المناسب لمتجرك وتتفادى تكدس المقاسات غير المطلوبة.
+  [x] DE: Was bedeutet Großhandel-Serie? Ratgeber für Größenläufe & Packs
+      Meta: Alles Wissenswerte über Serien und Größenläufe im Textilgroßhandel. Wie Größen verteilt sind und wie Boutique-Besitzer ihren Wareneinkauf optimieren.
+  [x] FR: Qu'est-ce qu'une Série en Gros ? Guide des Packs et Tailles B2B
+      Meta: Comprendre les séries et le pré-conditionnement dans la vente en gros de vêtements. Conseils essentiels sur la répartition des tailles pour boutiques.
+  [x] PL: Czym Jest Seria Rozmiarowa w Hurcie? Poradnik Zakupowy dla Butiku
+      Meta: Wszystko o seriach i pakietach odzieżowych w hurcie: podział rozmiarów (S-XL), zasady pakowania i jak mądrze zaopatrywać butik bez zalegania towaru.
+  [x] BG: Какво е Размерна Серия на Едро? Наръчник за Номерация и Пакети
+      Meta: Пълно ръководство за пазаруване на едро в серии: разпределение на размерите, предимства на готовите пакети и съвети за зареждане на бутик.
 ================================================================================
 SONRAKİ ADIMLAR (İŞ AKIŞI):
 1. Adım: Türkçe (TR) başlıkları inceleyip onaylayacağız / revize edeceğiz.
