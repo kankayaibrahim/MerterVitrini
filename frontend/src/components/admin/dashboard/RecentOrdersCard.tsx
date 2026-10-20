@@ -50,6 +50,75 @@ function formatPaymentMethod(method: string) {
   return method || "Banka Havalesi";
 }
 
+function renderOrdersContent(loading: boolean, orders: readonly DashboardOrderSummary[]) {
+  if (loading) {
+    return <div className="py-8 text-center text-xs text-zinc-400">Siparişler yükleniyor...</div>;
+  }
+  if (orders.length === 0) {
+    return (
+      <div className="py-8 text-center">
+        <AlertCircle size={28} className="mx-auto text-zinc-300 mb-2" />
+        <p className="text-xs font-semibold text-zinc-600">Henüz yeni sipariş bulunmuyor</p>
+        <p className="text-[11px] text-zinc-400 mt-0.5">Siparişler geldikçe anlık olarak burada listelenecektir.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-xs">
+        <thead>
+          <tr className="border-b border-zinc-100 text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
+            <th className="py-2 pr-3">Sipariş No</th>
+            <th className="py-2 pr-3">Müşteri</th>
+            <th className="py-2 pr-3">Ödeme</th>
+            <th className="py-2 pr-3">Tutar</th>
+            <th className="py-2 pr-3">Durum</th>
+            <th className="py-2 text-right">Tarih</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-100">
+          {orders.map((order) => (
+            <tr key={order.id} className="hover:bg-zinc-50/80 transition-colors">
+              <td className="py-2.5 pr-3 font-mono font-bold text-zinc-900">
+                <Link href={`/admin/orders?search=${order.order_number}`} className="hover:text-indigo-600">
+                  #{order.order_number}
+                </Link>
+              </td>
+              <td className="py-2.5 pr-3">
+                <div className="font-semibold text-zinc-800 truncate max-w-[140px]">
+                  {order.customer_name}
+                </div>
+                {order.customer_email ? (
+                  <div className="text-[10px] text-zinc-400 truncate max-w-[140px]">
+                    {order.customer_email}
+                  </div>
+                ) : null}
+              </td>
+              <td className="py-2.5 pr-3 text-zinc-600">
+                {formatPaymentMethod(order.payment_method)}
+              </td>
+              <td className="py-2.5 pr-3 font-bold text-zinc-900">
+                ₺{order.total_amount.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}
+              </td>
+              <td className="py-2.5 pr-3">
+                {getStatusBadge(order.order_status)}
+              </td>
+              <td className="py-2.5 text-right text-zinc-400 text-[11px] whitespace-nowrap">
+                {new Date(order.created_at).toLocaleDateString("tr-TR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function RecentOrdersCard({
   orders,
   loading,
@@ -81,68 +150,7 @@ export default function RecentOrdersCard({
           </Link>
         </div>
 
-        {loading ? (
-          <div className="py-8 text-center text-xs text-zinc-400">Siparişler yükleniyor...</div>
-        ) : orders.length === 0 ? (
-          <div className="py-8 text-center">
-            <AlertCircle size={28} className="mx-auto text-zinc-300 mb-2" />
-            <p className="text-xs font-semibold text-zinc-600">Henüz yeni sipariş bulunmuyor</p>
-            <p className="text-[11px] text-zinc-400 mt-0.5">Siparişler geldikçe anlık olarak burada listelenecektir.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-zinc-100 text-zinc-400 font-semibold uppercase tracking-wider text-[10px]">
-                  <th className="py-2 pr-3">Sipariş No</th>
-                  <th className="py-2 pr-3">Müşteri</th>
-                  <th className="py-2 pr-3">Ödeme</th>
-                  <th className="py-2 pr-3">Tutar</th>
-                  <th className="py-2 pr-3">Durum</th>
-                  <th className="py-2 text-right">Tarih</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {orders.map((order) => (
-                  <tr key={order.id} className="hover:bg-zinc-50/80 transition-colors">
-                    <td className="py-2.5 pr-3 font-mono font-bold text-zinc-900">
-                      <Link href={`/admin/orders?search=${order.order_number}`} className="hover:text-indigo-600">
-                        #{order.order_number}
-                      </Link>
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <div className="font-semibold text-zinc-800 truncate max-w-[140px]">
-                        {order.customer_name}
-                      </div>
-                      {order.customer_email ? (
-                        <div className="text-[10px] text-zinc-400 truncate max-w-[140px]">
-                          {order.customer_email}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="py-2.5 pr-3 text-zinc-600">
-                      {formatPaymentMethod(order.payment_method)}
-                    </td>
-                    <td className="py-2.5 pr-3 font-bold text-zinc-900">
-                      ₺{order.total_amount.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      {getStatusBadge(order.order_status)}
-                    </td>
-                    <td className="py-2.5 text-right text-zinc-400 text-[11px] whitespace-nowrap">
-                      {new Date(order.created_at).toLocaleDateString("tr-TR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {renderOrdersContent(loading, orders)}
       </div>
 
       <div className="pt-3 mt-3 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-500">

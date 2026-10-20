@@ -114,6 +114,10 @@ func main() {
 	supplierApplicationsHandler := handlers.NewSupplierApplicationsHandler(cfg)
 	analyticsHandler := handlers.NewAnalyticsHandler(cfg)
 	adminDashboardHandler := handlers.NewAdminDashboardHandler(cfg)
+	chatHandler := handlers.NewChatHandler(cfg)
+
+	// Background unverified supplier applications cleaner (purges unverified after 30 mins)
+	handlers.StartUnverifiedApplicationsCleaner()
 
 	// 6. Register HTTP Router using Go 1.22+ ServeMux
 	mux := http.NewServeMux()
@@ -185,6 +189,7 @@ func main() {
 	mux.HandleFunc("GET /api/v1/store/products", storeCatalogHandler.ListProducts)
 	mux.HandleFunc("GET /api/v1/store/catalog/delta", storeCatalogHandler.CatalogDelta)
 	mux.HandleFunc("POST /api/v1/store/supplier-applications", supplierApplicationsHandler.SubmitApplication)
+	mux.HandleFunc("GET /api/v1/store/supplier-applications/verify", supplierApplicationsHandler.VerifyApplicationEmail)
 	mux.HandleFunc("GET /api/v1/store/products/{id}", storeCatalogHandler.GetProductByID)
 	mux.HandleFunc("GET /api/v1/store/categories", storeCatalogHandler.ListCategories)
 	mux.HandleFunc("GET /api/v1/store/brands", storeCatalogHandler.ListBrands)
@@ -257,11 +262,13 @@ func main() {
 	mux.Handle("POST /api/v1/suppliers/{id}/products/deactivate", authMiddleware(http.HandlerFunc(suppliersHandler.DeactivateSupplierProducts)))
 	mux.Handle("DELETE /api/v1/suppliers/{id}/products", authMiddleware(http.HandlerFunc(suppliersHandler.DeleteSupplierProducts)))
 
-	// Admin Supplier Login Accounts
+	// Admin Supplier Login Accounts & Chat Monitor
 	mux.Handle("GET /api/v1/admin/supplier-users", authMiddleware(http.HandlerFunc(adminSupplierUsersHandler.ListSupplierUsers)))
 	mux.Handle("POST /api/v1/admin/supplier-users", authMiddleware(http.HandlerFunc(adminSupplierUsersHandler.CreateSupplierUser)))
 	mux.Handle("PUT /api/v1/admin/supplier-users/{id}", authMiddleware(http.HandlerFunc(adminSupplierUsersHandler.UpdateSupplierUser)))
 	mux.Handle("DELETE /api/v1/admin/supplier-users/{id}", authMiddleware(http.HandlerFunc(adminSupplierUsersHandler.DeleteSupplierUser)))
+	mux.Handle("GET /api/v1/admin/chat/rooms", authMiddleware(http.HandlerFunc(chatHandler.ListAdminRooms)))
+	mux.Handle("GET /api/v1/admin/chat/rooms/{room_id}/messages", authMiddleware(http.HandlerFunc(chatHandler.ListAdminMessages)))
 
 	// Admin Prospective Supplier Applications
 	mux.Handle("GET /api/v1/admin/supplier-applications", authMiddleware(http.HandlerFunc(supplierApplicationsHandler.ListApplications)))
@@ -346,6 +353,8 @@ func main() {
 	// ==========================================
 	supplierAuthMiddleware := middleware.SupplierAuthMiddleware(cfg.JWTSecret, cfg.KeycloakPublicKey)
 	mux.HandleFunc("POST /api/v1/supplier/auth/login", supplierPortalHandler.Login)
+	mux.HandleFunc("GET /api/v1/supplier/auth/verify-setup-token", supplierPortalHandler.VerifySetupToken)
+	mux.HandleFunc("POST /api/v1/supplier/auth/setup-password", supplierPortalHandler.SetupPassword)
 	mux.Handle("GET /api/v1/supplier/profile", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.GetProfile)))
 	mux.Handle("GET /api/v1/supplier/products", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.ListProducts)))
 	mux.Handle("GET /api/v1/supplier/products/{id}", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.GetProduct)))
@@ -355,6 +364,27 @@ func main() {
 	mux.Handle("POST /api/v1/supplier/upload-image", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.UploadImage)))
 	mux.Handle("GET /api/v1/supplier/categories", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.ListCategories)))
 	mux.Handle("GET /api/v1/supplier/attributes", supplierAuthMiddleware(http.HandlerFunc(supplierPortalHandler.ListAttributes)))
+
+	// ==========================================
+	// CENTRIFUGE REAL-TIME B2B CHAT ROUTES
+	// ==========================================
+	mux.Handle("/api/v1/chat/ws", chatHandler.WebsocketHandler())
+
+	// Storefront Customer Chat Endpoints
+	mux.HandleFunc("GET /api/v1/store/chat/brands/{brand_id}/agents", chatHandler.ListBrandAgents)
+	mux.HandleFunc("POST /api/v1/store/chat/rooms", chatHandler.InitOrGetRoom)
+	mux.HandleFunc("GET /api/v1/store/chat/rooms", chatHandler.ListCustomerRooms)
+	mux.HandleFunc("GET /api/v1/store/chat/rooms/{room_id}/messages", chatHandler.ListCustomerMessages)
+	mux.HandleFunc("POST /api/v1/store/chat/rooms/{room_id}/messages", chatHandler.SendCustomerMessage)
+	mux.HandleFunc("POST /api/v1/store/chat/messages/{message_id}/accept-offer", chatHandler.AcceptCustomOffer)
+
+	// Supplier Portal Chat & Sub-User Team Endpoints
+	mux.Handle("GET /api/v1/supplier/chat/rooms", supplierAuthMiddleware(http.HandlerFunc(chatHandler.ListSupplierRooms)))
+	mux.Handle("GET /api/v1/supplier/chat/rooms/{room_id}/messages", supplierAuthMiddleware(http.HandlerFunc(chatHandler.ListSupplierMessages)))
+	mux.Handle("POST /api/v1/supplier/chat/rooms/{room_id}/messages", supplierAuthMiddleware(http.HandlerFunc(chatHandler.SendSupplierMessage)))
+	mux.Handle("GET /api/v1/supplier/team", supplierAuthMiddleware(http.HandlerFunc(chatHandler.ListSupplierTeam)))
+	mux.Handle("POST /api/v1/supplier/team", supplierAuthMiddleware(http.HandlerFunc(chatHandler.CreateSupplierTeamMember)))
+	mux.Handle("DELETE /api/v1/supplier/team/{id}", supplierAuthMiddleware(http.HandlerFunc(chatHandler.DeleteSupplierTeamMember)))
 
 	// 7. Wrap global middlewares (Recovery, Logging, RateLimit, CORS)
 	var handler http.Handler = mux

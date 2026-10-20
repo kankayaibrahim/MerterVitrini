@@ -20,6 +20,8 @@ import OrderCalculator from "./components/OrderCalculator";
 import SocialShare from "./components/SocialShare";
 import ProductInquiryCart from "./components/ProductInquiryCart";
 import { InquiryFormData } from "@/components/store/CartDrawer";
+import StoreChatDrawer from "@/components/store/StoreChatDrawer";
+import { ChatOfferMetadata } from "@/types/chat";
 
 interface ProductDetailClientProps {
   readonly product: Product | null;
@@ -56,6 +58,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
   });
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategoryId, setActiveCategoryId] = useState<string>("");
 
@@ -267,6 +270,56 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
 
     setIsCartOpen(true);
     triggerToast(t("product_added_to_cart", lang) || "Ürün sepete eklendi!");
+  };
+
+  // Accept custom supplier price offer from Centrifuge chat and add to cart
+  const handleAcceptOfferToCart = (offer: ChatOfferMetadata) => {
+    const offeredUnitConv = convertPrice(
+      offer.offered_unit_price || product.price,
+      offer.currency || product.currency || "TRY",
+      displayCurrency,
+      exchangeRates
+    );
+
+    const newItem: CartItem = {
+      product_id: offer.product_id || product.id,
+      title: offer.title || title,
+      custom_sku: offer.custom_sku || product.custom_sku || "",
+      color: offer.color || selectedColor,
+      packages_qty: offer.packages_qty || 1,
+      units_per_package: offer.units_per_package || unitsPerPkg,
+      price_per_unit: offeredUnitConv,
+      weight_per_unit: offer.weight_per_unit || singleItemWeight,
+      image_url: offer.image_url || product.images?.[0]?.image_url || "/placeholder.png",
+      currency: displayCurrency,
+      slug: offer.slug || product.slug,
+    };
+
+    setCart((prev) => {
+      const existingIdx = prev.findIndex(
+        (item) => item.product_id === newItem.product_id && item.color === newItem.color
+      );
+      let updated: CartItem[];
+      if (existingIdx >= 0) {
+        updated = [...prev];
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          packages_qty: newItem.packages_qty,
+          price_per_unit: newItem.price_per_unit,
+        };
+      } else {
+        updated = [...prev, newItem];
+      }
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
+      }
+      return updated;
+    });
+
+    setIsChatOpen(false);
+    setIsCartOpen(true);
+    triggerToast("🎁 Özel fiyat teklifi kabul edildi ve indirimli fiyattan sepete eklendi!");
   };
 
   // Adjust cart item quantities
@@ -561,6 +614,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
                 lang={lang}
                 t={t}
                 handleAddToCart={handleAddToCart}
+                onOpenSupplierChat={() => setIsChatOpen(true)}
               />
 
               <SocialShare
@@ -616,6 +670,18 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
           onCancel={() => setPendingRemove(null)}
         />
       )}
+
+      <StoreChatDrawer
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        initialBrandId={product.brand_id}
+        initialProductId={product.id}
+        supplierDisplayName={product.brand_name || "Merter Üreticisi"}
+        lang={lang}
+        displayCurrency={displayCurrency}
+        exchangeRates={exchangeRates}
+        onAcceptOfferToCart={handleAcceptOfferToCart}
+      />
     </div>
   );
 }

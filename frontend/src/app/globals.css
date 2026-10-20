@@ -138,8 +138,9 @@ body {
 }
 
 /* Hide Google reCAPTCHA v3 badge for clean UI */
-.grecaptcha-badge {
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
+html body .grecaptcha-badge {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
+

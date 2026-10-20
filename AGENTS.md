@@ -10,7 +10,7 @@
 
 ### Temel Sistem Felsefesi:
 1. **Sadeleştirilmiş Birleşik Monorepo Mimarisi:** Tek depoda (monorepo) birleştirilmiş yüksek performanslı tek Go backend (`backend/`, Port `8080`) ve hem vitrin mağazasını hem de `/admin` yönetim panelini barındıran tek Next.js SSR frontend (`frontend/`, Port `3000`).
-2. **Yüksek Performans & Düşük Kaynak Tüketimi:** Backend tarafında Go 1.25'in ultra-hafif `net/http` ve `pgx/v5` havuzları; frontend tarafında Next.js 16 (App Router) + React 19 ile optimize edilmiş dinamik SSR mimarisi.
+2. **Yüksek Performans & Düşük Kaynak Tüketimi:** Backend tarafında Go 1.27.2'nin ultra-hafif `net/http` ve `pgx/v5` havuzları; frontend tarafında Next.js 16 (App Router) + React 19 ile optimize edilmiş dinamik SSR mimarisi.
 3. **Üretici Maskeleme & Entegrasyon Gizliliği:** Toptancı tedarikçilerinin (Lustrin, Etika, Jane's vb.) gerçek isimleri storefront üzerinde maske kodlarla (MIMOZA, FLORA, EDUSA) sunulur. SKU yapıları otomatik üretilen benzersiz kodlarla korunur.
 4. **Veri Bütünlüğü ve Çok Dillilik:** Kategori ağaçları PostgreSQL `ltree` eklentisiyle hiyerarşik yönetilir. Tüm katalog, renk, kumaş, sayfa ve blog verileri normalleştirilmiş çeviri tablolarında çok dilli olarak saklanır.
 5. **Kurumsal Kimlik Yönetimi:** Tüm müşteri ve admin yetkilendirmesi Keycloak 26 (Quarkus LTS) IAM motoru üzerinden yürütülür.
@@ -24,9 +24,9 @@
 | **Unified Frontend** | Next.js (App Router, SSR) | `16.2.6` | Müşteri Vitrini (/) + Yönetim Paneli (/admin) (Port `3000`) |
 | **Unified UI & State** | React, Tailwind CSS, Lucide | `React 19.2.4`, `Tailwind v4` | Modern, responsive, sepet çekmecesi ve admin modülleri |
 | **Hata İzleme (Sentry)** | Sentry Next.js SDK | `^10.55.0` | İstemci & Sunucu hata yakalama ve performans izleme |
-| **Unified Backend** | Go (Golang) | `1.25.0` | Birleşik REST API: Store (`/api/v1/store/`) & Admin (`/api/v1/`) (Port `8080`) |
+| **Unified Backend** | Go (Golang) | `1.27.2` | Birleşik REST API: Store (`/api/v1/store/`) & Admin (`/api/v1/`) (Port `8080`) |
 | **Kimlik & Yetki (IAM)** | Keycloak (Quarkus LTS, Java 21) | `26.6.2` | OIDC kimlik doğrulama, JWT, Realm: `merter` |
-| **Veritabanı** | PostgreSQL (pgcrypto, ltree) | `16+` | Ana veritabanı (`merterdevdb`), Keycloak DB (`keycloak`) |
+| **Veritabanı** | PostgreSQL (native uuidv7, pgcrypto, ltree) | `18+` | Ana veritabanı (`merterdevdb`), Keycloak DB (`keycloak`) |
 | **Veritabanı Sürücüsü** | `jackc/pgx/v5` (pgxpool) | `5.9.2` | Yüksek performanslı Go native PostgreSQL bağlantı havuzu |
 | **Önbellek & Kuyruk** | Redis | `7+` | Senkronizasyon takibi, oturum ve veri önbelleği |
 | **Ters Proxy & Web Sunucu** | Nginx | `Stable` | SSL sonlandırma, statik dosya sunumu, reverse proxy |
@@ -82,7 +82,7 @@ Bu projede tek bir jenerik asistan yerine, kendi içinde koordine olan **Özerk 
 2. **`@coder` (Kıdemli Yazılımcı):**
    - Mimarın belirlediği kontratlara harfiyen uyar. Temiz, tip güvenli, idiomatic Go ve Next.js kodu üretir.
 3. **`@dba` (Veritabanı & Performans Uzmanı):**
-   - PostgreSQL 16 şema tasarımı, UUIDv7 standardı, Base36 sequence'ları, `ltree` indeksleri, `catalog.mv_products` Materialized View yönetimi ve transaction güvenliğini sağlar.
+   - PostgreSQL 18 şema tasarımı, native UUIDv7 (`uuidv7()`) standardı, Base36 sequence'ları, `ltree` indeksleri, `catalog.mv_products` Materialized View yönetimi ve transaction güvenliğini sağlar.
 4. **`@seo` (Kıdemli B2B & E-Ticaret SEO / Büyüme Uzmanı):**
    - Schema.org JSON-LD (`Product`, `Offer`, `BreadcrumbList`), çok dilli `hreflang`, canonical URL'ler, dinamik `sitemap.ts`, `robots.ts` (admin sayfalarını hariç tutar), IndexNow API, Google Merchant feed ve Core Web Vitals optimizasyonlarını yürütür.
 5. **`@security` (AppSec & Güvenlik Uzmanı):**
@@ -128,6 +128,9 @@ Bu projede tek bir jenerik asistan yerine, kendi içinde koordine olan **Özerk 
    - Next.js SSR uygulaması doğrudan AlmaLinux sunucusu üzerinde (`systemd: merter-frontend`, Port `3000`) çalışır.
    - Dağıtım işleminde yalnızca saf kaynak kodlar (`src/`, `public/`, `package.json` vb.) sunucuya aktarılır; derleme işlemi doğrudan sunucu ortamında (`npm run build`) gerçekleştirilir.
    - Tüm deployment araçlarında (`unified_deployer.py`, `build_deploy.ps1`) `--remote-build` kalıcı olarak varsayılandır (default: true).
+8. **HER KONUŞMAYI OTOMATİK VE KALICI OLARAK KAYDET (Persistent Conversation Logging):**
+   - Kullanıcı ile yapılan **her konuşma turu (her kullanıcı mesajı ve ajan yanıtı/aksiyon özeti)** istisnasız olarak [`context/conversations.md`](file:///c:/Projects/mertervitrini.com.tr/context/conversations.md) dosyasına tarih/saat damgası, konuşma kimliği (`Conversation ID`), kullanıcı istemi ve yapılan işlemler/cevap özeti ile birlikte eklenmelidir (`Append`).
+   - Hiçbir yanıt, `context/conversations.md` güncellenmeden tamamlanmamalıdır.
 
 ---
 
@@ -142,7 +145,8 @@ c:\Projects\mertervitrini.com.tr\
 │   ├── architecture.md                     # Katmanlar, iletişim, güvenlik ve middleware mimarisi
 │   ├── database.md                         # DB şemaları, ltree, UUIDv7, materialized view ve DDL
 │   ├── environments.md                     # Ortamlar, IP'ler, portlar, Nginx ve Keycloak haritası
-│   └── business_rules.md                   # B2B sipariş, döviz, tedarikçi maskeleme, SEO kuralları
+│   ├── business_rules.md                   # B2B sipariş, döviz, tedarikçi maskeleme, SEO kuralları
+│   └── conversations.md                    # Tüm kullanıcı-ajan konuşmalarının kalıcı kronolojik kaydı
 ├── .agents/                                # Antigravity Ajan Sistemi Konfigürasyonu
 │   ├── rules/
 │   │   ├── multi-role-framework.md         # Otonom çok rollü framework (7 Rol, Orkestrasyon Döngüsü)
@@ -151,7 +155,7 @@ c:\Projects\mertervitrini.com.tr\
 │       ├── build-and-deploy/SKILL.md       # Cross-compile ve deployment iş akışı rehberi
 │       ├── xml-feed-integration/SKILL.md   # XML entegrasyonu ve katalog senkronizasyon rehberi
 │       └── seo-optimization/SKILL.md       # B2B teknik SEO, JSON-LD, hreflang, sitemap rehberi
-├── backend/                                # Birleşik Go 1.25 REST API (Port 8080)
+├── backend/                                # Birleşik Go 1.27.2 REST API (Port 8080)
 │   ├── config/                             # config.json okuyucu ve struct tanımları
 │   ├── db/                                 # pgxpool PostgreSQL, Redis ve TCMB worker bağlantıları
 │   ├── handlers/                           # Tekilleştirilmiş REST endpoint işleyicileri (admin + store)
@@ -197,6 +201,7 @@ c:\Projects\mertervitrini.com.tr\
 - **Veritabanı Şemaları, ltree, Materialized View & DDL:** [context/database.md](file:///c:/Projects/mertervitrini.com.tr/context/database.md)
 - **Sunucu, Portlar, Nginx, SSL ve Ortamlar:** [context/environments.md](file:///c:/Projects/mertervitrini.com.tr/context/environments.md)
 - **Kritik İş Kuralları, Yetkiler, Maskeleme & Sipariş:** [context/business_rules.md](file:///c:/Projects/mertervitrini.com.tr/context/business_rules.md)
+- **Kalıcı Konuşma Geçmişi (Conversation Log):** [context/conversations.md](file:///c:/Projects/mertervitrini.com.tr/context/conversations.md)
 - **Ajan Çalışma ve Kod Standartları Kuralları:** [.agents/rules/workflow-rules.md](file:///c:/Projects/mertervitrini.com.tr/.agents/rules/workflow-rules.md)
 - **Build & Dağıtım Skill'i:** [.agents/skills/build-and-deploy/SKILL.md](file:///c:/Projects/mertervitrini.com.tr/.agents/skills/build-and-deploy/SKILL.md)
 - **XML Entegrasyon Skill'i:** [.agents/skills/xml-feed-integration/SKILL.md](file:///c:/Projects/mertervitrini.com.tr/.agents/skills/xml-feed-integration/SKILL.md)

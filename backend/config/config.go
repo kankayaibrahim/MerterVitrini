@@ -25,6 +25,10 @@ type Config struct {
 	KeycloakPublicKey    string `json:"keycloak_public_key"`
 	ReCaptchaSecret      string `json:"recaptcha_secret"`
 	ReCaptchaSiteKey     string `json:"recaptcha_site_key"`
+	SMTPHost             string `json:"smtp_host"`
+	SMTPPort             string `json:"smtp_port"`
+	SMTPFrom             string `json:"smtp_from"`
+	AdminEmail           string `json:"admin_email"`
 }
 
 func defaultConfiguration() *Config {
@@ -46,6 +50,10 @@ func defaultConfiguration() *Config {
 		KeycloakPublicKey:    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuCdrk6NMm3+dvWzRdxxSyuCPXj4XCFzxsptRGXv1YFNzujnXlVIKsR9miSz8NHWonrRbOIHofcAXJu3r9X/VeR7deprxbOALJQDNwhPtLM8zxUyUU4mpqkBdfnPouDEPhWu3tBWZrWooAaZj/Ec2I4BZTv+2IaeZAaUeKgUHmxL8BLNtYMNxoI5xFHYI+vQ3XbCzHFAYQr8/NaXYkb+QAD58AB8wxMGYkQ3eeV/uRGVQ01CjmqfDbug4p+u1rrqPXUfhbp4LJIPJiOY5hIrnufmmpMYl6g+lV8JYmV0bws30Whi1PauD/INqYCWNCasaC/eagwoX8w0WIyPAo/YsLwIDAQAB",
 		ReCaptchaSecret:      "6LfwagMtAAAAAGvvZzj5or1CJQeZimqOJljjgxyn",
 		ReCaptchaSiteKey:     "6LfwagMtAAAAAHpF7ID6J-bQmcn92YhFaSH9CX94",
+		SMTPHost:             "127.0.0.1",
+		SMTPPort:             "25",
+		SMTPFrom:             "destek@mertervitrini.com.tr",
+		AdminEmail:           "kankayaibrahim@gmail.com",
 	}
 }
 
@@ -92,6 +100,10 @@ func applyEnvOverrides(cfg *Config) {
 	setIfPresent(&cfg.KeycloakPublicKey, "KEYCLOAK_PUBLIC_KEY")
 	setIfPresent(&cfg.ReCaptchaSecret, "RECAPTCHA_SECRET")
 	setIfPresent(&cfg.ReCaptchaSiteKey, "RECAPTCHA_SITE_KEY")
+	setIfPresent(&cfg.SMTPHost, "SMTP_HOST")
+	setIfPresent(&cfg.SMTPPort, "SMTP_PORT")
+	setIfPresent(&cfg.SMTPFrom, "SMTP_FROM")
+	setIfPresent(&cfg.AdminEmail, "ADMIN_EMAIL")
 
 	if val, ok := os.LookupEnv("DISABLE_OTP"); ok {
 		cfg.DisableOTP = (val == "true")

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Link from "next/link";
 import { ShieldCheck, AlertCircle, RefreshCw, LogIn } from "lucide-react";
 
 // Localized labels dictionary to prevent JSX literal internationalization warnings
@@ -104,6 +105,15 @@ export default function LoginScreen() {
           <div className="flex items-center justify-center gap-2 text-[10px] font-semibold text-zinc-500 mt-2">
             <ShieldCheck size={14} className="text-emerald-500" />
             <span>{LABELS.mfaNotice}</span>
+          </div>
+
+          <div className="flex items-center justify-center pt-2">
+            <Link
+              href="/"
+              className="text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              ← Mağaza Vitrini
+            </Link>
           </div>
         </div>
 

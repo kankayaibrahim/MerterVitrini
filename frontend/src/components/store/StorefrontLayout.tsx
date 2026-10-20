@@ -904,7 +904,7 @@ export default function StorefrontLayout({
             {/* Success Checkmark Circle with Ping effect */}
             <div className="relative flex items-center justify-center w-16 h-16 bg-emerald-500/10 rounded-full border border-emerald-500/20 text-emerald-400">
               <span className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping"></span>
-              <svg className="w-8 h-8 shrink-0 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+              <svg className="w-8 h-8 shrink-0 relative z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
               </svg>
             </div>

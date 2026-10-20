@@ -1,28 +1,140 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { 
-  Users, 
-  UserPlus, 
-  Key, 
-  Trash2, 
-  Edit3, 
-  CheckCircle2, 
-  XCircle, 
-  Search, 
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  Users,
+  UserPlus,
+  Key,
+  Trash2,
+  Edit3,
+  CheckCircle2,
+  XCircle,
+  Search,
   RefreshCw,
   Building,
   Phone,
   Mail,
   Lock,
-  X
+  X,
+  Briefcase,
+  Globe,
+  ShieldCheck,
+  MessageSquare,
+  Gift,
+  Filter
 } from "lucide-react";
 import { Brand, SupplierUser } from "@/types/integration";
+import { ChatRoom, ChatMessage, ChatOfferMetadata } from "@/types/chat";
 
 interface SupplierUsersSectionProps {
   suppliers: Brand[];
   apiUrl: string;
   token: string | null;
+}
+
+function renderChatRoomsList(
+  loadingChats: boolean,
+  chatRooms: readonly ChatRoom[],
+  selectedRoom: ChatRoom | null,
+  onSelectRoom: (room: ChatRoom) => void
+) {
+  if (loadingChats) {
+    return <div className="p-8 text-center text-xs text-zinc-400">Sohbet odaları yükleniyor...</div>;
+  }
+  if (chatRooms.length === 0) {
+    return <div className="p-8 text-center text-xs text-zinc-400">Henüz kayıtlı sohbet odası bulunamadı.</div>;
+  }
+  return chatRooms.map((room) => (
+    <button
+      key={room.id}
+      type="button"
+      onClick={() => void onSelectRoom(room)}
+      className={`w-full text-left p-3.5 hover:bg-white transition-colors cursor-pointer flex flex-col gap-1 ${
+        selectedRoom?.id === room.id ? "bg-white border-l-4 border-l-violet-600 shadow-xs" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-zinc-900 truncate">{room.customer_name}</span>
+        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-bold">
+          {room.supplier_name}
+        </span>
+      </div>
+      <div className="text-[11px] text-indigo-700 font-semibold">
+        Temsilci: {room.supplier_user_name || "Genel Mağaza Hattı"}{" "}
+        {room.supplier_user_title ? `(${room.supplier_user_title})` : ""}
+      </div>
+      <p className="text-xs text-zinc-500 truncate">{room.last_message_preview || "Mesaj yok"}</p>
+      <span className="text-[10px] text-zinc-400">
+        {new Date(room.last_message_at).toLocaleString("tr-TR")}
+      </span>
+    </button>
+  ));
+}
+
+function renderChatMessages(
+  selectedRoom: ChatRoom | null,
+  loadingMessages: boolean,
+  roomMessages: readonly ChatMessage[]
+) {
+  if (!selectedRoom) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-xs text-zinc-400 p-8">
+        Detaylarını görmek için soldan bir sohbet odası seçin.
+      </div>
+    );
+  }
+  if (loadingMessages) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-xs text-zinc-400 p-8">
+        Mesaj geçmişi yükleniyor...
+      </div>
+    );
+  }
+  return (
+    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-zinc-50/40">
+      {roomMessages.map((msg) => {
+        const isSupplier = msg.sender_type === "supplier";
+        const offer =
+          msg.message_type === "custom_offer"
+            ? (msg.metadata as ChatOfferMetadata | undefined)
+            : undefined;
+        return (
+          <div
+            key={msg.id}
+            className={`flex flex-col ${isSupplier ? "items-end" : "items-start"}`}
+          >
+            <span className="text-[10px] text-zinc-400 mb-0.5 px-1">
+              {msg.sender_name} • {new Date(msg.created_at).toLocaleString("tr-TR")}
+            </span>
+            <div
+              className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-xs ${
+                isSupplier
+                  ? "bg-violet-600 text-white rounded-br-xs"
+                  : "bg-white border border-zinc-200 text-zinc-800 rounded-bl-xs"
+              }`}
+            >
+              {offer && (
+                <div className="mb-2 p-2.5 rounded-xl bg-black/15 border border-white/15 text-left">
+                  <div className="flex items-center gap-1.5 font-extrabold text-[11px] mb-1">
+                    <Gift size={13} />
+                    ÖZEL B2B FİYAT TEKLİFİ ({offer.offer_status === "accepted" ? "KABUL EDİLDİ" : "BEKLİYOR"})
+                  </div>
+                  <div className="text-[11px] font-bold">{offer.title}</div>
+                  <div className="text-[11px] opacity-90 mt-0.5">
+                    Miktar: {offer.packages_qty} Paket • Teklif Birim Fiyatı:{" "}
+                    <span className="font-extrabold underline">
+                      {offer.offered_unit_price} {offer.currency}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function SupplierUsersSection({
@@ -33,7 +145,8 @@ export default function SupplierUsersSection({
   const [users, setUsers] = useState<SupplierUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeModal, setActiveModal] = useState<"create" | "edit" | "delete" | null>(null);
+  const [selectedBrandFilter, setSelectedBrandFilter] = useState<string>("all");
+  const [activeModal, setActiveModal] = useState<"create" | "edit" | "delete" | "chats" | null>(null);
   const [selectedUser, setSelectedUser] = useState<SupplierUser | null>(null);
 
   // Form states
@@ -42,9 +155,19 @@ export default function SupplierUsersSection({
   const [formEmail, setFormEmail] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [formPhone, setFormPhone] = useState("");
+  const [formJobTitle, setFormJobTitle] = useState("Satış Temsilcisi");
+  const [formSpokenLanguages, setFormSpokenLanguages] = useState("TR, EN, RU");
+  const [formIsOwner, setFormIsOwner] = useState(false);
   const [formIsActive, setFormIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Admin Chat Monitor states
+  const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
+  const [roomMessages, setRoomMessages] = useState<ChatMessage[]>([]);
+  const [loadingChats, setLoadingChats] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
 
   const loadUsers = useCallback(async () => {
     if (!token) return;
@@ -52,12 +175,12 @@ export default function SupplierUsersSection({
     try {
       const res = await fetch(`${apiUrl}/api/v1/admin/supplier-users`, {
         headers: {
-          "Authorization": `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         }
       });
       if (res.ok) {
         const data = await res.json();
-        setUsers(data);
+        setUsers(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error("Tedarikçi kullanıcıları yüklenemedi:", err);
@@ -72,11 +195,11 @@ export default function SupplierUsersSection({
       if (!token) return;
       try {
         const res = await fetch(`${apiUrl}/api/v1/admin/supplier-users`, {
-          headers: { "Authorization": `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok && !ignore) {
           const data = await res.json();
-          setUsers(data);
+          setUsers(Array.isArray(data) ? data : []);
         }
       } catch (err) {
         console.error("Tedarikçi kullanıcıları yüklenemedi:", err);
@@ -88,12 +211,24 @@ export default function SupplierUsersSection({
     };
   }, [apiUrl, token]);
 
-  const handleOpenCreate = () => {
-    setFormBrandId(suppliers[0]?.id || "");
+  const userCountByBrand = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const u of users) {
+      counts[u.brand_id] = (counts[u.brand_id] || 0) + 1;
+    }
+    return counts;
+  }, [users]);
+
+  const handleOpenCreate = (presetBrandId?: string) => {
+    const defaultBrand = presetBrandId && presetBrandId !== "all" ? presetBrandId : suppliers[0]?.id || "";
+    setFormBrandId(defaultBrand);
     setFormContactName("");
     setFormEmail("");
     setFormPassword("");
     setFormPhone("");
+    setFormJobTitle("Satış Temsilcisi");
+    setFormSpokenLanguages("TR, EN, RU");
+    setFormIsOwner((userCountByBrand[defaultBrand] || 0) === 0);
     setFormIsActive(true);
     setFormError("");
     setActiveModal("create");
@@ -103,6 +238,9 @@ export default function SupplierUsersSection({
     setSelectedUser(user);
     setFormContactName(user.contact_name);
     setFormPhone(user.phone || "");
+    setFormJobTitle(user.job_title || "Satış Temsilcisi");
+    setFormSpokenLanguages(user.spoken_languages || "TR");
+    setFormIsOwner(Boolean(user.is_owner));
     setFormPassword("");
     setFormIsActive(user.is_active);
     setFormError("");
@@ -112,6 +250,59 @@ export default function SupplierUsersSection({
   const handleOpenDelete = (user: SupplierUser) => {
     setSelectedUser(user);
     setActiveModal("delete");
+  };
+
+  const handleOpenChatMonitor = async (user?: SupplierUser) => {
+    if (!token) return;
+    setSelectedUser(user || null);
+    setSelectedRoom(null);
+    setRoomMessages([]);
+    setActiveModal("chats");
+    setLoadingChats(true);
+    try {
+      const qs = new URLSearchParams();
+      if (user) {
+        qs.set("brand_id", user.brand_id);
+        qs.set("supplier_user_id", user.id);
+      } else if (selectedBrandFilter !== "all") {
+        qs.set("brand_id", selectedBrandFilter);
+      }
+      const queryStr = qs.toString() ? `?${qs.toString()}` : "";
+      const res = await fetch(`${apiUrl}/api/v1/admin/chat/rooms${queryStr}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const rooms: ChatRoom[] = await res.json();
+        const list = Array.isArray(rooms) ? rooms : [];
+        setChatRooms(list);
+        if (list.length > 0) {
+          void handleSelectChatRoom(list[0]);
+        }
+      }
+    } catch (err) {
+      console.error("Sohbet odaları yüklenemedi:", err);
+    } finally {
+      setLoadingChats(false);
+    }
+  };
+
+  const handleSelectChatRoom = async (room: ChatRoom) => {
+    if (!token) return;
+    setSelectedRoom(room);
+    setLoadingMessages(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/admin/chat/rooms/${room.id}/messages`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const msgs: ChatMessage[] = await res.json();
+        setRoomMessages(Array.isArray(msgs) ? msgs : []);
+      }
+    } catch (err) {
+      console.error("Mesajlar yüklenemedi:", err);
+    } finally {
+      setLoadingMessages(false);
+    }
   };
 
   const handleSubmitCreate = async (e: React.FormEvent) => {
@@ -132,14 +323,17 @@ export default function SupplierUsersSection({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
           brand_id: formBrandId,
           contact_name: formContactName,
           email: formEmail,
           password: formPassword,
-          phone: formPhone
+          phone: formPhone,
+          job_title: formJobTitle,
+          spoken_languages: formSpokenLanguages,
+          is_owner: formIsOwner
         })
       });
 
@@ -176,11 +370,14 @@ export default function SupplierUsersSection({
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
           contact_name: formContactName,
           phone: formPhone,
+          job_title: formJobTitle,
+          spoken_languages: formSpokenLanguages,
+          is_owner: formIsOwner,
           password: formPassword || undefined,
           is_active: formIsActive
         })
@@ -207,7 +404,7 @@ export default function SupplierUsersSection({
       const res = await fetch(`${apiUrl}/api/v1/admin/supplier-users/${selectedUser.id}`, {
         method: "DELETE",
         headers: {
-          "Authorization": `Bearer ${token}`
+          Authorization: `Bearer ${token}`
         }
       });
       if (!res.ok) {
@@ -225,12 +422,17 @@ export default function SupplierUsersSection({
   };
 
   const filteredUsers = users.filter((u) => {
+    if (selectedBrandFilter !== "all" && u.brand_id !== selectedBrandFilter) {
+      return false;
+    }
     const q = searchQuery.toLowerCase();
     return (
       u.contact_name.toLowerCase().includes(q) ||
       u.email.toLowerCase().includes(q) ||
       (u.brand_name || "").toLowerCase().includes(q) ||
-      (u.alias_code || "").toLowerCase().includes(q)
+      (u.alias_code || "").toLowerCase().includes(q) ||
+      (u.job_title || "").toLowerCase().includes(q) ||
+      (u.spoken_languages || "").toLowerCase().includes(q)
     );
   });
 
@@ -241,14 +443,23 @@ export default function SupplierUsersSection({
         <div>
           <h2 className="text-base font-bold text-zinc-900 flex items-center gap-2">
             <Users className="text-violet-600" size={18} />
-            Tedarikçi Giriş Hesapları
+            Tedarikçi Ana Hesapları & Alt Satış Temsilcileri ({users.length})
           </h2>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Tedarikçiler için kullanıcı adı/şifre tanımlayın. Tedarikçiler bu bilgilerle <span className="font-semibold text-violet-700">/tedarikci</span> panelinden ürün ekleyebilir.
+            Her tedarikçi firmaya birden fazla alt kullanıcı (Satış Temsilcisi, İhracat Sorumlusu vb.) tanımlayabilir, dil ve departman bilgilerini düzenleyebilir ve canlı müşteri sohbetlerini denetleyebilirsiniz.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => void handleOpenChatMonitor()}
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
+          >
+            <MessageSquare size={15} />
+            Canlı Sohbet & Teklif Denetimi
+          </button>
+
           <button
             type="button"
             onClick={() => void loadUsers()}
@@ -261,25 +472,43 @@ export default function SupplierUsersSection({
 
           <button
             type="button"
-            onClick={handleOpenCreate}
+            onClick={() => handleOpenCreate(selectedBrandFilter)}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold shadow-md shadow-violet-600/10 transition-all cursor-pointer hover:shadow-lg active:scale-95"
           >
             <UserPlus size={16} />
-            Yeni Tedarikçi Girişi Tanımla
+            Yeni Tedarikçi / Alt Temsilci Tanımla
           </button>
         </div>
       </div>
 
-      {/* Search Input */}
-      <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Tedarikçi firma, yetkili adı veya e-posta ile arayın..."
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-zinc-200/80 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
-        />
+      {/* Filter & Search Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Tedarikçi firma, temsilci adı, departman, dil veya e-posta ile arayın..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-zinc-200/80 text-xs text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 bg-white border border-zinc-200/80 rounded-xl px-3 py-2 text-xs font-semibold text-zinc-700 shrink-0">
+          <Filter size={14} className="text-violet-600" />
+          <select
+            value={selectedBrandFilter}
+            onChange={(e) => setSelectedBrandFilter(e.target.value)}
+            className="bg-transparent focus:outline-none cursor-pointer pr-2 font-bold text-zinc-800"
+          >
+            <option value="all">Tüm Tedarikçi Firmalar ({users.length} Hesap)</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} {s.alias_code ? `[${s.alias_code}]` : ""} — ({userCountByBrand[s.id] || 0} Temsilci)
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Table */}
@@ -289,7 +518,8 @@ export default function SupplierUsersSection({
             <thead className="bg-zinc-50/80 border-b border-zinc-200/60 text-zinc-500 uppercase tracking-wider font-semibold">
               <tr>
                 <th className="py-3 px-4">Tedarikçi Firma / Marka</th>
-                <th className="py-3 px-4">Yetkili Kişi</th>
+                <th className="py-3 px-4">Temsilci & Rol</th>
+                <th className="py-3 px-4">Departman & Diller</th>
                 <th className="py-3 px-4">Giriş E-Postası</th>
                 <th className="py-3 px-4">Telefon</th>
                 <th className="py-3 px-4 text-center">Durum</th>
@@ -300,8 +530,8 @@ export default function SupplierUsersSection({
             <tbody className="divide-y divide-zinc-100 font-medium">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-zinc-400">
-                    {loading ? "Tedarikçi hesapları yükleniyor..." : "Tanımlı tedarikçi kullanıcısı bulunamadı."}
+                  <td colSpan={8} className="py-12 text-center text-zinc-400">
+                    {loading ? "Tedarikçi hesapları yükleniyor..." : "Seçili filtreye uygun tedarikçi veya alt temsilci hesabı bulunamadı."}
                   </td>
                 </tr>
               ) : (
@@ -318,22 +548,49 @@ export default function SupplierUsersSection({
                         )}
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-zinc-700">
-                      {user.contact_name}
+                    <td className="py-3.5 px-4 text-zinc-800">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold">{user.contact_name}</span>
+                          {user.is_owner ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-extrabold uppercase">
+                              <ShieldCheck size={10} />
+                              Ana Hesap
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[9px] font-bold">
+                              Alt Temsilci
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-zinc-700 font-semibold flex items-center gap-1">
+                          <Briefcase size={11} className="text-zinc-400" />
+                          {user.job_title || "Satış Temsilcisi"}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-bold">
+                          <Globe size={10} />
+                          {user.spoken_languages || "TR"}
+                        </span>
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 text-zinc-600 font-mono">
                       <div className="flex items-center gap-1.5">
                         <span>{user.email}</span>
                         {user.keycloak_id && (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-sans font-bold" title={`Keycloak ID: ${user.keycloak_id}`}>
+                          <span
+                            className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-sans font-bold"
+                            title={`Keycloak ID: ${user.keycloak_id}`}
+                          >
                             Keycloak
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-zinc-500">
-                      {user.phone || "-"}
-                    </td>
+                    <td className="py-3.5 px-4 text-zinc-500">{user.phone || "-"}</td>
                     <td className="py-3.5 px-4 text-center">
                       {user.is_active ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
@@ -348,17 +605,23 @@ export default function SupplierUsersSection({
                       )}
                     </td>
                     <td className="py-3.5 px-4 text-zinc-400 text-[11px]">
-                      {user.last_login_at 
-                        ? new Date(user.last_login_at).toLocaleString("tr-TR") 
-                        : "Henüz girmedi"}
+                      {user.last_login_at ? new Date(user.last_login_at).toLocaleString("tr-TR") : "Henüz girmedi"}
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="inline-flex items-center gap-1.5">
                         <button
                           type="button"
+                          onClick={() => void handleOpenChatMonitor(user)}
+                          className="p-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                          title="Bu Temsilcinin Sohbetlerini Gör"
+                        >
+                          <MessageSquare size={14} />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleOpenEdit(user)}
                           className="p-1.5 rounded-lg border border-zinc-200 text-zinc-600 hover:text-violet-600 hover:bg-violet-50 transition-colors cursor-pointer"
-                          title="Düzenle / Şifre Yenile"
+                          title="Düzenle / Şifre & Departman Güncelle"
                         >
                           <Edit3 size={14} />
                         </button>
@@ -387,18 +650,18 @@ export default function SupplierUsersSection({
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <h3 className="font-bold text-zinc-900 text-sm flex items-center gap-2">
                 <UserPlus size={16} className="text-violet-600" />
-                Yeni Tedarikçi Girişi Tanımla
+                Yeni Tedarikçi veya Alt Temsilci Hesabı Tanımla
               </h3>
-              <button 
-                type="button" 
-                onClick={() => setActiveModal(null)} 
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
                 className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitCreate} className="p-5 flex flex-col gap-4">
+            <form onSubmit={handleSubmitCreate} className="p-5 flex flex-col gap-3.5">
               {formError && (
                 <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
                   {formError}
@@ -407,7 +670,9 @@ export default function SupplierUsersSection({
 
               {/* Brand Select */}
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="create-supplier-brand" className="text-xs font-bold text-zinc-700">Tedarikçi Firma *</label>
+                <label htmlFor="create-supplier-brand" className="text-xs font-bold text-zinc-700">
+                  Tedarikçi Firma *
+                </label>
                 <select
                   id="create-supplier-brand"
                   value={formBrandId}
@@ -417,7 +682,7 @@ export default function SupplierUsersSection({
                 >
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} {s.alias_code ? `(${s.alias_code})` : ""}
+                      {s.name} {s.alias_code ? `(${s.alias_code})` : ""} — Mevcut: {userCountByBrand[s.id] || 0} Temsilci
                     </option>
                   ))}
                 </select>
@@ -425,16 +690,50 @@ export default function SupplierUsersSection({
 
               {/* Contact Name */}
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="create-supplier-contact" className="text-xs font-bold text-zinc-700">Yetkili Kişi Adı Soyadı *</label>
+                <label htmlFor="create-supplier-contact" className="text-xs font-bold text-zinc-700">
+                  Temsilci / Yetkili Adı Soyadı *
+                </label>
                 <input
                   id="create-supplier-contact"
                   type="text"
                   value={formContactName}
                   onChange={(e) => setFormContactName(e.target.value)}
-                  placeholder="Örn: Mehmet Yılmaz"
+                  placeholder="Örn: Ahmet Yılmaz (Rusya Satış)"
                   className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
                   required
                 />
+              </div>
+
+              {/* Job Title & Languages */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="create-supplier-job" className="text-xs font-bold text-zinc-700 flex items-center gap-1">
+                    <Briefcase size={12} className="text-zinc-400" />
+                    Departman / Ünvan
+                  </label>
+                  <input
+                    id="create-supplier-job"
+                    type="text"
+                    value={formJobTitle}
+                    onChange={(e) => setFormJobTitle(e.target.value)}
+                    placeholder="İhracat Temsilcisi"
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="create-supplier-langs" className="text-xs font-bold text-zinc-700 flex items-center gap-1">
+                    <Globe size={12} className="text-zinc-400" />
+                    Konuşulan Diller
+                  </label>
+                  <input
+                    id="create-supplier-langs"
+                    type="text"
+                    value={formSpokenLanguages}
+                    onChange={(e) => setFormSpokenLanguages(e.target.value)}
+                    placeholder="TR, EN, RU, AR"
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
+                  />
+                </div>
               </div>
 
               {/* Email */}
@@ -448,44 +747,57 @@ export default function SupplierUsersSection({
                   type="email"
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
-                  placeholder="tedarikci@firma.com"
+                  placeholder="temsilci@firma.com"
                   className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
                   required
                 />
               </div>
 
-              {/* Password */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="create-supplier-password" className="text-xs font-bold text-zinc-700 flex items-center gap-1.5">
-                  <Lock size={13} className="text-zinc-400" />
-                  Giriş Şifresi *
-                </label>
-                <input
-                  id="create-supplier-password"
-                  type="password"
-                  value={formPassword}
-                  onChange={(e) => setFormPassword(e.target.value)}
-                  placeholder="En az 6 karakter"
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
-                  required
-                />
+              {/* Password & Phone */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="create-supplier-password" className="text-xs font-bold text-zinc-700 flex items-center gap-1">
+                    <Lock size={12} className="text-zinc-400" />
+                    Giriş Şifresi *
+                  </label>
+                  <input
+                    id="create-supplier-password"
+                    type="password"
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    placeholder="En az 6 karakter"
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="create-supplier-phone" className="text-xs font-bold text-zinc-700 flex items-center gap-1">
+                    <Phone size={12} className="text-zinc-400" />
+                    Telefon / WhatsApp
+                  </label>
+                  <input
+                    id="create-supplier-phone"
+                    type="tel"
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    placeholder="+90 5XX XXX XX XX"
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
+                  />
+                </div>
               </div>
 
-              {/* Phone */}
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="create-supplier-phone" className="text-xs font-bold text-zinc-700 flex items-center gap-1.5">
-                  <Phone size={13} className="text-zinc-400" />
-                  Telefon Numarası (İsteğe Bağlı)
-                </label>
+              {/* Owner Checkbox */}
+              <label className="flex items-center gap-2 cursor-pointer pt-1">
                 <input
-                  id="create-supplier-phone"
-                  type="tel"
-                  value={formPhone}
-                  onChange={(e) => setFormPhone(e.target.value)}
-                  placeholder="+90 5XX XXX XX XX"
-                  className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
+                  type="checkbox"
+                  checked={formIsOwner}
+                  onChange={(e) => setFormIsOwner(e.target.checked)}
+                  className="w-4 h-4 rounded text-violet-600 focus:ring-violet-500 border-zinc-300"
                 />
-              </div>
+                <span className="text-xs font-bold text-zinc-800">
+                  Firma Ana Hesabı (Alt kullanıcı ekleme/silme yetkisine sahip)
+                </span>
+              </label>
 
               <div className="flex justify-end gap-2.5 pt-3 border-t border-zinc-100">
                 <button
@@ -515,18 +827,18 @@ export default function SupplierUsersSection({
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <h3 className="font-bold text-zinc-900 text-sm flex items-center gap-2">
                 <Key size={16} className="text-violet-600" />
-                Tedarikçi Hesabını Düzenle / Şifre Yenile
+                Temsilci Hesabını Düzenle / Şifre Yenile
               </h3>
-              <button 
-                type="button" 
-                onClick={() => setActiveModal(null)} 
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
                 className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitEdit} className="p-5 flex flex-col gap-4">
+            <form onSubmit={handleSubmitEdit} className="p-5 flex flex-col gap-3.5">
               {formError && (
                 <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium">
                   {formError}
@@ -535,14 +847,18 @@ export default function SupplierUsersSection({
 
               <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-xs flex flex-col gap-1">
                 <span className="text-zinc-500">Tedarikçi Firma:</span>
-                <span className="font-bold text-zinc-900">{selectedUser.brand_name} ({selectedUser.alias_code})</span>
+                <span className="font-bold text-zinc-900">
+                  {selectedUser.brand_name} ({selectedUser.alias_code})
+                </span>
                 <span className="text-zinc-500 mt-1">E-Posta:</span>
                 <span className="font-mono text-zinc-700">{selectedUser.email}</span>
               </div>
 
               {/* Contact Name */}
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="edit-supplier-contact" className="text-xs font-bold text-zinc-700">Yetkili Kişi Adı Soyadı *</label>
+                <label htmlFor="edit-supplier-contact" className="text-xs font-bold text-zinc-700">
+                  Temsilci / Yetkili Adı Soyadı *
+                </label>
                 <input
                   id="edit-supplier-contact"
                   type="text"
@@ -553,9 +869,39 @@ export default function SupplierUsersSection({
                 />
               </div>
 
+              {/* Job Title & Spoken Languages */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="edit-supplier-job" className="text-xs font-bold text-zinc-700">
+                    Departman / Ünvan
+                  </label>
+                  <input
+                    id="edit-supplier-job"
+                    type="text"
+                    value={formJobTitle}
+                    onChange={(e) => setFormJobTitle(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="edit-supplier-langs" className="text-xs font-bold text-zinc-700">
+                    Konuşulan Diller
+                  </label>
+                  <input
+                    id="edit-supplier-langs"
+                    type="text"
+                    value={formSpokenLanguages}
+                    onChange={(e) => setFormSpokenLanguages(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-950/20"
+                  />
+                </div>
+              </div>
+
               {/* Phone */}
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="edit-supplier-phone" className="text-xs font-bold text-zinc-700">Telefon Numarası</label>
+                <label htmlFor="edit-supplier-phone" className="text-xs font-bold text-zinc-700">
+                  Telefon Numarası
+                </label>
                 <input
                   id="edit-supplier-phone"
                   type="tel"
@@ -581,16 +927,28 @@ export default function SupplierUsersSection({
                 />
               </div>
 
-              {/* Active Toggle */}
-              <label className="flex items-center gap-2 cursor-pointer mt-1">
-                <input
-                  type="checkbox"
-                  checked={formIsActive}
-                  onChange={(e) => setFormIsActive(e.target.checked)}
-                  className="w-4 h-4 rounded text-violet-600 focus:ring-violet-500 border-zinc-300"
-                />
-                <span className="text-xs font-bold text-zinc-800">Hesap Aktif (Giriş Yapabilir)</span>
-              </label>
+              {/* Toggles */}
+              <div className="flex flex-col gap-2 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formIsOwner}
+                    onChange={(e) => setFormIsOwner(e.target.checked)}
+                    className="w-4 h-4 rounded text-violet-600 focus:ring-violet-500 border-zinc-300"
+                  />
+                  <span className="text-xs font-bold text-zinc-800">Firma Ana Hesabı (Owner)</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formIsActive}
+                    onChange={(e) => setFormIsActive(e.target.checked)}
+                    className="w-4 h-4 rounded text-violet-600 focus:ring-violet-500 border-zinc-300"
+                  />
+                  <span className="text-xs font-bold text-zinc-800">Hesap Aktif (Giriş ve Canlı Sohbet Yapabilir)</span>
+                </label>
+              </div>
 
               <div className="flex justify-end gap-2.5 pt-3 border-t border-zinc-100">
                 <button
@@ -624,7 +982,7 @@ export default function SupplierUsersSection({
               Hesabı Silmek İstediğinize Emin Misiniz?
             </h3>
             <p className="text-xs text-zinc-500 mb-6 leading-relaxed">
-              <span className="font-semibold text-zinc-800">{selectedUser.contact_name}</span> ({selectedUser.email}) kullanıcısına ait tedarikçi giriş yetkisi tamamen silinecektir.
+              <span className="font-semibold text-zinc-800">{selectedUser.contact_name}</span> ({selectedUser.email}) kullanıcısına ait tedarikçi / satış temsilcisi yetkisi silinecektir.
             </p>
             <div className="flex gap-2.5 justify-center">
               <button
@@ -642,6 +1000,48 @@ export default function SupplierUsersSection({
               >
                 {submitting ? "Siliniyor..." : "Evet, Hesabı Sil"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN LIVE CHAT & OFFER MONITOR MODAL */}
+      {activeModal === "chats" && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-zinc-200 max-w-5xl w-full h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-900 text-white">
+              <div className="flex items-center gap-2.5">
+                <MessageSquare size={18} className="text-emerald-400" />
+                <div>
+                  <h3 className="font-bold text-sm">
+                    {selectedUser
+                      ? `${selectedUser.contact_name} (${selectedUser.brand_name}) — Canlı Müşteri Görüşmeleri`
+                      : "Tüm Tedarikçi & Alt Temsilci Canlı Sohbet Denetimi"}
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    Müşteriler ile tedarikçi satış temsilcileri arasındaki konuşmaları ve özel fiyat tekliflerini inceleyin.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-12 min-h-0">
+              {/* Left: Rooms list */}
+              <div className="md:col-span-5 border-r border-zinc-200 overflow-y-auto divide-y divide-zinc-100 bg-zinc-50/50">
+                {renderChatRoomsList(loadingChats, chatRooms, selectedRoom, handleSelectChatRoom)}
+              </div>
+
+              {/* Right: Messages */}
+              <div className="md:col-span-7 flex flex-col min-h-0 bg-white">
+                {renderChatMessages(selectedRoom, loadingMessages, roomMessages)}
+              </div>
             </div>
           </div>
         </div>

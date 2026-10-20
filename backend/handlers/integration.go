@@ -1387,26 +1387,6 @@ func getUrlHash(url string) string {
 	return fmt.Sprintf("%x", h)[:8]
 }
 
-func downloadImage(url string, destPath string) error {
-	resp, err := httpclient.DefaultPooledClient.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
-	}
-
-	out, err := os.Create(destPath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
-}
 
 func getParentPath(path string) string {
 	parts := strings.Split(path, "/")
@@ -1886,8 +1866,8 @@ func syncStandardizedVariantRecords(ctx context.Context, syncRunID, productUUID 
 	return variants
 }
 
-// importStandardizedProduct imports a standard DTO representation of B2B product into DB
-func importStandardizedProduct(ctx context.Context, feedID string, brandID *string, syncRunID string, p *StandardizedProduct, categoryMapping map[string]any) (added bool, updated bool, variants int, err error) {
+// ImportStandardizedProduct imports a standard DTO representation of B2B product into DB
+func ImportStandardizedProduct(ctx context.Context, feedID string, brandID *string, syncRunID string, p *StandardizedProduct, categoryMapping map[string]any) (added bool, updated bool, variants int, err error) {
 	if p.SourceProductID == "" || p.Title == "" {
 		return false, false, 0, fmt.Errorf("missing source product ID or title")
 	}

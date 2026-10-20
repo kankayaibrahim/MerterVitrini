@@ -16,7 +16,7 @@ graph TD
         Nginx -->|"mertervitrini.com.tr/api/ | api.mertervitrini.com.tr"| UnifiedBE["Unified Backend (Go API :8080)\nStore Uçları (/api/v1/store/)\nAdmin Uçları (/api/v1/)"]
         Nginx -->|"auth.mertervitrini.com.tr"| Keycloak["Keycloak IAM (Quarkus :8082)"]
 
-        UnifiedBE -->|"pgxpool"| Postgres[(PostgreSQL 16 :5432\nmerterdevdb)]
+        UnifiedBE -->|"pgxpool"| Postgres[(PostgreSQL 18 :5432\nmerterdevdb)]
         Keycloak -->|"JDBC"| PostgresKeycloak[(Keycloak DB :5432)]
 
         UnifiedBE -->|"Oturum, Önbellek & Sync"| Redis[(Redis :6379)]
@@ -49,7 +49,7 @@ graph TD
 
 ---
 
-## 3. Backend Mimarisi (Unified Go 1.25 REST API)
+## 3. Backend Mimarisi (Unified Go 1.27.2 REST API)
 
 - **Konum:** [`backend/`](file:///c:/Projects/mertervitrini.com.tr/backend)
 - **Çalışma Portu:** `8080` (`systemd: merter-backend`)

@@ -143,7 +143,7 @@ type variantStockUpdate struct {
 
 func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, float64, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT ci.product_id, COALESCE(p.brand_id::text, ''), ci.quantity, p.title, p.custom_sku, p.price, p.discounted_price, p.series_ratio, p.stock,
+		SELECT ci.product_id, COALESCE(p.brand_id::text, ''), ci.quantity, p.title, p.custom_sku, p.price, COALESCE(ci.custom_unit_price, p.discounted_price), p.series_ratio, p.stock,
 		       COALESCE(
 		           (SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY sort_order ASC, is_cover DESC LIMIT 1),
 		           '/placeholder.png'

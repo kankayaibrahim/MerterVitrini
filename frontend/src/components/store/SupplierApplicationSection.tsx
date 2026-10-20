@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import { 
   Building2, 
   Send, 
-  CheckCircle2, 
   AlertCircle, 
   Globe, 
   Phone, 
@@ -16,6 +15,20 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { SUPPLIER_TRANSLATIONS, SupplierPageTranslations } from "@/app/[categoryPrefix]/tedarikci-basvuru/translations";
+import turkeyLocationsData from "@/data/turkeyLocations.json";
+
+interface ProvinceData {
+  name: string;
+  districts: string[];
+}
+
+const TURKEY_PROVINCES: { code: string; name: string; districts: string[] }[] = Object.entries(
+  turkeyLocationsData as Record<string, ProvinceData>
+).map(([code, data]) => ({
+  code,
+  name: data.name,
+  districts: data.districts,
+}));
 
 const Instagram = ({ size = 16, ...props }: Readonly<React.SVGProps<SVGSVGElement> & { size?: number }>) => (
   <svg
@@ -48,18 +61,28 @@ interface SupplierApplicationSectionProps {
 interface SuccessViewProps {
   readonly t: SupplierPageTranslations;
   readonly onReset: () => void;
+  readonly submittedEmail?: string;
 }
 
-function SupplierSuccessView({ t, onReset }: Readonly<SuccessViewProps>) {
+function SupplierSuccessView({ t, onReset, submittedEmail }: Readonly<SuccessViewProps>) {
   return (
     <div className="py-12 px-4 text-center max-w-md mx-auto">
-      <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 mx-auto mb-5">
-        <CheckCircle2 size={36} />
+      <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto mb-5">
+        <Mail size={36} />
       </div>
-      <h3 className="text-xl font-black text-zinc-950">{t.success_title}</h3>
+      <h3 className="text-xl font-black text-zinc-950">Doğrulama E-Postası Gönderildi!</h3>
       <p className="text-xs sm:text-sm text-zinc-600 mt-2.5 leading-relaxed">
-        {t.success_desc}
+        {submittedEmail ? (
+          <>
+            <strong>{submittedEmail}</strong> adresinize 30 dakika geçerli bir başvuru doğrulama bağlantısı ilettik.
+          </>
+        ) : (
+          "E-posta adresinize 30 dakika geçerli bir başvuru doğrulama bağlantısı ilettik."
+        )}
       </p>
+      <div className="mt-4 p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl text-left text-xs text-amber-900 leading-relaxed">
+        ⚠️ <strong>Önemli:</strong> Güvenlik politikamız gereğince 30 dakika içinde doğrulanmayan başvurular otomatik olarak silinmektedir. Lütfen gelen kutunuzu (ve gerekiyorsa spam klasörünü) kontrol ediniz.
+      </div>
       <button
         type="button"
         onClick={onReset}
@@ -80,6 +103,7 @@ export default function SupplierApplicationSection({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
   const [category, setCategory] = useState("");
   const [instagram, setInstagram] = useState("");
   const [website, setWebsite] = useState("");
@@ -91,6 +115,9 @@ export default function SupplierApplicationSection({
 
   const t: SupplierPageTranslations = SUPPLIER_TRANSLATIONS[lang] || SUPPLIER_TRANSLATIONS.en;
   const isRtl = lang === "ar";
+
+  const selectedProvince = TURKEY_PROVINCES.find((p) => p.name === city);
+  const availableDistricts = selectedProvince ? selectedProvince.districts : [];
 
   useEffect(() => {
     const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LfwagMtAAAAAHpF7ID6J-bQmcn92YhFaSH9CX94";
@@ -129,6 +156,7 @@ export default function SupplierApplicationSection({
     setEmail("");
     setPhone("");
     setCity("");
+    setDistrict("");
     setCategory("");
     setInstagram("");
     setWebsite("");
@@ -139,8 +167,14 @@ export default function SupplierApplicationSection({
     e.preventDefault();
     setError(null);
 
-    if (!companyName.trim() || !contactName.trim() || !email.trim() || !phone.trim()) {
+    if (!companyName.trim() || !contactName.trim() || !email.trim() || !phone.trim() || !city.trim() || !district.trim()) {
       setError(t.error_required);
+      return;
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      setError(t.error_invalid_email || "Lütfen geçerli bir e-posta adresi giriniz.");
       return;
     }
 
@@ -160,6 +194,7 @@ export default function SupplierApplicationSection({
           email: email.trim(),
           phone: phone.trim(),
           city: city.trim(),
+          district: district.trim(),
           category: category.trim(),
           instagram: instagram.trim(),
           website: website.trim(),
@@ -201,7 +236,7 @@ export default function SupplierApplicationSection({
         {/* Content Box */}
         <div className="bg-white border border-zinc-200/90 rounded-3xl p-6 sm:p-10 shadow-sm">
           {submitted ? (
-            <SupplierSuccessView t={t} onReset={handleReset} />
+            <SupplierSuccessView t={t} onReset={handleReset} submittedEmail={email} />
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
@@ -284,20 +319,56 @@ export default function SupplierApplicationSection({
                   />
                 </div>
 
-                {/* City */}
+                {/* City (İl) */}
                 <div>
                   <label htmlFor="supp_city" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <MapPin size={13} className="text-zinc-600" />
                     <span>{t.city_label}</span>
+                    <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <select
                     id="supp_city"
-                    type="text"
+                    required
                     value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder={t.city_placeholder}
-                    className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
-                  />
+                    onChange={(e) => {
+                      setCity(e.target.value);
+                      setDistrict("");
+                    }}
+                    className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all cursor-pointer"
+                  >
+                    <option value="">{t.city_placeholder || "İl Seçiniz"}</option>
+                    {TURKEY_PROVINCES.map((p) => (
+                      <option key={p.code} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* District (İlçe) */}
+                <div>
+                  <label htmlFor="supp_district" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
+                    <MapPin size={13} className="text-zinc-600" />
+                    <span>{t.district_label || "Bulunduğunuz İlçe"}</span>
+                    <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="supp_district"
+                    required
+                    disabled={!city}
+                    value={district}
+                    onChange={(e) => setDistrict(e.target.value)}
+                    className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {!city ? "Önce İl Seçiniz" : (t.district_placeholder || "İlçe Seçiniz")}
+                    </option>
+                    {availableDistricts.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Category Selection */}

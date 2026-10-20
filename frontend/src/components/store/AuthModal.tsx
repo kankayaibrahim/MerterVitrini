@@ -386,7 +386,7 @@ interface GrecaptchaInstance {
                 onClick={handleGoogleLogin}
                 className="w-full py-3 bg-white hover:bg-cultured text-onyx border border-cultured rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer shadow-sm flex items-center justify-center gap-2 select-none active:scale-[0.98]"
               >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                   <path
                     fill="#4285F4"
                     d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69a5.74 5.74 0 0 1-2.48 3.77v3.13h3.99c2.34-2.16 3.68-5.32 3.68-8.75z"
@@ -409,7 +409,7 @@ interface GrecaptchaInstance {
 
               <div className="pt-3 text-center border-t border-cultured mt-3">
                 <Link
-                  href="/tedarikci/login"
+                  href="/supplier/login"
                   onClick={onClose}
                   className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 transition-colors"
                 >
@@ -587,7 +587,7 @@ interface GrecaptchaInstance {
                 onClick={handleGoogleLogin}
                 className="w-full py-3 bg-white hover:bg-cultured text-onyx border border-cultured rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer shadow-sm flex items-center justify-center gap-2 select-none active:scale-[0.98]"
               >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                   <path
                     fill="#4285F4"
                     d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69a5.74 5.74 0 0 1-2.48 3.77v3.13h3.99c2.34-2.16 3.68-5.32 3.68-8.75z"

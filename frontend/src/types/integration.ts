@@ -146,6 +146,9 @@ export interface SupplierUser {
   email: string;
   contact_name: string;
   phone?: string | null;
+  job_title?: string;
+  spoken_languages?: string;
+  is_owner?: boolean;
   keycloak_id?: string | null;
   is_active: boolean;
   last_login_at?: string | null;
@@ -255,6 +258,7 @@ export interface SupplierApplication {
   email: string;
   phone: string;
   city?: string | null;
+  district?: string | null;
   category?: string | null;
   instagram?: string | null;
   website?: string | null;

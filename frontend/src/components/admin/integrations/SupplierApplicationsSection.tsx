@@ -19,7 +19,11 @@ import {
   Edit3, 
   X,
   MessageCircle,
-  ExternalLink
+  ExternalLink,
+  Key,
+  ShieldCheck,
+  Send,
+  AlertCircle
 } from "lucide-react";
 import { SupplierApplication } from "@/types/integration";
 
@@ -61,6 +65,12 @@ export default function SupplierApplicationsSection({
   const [newStatus, setNewStatus] = useState<string>("");
   const [adminNotes, setAdminNotes] = useState<string>("");
   const [savingStatus, setSavingStatus] = useState(false);
+
+  // WinForm style Approval & Password Link Dialog State
+  const [approveModalApp, setApproveModalApp] = useState<SupplierApplication | null>(null);
+  const [approveAdminNotes, setApproveAdminNotes] = useState<string>("Yönetici tarafından onaylandı ve şifre daveti gönderildi.");
+  const [approveLoading, setApproveLoading] = useState<boolean>(false);
+  const [approveResult, setApproveResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const loadApplications = useCallback(async () => {
     if (!token) return;
@@ -131,6 +141,54 @@ export default function SupplierApplicationsSection({
       alert((err as Error).message);
     } finally {
       setSavingStatus(false);
+    }
+  };
+
+  const openApproveModal = (app: SupplierApplication) => {
+    setApproveModalApp(app);
+    setApproveAdminNotes(app.admin_notes || "Yönetici tarafından onaylandı ve şifre daveti gönderildi.");
+    setApproveResult(null);
+    setApproveLoading(false);
+  };
+
+  const closeApproveModal = () => {
+    setApproveModalApp(null);
+    setApproveResult(null);
+    setApproveLoading(false);
+  };
+
+  const handleExecuteApproval = async () => {
+    if (!approveModalApp || !token) return;
+    setApproveLoading(true);
+    setApproveResult(null);
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/admin/supplier-applications/${approveModalApp.id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          status: "approved",
+          admin_notes: approveAdminNotes
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "İşlem gerçekleştirilemedi.");
+      }
+      setApproveResult({
+        success: true,
+        message: data.message || "Başvuru başarıyla onaylandı ve 48 saat geçerli şifre oluşturma bağlantısı tedarikçinin e-posta adresine gönderildi."
+      });
+      void loadApplications();
+    } catch (err: unknown) {
+      setApproveResult({
+        success: false,
+        message: (err as Error).message || "İşlem sırasında bir hata oluştu."
+      });
+    } finally {
+      setApproveLoading(false);
     }
   };
 
@@ -348,7 +406,7 @@ export default function SupplierApplicationsSection({
                         {app.city && (
                           <span className="inline-flex items-center gap-1 text-zinc-400">
                             <MapPin size={11} />
-                            {app.city}
+                            {app.city}{app.district ? ` / ${app.district}` : ""}
                           </span>
                         )}
                       </div>
@@ -420,7 +478,22 @@ export default function SupplierApplicationsSection({
 
                     {/* İşlemler */}
                     <td className="py-3.5 px-4 text-right">
-                      <div className="inline-flex items-center gap-1.5">
+                      <div className="inline-flex items-center gap-1.5 justify-end">
+                        {/* Onayla & Şifre Bağlantısı Gönder Butonu */}
+                        <button
+                          type="button"
+                          onClick={() => openApproveModal(app)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-[11px] transition-all cursor-pointer shadow-xs whitespace-nowrap ${
+                            app.status === "approved"
+                              ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200"
+                              : "bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-amber-500/20"
+                          }`}
+                          title={app.status === "approved" ? "Tedarikçiye Yeni Şifre Oluşturma Bağlantısı Gönder" : "Başvuruyu Onayla ve Tedarikçiye Şifre Oluşturma Bağlantısı Gönder"}
+                        >
+                          <Key size={13} />
+                          <span>{app.status === "approved" ? "Şifre Gönder" : "Onayla & Şifre Gönder"}</span>
+                        </button>
+
                         {/* WhatsApp Button */}
                         <a
                           href={formatWhatsAppUrl(app.phone, app.company_name)}
@@ -503,9 +576,9 @@ export default function SupplierApplicationsSection({
                   </a>
                 </div>
                 <div>
-                  <span className="text-zinc-400 block text-[10px] font-bold uppercase tracking-wider">Şehir / Kategori</span>
+                  <span className="text-zinc-400 block text-[10px] font-bold uppercase tracking-wider">İl / İlçe / Kategori</span>
                   <span className="font-medium text-zinc-900 mt-0.5 block">
-                    {selectedApp.city || "-"} / {selectedApp.category || "-"}
+                    {selectedApp.city || "-"}{selectedApp.district ? ` / ${selectedApp.district}` : ""} • {selectedApp.category || "-"}
                   </span>
                 </div>
                 {selectedApp.instagram && (
@@ -561,6 +634,33 @@ export default function SupplierApplicationsSection({
                   <option value="approved">Onaylandı (Tedarikçi hesabı açılabilir)</option>
                   <option value="rejected">Reddedildi (Uygun değil)</option>
                 </select>
+              </div>
+
+              {/* Direct Password Setup Link & Approval Action Box */}
+              <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0">
+                    <Key size={18} />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-amber-950">Şifre Oluşturma &amp; Onay Daveti</div>
+                    <div className="text-[11px] text-amber-800">
+                      Tedarikçi hesabı açılır ve <strong className="text-zinc-950 font-mono">{selectedApp.email}</strong> adresine şifre linki iletilir.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = selectedApp;
+                    setModalMode(null);
+                    openApproveModal(target);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer whitespace-nowrap inline-flex items-center justify-center gap-1.5"
+                >
+                  <Key size={14} />
+                  <span>{selectedApp.status === "approved" ? "Şifre Linkini Tekrar Gönder" : "Şimdi Onayla & Şifre Gönder"}</span>
+                </button>
               </div>
 
               {/* Admin Private Notes */}
@@ -637,6 +737,200 @@ export default function SupplierApplicationsSection({
               >
                 {savingStatus ? "Siliniyor..." : "Evet, Sil"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Sleek WinForm / Desktop Dialog for Approval & Password Link Dispatch */}
+      {approveModalApp && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-zinc-200 overflow-hidden text-left animate-in zoom-in-95 duration-200">
+            {/* Window Header Bar (Desktop/WinForm style with Title, Icon & Close) */}
+            <div className="px-5 py-4 bg-linear-to-r from-zinc-900 via-zinc-800 to-zinc-900 text-white flex items-center justify-between border-b border-zinc-700">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shadow-xs">
+                  <Key size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-zinc-100 flex items-center gap-1.5">
+                    Tedarikçi Onay &amp; Şifre Davet Sihirbazı
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    B2B Portal Yetkilendirme &amp; Otomatik E-Posta Aktivasyonu
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeApproveModal}
+                disabled={approveLoading}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                title="Kapat"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {approveResult?.success ? (
+                // SUCCESS SCREEN
+                <div className="text-center py-4 space-y-3">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+                    <CheckCircle2 size={36} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-zinc-900">
+                      Tedarikçi Onaylandı &amp; Şifre Linki Gönderildi!
+                    </h4>
+                    <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                      {approveResult.message}
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200 text-left text-xs space-y-1.5 max-w-sm mx-auto">
+                    <div className="flex items-center justify-between text-zinc-600">
+                      <span>Firma:</span>
+                      <strong className="text-zinc-900 font-semibold">{approveModalApp.company_name}</strong>
+                    </div>
+                    <div className="flex items-center justify-between text-zinc-600">
+                      <span>Alıcı E-Posta:</span>
+                      <span className="font-mono font-bold text-blue-600">{approveModalApp.email}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-zinc-600">
+                      <span>Bağlantı Geçerlilik:</span>
+                      <span className="font-semibold text-amber-600">48 Saat</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={closeApproveModal}
+                      className="w-full py-2.5 px-4 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-bold text-xs transition-all cursor-pointer shadow-md"
+                    >
+                      Pencereyi Kapat
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // APPROVAL FORM SCREEN
+                <>
+                  {/* Summary Card */}
+                  <div className="p-3.5 rounded-xl bg-zinc-50 border border-zinc-200 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Tedarikçi Adayı</div>
+                        <div className="text-sm font-bold text-zinc-900 flex items-center gap-1.5">
+                          <Building2 size={15} className="text-amber-500" />
+                          <span>{approveModalApp.company_name}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">Yetkili</div>
+                        <div className="text-xs font-semibold text-zinc-800">{approveModalApp.contact_name}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-200/60 text-xs">
+                      <div className="flex items-center gap-1.5 text-zinc-600">
+                        <Mail size={12} className="text-zinc-400 shrink-0" />
+                        <span className="font-mono text-[11px] truncate">{approveModalApp.email}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-zinc-600">
+                        <Phone size={12} className="text-zinc-400 shrink-0" />
+                        <span className="text-[11px]">{approveModalApp.phone}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions to be executed */}
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-bold text-zinc-700 flex items-center gap-1">
+                      <ShieldCheck size={14} className="text-emerald-600" />
+                      <span>Onaylandığında Gerçekleşecek İşlemler:</span>
+                    </div>
+                    <div className="rounded-xl border border-zinc-200 divide-y divide-zinc-100 bg-white text-xs shadow-xs">
+                      <div className="p-2.5 flex items-start gap-2">
+                        <div className="w-5 h-5 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">1</div>
+                        <div>
+                          <strong className="text-zinc-900 font-semibold">Marka ve Katalog Eşleştirmesi</strong>
+                          <p className="text-[11px] text-zinc-500 leading-tight">Sistemde &ldquo;{approveModalApp.company_name}&rdquo; markası açılır ve ürün entegrasyonuna hazır hale gelir.</p>
+                        </div>
+                      </div>
+                      <div className="p-2.5 flex items-start gap-2">
+                        <div className="w-5 h-5 rounded-md bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">2</div>
+                        <div>
+                          <strong className="text-zinc-900 font-semibold">Tedarikçi Paneli Hesabı</strong>
+                          <p className="text-[11px] text-zinc-500 leading-tight">Yetkili adına tedarikçi paneli giriş hesabı tanımlanır.</p>
+                        </div>
+                      </div>
+                      <div className="p-2.5 flex items-start gap-2">
+                        <div className="w-5 h-5 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 mt-0.5 font-bold text-[10px]">3</div>
+                        <div>
+                          <strong className="text-zinc-900 font-semibold">48 Saatlik Şifre Belirleme Daveti</strong>
+                          <p className="text-[11px] text-zinc-500 leading-tight">
+                            <span className="font-mono text-blue-600 font-semibold">{approveModalApp.email}</span> adresine tek kullanımlık şifre oluşturma bağlantısı postalanır.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Admin Note field */}
+                  <div className="space-y-1">
+                    <label htmlFor="approve-admin-notes" className="text-[11px] font-bold text-zinc-600">
+                      Yönetici Notu (Sistem loglarında saklanır):
+                    </label>
+                    <input
+                      id="approve-admin-notes"
+                      type="text"
+                      value={approveAdminNotes}
+                      onChange={(e) => setApproveAdminNotes(e.target.value)}
+                      placeholder="Örn: Başvuru incelendi, onaylandı."
+                      className="w-full px-3 py-2 rounded-xl border border-zinc-200 bg-white text-xs text-zinc-900 focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                    />
+                  </div>
+
+                  {/* Error display if any */}
+                  {approveResult && !approveResult.success && (
+                    <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                      <AlertCircle size={16} className="shrink-0 text-red-600" />
+                      <span>{approveResult.message}</span>
+                    </div>
+                  )}
+
+                  {/* Footer actions */}
+                  <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-zinc-100">
+                    <button
+                      type="button"
+                      onClick={closeApproveModal}
+                      disabled={approveLoading}
+                      className="px-4 py-2.5 rounded-xl border border-zinc-200 text-zinc-600 hover:bg-zinc-50 text-xs font-bold transition-colors cursor-pointer disabled:opacity-60"
+                    >
+                      Vazgeç
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExecuteApproval}
+                      disabled={approveLoading}
+                      className="px-5 py-2.5 rounded-xl bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer disabled:opacity-60 inline-flex items-center gap-2"
+                    >
+                      {approveLoading ? (
+                        <>
+                          <RefreshCw size={14} className="animate-spin" />
+                          <span>İşleniyor &amp; E-Posta Gönderiliyor...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={14} />
+                          <span>Onayla ve Şifre Linkini Gönder</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

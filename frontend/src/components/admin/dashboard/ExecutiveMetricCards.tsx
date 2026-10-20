@@ -114,7 +114,7 @@ export default function ExecutiveMetricCards({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
             </span>
-            Canlı Ziyaretçi
+            <span>Canlı Ziyaretçi</span>
           </span>
           <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 group-hover:scale-105 transition-transform">
             <Activity size={20} />

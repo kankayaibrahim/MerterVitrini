@@ -158,7 +158,7 @@ function FooterContactColumn({ settings, lang }: { readonly settings: Settings; 
 
       <div className="text-sm space-y-3 pt-2 text-onyx">
         <p className="flex items-start gap-2.5 leading-relaxed">
-          <svg className="w-5 h-5 text-black shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-black shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
@@ -166,7 +166,7 @@ function FooterContactColumn({ settings, lang }: { readonly settings: Settings; 
         </p>
 
         <p className="flex items-center gap-2.5">
-          <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
           </svg>
           <a href={`tel:${settings.phone}`} className="hover:text-black transition-colors duration-200">
@@ -175,7 +175,7 @@ function FooterContactColumn({ settings, lang }: { readonly settings: Settings; 
         </p>
 
         <p className="flex items-center gap-2.5">
-          <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 text-black shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
           <a href={`mailto:${settings.email}`} className="hover:text-black transition-colors duration-200 break-all">
@@ -222,7 +222,7 @@ function FooterAboutColumn({ lang }: { readonly lang: string }) {
           </Link>
         </li>
         <li>
-          <Link href="/tedarikci/login" className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5">
+          <Link href="/supplier/login" className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5">
             <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <span>{t("supplier_portal_login", lang)}</span>
           </Link>
@@ -323,7 +323,7 @@ function FooterAccountColumn({ lang, whatsappUrl }: { readonly lang: string; rea
           </li>
           <li className="pt-2 border-t border-cultured">
             <Link 
-              href="/tedarikci/login" 
+              href="/supplier/login" 
               className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5 text-xs"
             >
               <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
@@ -340,7 +340,7 @@ function FooterAccountColumn({ lang, whatsappUrl }: { readonly lang: string; rea
           rel="noopener noreferrer"
           className="inline-flex items-center gap-3 px-5 py-3 bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-[5px] shadow-sm transition-all duration-300 group font-bold text-xs tracking-[1.5px] border-none relative overflow-hidden uppercase"
         >
-          <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.458L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.863-9.73.001-2.595-1.006-5.035-2.836-6.87C16.671 2.16 14.237.986 11.64.985c-5.441 0-9.87 4.372-9.873 9.734-.001 1.709.467 3.376 1.354 4.887l-.982 3.582 3.71-.974zm13.14-5.932c-.3-.15-1.776-.875-2.05-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-1.127-.566-1.929-1.009-2.694-2.321-.202-.347-.202-.656-.051-.951.136-.264.3-.35.45-.5.15-.15.2-.25.3-.45.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.588-.491-.508-.675-.518-.175-.009-.375-.01-.575-.01-.2 0-.525.075-.8 1.025-.275.95-1.05 3.3-1.05 3.4 0 .1.075.2.225.35.15.15 1.75 2.673 4.237 3.743.592.255 1.054.408 1.413.523.595.19 1.137.163 1.564.1.477-.07 1.475-.603 1.675-1.18.2-.578.2-1.075.14-1.18-.06-.1-.225-.15-.525-.3z" />
           </svg>
           <span>{t("whatsapp_line", lang)}</span>
@@ -400,7 +400,7 @@ function FooterBottomBar({ lang, lastUpdatedTitle, onOpenPolicy }: FooterBottomB
       </div>
       <div className="flex flex-wrap gap-4 sm:gap-6 items-center">
         <Link 
-          href="/tedarikci/login" 
+          href="/supplier/login" 
           className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1"
         >
           <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />

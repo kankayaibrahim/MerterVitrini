@@ -53,7 +53,7 @@ export function AnalyticsTracker() {
     }
 
     const currentUrl = window.location.href;
-    const fullPath = searchParams && searchParams.toString()
+    const fullPath = searchParams?.toString()
       ? `${pathname}?${searchParams.toString()}`
       : pathname;
 

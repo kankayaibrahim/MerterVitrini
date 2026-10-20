@@ -150,7 +150,25 @@ func exchangeKeycloakCode(ctx context.Context, cfg *config.Config, code, redirec
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", resp.StatusCode, fmt.Errorf("authorization exchange failed: %s", string(respBytes))
+		log.Printf("[KEYCLOAK ERROR] Token exchange failed (%d): %s", resp.StatusCode, string(respBytes))
+
+		var kcErr struct {
+			Error            string `json:"error"`
+			ErrorDescription string `json:"error_description"`
+		}
+		if jsonErr := json.Unmarshal(respBytes, &kcErr); jsonErr == nil && kcErr.Error != "" {
+			switch kcErr.Error {
+			case "invalid_grant":
+				return "", resp.StatusCode, errors.New("Giriş oturumunun süresi doldu veya bu güvenlik kodu daha önce kullanıldı. Lütfen tekrar giriş yapın.")
+			case "invalid_client":
+				return "", resp.StatusCode, errors.New("Kimlik doğrulama istemcisi geçersiz veya yetkisiz.")
+			default:
+				if kcErr.ErrorDescription != "" {
+					return "", resp.StatusCode, fmt.Errorf("Kimlik doğrulama hatası: %s", kcErr.ErrorDescription)
+				}
+			}
+		}
+		return "", resp.StatusCode, fmt.Errorf("Kimlik doğrulama oturumu onaylanamadı (HTTP %d)", resp.StatusCode)
 	}
 
 	var exchangeResp map[string]any

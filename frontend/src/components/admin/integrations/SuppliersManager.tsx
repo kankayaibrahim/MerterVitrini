@@ -145,6 +145,8 @@ interface SupplierAddress {
   coordinates: string;
 }
 
+export type SupplierSubTab = "suppliers" | "users" | "applications";
+
 interface SuppliersManagerProps {
   suppliers: Brand[];
   categories: CategoryNode[];
@@ -153,6 +155,7 @@ interface SuppliersManagerProps {
   token: string | null;
   activeSyncing: Record<string, string>;
   triggerSync: (feedId: string) => Promise<void>;
+  initialTab?: SupplierSubTab;
 }
 
 function formatBytes(totalSize: number): string {
@@ -1114,10 +1117,27 @@ export default function SuppliersManager({
   apiUrl,
   token,
   activeSyncing,
-  triggerSync
+  triggerSync,
+  initialTab = "suppliers"
 }: Readonly<SuppliersManagerProps>) {
   const [isPending, startTransition] = useTransition();
-  const [subTab, setSubTab] = useState<"suppliers" | "users" | "applications">("suppliers");
+  const [subTab, setSubTab] = useState<SupplierSubTab>(initialTab);
+  const [prevInitialTab, setPrevInitialTab] = useState(initialTab);
+
+  if (initialTab !== prevInitialTab) {
+    setPrevInitialTab(initialTab);
+    setSubTab(initialTab);
+  }
+
+  const handleTabChange = useCallback((tab: SupplierSubTab) => {
+    setSubTab(tab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [activeWizardFeed, setActiveWizardFeed] = useState<XmlFeed | null>(null);
 
@@ -1546,7 +1566,7 @@ export default function SuppliersManager({
       <div className="flex border-b border-zinc-200/60 gap-6">
         <button
           type="button"
-          onClick={() => setSubTab("suppliers")}
+          onClick={() => handleTabChange("suppliers")}
           className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
             subTab === "suppliers"
               ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
@@ -1559,7 +1579,7 @@ export default function SuppliersManager({
 
         <button
           type="button"
-          onClick={() => setSubTab("users")}
+          onClick={() => handleTabChange("users")}
           className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
             subTab === "users"
               ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
@@ -1567,12 +1587,12 @@ export default function SuppliersManager({
           }`}
         >
           <Users size={15} />
-          Tedarikçi Giriş Hesapları (Portal)
+          Tedarikçi & Alt Temsilci Hesapları (Portal & Sohbet)
         </button>
 
         <button
           type="button"
-          onClick={() => setSubTab("applications")}
+          onClick={() => handleTabChange("applications")}
           className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
             subTab === "applications"
               ? "text-amber-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-amber-600"

@@ -39,7 +39,7 @@ export default function SupplierApplicationClient({ lang }: Readonly<SupplierApp
 
           <div className="flex items-center gap-4">
             <Link
-              href="/tedarikci/login"
+              href="/supplier/login"
               className="text-xs font-bold text-zinc-600 hover:text-zinc-950 transition-colors flex items-center gap-1"
             >
               <span>{t.supplier_login}</span>

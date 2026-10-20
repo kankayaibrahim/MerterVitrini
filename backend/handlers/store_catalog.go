@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -896,14 +895,6 @@ func (h *StoreCatalogHandler) ListAttributes(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(attrMap)
-}
-
-// Helper sql.NullString wrapper mapping
-func scanNullString(ns sql.NullString) *string {
-	if ns.Valid {
-		return &ns.String
-	}
-	return nil
 }
 
 // GetStoreSettings fetches the singleton global storefront contact settings

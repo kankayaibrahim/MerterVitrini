@@ -10,6 +10,47 @@ interface MarketFxTickerProps {
   readonly loading: boolean;
 }
 
+function renderFxContent(loading: boolean, rates: readonly DashboardExchangeRate[]) {
+  if (loading) {
+    return <div className="py-4 text-center text-xs text-zinc-400">Döviz kurları yükleniyor...</div>;
+  }
+  if (rates.length === 0) {
+    return <div className="py-4 text-center text-xs text-zinc-400">Kayıtlı döviz kuru bulunamadı.</div>;
+  }
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {rates.map((rate) => (
+        <div
+          key={rate.currency_code}
+          className="p-3 rounded-xl bg-zinc-50/80 border border-zinc-200/60 flex flex-col justify-between hover:bg-zinc-100/70 transition-colors"
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-bold text-zinc-900 flex items-center gap-1">
+              <DollarSign size={13} className="text-zinc-400" />
+              {rate.currency_code}/TRY
+            </span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white text-zinc-600 border border-zinc-200/60 shadow-2xs">
+              TCMB
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-1">
+            <span className="text-[11px] text-zinc-500">Satış:</span>
+            <span className="text-sm font-black text-zinc-900">
+              ₺{rate.selling_rate.toFixed(4)}
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-1 mt-0.5">
+            <span className="text-[10px] text-zinc-400">Alış:</span>
+            <span className="text-xs font-semibold text-zinc-600">
+              ₺{rate.buying_rate.toFixed(4)}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function MarketFxTicker({
   rates,
   loading,
@@ -42,42 +83,7 @@ export default function MarketFxTicker({
         </Link>
       </div>
 
-      {loading ? (
-        <div className="py-4 text-center text-xs text-zinc-400">Döviz kurları yükleniyor...</div>
-      ) : rates.length === 0 ? (
-        <div className="py-4 text-center text-xs text-zinc-400">Kayıtlı döviz kuru bulunamadı.</div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {rates.map((rate) => (
-            <div
-              key={rate.currency_code}
-              className="p-3 rounded-xl bg-zinc-50/80 border border-zinc-200/60 flex flex-col justify-between hover:bg-zinc-100/70 transition-colors"
-            >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-zinc-900 flex items-center gap-1">
-                  <DollarSign size={13} className="text-zinc-400" />
-                  {rate.currency_code}/TRY
-                </span>
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white text-zinc-600 border border-zinc-200/60 shadow-2xs">
-                  TCMB
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between gap-1">
-                <span className="text-[11px] text-zinc-500">Satış:</span>
-                <span className="text-sm font-black text-zinc-900">
-                  ₺{rate.selling_rate.toFixed(4)}
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between gap-1 mt-0.5">
-                <span className="text-[10px] text-zinc-400">Alış:</span>
-                <span className="text-xs font-semibold text-zinc-600">
-                  ₺{rate.buying_rate.toFixed(4)}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {renderFxContent(loading, rates)}
     </div>
   );
 }

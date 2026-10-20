@@ -66,9 +66,9 @@ Sunucuda Nginx ayarları `/etc/nginx/conf.d/` altındadır:
 - **İşletim Sistemi:** Windows
 - **Çalışma Dizini:** `c:\Projects\mertervitrini.com.tr`
 - **Gereksinimler:**
-  - Go 1.25.0 (`go version`)
+  - Go 1.27.2 (`go version`)
   - Node.js 20+ & npm (`node -v`, `npm -v`)
-  - PostgreSQL 16 (Port: `5432`, Veritabanı: `merterdevdb`)
+  - PostgreSQL 18 (Port: `5432`, Veritabanı: `merterdevdb`)
   - Redis (Port: `6379`)
   - Python 3.10+ (Deployment ve otomasyon scriptleri için)
 - **Yerel Port Tahsisleri:**

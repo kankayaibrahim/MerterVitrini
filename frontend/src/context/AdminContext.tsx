@@ -145,6 +145,9 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
     setUser(null);
     localStorage.removeItem("admin_token");
     localStorage.removeItem("admin_user");
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    }
   }, []);
 
   const fetchWithConfig = useCallback(async (path: string, options?: RequestInit) => {
@@ -214,17 +217,16 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
 
           const data = await res.json();
           login(data.token, data.user);
-
+        } catch (err: unknown) {
+          console.error("Keycloak OIDC callback error:", err);
+          handleLogout();
+        } finally {
           params.delete("code");
           params.delete("session_state");
           params.delete("iss");
           const newSearch = params.toString();
           const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "");
           window.history.replaceState({}, "", newUrl);
-        } catch (err: unknown) {
-          console.error("Keycloak OIDC callback error:", err);
-          handleLogout();
-        } finally {
           setIsInitialized(true);
         }
       } else {

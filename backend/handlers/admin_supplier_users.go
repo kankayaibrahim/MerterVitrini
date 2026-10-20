@@ -13,6 +13,7 @@ import (
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/mailer"
 )
 
 type AdminSupplierUsersHandler struct {
@@ -37,6 +38,9 @@ func (h *AdminSupplierUsersHandler) ListSupplierUsers(w http.ResponseWriter, r *
 			u.email, 
 			u.contact_name, 
 			u.phone, 
+			COALESCE(u.job_title, 'Satış Temsilcisi') as job_title,
+			COALESCE(u.spoken_languages, 'TR') as spoken_languages,
+			COALESCE(u.is_owner, false) as is_owner,
 			u.keycloak_id,
 			u.is_active, 
 			u.last_login_at, 
@@ -44,7 +48,7 @@ func (h *AdminSupplierUsersHandler) ListSupplierUsers(w http.ResponseWriter, r *
 			u.updated_at
 		FROM catalog.supplier_users u
 		JOIN catalog.brands b ON u.brand_id = b.id
-		ORDER BY b.brand_name ASC, u.created_at DESC`
+		ORDER BY b.brand_name ASC, u.is_owner DESC, u.created_at DESC`
 
 	rows, err := db.Pool.Query(ctx, query)
 	if err != nil {
@@ -65,6 +69,9 @@ func (h *AdminSupplierUsersHandler) ListSupplierUsers(w http.ResponseWriter, r *
 			&u.Email,
 			&u.ContactName,
 			&u.Phone,
+			&u.JobTitle,
+			&u.SpokenLanguages,
+			&u.IsOwner,
 			&u.KeycloakID,
 			&u.IsActive,
 			&u.LastLoginAt,
@@ -141,18 +148,41 @@ func (h *AdminSupplierUsersHandler) CreateSupplierUser(w http.ResponseWriter, r 
 		kcIDVal = &keycloakID
 	}
 
+	jobTitle := strings.TrimSpace(req.JobTitle)
+	if jobTitle == "" {
+		jobTitle = "Satış Temsilcisi"
+	}
+	spokenLangs := strings.TrimSpace(req.SpokenLanguages)
+	if spokenLangs == "" {
+		spokenLangs = "TR"
+	}
+
 	var newID string
 	insertQuery := `
-		INSERT INTO catalog.supplier_users (brand_id, email, password_hash, contact_name, phone, is_active, keycloak_id)
-		VALUES ($1, $2, $3, $4, $5, true, $6)
+		INSERT INTO catalog.supplier_users (brand_id, email, password_hash, contact_name, phone, job_title, spoken_languages, is_owner, is_active, keycloak_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9)
 		RETURNING id`
 
-	err = db.Pool.QueryRow(ctx, insertQuery, req.BrandID, req.Email, string(hashed), req.ContactName, phoneVal, kcIDVal).Scan(&newID)
+	err = db.Pool.QueryRow(ctx, insertQuery, req.BrandID, req.Email, string(hashed), req.ContactName, phoneVal, jobTitle, spokenLangs, req.IsOwner, kcIDVal).Scan(&newID)
 	if err != nil {
 		log.Printf("[SUPPLIER USERS] Insert error: %v", err)
 		http.Error(w, fmt.Sprintf(`{"error":"Kullanıcı oluşturulamadı: %v"}`, err), http.StatusInternalServerError)
 		return
 	}
+
+	// Trigger asynchronous email notifications
+	var brandName, brandCode string
+	_ = db.Pool.QueryRow(ctx, "SELECT name, code FROM catalog.brands WHERE id = $1", req.BrandID).Scan(&brandName, &brandCode)
+	if brandName == "" {
+		brandName = req.BrandID
+	}
+	phoneStr := ""
+	if phoneVal != nil {
+		phoneStr = *phoneVal
+	}
+	meta := mailer.ExtractClientMeta(r)
+	mailer.SendSupplierRegisteredNotification(h.Cfg, brandName, brandCode, req.ContactName, req.Email, phoneStr, meta)
+	mailer.SendSupplierWelcomeEmail(h.Cfg, brandName, req.ContactName, req.Email)
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
@@ -184,6 +214,15 @@ func syncKeycloakUserOnUpdate(ctx context.Context, cfg *config.Config, id string
 }
 
 func updateSupplierUserInDB(ctx context.Context, id string, req models.UpdateSupplierUserRequest, phoneVal *string) error {
+	jobTitle := strings.TrimSpace(req.JobTitle)
+	if jobTitle == "" {
+		jobTitle = "Satış Temsilcisi"
+	}
+	spokenLangs := strings.TrimSpace(req.SpokenLanguages)
+	if spokenLangs == "" {
+		spokenLangs = "TR"
+	}
+
 	password := strings.TrimSpace(req.Password)
 	if password != "" {
 		if len(password) < 6 {
@@ -196,17 +235,17 @@ func updateSupplierUserInDB(ctx context.Context, id string, req models.UpdateSup
 
 		query := `
 			UPDATE catalog.supplier_users 
-			SET contact_name = $1, phone = $2, is_active = $3, password_hash = $4, updated_at = CURRENT_TIMESTAMP
-			WHERE id = $5`
-		_, err = db.Pool.Exec(ctx, query, req.ContactName, phoneVal, req.IsActive, string(hashed), id)
+			SET contact_name = $1, phone = $2, job_title = $3, spoken_languages = $4, is_owner = $5, is_active = $6, password_hash = $7, updated_at = CURRENT_TIMESTAMP
+			WHERE id = $8`
+		_, err = db.Pool.Exec(ctx, query, req.ContactName, phoneVal, jobTitle, spokenLangs, req.IsOwner, req.IsActive, string(hashed), id)
 		return err
 	}
 
 	query := `
 		UPDATE catalog.supplier_users 
-		SET contact_name = $1, phone = $2, is_active = $3, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $4`
-	_, err := db.Pool.Exec(ctx, query, req.ContactName, phoneVal, req.IsActive, id)
+		SET contact_name = $1, phone = $2, job_title = $3, spoken_languages = $4, is_owner = $5, is_active = $6, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $7`
+	_, err := db.Pool.Exec(ctx, query, req.ContactName, phoneVal, jobTitle, spokenLangs, req.IsOwner, req.IsActive, id)
 	return err
 }
 

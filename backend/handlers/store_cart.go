@@ -128,7 +128,7 @@ func (h *CartHandler) GetCart(w http.ResponseWriter, r *http.Request) {
 	// Query user's cart items
 	query := `
 		SELECT ci.id, ci.product_id, p.title, p.custom_sku, COALESCE(col.color_name, 'Standart') as color,
-		       p.series_ratio, p.price, p.discounted_price, p.currency, p.shipping_weight_kg,
+		       p.series_ratio, p.price, COALESCE(ci.custom_unit_price, p.discounted_price) as discounted_price, p.currency, p.shipping_weight_kg,
 		       ci.quantity,
 		       COALESCE(
 		           (SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY sort_order ASC, is_cover DESC LIMIT 1),

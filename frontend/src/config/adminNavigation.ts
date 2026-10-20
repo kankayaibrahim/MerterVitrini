@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   FileCode2,
   BarChart3,
+  FileText,
   LucideIcon
 } from "lucide-react";
 
@@ -77,6 +78,15 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
         badge: "Portal",
         badgeColor: "violet",
         description: "Toptancı firmalar, XML feed eşlemeleri ve portal hesapları"
+      },
+      {
+        id: "supplier-applications",
+        title: "Tedarikçi Başvuruları",
+        href: "/admin/supplier-applications",
+        icon: FileText,
+        badge: "Yeni",
+        badgeColor: "amber",
+        description: "Vitrinden gelen yeni toptancı ve üretici adayları"
       },
       {
         id: "products",

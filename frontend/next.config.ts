@@ -61,6 +61,60 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  redirects() {
+    return Promise.resolve([
+      {
+        source: "/iletisim",
+        destination: "/tr/contact",
+        permanent: true,
+      },
+      {
+        source: "/sss",
+        destination: "/tr/faq",
+        permanent: true,
+      },
+      {
+        source: "/toptan-satis",
+        destination: "/tr/b2b",
+        permanent: true,
+      },
+      {
+        source: "/tum-urunler",
+        destination: "/tr/tum-urunler",
+        permanent: true,
+      },
+      {
+        source: "/tedarikci/sifre-olustur",
+        destination: "/supplier/set-password",
+        permanent: true,
+      },
+      {
+        source: "/supplier/sifre-olustur",
+        destination: "/supplier/set-password",
+        permanent: true,
+      },
+      {
+        source: "/tedarikci-basvuru/dogrula",
+        destination: "/supplier/verify",
+        permanent: true,
+      },
+      {
+        source: "/tedarikci-basvuru",
+        destination: "/tr/tedarikci-basvuru",
+        permanent: true,
+      },
+      {
+        source: "/tedarikci",
+        destination: "/supplier",
+        permanent: true,
+      },
+      {
+        source: "/tedarikci/:path*",
+        destination: "/supplier/:path*",
+        permanent: true,
+      },
+    ]);
+  },
   env: {
     NEXT_PUBLIC_BUILD_NUMBER: String(buildNumber),
     NEXT_PUBLIC_BUILD_TIME: buildTimeStr,

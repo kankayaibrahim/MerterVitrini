@@ -58,7 +58,7 @@ graph TD
 - **Tetikleyici:** `@architect` tarafından bir geliştirme görevi atandığında.
 - **Sorumluluklar:**
   - `@architect` tarafından belirlenen mimari kontratları, DTO'ları ve dosya yollarını harfiyen uygular.
-  - Go 1.25 backend ve Next.js 16 frontend standartlarında temiz, tip güvenli, modüler ve idiomatic kod üretir.
+  - Go 1.27.2 backend ve Next.js 16 frontend standartlarında temiz, tip güvenli, modüler ve idiomatic kod üretir.
   - Erken çıkış (guard clauses) prensibine uyar; karmaşık fonksiyonları küçük parçalara böler.
 - **Katı Kural:** Mimarın çizdiği planın dışına çıkmaz; kodlama bittiğinde kontrolü ve dosya değişikliklerini `@architect`'e raporlar.
 
@@ -67,8 +67,8 @@ graph TD
 ### Rol 3: `@dba` (Veritabanı & Performans Uzmanı)
 - **Tetikleyici:** Veri katmanı, migration, tablo şeması veya sorgu optimizasyonu gerektiren durumlarda `@architect` çağrısıyla devreye girer.
 - **Sorumluluklar:**
-  - PostgreSQL 16 şema tasarımı, `identity`, `catalog`, `integration` şemalarının bütünlüğü.
-  - UUIDv7 birincil anahtar standartları, Base36 sequence ve tetikleyici fonksiyonları (`fn_slugify`, `to_base36`).
+  - PostgreSQL 18 şema tasarımı, `identity`, `catalog`, `integration`, `analytics` şemalarının bütünlüğü.
+  - PostgreSQL 18 native UUIDv7 (`uuidv7()`) birincil anahtar standartları, Base36 sequence ve tetikleyici fonksiyonları (`fn_slugify`, `to_base36`).
   - `ltree` kategori hiyerarşisi GiST indeksleri ve `catalog.mv_products` Materialized View eşzamanlı yenileme (`CONCURRENT REFRESH`) stratejileri.
   - N+1 sorgularını önleme, `pgx/v5` connection pool yönetimi ve transaction (`tx`) atomikliği.
 - **Katı Kural:** Veri kaybına yol açabilecek `DROP` işlemlerini `@architect` ve kullanıcı onayı olmaksızın çalıştırmaz.

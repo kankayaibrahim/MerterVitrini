@@ -1,5 +1,5 @@
 import React from "react";
-import { Minus, Plus, ShoppingBag } from "lucide-react";
+import { Minus, Plus, ShoppingBag, MessageSquare } from "lucide-react";
 
 interface OrderCalculatorProps {
   readonly hasSeries: boolean;
@@ -15,6 +15,7 @@ interface OrderCalculatorProps {
   readonly lang: string;
   readonly t: (key: string, lang: string) => string;
   readonly handleAddToCart: () => void;
+  readonly onOpenSupplierChat?: () => void;
 }
 
 export default function OrderCalculator({
@@ -31,6 +32,7 @@ export default function OrderCalculator({
   lang,
   t,
   handleAddToCart,
+  onOpenSupplierChat,
 }: OrderCalculatorProps) {
   return (
     <>
@@ -140,6 +142,18 @@ export default function OrderCalculator({
         <ShoppingBag className="w-4 h-4 text-white" />
         {t("add_to_cart", lang)}
       </button>
+
+      {/* Ask Supplier / Request Custom Price Button (Centrifuge Live B2B Chat) */}
+      {onOpenSupplierChat && (
+        <button
+          type="button"
+          onClick={onOpenSupplierChat}
+          className="w-full py-3 bg-slate-900 hover:bg-purple-700 text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase transition-all duration-300 border-none flex items-center justify-center gap-2.5 cursor-pointer select-none shadow-sm active:scale-[0.99]"
+        >
+          <MessageSquare className="w-4 h-4 text-purple-300" />
+          Tedarikçiye Sor / Özel Fiyat İste (Canlı)
+        </button>
+      )}
     </>
   );
 }

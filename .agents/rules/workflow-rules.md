@@ -63,3 +63,11 @@ Bu kurallar bütünü, `mertervitrini.com.tr` deposunda kod yazan, refactor yapa
 5. **Sıfır Uyarı Standardı (TreatWarningsAsErrors):**
    - Kod değişikliklerinden sonra ne Go derleyicisinde ne de TypeScript/ESLint tarafında çözülmemiş hiçbir uyarı (warning) bırakılamaz.
    - Kullanılmayan kütüphane importları, tanımlanıp okunmayan değişkenler anında temizlenmelidir.
+
+---
+
+## 4. Kalıcı Konuşma Kaydı Kuralı (Persistent Conversation Logging)
+
+1. **HER KONUŞMA TURUNU KAYDETME ZORUNLULUĞU:**
+   - Kullanıcı ile gerçekleşen her diyalog (kullanıcı talebi ve ajanın verdiği yanıt / yaptığı teknik işlemler), yanıt kullanıcıya sunulmadan hemen önce [`context/conversations.md`](file:///c:/Projects/mertervitrini.com.tr/context/conversations.md) dosyasına kronolojik olarak eklenmelidir (`Append`).
+   - Kayıt formatı; Tarih/Saat (`YYYY-MM-DD HH:mm`), `Conversation ID`, **Kullanıcı Mesajı**, **Ajan Yanıtı / Yapılan İşlemler** ve varsa **Değiştirilen Dosyalar** başlıklarını içermelidir.

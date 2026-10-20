@@ -404,18 +404,21 @@ type BlogPost struct {
 // --- Supplier Portal Models ---
 
 type SupplierUser struct {
-	ID          string     `json:"id"`
-	BrandID     string     `json:"brand_id"`
-	BrandName   string     `json:"brand_name,omitempty"`
-	AliasCode   string     `json:"alias_code,omitempty"`
-	Email       string     `json:"email"`
-	ContactName string     `json:"contact_name"`
-	Phone       *string    `json:"phone,omitempty"`
-	KeycloakID  *string    `json:"keycloak_id,omitempty"`
-	IsActive    bool       `json:"is_active"`
-	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID              string     `json:"id"`
+	BrandID         string     `json:"brand_id"`
+	BrandName       string     `json:"brand_name,omitempty"`
+	AliasCode       string     `json:"alias_code,omitempty"`
+	Email           string     `json:"email"`
+	ContactName     string     `json:"contact_name"`
+	Phone           *string    `json:"phone,omitempty"`
+	JobTitle        string     `json:"job_title"`
+	SpokenLanguages string     `json:"spoken_languages"`
+	IsOwner         bool       `json:"is_owner"`
+	KeycloakID      *string    `json:"keycloak_id,omitempty"`
+	IsActive        bool       `json:"is_active"`
+	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type SupplierLoginRequest struct {
@@ -429,18 +432,24 @@ type SupplierLoginResponse struct {
 }
 
 type CreateSupplierUserRequest struct {
-	BrandID     string `json:"brand_id"`
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	ContactName string `json:"contact_name"`
-	Phone       string `json:"phone,omitempty"`
+	BrandID         string `json:"brand_id"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	ContactName     string `json:"contact_name"`
+	Phone           string `json:"phone,omitempty"`
+	JobTitle        string `json:"job_title,omitempty"`
+	SpokenLanguages string `json:"spoken_languages,omitempty"`
+	IsOwner         bool   `json:"is_owner"`
 }
 
 type UpdateSupplierUserRequest struct {
-	ContactName string `json:"contact_name"`
-	Phone       string `json:"phone,omitempty"`
-	Password    string `json:"password,omitempty"`
-	IsActive    bool   `json:"is_active"`
+	ContactName     string `json:"contact_name"`
+	Phone           string `json:"phone,omitempty"`
+	JobTitle        string `json:"job_title,omitempty"`
+	SpokenLanguages string `json:"spoken_languages,omitempty"`
+	IsOwner         bool   `json:"is_owner"`
+	Password        string `json:"password,omitempty"`
+	IsActive        bool   `json:"is_active"`
 }
 
 type SupplierProductVariantInput struct {
@@ -472,21 +481,25 @@ type SupplierProductInput struct {
 }
 
 type SupplierApplication struct {
-	ID          string    `json:"id"`
-	CompanyName string    `json:"company_name"`
-	ContactName string    `json:"contact_name"`
-	Email       string    `json:"email"`
-	Phone       string    `json:"phone"`
-	City        *string   `json:"city,omitempty"`
-	Category    *string   `json:"category,omitempty"`
-	Instagram   *string   `json:"instagram,omitempty"`
-	Website     *string   `json:"website,omitempty"`
-	Notes       *string   `json:"notes,omitempty"`
-	Status      string    `json:"status"` // 'pending', 'reviewed', 'contacted', 'approved', 'rejected'
-	AdminNotes  *string   `json:"admin_notes,omitempty"`
-	IPAddress   *string   `json:"ip_address,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID                    string     `json:"id"`
+	CompanyName           string     `json:"company_name"`
+	ContactName           string     `json:"contact_name"`
+	Email                 string     `json:"email"`
+	Phone                 string     `json:"phone"`
+	City                  *string    `json:"city,omitempty"`
+	District              *string    `json:"district,omitempty"`
+	Category              *string    `json:"category,omitempty"`
+	Instagram             *string    `json:"instagram,omitempty"`
+	Website               *string    `json:"website,omitempty"`
+	Notes                 *string    `json:"notes,omitempty"`
+	Status                string     `json:"status"` // 'pending', 'reviewed', 'contacted', 'approved', 'rejected'
+	AdminNotes            *string    `json:"admin_notes,omitempty"`
+	IPAddress             *string    `json:"ip_address,omitempty"`
+	EmailVerified         bool       `json:"email_verified"`
+	VerifiedAt            *time.Time `json:"verified_at,omitempty"`
+	VerificationExpiresAt *time.Time `json:"verification_expires_at,omitempty"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 type CreateSupplierApplicationRequest struct {
@@ -494,7 +507,8 @@ type CreateSupplierApplicationRequest struct {
 	ContactName    string `json:"contact_name"`
 	Email          string `json:"email"`
 	Phone          string `json:"phone"`
-	City           string `json:"city,omitempty"`
+	City           string `json:"city"`
+	District       string `json:"district"`
 	Category       string `json:"category,omitempty"`
 	Instagram      string `json:"instagram,omitempty"`
 	Website        string `json:"website,omitempty"`
@@ -505,6 +519,11 @@ type CreateSupplierApplicationRequest struct {
 type UpdateSupplierApplicationStatusRequest struct {
 	Status     string `json:"status"`
 	AdminNotes string `json:"admin_notes,omitempty"`
+}
+
+type SupplierSetupPasswordRequest struct {
+	Token    string `json:"token"`
+	Password string `json:"password"`
 }
 
 // B2B Multi-Vendor Marketplace Models

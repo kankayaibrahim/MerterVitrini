@@ -48,7 +48,7 @@ export default function AdminCatalogVariantsPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-zinc-950 dark:text-white flex items-center gap-2">
-              Varyant &amp; Beden/Renk Matrisi
+              <span>Varyant &amp; Beden/Renk Matrisi</span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300 font-bold">
                 B2B Paket Serileri
               </span>

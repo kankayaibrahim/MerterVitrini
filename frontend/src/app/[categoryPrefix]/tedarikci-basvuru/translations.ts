@@ -29,6 +29,9 @@ export interface SupplierPageTranslations {
   phone_placeholder: string;
   city_label: string;
   city_placeholder: string;
+  district_label?: string;
+  district_placeholder?: string;
+  error_invalid_email?: string;
   category_label: string;
   category_select: string;
   categories: {
@@ -88,8 +91,10 @@ export const SUPPLIER_TRANSLATIONS: Record<string, SupplierPageTranslations> = {
     email_placeholder: "info@markaniz.com",
     phone_label: "Telefon / WhatsApp Numarası",
     phone_placeholder: "+90 532 000 00 00",
-    city_label: "Şehir / İlçe",
-    city_placeholder: "Örn: İstanbul / Merter - Güngören",
+    city_label: "Bulunduğunuz İl",
+    city_placeholder: "İl Seçiniz",
+    district_label: "Bulunduğunuz İlçe",
+    district_placeholder: "İlçe Seçiniz",
     category_label: "Ana Üretim Kategorisi",
     category_select: "Kategori Seçiniz",
     categories: {
@@ -112,7 +117,8 @@ export const SUPPLIER_TRANSLATIONS: Record<string, SupplierPageTranslations> = {
     security_note: "Google reCAPTCHA koruması ve KVKK gizlilik güvencesiyle korunmaktadır.",
     submit_btn: "Başvuruyu Gönder",
     submitting_btn: "Gönderiliyor...",
-    error_required: "Lütfen firma adı, yetkili adı, e-posta ve telefon alanlarını doldurun.",
+    error_required: "Lütfen firma adı, yetkili adı, e-posta, telefon, il ve ilçe alanlarını eksiksiz doldurun.",
+    error_invalid_email: "Lütfen geçerli bir e-posta adresi giriniz.",
     error_generic: "Başvuru gönderilemedi. Lütfen bilgilerinizi kontrol edip tekrar deneyin.",
     success_title: "Başvurunuz Alındı!",
     success_desc: "Tedarikçi başvurunuz başarıyla sistemimize kaydedilmiştir. Kategori yöneticilerimiz başvurunuzu inceledikten sonra belirttiğiniz telefon veya e-posta üzerinden en kısa sürede sizinle iletişime geçecektir.",

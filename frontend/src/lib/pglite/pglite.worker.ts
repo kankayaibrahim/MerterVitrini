@@ -3,7 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { live } from "@electric-sql/pglite/live";
 import { PGLITE_SCHEMA_SQL } from "./pglite-schema";
 
-worker({
+void worker({
   async init() {
     const pg = new PGlite("idb://merter_catalog_b2b", {
       extensions: { live },
@@ -13,3 +13,4 @@ worker({
     return pg;
   },
 });
+

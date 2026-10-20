@@ -903,3 +903,141 @@ func (h *SupplierPortalHandler) ListAttributes(w http.ResponseWriter, r *http.Re
 		"fabrics": fabrics,
 	})
 }
+
+// VerifySetupToken validates supplier password setup token and returns basic details for the UI
+func (h *SupplierPortalHandler) VerifySetupToken(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		http.Error(w, `{"error":"Şifre belirleme belirteci (token) eksik"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	var email, contactName, brandName string
+	var expiresAt time.Time
+
+	query := `
+		SELECT u.email, u.contact_name, b.brand_name, u.setup_token_expires_at
+		FROM catalog.supplier_users u
+		JOIN catalog.brands b ON u.brand_id = b.id
+		WHERE u.setup_token = $1`
+
+	err := db.Pool.QueryRow(ctx, query, token).Scan(&email, &contactName, &brandName, &expiresAt)
+	if err != nil {
+		http.Error(w, `{"error":"Geçersiz veya süresi dolmuş şifre belirleme bağlantısı"}`, http.StatusNotFound)
+		return
+	}
+
+	if time.Now().After(expiresAt) {
+		http.Error(w, `{"error":"Şifre belirleme bağlantısının 48 saatlik geçerlilik süresi dolmuştur. Lütfen destek ekibimizle iletişime geçiniz."}`, http.StatusGone)
+		return
+	}
+
+	writeSupplierJSON(w, http.StatusOK, map[string]any{
+		"valid":        true,
+		"email":        email,
+		"contact_name": contactName,
+		"brand_name":   brandName,
+	})
+}
+
+// SetupPassword sets the supplier password, syncs with Keycloak and logs the supplier in
+func (h *SupplierPortalHandler) SetupPassword(w http.ResponseWriter, r *http.Request) {
+	var req models.SupplierSetupPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Geçersiz istek formatı"}`, http.StatusBadRequest)
+		return
+	}
+
+	req.Token = strings.TrimSpace(req.Token)
+	req.Password = strings.TrimSpace(req.Password)
+
+	if req.Token == "" {
+		http.Error(w, `{"error":"Belirteç (token) zorunludur"}`, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Password) < 6 {
+		http.Error(w, `{"error":"Şifre en az 6 karakter olmalıdır"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	var u models.SupplierUser
+	var expiresAt time.Time
+
+	query := `
+		SELECT u.id, u.brand_id, b.brand_name, coalesce(b.alias_code, ''), u.email, u.contact_name, u.phone, u.keycloak_id, u.setup_token_expires_at
+		FROM catalog.supplier_users u
+		JOIN catalog.brands b ON u.brand_id = b.id
+		WHERE u.setup_token = $1`
+
+	err := db.Pool.QueryRow(ctx, query, req.Token).Scan(
+		&u.ID, &u.BrandID, &u.BrandName, &u.AliasCode, &u.Email, &u.ContactName, &u.Phone, &u.KeycloakID, &expiresAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"Geçersiz veya süresi dolmuş şifre belirleme bağlantısı"}`, http.StatusNotFound)
+		return
+	}
+
+	if time.Now().After(expiresAt) {
+		http.Error(w, `{"error":"Şifre belirleme bağlantısının süresi dolmuştur"}`, http.StatusGone)
+		return
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+	if err != nil {
+		http.Error(w, `{"error":"Şifre şifrelenirken hata oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Update DB password and clear setup token
+	_, err = db.Pool.Exec(ctx, `
+		UPDATE catalog.supplier_users 
+		SET password_hash = $1, setup_token = NULL, setup_token_expires_at = NULL, is_active = true, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2`, string(hashed), u.ID)
+	if err != nil {
+		log.Printf("[SUPPLIER SETUP ERROR] DB update failed: %v", err)
+		http.Error(w, `{"error":"Şifre kaydedilemedi"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Create or update Keycloak user
+	phoneStr := ""
+	if u.Phone != nil {
+		phoneStr = *u.Phone
+	}
+	if u.KeycloakID != nil && *u.KeycloakID != "" {
+		_ = updateKeycloakSupplierUser(ctx, h.Cfg, *u.KeycloakID, u.ContactName, req.Password, true)
+	} else {
+		newKCID, kcErr := createKeycloakSupplierUser(ctx, h.Cfg, u.Email, u.ContactName, req.Password, phoneStr, u.BrandID)
+		if kcErr == nil && newKCID != "" {
+			u.KeycloakID = &newKCID
+			_, _ = db.Pool.Exec(ctx, "UPDATE catalog.supplier_users SET keycloak_id = $1 WHERE id = $2", newKCID, u.ID)
+		}
+	}
+
+	// Direct login
+	tokenString, _ := loginKeycloakUser(ctx, h.Cfg, u.Email, req.Password)
+
+	// Update last login
+	_, _ = db.Pool.Exec(ctx, "UPDATE catalog.supplier_users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1", u.ID)
+
+	writeSupplierJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": "Şifreniz başarıyla oluşturuldu! Tedarikçi yönetim portalına yönlendiriliyorsunuz.",
+		"token":   tokenString,
+		"user": map[string]any{
+			"id":           u.ID,
+			"brand_id":     u.BrandID,
+			"brand_name":   u.BrandName,
+			"email":        u.Email,
+			"contact_name": u.ContactName,
+		},
+	})
+}
+

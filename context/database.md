@@ -2,7 +2,7 @@
 
 ## 1. Veritabanı Genel Özellikleri
 
-- **Veritabanı Motoru:** PostgreSQL 16+
+- **Veritabanı Motoru:** PostgreSQL 18+ (Native `uuidv7()` desteği)
 - **Veritabanı Adı:** `merterdevdb` (Geliştirme & Canlı Veritabanı)
 - **Karakter Seti (Encoding):** `UTF-8`
 - **Karakter Sıralaması (Collation):** `tr_TR.utf8` / `C`

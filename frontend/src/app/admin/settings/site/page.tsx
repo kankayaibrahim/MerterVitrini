@@ -156,6 +156,7 @@ export default function AdminSettingsSitePage() {
                 </div>
 
                 <label className="relative inline-flex items-center cursor-pointer">
+                  <span className="sr-only">Tek Fiyat / B2B Seri Fiyat Modu</span>
                   <input
                     type="checkbox"
                     checked={storeSettings.show_single_price}
