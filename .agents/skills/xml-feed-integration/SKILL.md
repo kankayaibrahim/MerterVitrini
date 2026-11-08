@@ -9,13 +9,13 @@ Bu rehber, Merter Vitrini platformuna yeni bir toptancı tedarikçi eklendiğind
 
 ---
 
-## 1. Tedarikçi ve Maske Kodu Kurulumu (`catalog.brands`)
+## 1. Tedarikçi ve SKU Ön Ek Kodu Kurulumu (`catalog.brands`)
 
-Platform gizlilik kuralları gereği toptancı tedarikçinin gerçek adı vitrinde gösterilmez; arayüzde bir maske kodu (`alias_code`) ile listelenir.
+Vitrinde tedarikçi firmaların gerçek ticari adları (`brand_name`) açıkça gösterilir. `alias_code` yalnızca ürün SKU kodlarında (`MIMOZA-255S` vb.) benzersiz ön ek olarak kullanılır.
 
 Yeni bir tedarikçi eklerken:
-1. `brand_name`: Tedarikçinin yasal/fiziksel adı (örn: `Lustrin Toptan Tekstil`).
-2. `alias_code`: Mağazada ve SKU'da görünecek benzersiz maske kodu (örn: `MIMOZA`).
+1. `brand_name`: Tedarikçinin vitrinde görünecek gerçek firma/marka adı (örn: `Lustrin Toptan Tekstil`).
+2. `alias_code`: Ürün SKU kodlarında ön ek olarak kullanılacak benzersiz kısa kod (örn: `MIMOZA`).
 3. `slug`: Sistem tarafından `catalog.fn_slugify` ile otomatik türetilir.
 
 ```sql

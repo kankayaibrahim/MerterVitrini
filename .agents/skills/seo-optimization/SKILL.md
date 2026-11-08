@@ -46,7 +46,7 @@ Storefront ürün detay sayfasında (`shop/frontend/src/app/product/[slug]/page.
   "mpn": "255S",
   "brand": {
     "@type": "Brand",
-    "name": "MIMOZA"
+    "name": "Lustrin Toptan Tekstil"
   },
   "offers": {
     "@type": "Offer",
@@ -182,7 +182,7 @@ Platformda `scripts/optimize_seo.py` otomasyon scripti ile binlerce ürünün ba
   - `ı -> i`, `ş -> s`, `ğ -> g`, `ü -> u`, `ö -> o`, `ç -> c` dönüşümünü yapar.
   - Alfanümerik olmayan karakterleri tireye (`-`) çevirir.
   - Ürün başlıklarının sonuna Base36 sequence kimliğini ekler (`-255s`).
-  - Tedarikçi maske kodları ile SKU formatını sabitler (`MIMOZA-255S`).
+  - Tedarikçi SKU ön ek kodları (`alias_code`) ile SKU formatını sabitler (`MIMOZA-255S`), marka adlarında ise firmanın gerçek adını (`brand_name`) kullanır.
 
 ---
 

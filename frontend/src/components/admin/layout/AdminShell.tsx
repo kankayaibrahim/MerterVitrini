@@ -4,11 +4,12 @@ import React from "react";
 import AdminSidebar from "./AdminSidebar";
 import AdminNavbar from "./AdminNavbar";
 import LoginScreen from "@/components/admin/auth/LoginScreen";
-import { useAdmin } from "@/context/AdminContext";
+import { useAdminAuth, useAdminShell } from "@/context/AdminContext";
 import { Loader2 } from "lucide-react";
 
 export default function AdminShell({ children }: { readonly children: React.ReactNode }) {
-  const { isInitialized, token, theme } = useAdmin();
+  const { isInitialized, token } = useAdminAuth();
+  const { theme } = useAdminShell();
 
   // 1. Initializing state (checking stored JWT / Keycloak callback)
   if (!isInitialized) {

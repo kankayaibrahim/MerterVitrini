@@ -22,7 +22,8 @@ from bs4 import BeautifulSoup
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-PROFIT_RATE = 0.20
+# Tedarikçi fiyatı doğrudan (0% kar marjı ile birebir) vitrine yansıtılır
+PROFIT_RATE = 0.0
 
 CAT_ALT_ETEK = "kadin-giyim/alt-giyim/etek"
 CAT_DIGER = "kadin-giyim/diger"

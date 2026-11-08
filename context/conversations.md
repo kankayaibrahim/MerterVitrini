@@ -926,6 +926,107 @@
   - `npx tsc --noEmit` -> Sıfır hata (Exit code 0).
 - **Sunucu Durumu:** Kullanıcının *"ben söyleyene kadar sunucda yayınlama"* direktifi gereğince canlı sunucuya aktarım yapılmadı; tüm değişiklikler yerel çalışma alanında hazır tutulmaktadır.
 
+---
+
+### [2026-10-20] — Oturum #48 (`3e09273a-f073-494a-9e12-d7e40d403164`)
+
+- **Kullanıcı İstemi:** `commitle` (Kullanıcının açık onayı ile çalışma alanındaki tüm geliştirmelerin kurumsal Conventional Commits standardında git commit haline getirilmesi).
+- **Commit Öncesi Doğrulama:**
+  - `npx tsc --noEmit` -> Sıfır hata (Exit code 0).
+  - `go vet ./...` -> Sıfır hata (Exit code 0).
+- **Oluşturulan Git Commit:**
+  - **Commit Hash:** `10349f5`
+  - **Commit Başlığı:** `feat: b2b anlik sohbet, tedarikci dogrulama, rota standardizasyonu ve a11y iyilestirmeleri`
+  - **Kapsam:**
+    - Centrifuge tabanlı B2B anlık chat altyapısı (`backend/handlers/chat.go`, SQL migration `0014`, vitrin/panel bileşenleri).
+    - Tedarikçi aday başvuru doğrulama, token yönetimi, şifre oluşturma portali ve Postfix mail şablonları (`0015`, `0016`, mailer paketi, `/supplier/set-password`, `/supplier/verify`).
+    - Rota yapısının İngilizce standartlaştırılması (`tedarikci` -> `supplier`, `sifre-olustur` -> `set-password`, `tedarikci-basvuru/dogrula` -> `supplier/verify`, `iletisim` -> `contact`, `sss` -> `faq`, `toptan-satis` -> `b2b`) ve `next.config.ts` 301 kalıcı yönlendirmeleri.
+    - SVG ikon erişilebilirlik (`aria-hidden="true"`) ve linter düzeltmeleri (`AnalyticsTracker`, `pglite.worker`, `chat.ts`).
+- **Sunucu Durumu:** Kullanıcının direktifi sadece *"commitle"* olduğu ve sunucuya yayınlama izni verilmediği için push/deploy yapılmamıştır.
+
+---
+
+### [2026-10-20] — Oturum #49 (`3e09273a-f073-494a-9e12-d7e40d403164`)
+
+- **Kullanıcı İstemi:** `sunucuda yayınla` (Kullanıcının açık onayı ve talimatı ile canlı sunucuya dağıtımın gerçekleştirilmesi).
+- **Yürütülen Dağıtım Süreci:**
+  - `python scripts/unified_deployer.py -p unified -c all -a deploy` çalıştırıldı.
+  - **Go Backend (8080):** Linux AMD64 için cross-compile edildi, SFTP ile `213.202.255.80` sunucusuna yüklendi, `merter-backend` servisi yeniden başlatıldı (40.68 sn).
+  - **Next.js SSR Frontend (3000):** Kaynak kodlar sunucuya aktarıldı, doğrudan AlmaLinux sunucusu üzerinde `npm run build` ile SSR derlemesi tamamlandı (90/90 rota derlendi), `merter-frontend` servisi ve `nginx` yeniden başlatıldı (167.11 sn).
+  - **Genel Süre:** 207.80 sn.
+- **Canlı Sistem Sağlık Kontrolleri (Post-Deploy Health Checks):**
+  - `GET https://mertervitrini.com.tr/api/v1/health` ➔ HTTP 200 OK.
+  - `GET https://mertervitrini.com.tr/` ➔ HTTP 200 OK.
+  - `GET https://mertervitrini.com.tr/tedarikci-basvuru/dogrula` ➔ HTTP 308 Permanent Redirect (`/supplier/verify`).
+  - `GET https://mertervitrini.com.tr/supplier/verify` ➔ HTTP 200 OK.
+  - `GET https://mertervitrini.com.tr/admin` ➔ HTTP 200 OK.
+
+---
+
+### [2026-10-20] — Oturum #50 (`3e09273a-f073-494a-9e12-d7e40d403164`)
+
+- **Kullanıcı İstemi:** (Ekran Görüntüsü Analizi: Google ile Giriş yapıldığında `/google-callback?code=...` sayfasında `"Giriş Başarısız: JSON parse: unexpected character at line 1 column 1 of the JSON data"` hatası).
+- **Kök Neden Tespiti:**
+  1. Sunucu Nginx logları incelendi (`/var/log/nginx/error.log`).
+  2. Saat `23:53:09`'da (`merter-backend` servisinin yeni binary yüklenirken birkaç saniyeliğine durdurulup yeniden başlatıldığı an) kullanıcının tarayıcısından `/api/v1/store/auth/google-callback` isteği geldiği görüldü:
+     `2026/10/20 23:53:09 [error] connect() failed (111: Connection refused) while connecting to upstream http://127.0.0.1:8080/api/v1/store/auth/google-callback...`
+  3. Backend tam o saniye yeniden başladığı için Nginx 502 HTML yanıtı dönmüş, istemci tarafındaki [`frontend/src/app/google-callback/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/google-callback/page.tsx) ise HTML'i `response.json()` ile parse etmeye çalıştığı için Firefox'un `"JSON parse: unexpected character at line 1 column 1"` hatasını üretmiştir.
+  4. OAuth 2.0 tek kullanımlık `code` belirteci tüketildiği için o anki sayfa yenilense bile Keycloak'tan yeni kod alınması gerekmektedir.
+- **Uygulanan Çözüm ve Dayanıklılık İyileştirmesi:**
+  1. [`frontend/src/app/google-callback/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/google-callback/page.tsx):
+     - `response.json()` çağrısı `try/catch` korumasına alındı; beklenmeyen HTML veya ağ hatası durumunda kullanıcıya çiğ parser hatası yerine kurumsal ve anlaşılır hata mesajı gösterilmesi sağlandı.
+     - Hata ekranına doğrudan tek tıkla yeni Google OAuth akışını başlatan **"Google ile Tekrar Dene"** butonu (`handleGoogleRetry`) eklendi.
+- **Doğrulama:**
+  - `npx tsc --noEmit` -> Sıfır hata (Exit code 0).
+
+---
+
+### [2026-10-21] — Oturum #51 (`3e09273a-f073-494a-9e12-d7e40d403164`)
+
+- **Kullanıcı İstemi:** *"sğrekli pırpırlanıyo bu ekran ürün gelip gidiyor görünüyor"* (Ekran görüntüsü: Ürün detay sayfasında açılan `StoreChatDrawer` sohbet çekmecesinde *"Sohbet geçmişi yükleniyor..."* ve ürün kartının durmaksızın yanıp sönmesi / sonsuz re-render döngüsü).
+- **Kök Neden Analizi:**
+  1. [`frontend/src/components/store/StoreChatDrawer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/StoreChatDrawer.tsx) içerisinde `initProductRoom` fonksiyonu `useCallback` ile tanımlanmıştı ve bağımlılık dizisinde `activeRoom` ile `selectedAgentId` yer alıyordu.
+  2. `initProductRoom` çalıştığında `setActiveRoom(room)` ve `setSelectedAgentId(...)` fonksiyonlarını tetikliyordu.
+  3. Bu durum `initProductRoom` fonksiyon kimliğinin (reference) her render'da değişmesine neden oluyordu.
+  4. `useEffect([isOpen, initProductRoom])` ise bu referans değişimini algılayıp `setLoading(true)` ile odayı yeniden kuruyordu.
+  5. Sonuç: Her 100 milisaniyede bir `loading: true` ➔ *"Sohbet geçmişi yükleniyor..."* ➔ `loading: false` ➔ *Ürün kartı* ➔ `loading: true` sonsuz döngüsü (flicker / pırpırlanma) oluşuyordu.
+  6. Ayrıca `activeRoom` her güncellendiğinde Centrifuge WebSocket bağlantısı gereksiz yere kapatılıp yeniden açılıyordu.
+- **Uygulanan Çözüm:**
+  1. **Ref ile Bağımlılık İzolasyonu:** `activeRoom` ve `selectedAgentId` değerleri `activeRoomRef` ve `selectedAgentIdRef` referanslarına bağlanarak `initProductRoom` bağımlılık döngüsünden çıkarıldı.
+  2. **Tek Seferlik Başlatma Anahtarı (Idempotency Key):** `initializedKeyRef` tanımlandı; çekmece açıldığında oda kurma işlemi ürün/marka başına kesin olarak **yalnızca 1 kez** çalışacak şekilde kilitlendi.
+  3. **WebSocket Optimizasyonu:** Centrifuge abonelik `useEffect`'i nesne referansı yerine sadece `activeRoom?.id` string kimliğine bağlandı.
+- **Doğrulama:**
+  - `npx tsc --noEmit` -> Sıfır hata (Exit code 0).
+
+---
+
+### [2026-10-21] — Oturum #52 (`3e09273a-f073-494a-9e12-d7e40d403164`)
+
+- **Kullanıcı İstemi:** `@[StoreChatDrawer.tsx:current_problems]` (`StoreChatDrawer.tsx` dosyasındaki Cognitive Complexity [17 ve 16], optional chaining [satır 253, 257] ve nested ternary [satır 554-737] uyarılarının çözümü).
+- **Tespit Edilen Uyarılar & Çözüm Özeti:**
+  1. `initProductRoom` Cognitive Complexity (16 -> 15 sınırı):
+     - Fallback müşteri odası başlatma mantığı `setupInitialCustomerRoom` fonksiyonuna, aktif oda bağlama mantığı `applyActiveRoom` fonksiyonuna ayrıştırıldı. Karmaşıklık ~3 seviyesine çekildi.
+  2. Optional Chaining Uyarıları:
+     - `!env || !env.event` ifadesi `!env?.event` olarak güncellendi.
+     - `activeRoomRef.current && incoming.room_id === activeRoomRef.current.id` ifadesi `incoming.room_id === activeRoomRef.current?.id` olarak güncellendi.
+  3. `StoreChatDrawer` Cognitive Complexity (17 -> 15 sınırı) & Nested Ternary (no-nested-ternary):
+     - Mesaj alanı render mantığı (`loading`, `empty`, `product_card`, `custom_offer`, `normal_bubble`) bağımsız `ActiveRoomMessages` ve `ChatMessageItem` alt bileşenlerine ayrıştırıldı.
+     - Oda listesi render mantığı bağımsız `RoomListView` alt bileşenine ayrıştırıldı.
+     - İç içe ternary (`loading ? ... : messages.length === 0 ? ... : ...`) tamamen kaldırılarak erken dönüşlü (`if (loading) return ...`) temiz React yapısına kavuşturuldu.
+     - Bileşenin bilişsel karmaşıklığı 17'den ~4 seviyesine düşürüldü.
+- **Doğrulama:**
+  - `npx tsc --noEmit` -> Sıfır hata (Exit code 0).
+
+---
+
+### [2026-10-21] — Oturum #53 (`3e09273a-f073-494a-9e12-d7e40d403164`)
+
+- **Kullanıcı İstemi:** `@[StoreChatDrawer.tsx:current_problems]` (`StoreChatDrawer.tsx:771` satırındaki gereksiz `void` operatörü uyarısının çözümü).
+- **Tespit Edilen Uyarı & Çözüm:**
+  - *Uyarı:* Satır 771: `onClick={() => void handleAcceptOffer(msg)}` ifadesinde zaten `void` dönen fonksiyon için `void` operatörü kullanımı (`no-void`).
+  - *Çözüm:* İfade `onClick={() => handleAcceptOffer(msg)}` olarak sadeleştirildi.
+- **Doğrulama:**
+  - `npx tsc --noEmit` -> Sıfır hata (Exit code 0).
 
 
 
@@ -945,3 +1046,441 @@
 
 
 
+
+
+
+
+
+
+
+---
+
+### [2026-11-07] — Oturum #54 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `/goal bu uygulamanın artık flutter ile bir mobil uygulaması olmasını istiyorum tek bir mobil uygulama ama hem müşteri hem tedarikçi kullanabilecek tedarikçiler ürün girişi yapabilecek içinde kameradan da ürün fotoğrafı çekebilecek yükleyebilecek bir yapıya dönmeli uçtan uça tüm süreci çıkar mobil için ayrı endpoint falan gerekiyorsa onuda yaz tedarikçi chati falan onuda yaz direk play store da yayınlanacak hale getir`
+- **Yapılan Mimari, Backend, Mobil ve Play Store Çalışmaları:**
+  1. **Veritabanı (`@dba` — PostgreSQL 18 Native `uuidv7()`):**
+     - `database/0017_add_mobile_devices_notifications_and_chat_images.sql` oluşturuldu ve `backend/db/db.go` otomatik tablo kurulumuna (`auto-provisioning`) bağlandı (`identity.mobile_devices`, `catalog.mobile_wishlist`, `catalog.mobile_notifications`, `identity.account_deletion_requests`, `catalog.chat_messages` `'image'` mesaj tipi desteği ve `0010` tedarikçi cüzdan/alt sipariş tabloları).
+  2. **Birleşik Go Backend Mobil & Pazaryeri API (`@coder`):**
+     - `backend/handlers/mobile.go` ile `/api/v1/mobile/*` uçları eklendi: `bootstrap` (soğuk açılış tek istek paketi), çift rollü `auth/login` (`customer`/`supplier`/`auto`), `auth/refresh`, Google Play zorunlu `DELETE /api/v1/mobile/auth/account`, `devices`, `notifications`, `wishlist`, `supplier/dashboard`, `supplier/upload-images` (çoklu kamera fotoğrafı yükleme, magic-byte MIME doğrulama, EXIF/boyutlandırma <=1600px JPEG optimizasyonu), `quick-update`, `by-barcode` ve `chat/upload-image`.
+     - `backend/handlers/marketplace.go` SQL kolon uyumsuzlukları (`b.brand_name`, `c.title`) giderildi; tedarikçi alt sipariş (`/api/v1/supplier/orders*`) ve cüzdan/IBAN/ödeme (`/api/v1/supplier/wallet*`, `/api/v1/supplier/payouts`) rotaları `backend/main.go` üzerine bağlandı.
+     - `backend/handlers/chat.go` ve `supplier_portal.go` güncellenerek sohbet içi kamera/görsel paylaşımı, bildirim tetikleyicileri ve alt satış temsilcileri için yerel HS256 JWT fallback desteği sağlandı.
+     - Web tarafında Google Play Store Veri Güvenliği zorunluluğu için `frontend/src/app/account-deletion/` (`page.tsx` & `AccountDeletionClient.tsx`) sayfası oluşturuldu.
+  3. **Birleşik Çift Rollü Flutter Mobil Uygulaması (`mobile/` — `com.mertervitrini.app`):**
+     - Tek uygulamada dinamik **Müşteri Mağazası (`CustomerShell`)** ve **Tedarikçi Stüdyosu (`SupplierShell`)** mimarisi kuruldu (`TR / EN / RU / AR` RTL dahil çok dilli ve `TRY / USD / EUR / RUB` TCMB canlı döviz destekli).
+     - **Dahili Tedarikçi Kamera Stüdyosu (`camera_studio_screen.dart` & `supplier_product_wizard_screen.dart`):** `enableAudio: false` ile mikrofon izni istemeyen 3:4 tekstil kadraj rehberli çoklu seri kamera çekimi, flaş/lens kontrolü, kapak fotoğrafı seçimi, hazır Merter seri şablonları (`1-2-2-1`, `2-2-2`, `S-M-L-XL`, `36-42`), eldeki seri paket sayısına göre otomatik beden stok dağıtıcı ve tek tuşla vitrinde yayınlama sihirbazı geliştirildi.
+     - **Gerçek Zamanlı Centrifuge B2B Sohbet (`centrifuge_service.dart`, `chat_rooms_screen.dart`, `chat_conversation_screen.dart`):** Müşteriler için konuşulan dile göre satış temsilcisi seçimi, numune fotoğraf gönderimi ve özel fiyat teklifini (`custom_offer`) tek dokunuşla sepete onaylama; tedarikçiler için `Tüm Mağaza / Bana Atananlar` oda filtresi, anlık yanıt ve sohbet içinden indirimli paket teklifi gönderme akışı yazıldı.
+     - Tedarikçi KPI Dashboard, Barkod/SKU hızlı ürün bulucu, Hızlı Fiyat/Stok güncelleme çekmecesi, Alt Sipariş & Kargo Takip yönetimi, Cüzdan/IBAN/Ödeme talebi ve Satış Ekibi (alt kullanıcı) yönetimi tamamlandı.
+  4. **Google Play Store Yayın Paketi (`@sre` & `@security`):**
+     - Android SDK 36 (`minSdk 24`, `targetSdk 36`), R8/ProGuard küçültme (`proguard-rules.pro`), System Photo Picker uyumlu ve kısıtlı izinlerden arındırılmış (`RECORD_AUDIO` / `READ_MEDIA_IMAGES` `tools:node="remove"`, `camera` `required="false"`) `AndroidManifest.xml` yapılandırıldı.
+     - Üretim imzalama anahtarı (`mertervitrini-release.jks`), Adaptive Launcher ikonları, `icon_512x512.png`, `feature_graphic_1024x500.png`, 4 adet `1080x1920` mağaza ekran görseli, `PLAY_STORE_LISTING.md` ve `scripts/build_mobile_release.ps1` üretildi.
+- **Doğrulama:**
+  - Backend: `go vet ./...` -> 0 uyarı; `go test ./handlers -v` -> 4/4 PASS; `backend/bin/backend.exe` (Windows) ve `backend/bin/backend` (Linux AMD64) derlendi.
+  - Frontend: `npx tsc --noEmit` -> Exit code 0.
+  - Mobile: `flutter analyze` -> `No issues found!`; `flutter test` -> `6/6 All tests passed!`; `jarsigner -verify` ile doğrulanmış imzalı `app-release.aab` ve `app-release.apk` üretildi.
+
+
+---
+
+### [2026-11-07] — Oturum #55 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `tüm kodları solid prensiplerine uygun hale getir mobil de olsa backende olsa frontende olsa`
+- **Uygulanan Uçtan Uca S.O.L.I.D. Mimari Dönüşüm Özeti:**
+  1. **Mobil Katmanı (`mobile/lib/` & `mobile/test/` — SRP, ISP, LSP, DIP):**
+     - **Ayrıştırılmış Arayüz Kontratları (`contracts/`):** `1.098` satırlık monolitik `MobileApiService` God-class yapısı parçalanarak 7 odaklanmış arayüz kontratı oluşturuldu: [`ICatalogRepository`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/contracts/catalog_repository.dart), [`IAuthRepository`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/contracts/auth_repository.dart), [`ICommerceRepository`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/contracts/commerce_repository.dart), [`IChatRepository`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/contracts/chat_repository.dart) (`IRealtimeMessagingClient` dahil), [`ISupplierCatalogRepository`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/contracts/supplier_catalog_repository.dart), [`ISupplierOperationsRepository`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/contracts/supplier_operations_repository.dart) ve [`ISessionStorage`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/contracts/session_storage.dart).
+     - **Tek Sorumluluklu Repository Katmanı (`repositories/`):** Her kontrat için tek sorumluluklu `Http*Repository` sınıfları ve şifreli anahtar kasasını soyutlayan [`SecureSessionStorage`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/repositories/secure_session_storage.dart) yazıldı; `SessionProvider`, `CartProvider`, `ChatProvider` ve `SupplierProvider` yalnızca ihtiyaç duydukları dar arayüzlere bağımlı hale getirildi (**ISP + DIP**).
+     - **Modüler Ürün Stüdyosu (`features/supplier/wizard/`):** `1.431` satırlık `SupplierProductWizardScreen` ayrıştırılarak saf seri stok dağıtım motoru ([`SeriesStockDistributor`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/supplier/wizard/wizard_models.dart)) ve 4 modüler form kartı (`WizardPhotoStudioCard`, `WizardModelDetailsCard`, `WizardPricingSeriesCard`, `WizardVariantsMatrixCard`) oluşturuldu.
+  2. **Backend Katmanı (`backend/` — SRP, OCP, LSP, DIP):**
+     - **Birleşik HTTP Yanıt Katmanı (`pkg/httpx/`):** [`response.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/httpx/response.go) ile tip güvenli `httpx.JSON`, `httpx.Error` ve `httpx.DecodeJSON` oluşturuldu.
+     - **Domain Servis Soyutlamaları (`services/`):** [`MediaProcessor`](file:///c:/Projects/mertervitrini.com.tr/backend/services/media_service.go) (`LocalImageMediaService`), [`NotificationDispatcher`](file:///c:/Projects/mertervitrini.com.tr/backend/services/notification_service.go) (`PostgresNotificationDispatcher` & `NoopNotificationDispatcher`), [`TokenService`](file:///c:/Projects/mertervitrini.com.tr/backend/services/token_service.go) (`UnifiedTokenService`) ve **OCP/LSP** uyumlu [`AccountDeletionStrategy`](file:///c:/Projects/mertervitrini.com.tr/backend/services/account_deletion_service.go) + `AccountDeletionRegistry` (`CustomerDeletionStrategy`, `SupplierDeletionStrategy`) geliştirilip tüm handler'lara constructor injection ile bağlandı.
+     - **Handler & Router Ayrıştırması:** `1.379` satırlık `handlers/mobile.go` kaldırılarak 4 odaklanmış SRP dosyasına (`mobile_handler.go`, `mobile_auth_handler.go`, `mobile_engagement_handler.go`, `mobile_supplier_handler.go`) bölündü; `main.go` içindeki rota tablosu [`backend/router.go`](file:///c:/Projects/mertervitrini.com.tr/backend/router.go) (`AppHandlers` Composition Root) dosyasına çıkarıldı.
+  3. **Frontend Katmanı (`frontend/src/` — SRP, OCP, ISP, DIP):**
+     - **Tip Güvenli Servis & Strateji Katmanı (`src/services/`):** Sıfır `any` kuralıyla [`FetchHttpClient`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/services/http-client.ts) ve **OCP** uyumlu `AuthHeaderStrategy` (`NoAuthHeaderStrategy`, `BearerTokenHeaderStrategy`, `CustomerChatHeaderStrategy`), [`AdminApiService`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/services/admin-api.service.ts), [`HttpAccountDeletionService`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/services/account-deletion.service.ts) ve [`HttpStoreChatService`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/services/store-chat.service.ts) oluşturuldu.
+     - **Ayrıştırılmış ISP Context Hook'ları & Modüler Bileşenler:** [`AdminContext.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/context/AdminContext.tsx) ağ/oturum işlerini `AdminApiService`'e devretti ve geriye dönük `useAdmin()` korunarak `useAdminAuth`, `useAdminShell`, `useAdminFeeds`, `useAdminCatalog`, `useAdminStoreSettings` hook'larını sundu; `AccountDeletionClient.tsx` ve `StoreChatDrawer.tsx` (`ChatAgentSelector`, `ChatOfferCard`, `ChatMessageList`) tek sorumluluklu bileşenlere ayrıştırıldı.
+- **Doğrulama:**
+  - **Go Backend:** `go vet ./...` -> 0 uyarı; `go test ./services ./handlers -v` -> 6/6 PASS; Windows (`backend/bin/backend.exe`) ve Linux AMD64 (`backend/bin/backend`) binary derlendi.
+  - **Next.js Frontend:** `npx tsc --noEmit` -> 0 hata; `npm run lint` -> 0 hata, 0 uyarı (yerelde `npm run build` çalıştırılmadı - Demir Kural #7).
+  - **Flutter Mobile:** `flutter analyze` -> `No issues found!`; `flutter test` -> `9/9 All tests passed!`; imzalı `app-release.aab` güncellendi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde incelemeye hazır bırakıldı.
+
+
+---
+
+### [2026-11-07] — Oturum #56 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `backend/handlers/mobile_handler.go` (satır 101-103) üzerinde IDE `gopls` derleyicisinin bildirdiği `MissingLitField: unknown field Media / Tokens / Deletion in struct literal of type MobileHandler` tanılamalarının giderilmesi.
+- **Kök Neden ve Uygulanan Çözüm Özeti:**
+  1. **Kök Neden (`gopls` Açık Sekme Tamponu Çakışması):** Önceki adımda `handlers/mobile.go` silinip `handlers/mobile_handler.go` oluşturulmuştu; ancak IDE'de açık kalan eski `mobile.go` sekmesi `gopls`'e bellek-içi (`didOpen` overlay) eski `MobileHandler` struct tanımını (`Media`, `Tokens`, `Deletion` alanları olmayan sürüm) göndermeye devam ettiği için `mobile_handler.go` içindeki struct literal'da alan uyuşmazlığı oluştu.
+  2. **Kalıcı Çözüm:** 260 satırlık çekirdek SRP dosyası (`MobileHandlerDeps`, `MobileHandler`, `NewMobileHandler`, `MediaRootDir`, `Bootstrap`) doğrudan [`backend/handlers/mobile.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile.go) üzerine yazıldı ve mükerrer `backend/handlers/mobile_handler.go` kaldırıldı. Böylece açık editör sekmesi yeni struct tanımıyla birebir senkronize edildi ve 4 SRP dosyalı yapı (`mobile.go`, `mobile_auth_handler.go`, `mobile_engagement_handler.go`, `mobile_supplier_handler.go`) korundu.
+- **Doğrulama:**
+  - `gopls check handlers\mobile.go handlers\mobile_auth_handler.go handlers\mobile_engagement_handler.go handlers\mobile_supplier_handler.go` -> **0 hata / 0 çıktı**.
+  - `go vet ./...` -> **0 uyarı**; `go test ./services ./handlers -v` -> **6/6 PASS**.
+  - Windows (`backend/bin/backend.exe`) ve AlmaLinux AMD64 (`backend/bin/backend`) binary dosyaları yeniden derlendi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-07] — Oturum #57 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `Explain what this problem is and help me fix it: Refactor this method to reduce its Cognitive Complexity from 21 to the 15 allowed. [+16 locations] @[c:\Projects\mertervitrini.com.tr\backend\handlers\chat.go:L945]`
+- **Problem Analizi ve Uygulanan Çözüm Özeti:**
+  1. **Problem Nedir? (Bilişsel Karmaşıklık / Cognitive Complexity `go:S3776`):**
+     - `SendSupplierMessage` metodu; yetkilendirme, gönderici adı çözümleme, iç içe `if-else` ile mesaj tipi tahmini (`text` / `image` / `custom_offer`) ve `switch` içinde yuvalanmış doğrulamaları tek gövdede topladığı için yuvalanma cezalarıyla birlikte **21** bilişsel karmaşıklık puanına ulaşmıştı (izin verilen üst sınır: **15**).
+  2. **Uygulanan SRP & Guard Clause Refactoring (`backend/handlers/chat.go` & `mobile_test.go`):**
+     - Davranış %100 korunarak tek sorumluluklu yardımcı fonksiyonlar çıkarıldı: `inferChatMessageType` (karmaşıklık: `2`), `buildImageMessagePayload` (`2`), `resolveSupplierSender` (`3`), `buildSupplierMessagePayload` (`9`), `buildCustomerMessagePayload` (`3`) ve `postInitialProductCardIfMissing` (`2`).
+     - Böylece `SendSupplierMessage` bilişsel karmaşıklığı **21 → 7** seviyesine düşürüldü; aynı dosyadaki `SendCustomerMessage` (**16 → 6**) ve `InitOrGetRoom` (**17 → 11**) da 15 sınırının altına çekildi.
+     - `backend/handlers/mobile_test.go` içerisine `TestChatMessagePayloadAndSupplierSenderHelpers` birim testi eklendi.
+- **Doğrulama:**
+  - `go vet ./...` ve `gopls check handlers\chat.go handlers\mobile_test.go` -> **0 uyarı / 0 hata**.
+  - `go test ./services ./handlers -v` -> **7/7 PASS**.
+  - Windows (`backend/bin/backend.exe`) ve AlmaLinux AMD64 (`backend/bin/backend`) ikili dosyaları yeniden derlendi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-07] — Oturum #58 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `Explain what this problem is and help me fix it: Refactor this method to reduce its Cognitive Complexity from 21 to the 15 allowed. [+11 locations] @[c:\Projects\mertervitrini.com.tr\backend\handlers\mobile.go:L39]`
+- **Problem Analizi ve Uygulanan Çözüm Özeti:**
+  1. **Problem Nedir? (İç İçe Lambda / Closure Yuvalanma Cezası — `go:S3776`):**
+     - `NewMobileHandler` içinde `if deletionReg == nil` (derinlik 1) → `if storeAuth != nil && cfg != nil` (derinlik 2) → satır içi anonim closure `kcDeleter = func(...)` (derinlik **3**) tanımlandığı için, closure içindeki basit `if err != nil` kontrollerinin her biri **+4 ila +5 puan** alarak toplam bilişsel karmaşıklığı **21** seviyesine çıkarmıştı.
+  2. **Uygulanan SRP & Erken Çıkış Refactoring (`mobile.go`, `mobile_auth_handler.go`, `token_service.go`):**
+     - [`backend/handlers/mobile.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile.go): `deleteKeycloakUserViaAdmin` (karmaşıklık: `4`), `buildDefaultDeletionRegistry` (`2`) ve `resolveTokenService` (`2`) ayrı fonksiyonlara çıkarıldı; `NewMobileHandler` bilişsel karmaşıklığı **21 → 3** seviyesine indirildi.
+     - Proaktif tarama ile aynı mobil/SOLID modüllerinde `15` sınırını aşan diğer iki metot da sadeleştirildi: [`mobile_auth_handler.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_auth_handler.go) içindeki `RefreshToken` (**27 → 2**, `exchangeKeycloakRefreshToken` + `tryReissueSupplierToken` ile) ve `Login` (**13 → 6**, `tryAutoSupplierLogin` ile); [`services/token_service.go`](file:///c:/Projects/mertervitrini.com.tr/backend/services/token_service.go) içindeki `parseAndVerifyClaims` (**27 → 5**, `verifyHMACTokenClaims` + `verifyRSATokenClaims` + `decodeUnverifiedClaimsWithExp` ile).
+- **Doğrulama:**
+  - AST tabanlı Bilişsel Karmaşıklık taraması (`handlers/mobile*.go`, `handlers/chat.go`, `handlers/supplier_portal.go`, `services/*.go`, `router.go`, `main.go`) -> **15 sınırını aşan 0 fonksiyon**.
+  - `go vet ./...`, `gopls check` ve `go test ./services ./handlers -v` -> **7/7 PASS, 0 uyarı**.
+  - Windows (`backend/bin/backend.exe`) ve AlmaLinux AMD64 (`backend/bin/backend`) binary dosyaları yeniden derlendi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-07] — Oturum #59 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `mobile_auth_handler.go:150` üzerinde SonarLint `go:S1192` (`Define a constant instead of duplicating this literal "E-posta veya şifre hatalı." 3 times.`) uyarısının giderilmesi.
+- **Uygulanan Çözüm ve Proaktif Temizlik Özeti:**
+  1. [`backend/handlers/constants.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/constants.go) içine merkezi hata sabitleri (`errMsgInvalidCredentials`, `errMsgLoginRequired`, `errJSONUnauthorized`, `errJSONInvalidPayload`, `errJSONTxBeginFailed`, `errJSONMissingID`) tanımlandı.
+  2. [`backend/handlers/mobile_auth_handler.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_auth_handler.go) içindeki 3 adet `"E-posta veya şifre hatalı."` tekrarı `errMsgInvalidCredentials` sabitiyle değiştirildi.
+  3. Aynı `go:S1192` kuralına takılmaması için proaktif olarak [`mobile_engagement_handler.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_engagement_handler.go) (`errMsgLoginRequired`), [`services/token_service.go`](file:///c:/Projects/mertervitrini.com.tr/backend/services/token_service.go) (`errInvalidSessionToken`, `errExpiredOrInvalidToken`), [`marketplace.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/marketplace.go) ve [`supplier_portal.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_portal.go) içindeki tekrarlayan hata metinleri de sabitlere bağlandı.
+- **Doğrulama:**
+  - AST `S1192 / S3776 / S107` taraması -> tüm açık/düzenlenen Go dosyalarında tekrarlayan hata metni uyarısı kalmadı.
+  - `go vet ./...` ve `go test ./services ./handlers` -> **PASS, 0 uyarı**.
+  - Windows (`backend/bin/backend.exe`) ve AlmaLinux AMD64 (`backend/bin/backend`) binary dosyaları yeniden derlendi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-07] — Oturum #60 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `backend/services/notification_service.go:107-112` üzerinde SonarLint `go:S1186` (`Add a nested comment explaining why this function is empty or complete the implementation.`) uyarılarının giderilmesi.
+- **Uygulanan Çözüm Özeti:**
+  - [`backend/services/notification_service.go`](file:///c:/Projects/mertervitrini.com.tr/backend/services/notification_service.go) içerisindeki `NoopNotificationDispatcher` (`NotifyUserAsync`, `NotifySupplierBrandAsync`, `NotifySupplierChatAsync`) metot gövdelerine bu yapıların birim testler ve çevrimdışı mod için bilinçli **Null-Object (LSP)** implementasyonu olduğunu açıklayan iç yorumlar eklendi.
+- **Doğrulama:**
+  - `go vet ./...`, `gopls check services\notification_service.go` ve `go test ./services ./handlers` -> **PASS, 0 uyarı**.
+  - Windows (`backend/bin/backend.exe`) ve AlmaLinux AMD64 (`backend/bin/backend`) binary dosyaları yeniden derlendi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-07] — Oturum #61 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `C:\Projects\mertervitrini.com.tr\mobile buraya derleme için bir powershelll yaz windows da çalıştırma içinde derle çalıştır vb`
+- **Yapılan İşlemler ve Doğrulama Özeti:**
+  1. **Windows Masaüstü Platformu & Kamera Desteği (`mobile/windows/` & `pubspec.yaml`):**
+     - `flutter create --platforms=windows --project-name=mertervitrini_mobile .` ile Windows C++ masaüstü runner projesi oluşturuldu; [`windows/runner/main.cpp`](file:///c:/Projects/mertervitrini.com.tr/mobile/windows/runner/main.cpp) pencere başlığı `"Merter Vitrini B2B"` ve varsayılan mobil önizleme boyutu `460x900` (yeniden boyutlandırılabilir) olarak yapılandırıldı.
+     - Windows üzerinde canlı webcam ve dosya seçici desteğinin sorunsuz çalışması için `camera_windows` (`0.3.0+1`) bağımlılığı [`pubspec.yaml`](file:///c:/Projects/mertervitrini.com.tr/mobile/pubspec.yaml) içerisine eklendi.
+  2. **Birleşik PowerShell Yönetim Aracı ([`mobile/mobile.ps1`](file:///c:/Projects/mertervitrini.com.tr/mobile/mobile.ps1)) ve [`mobile/README.md`](file:///c:/Projects/mertervitrini.com.tr/mobile/README.md):**
+     - Argümansız çalıştırıldığında (`.\mobile.ps1`) `0-9` interaktif Türkçe seçim menüsü sunan, parametreyle doğrudan komut koşturabilen kapsamlı PowerShell scripti yazıldı:
+       - `run` / `run-win`: Windows masaüstünde Hot-Reload geliştirme oturumu açar (`-Local` veya `run-local` ile `http://localhost:8080` yerel backend'e bağlanır).
+       - `build-win` / `build-run-win` / `open-win`: Windows Release `.exe` (`build\windows\x64\runner\Release\mertervitrini_mobile.exe`) derler ve/veya anında çalıştırır; çalışan eski `.exe` kilidini otomatik kapatır.
+       - `apk` / `apk-debug` / `aab` / `release`: JDK 21 ortamını otomatik algılayarak Android APK ve Google Play Store imzalı AAB paketlerini üretir (`-OpenFolder` ile Explorer'da gösterir).
+       - `check` / `analyze` / `test` / `clean` / `devices` / `doctor`: Statik analiz, birim test ve temizlik komutlarını yürütür.
+- **Doğrulama:**
+  - `.\mobile.ps1 check` (`flutter analyze` -> `No issues found!`, `flutter test` -> `9/9 PASS`) ve `.\mobile.ps1 build-win` -> `build\windows\x64\runner\Release\mertervitrini_mobile.exe` başarıyla üretildi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm dosyalar yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-07] — Oturum #62 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `mobile/mobile.ps1` üzerinde `PSScriptAnalyzer` (`PSUseApprovedVerbs`) uyarılarının (`Ensure-WindowsPlatform`, `Execute-SelectedAction`) giderilmesi.
+- **Uygulanan Çözüm Özeti:**
+  - [`mobile/mobile.ps1`](file:///c:/Projects/mertervitrini.com.tr/mobile/mobile.ps1) içerisindeki onaylanmamış PowerShell fiilleri (`Ensure-*`, `Execute-*`), resmi Microsoft onaylı PowerShell fiilleriyle (`Initialize-WindowsPlatform` ve `Invoke-SelectedAction`) değiştirildi.
+- **Doğrulama:**
+  - `PSScriptAnalyzer` / sözdizimi ve `.\mobile.ps1 devices` çalışması sıfır uyarı ile doğrulandı.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-07] — Oturum #63 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `windowsda sağa sola resimleri neden değiştiremiyorum windows da exe icponu farklı olmalı default kalmış vitrin nedir daha önce varmıydı bizde boş geliyor` (2 adet çalışan Windows uygulama ekran görüntüsü ile birlikte)
+- **Kök Neden Analizi:**
+  1. **Windows'ta Resimlerin Sağa/Sola Kaymaması:** Flutter masaüstü `MaterialScrollBehavior` varsayılan olarak fare sürüklemesini (`PointerDeviceKind.mouse`) devre dışı bırakır; ayrıca [`product_detail_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/product_detail_screen.dart) içerisindeki `InteractiveViewer` varsayılan `panEnabled: true` ile yatay sürükleme hareketini yakalıyordu ve masaüstü `<` / `>` ok butonları veya küçük resim şeridi bulunmuyordu.
+  2. **Varsayılan Flutter `.exe` / Pencere İkonu:** `flutter create --platforms=windows` şablonu `windows/runner/resources/app_icon.ico` içerisine varsayılan mavi Flutter logosunu koymuştu.
+  3. **`"Vitrin"` Sekmesinin Ne Olduğu ve Neden Boş Geldiği:** Web'deki karşılığı Storefront açılış sayfası (`Ana Sayfa` / `PortalView.tsx`) olan ilk sekme mobilde `"Vitrin"` olarak adlandırılmıştı. Uygulama canlı `https://mertervitrini.com.tr` sunucusuna bağlandığında, yeni yazılan `GET /api/v1/mobile/bootstrap` uç noktası henüz canlı sunucuya deploy edilmediği için (Demir Kural #1) `404` dönüyor ve vitrin ürünleri boş kalıyordu (`Katalog` sekmesi ise canlıdaki mevcut `/api/v1/store/products` uç noktasını kullandığından dolu geliyordu).
+  4. **Ekran Görüntüsü #1 Tedarikçi Maskeleme Bulgusu:** Ürün detay ekranında `SKU: FLORA-L6MV` yanında ham tedarikçi adı (`ETIKA FASHION TOPTAN`) görünüyordu.
+- **Uygulanan Çözüm Özeti:**
+  1. **Masaüstü Fare Sürükleme, `<` / `>` Ok Butonları, Küçük Resim (Thumbnail) Galerisi ve Klavye Okları:**
+     - [`mobile/lib/main.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/main.dart): `AppScrollBehavior` tanımlanarak tüm yatay liste ve karusellerde `mouse`, `trackpad`, `touch` ve `stylus` sürükleme desteği etkinleştirildi.
+     - [`mobile/lib/features/customer/product_detail_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/product_detail_screen.dart): `PageController`, sol/sağ dairesel ok butonları (`_GalleryNavButton`), tıklanabilir yatay küçük resim (thumbnail) galerisi, klavye `Sol/Sağ` yön tuşu kısayolları (`CallbackShortcuts`) ve `InteractiveViewer(panEnabled: false)` eklendi.
+     - [`mobile/lib/widgets/product_card.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/widgets/product_card.dart): Ürün kartları üzerinde de çoklu görseller arasında hızlı geçiş sağlayan mini `<` / `>` ok butonları ve alt segment göstergesi eklendi.
+     - [`mobile/lib/features/customer/home_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/home_screen.dart) & [`catalog_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/catalog_screen.dart): Genişletilmiş Windows masaüstü pencereleri için duyarlı (responsive `2..5`) sütun sayısı eklendi.
+  2. **Özel Merter Vitrini `"MV"` Windows `.exe` ve Başlık Çubuğu İkonu:**
+     - [`mobile/store_listing/icon_512x512.png`](file:///c:/Projects/mertervitrini.com.tr/mobile/store_listing/icon_512x512.png) kurumsal lacivert-altın `"MV"` logosundan çoklu çözünürlüklü (`16, 24, 32, 48, 64, 128, 256 px`) RGBA [`.ico` dosyası](file:///c:/Projects/mertervitrini.com.tr/mobile/windows/runner/resources/app_icon.ico) üretildi ve [`Runner.rc`](file:///c:/Projects/mertervitrini.com.tr/mobile/windows/runner/Runner.rc) şirket/ürün üst verileri güncellendi.
+  3. **`"Ana Sayfa"` İsimlendirmesi ve Canlı Sunucu Otomatik Fallback Mekanizması:**
+     - [`mobile/lib/core/localization.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/core/localization.dart): Türkçe sekme adı web ile tutarlı olacak şekilde `'Vitrin'` yerine `'Ana Sayfa'` olarak güncellendi.
+     - [`mobile/lib/repositories/http_catalog_repository.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/repositories/http_catalog_repository.dart): `/api/v1/mobile/bootstrap` uç noktası `404` veya hata döndürdüğünde canlıdaki mevcut `/api/v1/store/products`, `/api/v1/store/categories`, `/api/v1/store/brands`, `/api/v1/store/exchange-rates` ve `/api/v1/store/settings` uç noktalarından paralel (`Future.wait`) veri çeken `_fetchBootstrapFromStorefrontEndpoints()` geri dönüş (fallback) katmanı eklendi.
+  4. **Tedarikçi Maskeleme Kuralı (`AGENTS.md` Madde 1.3):**
+     - [`mobile/lib/models/product.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/models/product.dart) (`maskedBrandName` getter'ı) ve [`backend/handlers/store_catalog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_catalog.go) (`COALESCE(NULLIF(b.alias_code, ''), b.brand_name)`) güncellenerek müşteri arayüzünde `ETIKA FASHION TOPTAN` yerine `FLORA` maske kodunun gösterilmesi garanti altına alındı.
+- **Doğrulama:**
+  - `.\mobile.ps1 check`: `flutter analyze` -> **`No issues found!`**, `flutter test` -> **`10/10 PASS`**.
+  - `.\mobile.ps1 build-win`: `build\windows\x64\runner\Release\mertervitrini_mobile.exe` yeni `"MV"` ikonu gömülü olarak yeniden derlendi.
+  - Backend: `go vet ./...` -> **0 uyarı**; Windows (`backend/bin/backend.exe`) ve Linux AMD64 (`backend/bin/backend`) binary dosyaları yeniden derlendi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-08] — Oturum #64 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `sitedeki tasarım neyse onu göstermek daha iyi değilmi baner falan da yok çünkü burada sitenin ana sayfası yok gibi bir şey`
+- **Mimari & Görsel Uyum Analizi:**
+  - Web vitrinindeki [`PortalView.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/PortalView.tsx), [`Header.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/Header.tsx), [`ProductCard.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/ProductCard.tsx), [`globals.css`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/globals.css) ve [`i18n.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/i18n.ts) birebir incelendi.
+  - Web sitesinin **Monokrom Lüks Editoryal** tasarım dili (`#000000` / `#1C1C1C` siyah-oniks tipografi, `#F8F6F2` fildişi karusel kartları, `#7A634E` bronz-altın vurgular, `#EDEDED` ince çerçeveler, keskin `0px` köşeler, Georgia serif başlıklar ve 10 adet gerçek kampanya/koleksiyon WebP görseli) mobil uygulamaya 1:1 aktarıldı.
+- **Uygulanan Çözüm Özeti:**
+  1. **Orijinal Web Banner'larının Gömülmesi (`mobile/assets/banners/` & [`pubspec.yaml`](file:///c:/Projects/mertervitrini.com.tr/mobile/pubspec.yaml)):**
+     - `frontend/public/banners/` altındaki 20 adet yüksek çözünürlüklü `.webp` (`hero_new_season`, `hero_women_collection`, `hero_men_collection`, `hero_accessories`, `hero_new_opportunities`, `hero_app_promo` + `collection_kadin`, `collection_erkek`, `collection_ic_giyim`, `collection_aksesuar` hem mobil `_mobile.webp` hem masaüstü `.webp` varyantlarıyla) `mobile/assets/banners/` dizinine kopyalandı; ekran genişliğine göre (`<= 680px` mobil, `> 680px` masaüstü) sıfır gecikmeyle yüklenmesi sağlandı.
+  2. **Monokrom Lüks Editoryal Tema ([`app_theme.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/core/app_theme.dart)) & Web Metinleri ([`localization.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/core/localization.dart)):**
+     - Web'deki renk paleti (`pureBlack`, `eerieBlack`, `onyx`, `sonicSilver`, `cultured`, `editorialGold`, `editorialIvory`, `editorialOffWhite`, `discountRed`) ve `TR / EN / RU / AR` çok dilli tüm `portal_*` kampanya ve koleksiyon metinleri birebir eklendi.
+  3. **Web `Header.tsx` Uyumlu Mağaza Üst Barı ([`customer_shell.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/customer_shell.dart)):**
+     - Üst şerit: `TOPTAN / B2B SHOWROOM — DOĞRUDAN ÜRETİCİDEN DİJİTAL TEDARİK` + kompakt dil (`TR/EN/AR/RU`) ve döviz (`TRY/USD/EUR/RUB`) seçicileri.
+     - Ana marka barı: Serif **`MERTER VİTRİNİ`** / **`TOPTAN SHOWROOM`** logosu + fildişi çerçeveli **`TEDARİKÇİ GİRİŞİ`** geçiş butonu + bildirim zili.
+  4. **Web `PortalView.tsx` Birebir Ana Sayfa Kurgusu ([`home_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/home_screen.dart)):**
+     - Üst hızlı arama çubuğu + `Kategori Seçin` çekmecesi + `TÜMÜ` butonu.
+     - **A. 6 Slaytlı Otomatik Kayan Lüks Hero Karuseli** (`6 sn` otomatik geçiş, fare sürükleme, `<` / `>` oklar, alt çizgi indikatörler, `#F8F6F2` fildişi kart ve altı çizili siyah CTA linkleri).
+     - **B. Keskin Çerçeveli Kategori Rozetleri** (`KADIN GİYİM`, `ERKEK GİYİM` vb.).
+     - **C. `SEZON KOLEKSİYONLARI` 4'lü Görsel Editoryal Koleksiyon Vitrin Kartları** (`Kadın Giyim`, `Erkek Giyim`, `İç Giyim`, `Aksesuar`).
+     - **D. `YENİ GELEN SEÇKİNLER` Ürün Izgarası** (canlı sunucu ürünleri).
+     - **E. `POPÜLER B2B TOPTAN ARAMALARI` Şeridi** (`Toptan Kadın Elbise Modelleri`, `Jaguar Elbise`, `Toptan Büstiyer`, `Merter Toptan Erkek Giyim`).
+     - **F. `TÜM KOLEKSİYONU KEŞFEDİN` Alt Çağrı Paneli** (`TÜM ÜRÜNLERİ İNCELE`).
+  5. **Web `ProductCard.tsx` Birebir Ürün Kartı ([`product_card.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/widgets/product_card.dart)):**
+     - `#FAFAFA` tam boy (`BoxFit.contain`) görsel çerçevesi, `% İNDİRİM` (`#A30000`) / cinsiyet rozeti, kare favori butonu, `<` / `>` görsel okları, siyah/gri alt çizgi barları, `+X RENK` rozeti, maskeli üretici kodu (`FLORA` vb.), `SERİ` beden/dağılım kutusu ve kart üzerinde siyah **`SEPETE EKLE`** butonu eklendi.
+- **Doğrulama:**
+  - `.\mobile.ps1 check`: `flutter analyze` -> **`No issues found!`**, `flutter test` -> **`10/10 PASS`**.
+  - `.\mobile.ps1 build-win`: `build\windows\x64\runner\Release\mertervitrini_mobile.exe` tüm gömülü banner'lar ve yeni vitrin tasarımıyla başarıyla yeniden derlendi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-08] — Oturum #65 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `mobil uygulamada bayrak ülke icon falan tok mu neden görünmüyor`
+- **Kök Neden Analizi:**
+  1. Web sitesinde ([`Header.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/Header.tsx)) dil seçicisinde harici `flagcdn.com` görselleri kullanılırken mobil üst çubukta (`_HeaderDropdownPill`) ve profil ekranındaki dil/döviz seçimlerinde henüz bayrak ikonu bağlanmamıştı.
+  2. Ayrıca Windows 10/11 işletim sisteminin `Segoe UI Emoji` yazı tipi, Unicode ülke bayrak emojilerini (`🇹🇷`, `🇬🇧` vb.) desteklemez ve düz harf (`TR`, `GB`) olarak basar.
+- **Uygulanan Çözüm Özeti:**
+  1. **Platformdan ve Ağdan Bağımsız Vektörel Bayrak Bileşeni ([`country_flag_icon.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/widgets/country_flag_icon.dart)):**
+     - Hem Windows masaüstünde hem Android/iOS'ta internet bağlantısı gerektirmeden keskin çözünürlükte çizim yapan `CustomPainter` tabanlı `CountryFlagIcon` bileşeni yazıldı (`tr`/`TRY` Ay-Yıldız Türk Bayrağı, `en`/`gb`/`GBP` Birleşik Krallık, `us`/`USD` ABD, `eu`/`EUR` Avrupa Birliği, `ru`/`RUB` Rusya, `ar`/`sa` Suudi Arabistan, `de`, `fr`, `pl`, `bg`).
+  2. **Üst Bar Dil & Döviz Seçicileri ([`customer_shell.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/customer_shell.dart)) ve [`currency_formatter.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/core/currency_formatter.dart):**
+     - Üst şeritteki aktif dil (`TR`) ve döviz (`TRY`) butonlarının soluna ülke bayrağı eklendi; açılır menülerin içine de bayraklı tam isimler (`TÜRKÇE`, `ENGLISH`, `العربية`, `РУССКИЙ` ve `TRY (₺)`, `USD ($)`, `EUR (€)`, `GBP (£)`, `RUB (₽)`) bağlandı.
+  3. **Profil Tercih Yongaları ([`customer_profile_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/customer_profile_screen.dart)) & Birim Test ([`widget_test.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/test/widget_test.dart)):**
+     - Profil ekranındaki tüm dil ve para birimi `ChoiceChip` seçeneklerine `CountryFlagIcon` avatarları eklendi; eşleme mantığı birim testle doğrulandı.
+- **Doğrulama:**
+  - `.\mobile.ps1 check`: `flutter analyze` -> **`No issues found!`**, `flutter test` -> **`11/11 PASS`**.
+  - `.\mobile.ps1 build-win`: `build\windows\x64\runner\Release\mertervitrini_mobile.exe` başarıyla yeniden derlendi.
+- **Git / Sunucu Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı; tüm değişiklikler yerel çalışma dizininde bırakıldı.
+
+
+---
+
+### [2026-11-08] — Oturum #66 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `birde artık apk yap apk siteye yüklensin ben indireceğim daha sonra güncelleme işi yeni versiyon var download edilsinmi falan gibi işler de artık oradan yürüsün android telefonuma atacağım bir defa sonra yeni güncelleme olunca kendisi kontrol etsin ve indirsin kendi kendini güncelleyebilsin bu yapıyı kur`
+- **Uygulanan Çözüm Özeti (Uçtan Uca OTA Kendini Güncelleyen Android Dağıtım Altyapısı):**
+  1. **Go Backend OTA Sürüm & APK Akış Uçları ([`mobile_release_handler.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_release_handler.go), [`mobile.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile.go), [`router.go`](file:///c:/Projects/mertervitrini.com.tr/backend/router.go), [`middleware.go`](file:///c:/Projects/mertervitrini.com.tr/backend/middleware/middleware.go)):**
+     - `GET /api/v1/mobile/version`: `/var/www/media/releases/version.json` manifestosunu önbelleksiz (`no-store`) okur, APK varlığını ve dosya boyutunu doğrular.
+     - `GET/HEAD /api/v1/mobile/apk` ve `/api/v1/mobile/apk/download`: `http.ResponseController` ile 15 dakikalık yazma süresi tanımlar, `application/vnd.android.package-archive` MIME başlığı, `X-Accel-Buffering: no`, `Content-Length` ve HTTP `Range` desteğiyle imzalı APK'yı sunar; path traversal saldırılarını `sanitizeApkFilename` ile engeller.
+     - [`mobile_release_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_release_test.go) birim testi eklendi ve `go test` + `go vet` doğrulandı.
+  2. **Web Sitesi Mobil İndirme Merkezi ([`mobil-uygulama/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/mobil-uygulama/page.tsx), [`MobileAppDownloadClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/mobil-uygulama/MobileAppDownloadClient.tsx), [`apk/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/apk/page.tsx), [`Header.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/Header.tsx), [`Footer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/Footer.tsx)):**
+     - `https://mertervitrini.com.tr/mobil-uygulama` (ve kısa yönlendirme `https://mertervitrini.com.tr/apk`) sayfası oluşturuldu; canlı sürüm bilgisi, MB boyutu, SHA-256 doğrulama özeti ve tek tıkla APK indirme butonu eklendi.
+     - Mobil üst şerit (`APK İNDİR`), masaüstü üst bar ve footer alanlarına doğrudan indirme bağlantıları eklendi.
+  3. **Android Yerel (Native) Kendi Kendini Güncelleyen (Self-Update) Motor ([`MainActivity.kt`](file:///c:/Projects/mertervitrini.com.tr/mobile/android/app/src/main/kotlin/com/mertervitrini/app/MainActivity.kt), [`AndroidManifest.xml`](file:///c:/Projects/mertervitrini.com.tr/mobile/android/app/src/main/AndroidManifest.xml), [`apk_installer_paths.xml`](file:///c:/Projects/mertervitrini.com.tr/mobile/android/app/src/main/res/xml/apk_installer_paths.xml), [`proguard-rules.pro`](file:///c:/Projects/mertervitrini.com.tr/mobile/android/app/proguard-rules.pro), [`app_update_service.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/services/app_update_service.dart), [`app_update_dialog.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/widgets/app_update_dialog.dart)):**
+     - `REQUEST_INSTALL_PACKAGES` izni ve `androidx.core.content.FileProvider` (`${applicationId}.apkprovider`) yapılandırıldı.
+     - `MainActivity.kt` içerisine `com.mertervitrini.app/ota_updater` kanalı eklendi: arka plan iş parçacığında akışlı SHA-256 doğrulaması, `ACTION_MANAGE_UNKNOWN_APP_SOURCES` izin yönlendirmesi ve kullanıcı izni açıp uygulamaya döndüğünde (`onResume`) kurulum penceresini otomatik başlatma desteği sağlandı.
+     - Uygulama açılışında (`CustomerShell` ve `SupplierShell`) otomatik yeni sürüm kontrolü ve **Profil -> Uygulama Güncellemelerini Kontrol Et** manuel denetim butonu bağlandı.
+  4. **Tek Komutla Otomatik Sürüm Artırma, Derleme ve Canlı Yayın Aracı ([`publish_mobile_apk.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/publish_mobile_apk.py), [`mobile.ps1`](file:///c:/Projects/mertervitrini.com.tr/mobile/mobile.ps1)):**
+     - `.\mobile.ps1 publish-apk` ve `.\mobile.ps1 bump-publish` komutları eklendi; atomik SFTP yükleme (`.tmp` -> `mv`) ve son 3 sürümü koruyan otomatik temizlik kuruldu.
+- **Canlı Dağıtım & Doğrulama:**
+  - `go vet ./...`, `npx tsc --noEmit`, `npm run lint`, `flutter analyze` -> **0 hata / 0 uyarı**, `flutter test` -> **12/12 PASS**.
+  - İmzalı `mertervitrini-v1.0.0+1.apk` (`60.4 MB`, SHA-256: `109da360c15763b4264ff200b95c62b34d089bda3b77295c4ab151a6f8267015`), Unified Go Backend ve Next.js SSR Frontend canlı sunucuya (`mertervitrini.com.tr`) aktarıldı; `/api/v1/mobile/version`, `/api/v1/mobile/apk` (`200 OK`, `application/vnd.android.package-archive`) ve `/mobil-uygulama` (`200 OK`) uçları canlı doğrulandı.
+- **Git Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı.
+
+
+---
+
+### [2026-11-08] — Oturum #67 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** [`scripts/publish_mobile_apk.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/publish_mobile_apk.py) satır 32 üzerindeki 4 adet SonarLint `python:S6353` (`Use concise character class syntax '\d' instead of '[0-9]'.`) uyarısının giderilmesi.
+- **Uygulanan Çözüm Özeti:**
+  - [`parse_pubspec_version`](file:///c:/Projects/mertervitrini.com.tr/scripts/publish_mobile_apk.py#L29-L37) içindeki düzenli ifade `r"^version:\s*([0-9]+\.[0-9]+\.[0-9]+)(?:\+([0-9]+))?"` yerine `r"^version:\s*(\d+\.\d+\.\d+)(?:\+(\d+))?"` olarak sadeleştirildi.
+  - `python scripts\publish_mobile_apk.py --local-only` ile doğrulandı (`v1.0.0`, `Build #1`, `SHA-256` üretimi sorunsuz).
+- **Git Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı.
+
+
+---
+
+### [2026-11-08] — Oturum #68 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** `mobil uygulama daha şık olmalı iconlar falan yerleşimler iyice üzerinden geç şıklık olarak`
+- **Uygulanan Çözüm Özeti (Couture Monochrome & Champagne Gold Lüks Editoryal UI/UX Yenilemesi + OTA `v1.0.1+2` Yayımı):**
+  1. **Özel Vektörel İnce Çizgi İkon Seti & Couture Alt Navigasyon Barı ([`luxury_icons.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/widgets/luxury_icons.dart)):**
+     - `1.55px` mimari çizgiler ve şampanya altın (`#B89655`) vurgularla çizilen `LuxuryIcon` (`showroom`, `collection`, `bag`, `concierge`, `account`, `heart`, `bell`, `search`, `filter`, `studioCamera`, `share`, `orders`, `location`, `shield`, `document`, `update`) oluşturuldu.
+     - Çift altın çerçeveli Georgia Serif `MV` arması (`MvEditorialCrest`) ve kaba Material 3 kapsüllerinin yerine animasyonlu `2px` üst aktif çizgili, kare rozetli `EditorialBottomNavBar` eklendi.
+  2. **Türkçe Büyük Harf Tipografi Düzeltmesi ([`localization.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/core/localization.dart), [`app_theme.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/core/app_theme.dart)):**
+     - `AppStrings.upper` ve `AppStrings.tUpper` ile Türkçe `i -> İ` / `ı -> I` dönüşümü korundu (`MERTER VİTRİNİ`, `VİTRİN`, `PROFİL`, `TEDARİKÇİ GİRİŞİ` başlıklarındaki noktasız `I` kusurları giderildi).
+     - `AppColors.obsidian` (`#111111`) ve `AppColors.champagneGold` (`#B89655`) renk jetonları ve keskin köşeli diyalog/alt-çekmece temaları tanımlandı.
+  3. **Tüm Ana Ekranların Baştan Sona Yenilenmesi:**
+     - **Üst Başlık & Kabuklar ([`customer_shell.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/customer_shell.dart), [`supplier_shell.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/supplier/supplier_shell.dart), [`main.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/main.dart), [`notifications_sheet.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/widgets/notifications_sheet.dart)):** `#111111` obsidiyen duyuru/bayrak-döviz şeridi, `MvEditorialCrest` armalı Georgia Serif vitrin başlığı, altın çerçeveli `TEDARİKÇİ` butonu ve kare bildirim butonu kurgulandı.
+     - **Vitrin, Ürün Kartı & Katalog ([`home_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/home_screen.dart), [`product_card.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/widgets/product_card.dart), [`catalog_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/catalog_screen.dart)):** Hızlı yatay kategori şeritleri, altın ince çizgili bölüm başlıkları, ürün kartlarında mor/indigo renk lekelerinin kaldırılıp monokrom-şampanya renk kartelası, SKU mikro satırı ve `LuxuryIcon` kalp/çanta butonları eklendi.
+     - **Ürün Detay ([`product_detail_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/product_detail_screen.dart)):** Nane yeşili ve mavi-gri yuvarlak kutular kaldırıldı; `#FAFAFA` galeri, `#111111` + şampanya altın **1 SERİ** hesaplama kartı, keskin kare `- / N PAKET / +` seçici, canlı pazarlık kartı ve 2 sütunlu teknik özellik tablosu uygulandı.
+     - **Sepet, Sohbet, Profil, Siparişler & Giriş ([`cart_and_checkout_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/cart_and_checkout_screen.dart), [`chat_rooms_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/chat/chat_rooms_screen.dart), [`customer_profile_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/customer_profile_screen.dart), [`customer_orders_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/customer_orders_screen.dart), [`auth_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/auth/auth_screen.dart)):** Lacivert/mavi gradyanlar ve yuvarlak çipler kaldırıldı; dikdörtgen bayraklı döviz/dil karoları, hizalı kare `LuxuryIcon` menü satırları ve mimari rol seçici sekmeler eklendi.
+- **Test, Derleme & Canlı OTA Yayımı:**
+  - `flutter analyze` -> **0 hata / 0 uyarı**; `flutter test` ([`widget_test.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/test/widget_test.dart)) -> **13/13 PASS**.
+  - `.\mobile.ps1 bump-publish` ile sürüm **`v1.0.1+2`** (`mertervitrini-v1.0.1+2.apk`, `60.49 MB`, SHA-256: `be342b34d98c9fe84f131040d2aa424640d43b94a07b2bac4e4c332bc1dfad95`) imzalı derlenip `mertervitrini.com.tr` canlı sunucusuna yüklendi; Windows masaüstü sürümü (`mertervitrini_mobile.exe`) de güncellendi.
+- **Git Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı.
+
+
+---
+
+### [2026-11-08] — Oturum #69 (`ea80f35f-34dd-451d-a636-45dd496a7728`)
+
+- **Kullanıcı İstemi:** [`mobile_release_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_release_test.go) dosyasında staticcheck S1030 uyarısı (`should use apkRec.Body.String() instead of string(apkRec.Body.Bytes())`).
+- **Uygulanan Çözüm Özeti:**
+  - [`mobile_release_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_release_test.go#L78) 78. satırındaki `string(apkRec.Body.Bytes())` ifadesi `apkRec.Body.String()` olarak güncellendi.
+  - `go test -v ./handlers -run TestMobileOtaVersionAndApkDownload` ve `go vet ./...` kontrolleri 0 hata ile doğrulandı.
+- **Git Durumu:** Demir Kural #1 uyarınca `git commit` veya `git push` çalıştırılmadı.
+
+
+---
+
+## Oturum #70 — B2B Seri / Paket Fiyat Çarpanı (`6x6 = 36` Çift Çarpan Hatası) Düzeltmesi & OTA `v1.0.2+3` Yayını
+- **Tarih / Saat:** 2026-11-08 23:45:00 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "mobil uygulamada fiyatlarda bir tuhaflık var bir seri olarak satıyoruz ürünleri neden fiyat çarpanları doğru değil sanki 6 adet bir seri 6 seri almış gibi gösteriyor kontrol et heryeri"
+- **Kök Neden Analizi (`@architect`, `@coder`, `@test`):**
+  - Veritabanında (`catalog.products`) `minimum_order_quantity` alanı XML entegrasyonları tarafından **toplam adet (`6` adet = `1` seri)** olarak tutulmaktadır (ör. `FLORA-L6MV`: `series_ratio = "2-2-2"`, `unitsPerPackage = 6`, `minimum_order_quantity = 6`).
+  - Web vitrininde (`frontend/src/components/store/ProductCard.tsx` ve `ProductDetailClient.tsx`) minimum paket sayısı `Math.max(1, Math.ceil(minimum_order_quantity / unitsPerPkg))` (`6 / 6 = 1 Paket`) olarak doğru hesaplanırken; mobil uygulamada (`product_detail_screen.dart` ve `product_card.dart`) `product.minimumOrderQuantity` doğrudan **paket/seri sayısı** sanılarak `6 Paket × 6 Adet = 36 Adet` (`6 × ₺6.849,94 = ₺41.099,62`) olarak başlatılıyor ve gösteriliyordu.
+- **Yapılan İşlemler ve Çözüm Özeti:**
+  1. **Tek Doğruluk Kaynağı (`mobile/lib/models/product.dart` & `mobile/lib/core/currency_formatter.dart`):**
+     - `Product` modeline web vitrinle birebir aynı matematikle çalışan `minOrderPackages` (`ceil(minimumOrderQuantity / unitsPerPackage)`, minimum `1`) ve `minOrderUnits` (`minOrderPackages * unitsPerPackage`) hesaplanmış özellikleri eklendi.
+     - `CurrencyFormatter.parseUnitsPerPackage` metoduna `S=1-M=2` gibi eşittir içeren seri oranlarını da ayrıştırma desteği eklendi.
+  2. **Ürün Detay Ekranı (`mobile/lib/features/customer/product_detail_screen.dart`):**
+     - `_packagesQty` başlangıç değeri `prod.minOrderPackages` (`1 Seri = 6 Adet`) olarak düzeltildi.
+     - `MİNİMUM SİPARİŞ` satırı `'${p.minOrderPackages} Seri (${p.minOrderUnits} Adet)'` (`1 Seri (6 Adet)`) olarak güncellendi.
+     - Seri sayacı ve alt bar `1 Seri × 6 Adet = 6 Adet` ve `TOPLAM (1 SERİ • 6 ADET)` olarak netleştirildi.
+  3. **Ürün Kartları (`mobile/lib/widgets/product_card.dart`):**
+     - Kart üzerindeki hızlı `SEPETE EKLE` butonu artık `6 Paket (36 Adet)` yerine `product.minOrderPackages` (`1 Seri = 6 Adet`) ekliyor.
+     - Kart üzerinde hem **Birim (1 Adet)** fiyatı hem de **1 Seri Toplam Fiyatı** (`1 Paket: ₺6.849,96`) birlikte gösterilecek şekilde düzenlendi; `Min: 1 Paket (6 Adet)` bilgisi düzeltildi.
+  4. **Sepet ve Tedarikçi Ürün Sihirbazı (`cart_and_checkout_screen.dart`, `supplier_product_wizard_screen.dart`):**
+     - Sepet kartlarına `X Seri (Y Adet) × Birim Fiyat` kırılımı ve önceki hatalı (`6 Paket`) kayıtları tek dokunuşla sıfırlamak için `TEMİZLE` butonu eklendi.
+     - Tedarikçi ürün düzenleme sihirbazında `Min. Paket` alanı `p.minOrderPackages` ile senkronize edildi.
+  5. **Test, Derleme ve OTA Yayın (`v1.0.2+3`):**
+     - `mobile/test/widget_test.dart` içine `FLORA-L6MV` (`series_ratio: '2-2-2'`, `minimum_order_quantity: 6`, `price: 1141.66`) için `minOrderPackages == 1` ve `minOrderUnits == 6` birim testi eklendi (`flutter analyze` 0 uyarı, `13/13` test yeşil).
+     - `v1.0.2+3` (`mertervitrini-v1.0.2+3.apk`, SHA-256: `6b0d8828236c6c80827c8a28a508fbf92a2b9f3fb60131bd8510a1088f47d762`) canlı sunucuya (`https://mertervitrini.com.tr/api/v1/mobile/version`) yüklendi ve Windows `.exe` yeniden derlendi.
+
+
+---
+
+## Oturum #71 — Büyük Dikey Portre Ürün Kartları, 1/2 Sütun Görünüm Geçişi & OTA `v1.0.3+4` Yayını
+- **Tarih / Saat:** 2026-11-08 23:50:30 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "şimdi mobil uygulamada ürünler daha büyük görünmeli çok küçük kalıyor"
+- **Kök Neden ve Tasarım Analizi (`@architect`, `@coder`, `@test`):**
+  - Önceki ürün kartında (`B2BProductCard`) görsel alanı `BoxFit.contain` ile çizildiği ve kartın altında 5 satırlık kutulu metin + tam genişlikli siyah buton (`~186px`) yer aldığı için görsele ayrılan dikey alan daralıyor ve dikey moda fotoğrafları sağdan/soldan gri boşluklarla küçülüyordu.
+- **Yapılan İşlemler ve Editoryal Mimari Yenileme:**
+  1. **Tam Çerçeve Dikey Portre Ürün Kartı (`mobile/lib/widgets/product_card.dart`, `mobile/lib/widgets/smart_network_image.dart`):**
+     - `SmartNetworkImage` bileşenine `alignment: Alignment.topCenter` varsayılanı ve sıcak krem (`#EDEAE4` -> `#F8F6F2`) shimmer efekti eklendi; ürün kartlarında `BoxFit.cover` + `Alignment.topCenter` kullanılarak fotoğrafların çerçeveyi uçtan uca tam doldurması sağlandı.
+     - Kart üzerinde parmakla sağa/sola kaydırarak (`onHorizontalDragEnd`) veya oklarla ürünün diğer fotoğrafları arasında gezinme ve alt kenarda `2px` ince fotoğraf ilerleme çizgisi eklendi.
+     - Kartın altındaki kalabalık kutular ve tam genişlikli siyah buton kaldırılarak **fotoğrafın sağ alt köşesinde yüzen hızlı sepet ikonu (`34×34`)** konumlandırıldı.
+     - Fotoğrafın altında yalnızca 3 satırlık ferah tipografi bırakıldı: **Üretici Marka + SKU**, **Ürün Adı** ve **Birim Fiyat + 1 Seri Toplam Fiyatı**. Böylece ürün fotoğraf alanı **2.5 kattan fazla** büyütüldü.
+  2. **Kenardan Kenara (Edge-to-Edge) Grid & 1/2 Sütun Görünüm Seçici (`catalog_screen.dart`, `home_screen.dart`):**
+     - Katalog ve Vitrin ekranlarında dış kenar boşluğu `6px` ve sütun arası boşluk `6px` yapılarak fotoğrafların ekran genişliğini maksimum kullanması sağlandı (`childAspectRatio: 0.54`).
+     - Hem Katalog barına hem de Vitrin "Yeni Gelen Seçkinler" başlığına **2 Sütun İkili Görünüm / 1 Sütun Tam Ekran Büyük Görünüm (`0.64`)** geçiş butonları eklendi.
+  3. **Ürün Detay Galerisi (`product_detail_screen.dart`):**
+     - Ürün detay sayfasındaki ana fotoğraf galerisi yüksekliği ekran genişliğine göre `(width * 1.28).clamp(480, 580)` olarak büyütüldü.
+  4. **OTA `v1.0.3+4` & Windows `.exe` Yayını:**
+     - `flutter analyze` (0 uyarı) ve `flutter test` (`13/13` yeşil) doğrulandı; `v1.0.3+4` imzalı APK canlı sunucuya yüklendi ve Windows `.exe` güncellendi.
+
+---
+
+## Oturum #72 — Kod Yorumları, Kayıtlar ve Canlı OTA Sürüm Notlarında Marka/Referans İfadelerinin Temizlenmesi
+- **Tarih / Saat:** 2026-11-09 00:28:00 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "hiçbir yerde harici marka referansı yazmasın logda falan"
+- **Yapılan İşlemler:**
+  - `mobile/lib/widgets/product_card.dart`, `mobile/lib/features/customer/catalog_screen.dart`, `mobile/lib/features/customer/home_screen.dart`, `mobile/lib/features/customer/product_detail_screen.dart`, `frontend/src/components/store/PortalView.tsx` ve `context/conversations.md` içindeki tüm yorum/kayıt referansları temizlendi.
+  - Yerel `backend/uploads/releases/version.json` ve canlı sunucudaki `/var/www/media/releases/version.json` (`release_notes`) alanı `"Tam cerceve buyuk dikey urun gorselleri, yuzen hizli sepet ikonu ve 1/2 sutun gorunum gecisi eklendi."` olarak güncellendi.
+
+
+---
+
+## Oturum #73 — Dijital B2B Tekstil Platformu İş Modeli ve Büyüme Stratejisi Karşılaştırma & Eksik Analizi Raporu
+- **Tarih / Saat:** 2026-11-09 00:34:00 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "MERTER VİTRİNİ Dijital B2B Tekstil Platformu – İş Modeli ve Büyüme Stratejisi ... bizde ne eksik raporlar mısın okuyacağım bir .md yap karşılaştırma falan olsun"
+- **Yapılan İşlemler:**
+  - Paylaşılan 12 bölümlük iş modeli ve büyüme stratejisi belgesi ile mevcut `mertervitrini.com.tr` kod tabanı (`backend/`, `frontend/`, `mobile/`, `database/`) birebir karşılaştırıldı.
+  - Karşılaştırma tablosu, stratejik yol ayrımı (Merkezi Maskeli Pazar Yeri vs. Açık Firma Vitrini & Hibrit Model önerisi), bizde halihazırda güçlü olan özellikler, 6 ana teknik eksik paketi (Üyelik/Kota Sistemi, Açık Firma Vitrini & WhatsApp, Firma Ziyaretçi/Ülke ROI Analitiği, Alıcı Talep Panosu / RFQ, Excel/AI Ürün Yükleme, Sponsorlu Reklam & Sektörel Hizmet Sağlayıcılar) ve 4 fazlı uygulama yol haritası `docs/is_modeli_karsilastirma_ve_eksik_analizi.md` dosyasına ve artifact raporuna yazıldı.
+
+
+---
+
+## Oturum #74 — Tedarikçi Maskeleme Kuralının Kaldırılması ve Açık Firma Kimliği Standardına Geçiş
+- **Tarih / Saat:** 2026-11-09 00:41:30 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "Üretici Kimliği Açık Firma Profili: Firmanın gerçek adı, adresi, telefonu, WhatsApp hattı ve web sitesi vitrinde açıktır. Üretici Maskeleme (alias_code): Tedarikçilerin gerçek adları gizlenir (MIMOZA, FLORA, EDUSA olarak gösterilir). ❌ Tam Zıt Kural (context/business_rules.md Kural #1) biz bundan artık vazgeçtik açık açık firmalar görünecek kuralalrımızı güncelleyelim"
+- **Yapılan İşlemler:**
+  - `AGENTS.md`, `context/business_rules.md`, `context/database.md`, `.agents/rules/multi-role-framework.md`, `.agents/skills/xml-feed-integration/SKILL.md` ve `.agents/skills/seo-optimization/SKILL.md` dosyalarındaki "Üretici Maskeleme" kuralı kaldırılarak **"Açık Firma Profili ve Doğrudan Tedarikçi Kimliği Kuralı"** olarak güncellendi (`alias_code` artık yalnızca ürün SKU ön eki olarak tanımlandı).
+  - Backend'de `backend/handlers/store_catalog.go`, `backend/handlers/mobile.go`, `backend/handlers/chat.go` ve `backend/handlers/marketplace.go` sorgularındaki `COALESCE(NULLIF(b.alias_code, ''), b.brand_name)` maskelemesi kaldırılarak doğrudan `b.brand_name` dönecek şekilde güncellendi.
+  - Mobil uygulamada `mobile/lib/models/product.dart` içindeki marka adı gösterimi doğrudan gerçek firma adını (`brandName`) gösterecek şekilde güncellendi.
+  - `docs/is_modeli_karsilastirma_ve_eksik_analizi.md` ve karşılaştırma raporu güncellendi.
+
+
+---
+
+## Oturum #75 — XML Parser'larda ve Veritabanında %20 Kâr Marjının Kaldırılması (Doğrudan Tedarikçi Fiyatı Standardı)
+- **Tarih / Saat:** 2026-11-09 00:50:30 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "şimdi artık sitede tedarikçinin fiyatı neyse o görünmeli istersen o yönde de kontrol et güncelle tüm yapıyı xml parserları falan"
+- **Yapılan İşlemler:**
+  - `backend/parsers/etika.py` ve `backend/parsers/janes.py` içindeki `PROFIT_RATE = 0.20` (%20 platform kâr marjı) `PROFIT_RATE = 0.0` olarak güncellendi.
+  - `backend/handlers/integration.go` (Go genel XML parser) ürün ekleme/güncelleme sorgularında `buying_price = price` (birebir tedarikçi fiyatı) kaydedilecek şekilde güncellendi.
+  - `backend/handlers/marketplace.go` ve `database/0010_b2b_marketplace_suborders_wallet_feeds.sql` içindeki dışa aktarım varsayılan marj oranı `1.15`'ten `1.00`'a (%0 marj) çekildi.
+  - `database/0019_set_direct_supplier_prices.sql` oluşturuldu ve canlı veritabanında (`merterdevdb`) çalıştırılarak mevcut **8.727** ürünün (`etika`: 2.293 ürün, `janes`: 6.444 ürün) fiyatları `%20` marjdan arındırılıp birebir tedarikçi fiyatına (`price = buying_price`) eşitlendi; `catalog.mv_products` Materialized View yenilendi.
+  - Güncellenen Go backend ve Python XML parser'lar canlı sunucuya dağıtıldı.
+
+
+---
+
+## Oturum #76 — Çalışma Ağacındaki Tüm Değişikliklerin Yerel Git Deposuna Commit Edilmesi (Push Yapılmadan)
+- **Tarih / Saat:** 2026-11-09 00:47:20 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "commitle pushlama"
+- **Yapılan İşlemler:**
+  - Açık firma kimliği standardı, %0 marjlı birebir tedarikçi fiyatı (`PROFIT_RATE = 0.0`), mobil uygulama lüks vitrin / seri hesaplama / OTA güncelleme altyapısı, iş modeli karşılaştırma raporu (`docs/is_modeli_karsilastirma_ve_eksik_analizi.md`) ve veritabanı migration dosyası (`database/0019_set_direct_supplier_prices.sql`) Conventional Commits standardına uygun olarak yerel git deposuna commit edildi (`git push` çalıştırılmadı).

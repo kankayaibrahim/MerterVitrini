@@ -1,17 +1,18 @@
 # Kritik İş Mantığı ve Güvenlik Kuralları (Business & Security Rules)
 
-## 1. Tedarikçi ve Üretici Maskeleme Kuralı (B2B Gizlilik)
+## 1. Açık Firma Profili ve Doğrudan Tedarikçi Kimliği Kuralı
 
-Merter Vitrini bir toptan B2B pazar yeri platformudur. Platformun varlık sebebi toptancı tedarikçiler ile küresel alıcıları buluşturmaktır. Bu nedenle:
-1. **Gerçek Tedarikçi Adları ASLA Vitrinde Gösterilemez:**
-   - Veritabanındaki `catalog.brands.brand_name` (örn: *Lustrin Toptan Tekstil*, *Etika Fashion*, *Jane's Toptan*) yalnızca yetkili yöneticilere gösterilir.
-   - Müşteri arayüzünde (Storefront) ve dışa açık API çıktılarında tedarikçiler daima **`alias_code`** (örn: *MIMOZA*, *FLORA*, *EDUSA*) ile maskelenir.
-   - `catalog.mv_products` Materialized View bu kuralı veritabanı seviyesinde uygular:
+Merter Vitrini, İstanbul Merter'deki tekstil üreticilerini ve toptancı firmaları küresel alıcılarla doğrudan buluşturan açık bir B2B ticaret ve tanıtım platformudur. Bu nedenle:
+1. **Gerçek Firma Adları ve Profilleri Vitrinde Açıkça Gösterilir:**
+   - Veritabanındaki `catalog.brands.brand_name` (örn: *Lustrin Toptan Tekstil*, *Etika Fashion*, *Jane's Toptan*) müşteri arayüzünde (Storefront, Mobil Uygulama) ve dışa açık katalog API'lerinde **gizlenmeden, gerçek ticari isimleriyle** sunulur.
+   - `catalog.mv_products` Materialized View ve tüm katalog sorguları doğrudan `b.brand_name` alanını döner:
      ```sql
-     COALESCE(NULLIF(b.alias_code, ''), b.brand_name) AS brand_name
+     b.brand_name AS brand_name
      ```
-2. **Tedarikçi URL ve İletişim Bilgileri Koruması:**
-   - Tedarikçiye ait web sitesi, telefon, adres veya XML feed URL'si hiçbir zaman genel (public) Storefront API'lerinden dönülemez.
+2. **Açık Firma İletişimi ve Entegrasyon Kaynağı Ayrımı:**
+   - Firmanın vitrinde paylaşmayı seçtiği iletişim bilgileri (WhatsApp hattı, telefon, e-posta, açık adres, web sitesi) firma profil sayfasında ve ürün detaylarında alıcılara açıkça gösterilir.
+   - `alias_code` (`MIMOZA`, `FLORA`, `EDUSA` vb.) yalnızca otomatik üretilen benzersiz ürün stok kodlarında (`custom_sku`) kısa ön ek olarak kullanılır; firma adını gizlemek için **kullanılmaz**.
+   - Yalnızca tedarikçiye ait arka plan XML entegrasyon adresi (`integration.xml_feeds.feed_url`) ve tedarikçi alış maliyeti (`buying_price`) dışa açık (public) API çıktılarından gizlenir.
 
 ---
 
@@ -40,6 +41,8 @@ Merter Vitrini bir toptan B2B pazar yeri platformudur. Platformun varlık sebebi
    - Müşterinin sepetine eklediği adetler, serinin katları olmak zorundadır (tekli satış istisnası hariç).
 2. **Tekli Fiyat Gösterimi (`show_single_price`):**
    - Sistem ayarlarında (`catalog.settings.show_single_price`) açık ise seriye ek olarak tek parça birim fiyatı vitrinde hesaplanarak gösterilir.
+3. **Doğrudan Tedarikçi Fiyatı Kuralı (%0 Platform Fiyat Marjı):**
+   - Tedarikçilerin XML entegrasyonlarından (`etika.py`, `janes.py`, Go XML Sync) veya Tedarikçi Portalı'ndan girilen fiyatlar, üzerine herhangi bir komisyon veya kâr marjı (`PROFIT_RATE = 0.0`) eklenmeden **birebir tedarikçinin kendi fiyatı** olarak vitrinde gösterilir (`price = buying_price`).
 
 ---
 

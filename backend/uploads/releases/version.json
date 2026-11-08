@@ -1,0 +1,22 @@
+{
+  "app_name": "Merter Vitrini",
+  "package_id": "com.mertervitrini.app",
+  "version": "1.0.3",
+  "build_number": 4,
+  "min_build_number": 1,
+  "force_update": false,
+  "apk_filename": "mertervitrini-v1.0.3+4.apk",
+  "download_url": "https://mertervitrini.com.tr/api/v1/mobile/apk?v=1.0.3.4",
+  "direct_cdn_url": "https://mertervitrini.com.tr/uploads/releases/mertervitrini-v1.0.3+4.apk",
+  "web_page_url": "https://mertervitrini.com.tr/mobil-uygulama",
+  "sha256": "009f96349d2b305c0008cd69faee0998aa50e1ba67e0f4b8d27a3ee4ad6595c7",
+  "file_size_bytes": 63449397,
+  "published_at": "2026-11-08T23:53:04+03:00",
+  "apk_available": true,
+  "release_notes": {
+    "tr": "Tam cerceve buyuk dikey urun gorselleri, yuzen hizli sepet ikonu ve 1/2 sutun gorunum gecisi eklendi.",
+    "en": "Merter Vitrini v1.0.3 (Build #4) — Luxury editorial storefront, vector country flags, B2B series ordering, live supplier chat, and automatic in-app OTA self-update support.",
+    "ru": "Merter Vitrini v1.0.3 (#4) — Обновление B2B витрины и поддержка автообновления.",
+    "ar": "Merter Vitrini v1.0.3 (#4) — تحديث متجر الجملة ودعم التحديث التلقائي."
+  }
+}

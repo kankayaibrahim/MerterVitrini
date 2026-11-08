@@ -74,6 +74,10 @@ func (rw *responseWriter) Flush() {
 	}
 }
 
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}
+
 // getClientIP extracts real client IP address checking proxies
 func getClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {

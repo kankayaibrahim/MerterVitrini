@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS catalog.b2b_api_keys (
     id uuid DEFAULT extensions.uuidv7() PRIMARY KEY,
     client_name VARCHAR(255) NOT NULL,
     api_key VARCHAR(64) NOT NULL UNIQUE,
-    margin_rate NUMERIC(5,2) NOT NULL DEFAULT 1.15,
+    margin_rate NUMERIC(5,2) NOT NULL DEFAULT 1.00,
     currency VARCHAR(3) NOT NULL DEFAULT 'TRY',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     allowed_categories JSONB NULL,

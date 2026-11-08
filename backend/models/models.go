@@ -133,6 +133,8 @@ type Product struct {
 	Description          *string              `json:"description,omitempty"`
 	BrandID              *string              `json:"brand_id,omitempty"`
 	CategoryID           *string              `json:"category_id,omitempty"`
+	ColorID              *string              `json:"color_id,omitempty"`
+	FabricID             *string              `json:"fabric_id,omitempty"`
 	Gender               *string              `json:"gender,omitempty"`
 	Season               *string              `json:"season,omitempty"`
 	KumasFabric          *string              `json:"kumas_fabric,omitempty"`

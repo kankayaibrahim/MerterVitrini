@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, ShoppingBag, Heart, User, ChevronDown, Menu } from "lucide-react";
+import { Search, ShoppingBag, Heart, User, ChevronDown, Menu, Smartphone } from "lucide-react";
 import { languages, t, getCategoryPrefix as getCategoryPrefixFn, getCategoryTitle, getCategoryUrl } from "@/app/i18n";
 import { Category } from "@/types/store";
 import { usePathname, useRouter } from "next/navigation";
@@ -159,6 +159,13 @@ function HeaderTopBar({
 
         {/* Language & Currency Selectors */}
         <div className="flex items-center gap-4">
+          <Link
+            href="/mobil-uygulama"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#111111] hover:bg-zinc-800 text-white font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+            <span>{lang === "tr" ? "ANDROID APK" : "ANDROID APP"}</span>
+          </Link>
           {/* Language selector */}
           <div className="relative">
             <button
@@ -745,6 +752,22 @@ export default function Header({
 
   return (
     <header className="w-full bg-white select-none border-b border-cultured">
+      {/* Mobile Top APK Strip */}
+      <div className="sm:hidden bg-[#111111] text-white px-3.5 py-2 flex items-center justify-between gap-2 border-b border-white/10">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Smartphone className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+          <span className="text-[10.5px] font-bold tracking-wide truncate">
+            {lang === "tr" ? "Resmi Android Uygulaması" : "Official Android App"}
+          </span>
+        </div>
+        <Link
+          href="/mobil-uygulama"
+          className="px-2.5 py-1 bg-[#D4AF37] text-[#111111] text-[10px] font-extrabold tracking-wider uppercase shrink-0 no-underline"
+        >
+          {lang === "tr" ? "APK İNDİR" : "GET APK"}
+        </Link>
+      </div>
+
       {/* 1. Header Top Bar */}
       <HeaderTopBar
         lang={lang}

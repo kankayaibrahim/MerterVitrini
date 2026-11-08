@@ -15,18 +15,16 @@ import {
   Moon
 } from "lucide-react";
 import AdminBreadcrumb from "./AdminBreadcrumb";
-import { useAdmin } from "@/context/AdminContext";
+import {
+  useAdminAuth,
+  useAdminFeeds,
+  useAdminShell,
+} from "@/context/AdminContext";
 
 export default function AdminNavbar() {
-  const { 
-    user, 
-    dbStatus, 
-    handleLogout, 
-    setMobileSidebarOpen,
-    activeSyncing,
-    theme,
-    toggleTheme
-  } = useAdmin();
+  const { user, dbStatus, handleLogout } = useAdminAuth();
+  const { setMobileSidebarOpen, theme, toggleTheme } = useAdminShell();
+  const { activeSyncing } = useAdminFeeds();
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);

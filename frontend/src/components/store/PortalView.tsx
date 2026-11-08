@@ -248,7 +248,7 @@ export default function PortalView({
         </div>
       </div>
 
-      {/* B. CATEGORY NAVIGATORS (Beymen-inspired clean text badges) */}
+      {/* B. CATEGORY NAVIGATORS (Luxury editorial clean text badges) */}
       <div className="mb-12 select-none border-t border-b border-cultured py-6">
         <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 md:gap-6">
           {categories.length === 0 ? (

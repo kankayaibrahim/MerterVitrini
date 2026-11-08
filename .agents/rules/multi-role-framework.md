@@ -94,7 +94,7 @@ graph TD
   - OWASP Top 10 denetimleri (SQL Injection, XSS, Broken Access Control, CSRF).
   - Keycloak OIDC JWT token doğrulaması, RS256 imza denetimi ve RBAC rol sınırları (`super_admin`, `admin`, `editor`, `customer`).
   - Input validation, rate limiting (`middleware.RateLimitMiddleware`) ve CORS güvenlik başlıkları.
-  - **Tedarikçi Maskeleme Güvenliği:** Gerçek toptancı adlarının, telefonlarının veya feed URL'lerinin dışa açık Storefront API'lerine sızmadığını doğrular.
+  - **Entegrasyon ve Maliyet Gizliliği:** Tedarikçi gerçek firma adları ve vitrin iletişim bilgileri açıkça sunulurken, arka plan XML `feed_url` adreslerinin ve `buying_price` (alış maliyeti) verilerinin dışa açık Storefront API'lerine sızmadığını doğrular.
 - **Katı Kural:** Güvenlik açığı tespit ettiğinde süreci derhal bloke eder ve düzeltme yönergeleriyle `@architect`'e bildirir.
 
 ---

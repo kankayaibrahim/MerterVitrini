@@ -11,7 +11,7 @@
 ### Temel Sistem Felsefesi:
 1. **Sadeleştirilmiş Birleşik Monorepo Mimarisi:** Tek depoda (monorepo) birleştirilmiş yüksek performanslı tek Go backend (`backend/`, Port `8080`) ve hem vitrin mağazasını hem de `/admin` yönetim panelini barındıran tek Next.js SSR frontend (`frontend/`, Port `3000`).
 2. **Yüksek Performans & Düşük Kaynak Tüketimi:** Backend tarafında Go 1.27.2'nin ultra-hafif `net/http` ve `pgx/v5` havuzları; frontend tarafında Next.js 16 (App Router) + React 19 ile optimize edilmiş dinamik SSR mimarisi.
-3. **Üretici Maskeleme & Entegrasyon Gizliliği:** Toptancı tedarikçilerinin (Lustrin, Etika, Jane's vb.) gerçek isimleri storefront üzerinde maske kodlarla (MIMOZA, FLORA, EDUSA) sunulur. SKU yapıları otomatik üretilen benzersiz kodlarla korunur.
+3. **Açık Firma Vitrini & Doğrudan Tedarikçi Kimliği:** Toptancı ve üretici firmaların (Lustrin, Etika, Jane's vb.) gerçek ticari isimleri, doğrulanmış işletme statüleri ve iletişim kanalları vitrin üzerinde açıkça sunulur. `alias_code` (MIMOZA, FLORA, EDUSA vb.) yalnızca otomatik üretilen benzersiz SKU kodlarında ön ek olarak kullanılır.
 4. **Veri Bütünlüğü ve Çok Dillilik:** Kategori ağaçları PostgreSQL `ltree` eklentisiyle hiyerarşik yönetilir. Tüm katalog, renk, kumaş, sayfa ve blog verileri normalleştirilmiş çeviri tablolarında çok dilli olarak saklanır.
 5. **Kurumsal Kimlik Yönetimi:** Tüm müşteri ve admin yetkilendirmesi Keycloak 26 (Quarkus LTS) IAM motoru üzerinden yürütülür.
 
@@ -86,7 +86,7 @@ Bu projede tek bir jenerik asistan yerine, kendi içinde koordine olan **Özerk 
 4. **`@seo` (Kıdemli B2B & E-Ticaret SEO / Büyüme Uzmanı):**
    - Schema.org JSON-LD (`Product`, `Offer`, `BreadcrumbList`), çok dilli `hreflang`, canonical URL'ler, dinamik `sitemap.ts`, `robots.ts` (admin sayfalarını hariç tutar), IndexNow API, Google Merchant feed ve Core Web Vitals optimizasyonlarını yürütür.
 5. **`@security` (AppSec & Güvenlik Uzmanı):**
-   - OWASP Top 10 denetimi, Keycloak JWT RS256 doğrulaması, RBAC matrisi, rate limiting ve tedarikçi gizliliği maskeleme kontrollerini yapar.
+   - OWASP Top 10 denetimi, Keycloak JWT RS256 doğrulaması, RBAC matrisi, rate limiting ve entegrasyon kaynak (XML feed URL / alış fiyatı) gizliliği kontrollerini yapar.
 6. **`@test` (QA & Test Otomasyon Mühendisi):**
    - Birim, entegrasyon ve E2E test senaryolarını hazırlar; edge-case'leri test eder; sonuçları `@architect`'e raporlar.
 7. **`@sre` (Observability, Logging & Exception Kontrolörü):**
@@ -145,7 +145,7 @@ c:\Projects\mertervitrini.com.tr\
 │   ├── architecture.md                     # Katmanlar, iletişim, güvenlik ve middleware mimarisi
 │   ├── database.md                         # DB şemaları, ltree, UUIDv7, materialized view ve DDL
 │   ├── environments.md                     # Ortamlar, IP'ler, portlar, Nginx ve Keycloak haritası
-│   ├── business_rules.md                   # B2B sipariş, döviz, tedarikçi maskeleme, SEO kuralları
+│   ├── business_rules.md                   # B2B sipariş, döviz, açık firma vitrini, SEO kuralları
 │   └── conversations.md                    # Tüm kullanıcı-ajan konuşmalarının kalıcı kronolojik kaydı
 ├── .agents/                                # Antigravity Ajan Sistemi Konfigürasyonu
 │   ├── rules/
@@ -158,27 +158,41 @@ c:\Projects\mertervitrini.com.tr\
 ├── backend/                                # Birleşik Go 1.27.2 REST API (Port 8080)
 │   ├── config/                             # config.json okuyucu ve struct tanımları
 │   ├── db/                                 # pgxpool PostgreSQL, Redis ve TCMB worker bağlantıları
-│   ├── handlers/                           # Tekilleştirilmiş REST endpoint işleyicileri (admin + store)
+│   ├── handlers/                           # Odaklanmış SRP REST endpoint işleyicileri (admin + store + mobile)
+│   ├── services/                           # SOLID domain servis arayüzleri (MediaProcessor, TokenService, AccountDeletionRegistry)
+│   ├── pkg/httpx/                          # Tip güvenli birleşik HTTP JSON yanıt/istek katmanı
 │   ├── middleware/                         # JWT / Keycloak auth, CORS, Rate Limit, logging
 │   ├── models/                             # DTO ve veritabanı veri modelleri
 │   ├── parsers/                            # XML toptancı veri formatlayıcıları
 │   ├── bin/                                # Windows (.exe) ve Linux derlenmiş ikili dosyalar
-│   └── main.go                             # Servis giriş noktası, router ve graceful shutdown
+│   ├── router.go                           # Modüler HTTP rota grupları ve DIP Composition Root
+│   └── main.go                             # Servis giriş noktası ve graceful shutdown
 ├── frontend/                               # Birleşik Next.js 16 SSR Frontend (Port 3000)
 │   ├── src/app/                            # App Router (Vitrin: /, /[categoryPrefix], /product; Admin: /admin)
 │   │   ├── admin/                          # Yönetici Paneli Rotaları (layout.tsx, page.tsx)
+│   │   ├── account-deletion/               # Google Play uyumlu web hesap/veri silme merkezi
 │   │   ├── robots.ts                       # Arama motoru robot direktifleri (admin engelli)
 │   │   └── sitemap.ts                      # Çok dilli dinamik B2B site haritası
+│   ├── src/services/                       # SOLID HTTP istemcisi, AuthHeaderStrategy ve domain API servisleri
 │   ├── src/components/
-│   │   ├── store/                          # Müşteri sepet, filtre, header, footer bileşenleri
+│   │   ├── store/                          # Müşteri sepet, filtre, header, footer ve modüler chat bileşenleri
 │   │   └── admin/                          # Admin katalog, sipariş, entegrasyon, cron modülleri
 │   ├── src/types/                          # Ortak TypeScript tip tanımları (store & integration)
 │   ├── src/utils/                          # Ortak formatlayıcılar ve yardımcı fonksiyonlar
 │   └── next.config.ts                      # SSR ve Sentry konfigürasyonu
+├── mobile/                                 # Birleşik Çift Rollü Flutter Mobil Uygulama (com.mertervitrini.app)
+│   ├── lib/
+│   │   ├── contracts/                      # SOLID ISP/DIP arayüz kontratları (ICatalog, IAuth, ICommerce, IChat, ISupplier)
+│   │   ├── repositories/                   # Tek sorumluluklu HTTP ve şifreli oturum repository implementasyonları
+│   │   └── features/                       # Müşteri Mağazası + Tedarikçi Kamera Stüdyosu + Modüler Ürün Sihirbazı
+│   ├── android/                            # Android SDK 36, R8/ProGuard, Adaptive Icon & Release Signing
+│   ├── store_listing/                      # Google Play Store 512px ikon, 1024x500 afiş ve mağaza metinleri
+│   └── test/                               # SOLID DI mock/fake birim ve widget testleri
 ├── database/                               # Veritabanı DDL ve Migration Scriptleri
 │   ├── DB_DDL.sql                          # Master veritabanı şeması ve seed kayıtları
 │   ├── 0005_add_blog_tables.sql            # Çok dilli blog tabloları migration'ı
-│   └── 0006_add_category_seo_description.sql # Kategori SEO alanları migration'ı
+│   ├── 0006_add_category_seo_description.sql # Kategori SEO alanları migration'ı
+│   └── 0017_add_mobile_devices_notifications_and_chat_images.sql # Mobil cihaz, bildirim ve chat görsel şeması
 ├── docs/                                   # Proje dokümantasyonu ve sunucu kılavuzları
 │   ├── application_configs.md              # Port dağılımı, Nginx konfigleri ve sunucu dizinleri
 │   └── kategoriler.txt                     # Kategori ağacı referans dökümü
@@ -186,6 +200,7 @@ c:\Projects\mertervitrini.com.tr\
 ├── keycloak_installation.md                # Keycloak 26 Quarkus kurulum ve yönetim dokümanı
 ├── scripts/                                # Otomasyon, build ve deployment scriptleri
 │   ├── build_deploy.ps1                    # PowerShell cross-compile ve deploy scripti
+│   ├── build_mobile_release.ps1            # Google Play Store imzalı AAB ve APK derleme scripti
 │   ├── unified_deployer.py                 # PySide6 GUI ve CLI deployment aracı
 │   └── optimize_seo.py                     # Toplu SEO optimizasyon scripti
 └── xml_mapping_schema.json                 # XML toptancı eşleme şeması
@@ -200,7 +215,7 @@ c:\Projects\mertervitrini.com.tr\
 - **Katmanlar, Güvenlik ve Servis Mimarisi:** [context/architecture.md](file:///c:/Projects/mertervitrini.com.tr/context/architecture.md)
 - **Veritabanı Şemaları, ltree, Materialized View & DDL:** [context/database.md](file:///c:/Projects/mertervitrini.com.tr/context/database.md)
 - **Sunucu, Portlar, Nginx, SSL ve Ortamlar:** [context/environments.md](file:///c:/Projects/mertervitrini.com.tr/context/environments.md)
-- **Kritik İş Kuralları, Yetkiler, Maskeleme & Sipariş:** [context/business_rules.md](file:///c:/Projects/mertervitrini.com.tr/context/business_rules.md)
+- **Kritik İş Kuralları, Yetkiler, Açık Firma Vitrini & Sipariş:** [context/business_rules.md](file:///c:/Projects/mertervitrini.com.tr/context/business_rules.md)
 - **Kalıcı Konuşma Geçmişi (Conversation Log):** [context/conversations.md](file:///c:/Projects/mertervitrini.com.tr/context/conversations.md)
 - **Ajan Çalışma ve Kod Standartları Kuralları:** [.agents/rules/workflow-rules.md](file:///c:/Projects/mertervitrini.com.tr/.agents/rules/workflow-rules.md)
 - **Build & Dağıtım Skill'i:** [.agents/skills/build-and-deploy/SKILL.md](file:///c:/Projects/mertervitrini.com.tr/.agents/skills/build-and-deploy/SKILL.md)

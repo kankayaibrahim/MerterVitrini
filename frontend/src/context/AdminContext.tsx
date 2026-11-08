@@ -1,26 +1,38 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
-import { 
-  XmlFeed, 
-  SyncRun, 
-  CategoryNode, 
-  Product, 
-  UserInfo, 
-  Brand 
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+import {
+  XmlFeed,
+  SyncRun,
+  CategoryNode,
+  Product,
+  UserInfo,
+  Brand,
 } from "@/types/integration";
 import { getFlatCategoriesList } from "@/utils/formatters";
+import {
+  BearerTokenHeaderStrategy,
+  FetchHttpClient,
+} from "@/services/http-client";
+import {
+  AdminApiService,
+  StoreSettingsDTO,
+} from "@/services/admin-api.service";
 
-export interface StoreSettingsData {
-  address: string;
-  phone: string;
-  whatsapp: string;
-  email: string;
-  show_single_price: boolean;
-}
+export type StoreSettingsData = StoreSettingsDTO;
 
-export interface AdminContextType {
-  // Auth & Connection
+// ============================================================================
+// SEGREGATED DOMAIN INTERFACES (ISP)
+// ============================================================================
+
+export interface AdminAuthSlice {
   apiUrl: string;
   token: string | null;
   user: UserInfo | null;
@@ -29,20 +41,20 @@ export interface AdminContextType {
   login: (token: string, user: UserInfo) => void;
   handleLogout: () => void;
   fetchWithConfig: (path: string, options?: RequestInit) => Promise<Response>;
+}
 
-  // Sidebar Layout State
+export interface AdminShellSlice {
   sidebarCollapsed: boolean;
   setSidebarCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   mobileSidebarOpen: boolean;
   setMobileSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
   toggleSidebar: () => void;
-
-  // Theme State
   theme: "light" | "dark";
   setTheme: (theme: "light" | "dark") => void;
   toggleTheme: () => void;
+}
 
-  // Feeds & Sync
+export interface AdminFeedsSlice {
   feeds: XmlFeed[];
   setFeeds: React.Dispatch<React.SetStateAction<XmlFeed[]>>;
   syncHistory: Record<string, SyncRun[]>;
@@ -52,26 +64,36 @@ export interface AdminContextType {
   cancelSync: (feedId: string) => Promise<void>;
   handleClearHistory: (feedId: string) => Promise<void>;
   loadFeedsAndHistory: () => Promise<void>;
+}
 
-  // Suppliers & Categories
+export interface AdminCatalogSlice {
   suppliers: Brand[];
   setSuppliers: React.Dispatch<React.SetStateAction<Brand[]>>;
   categories: CategoryNode[];
   setCategories: React.Dispatch<React.SetStateAction<CategoryNode[]>>;
-  flatCategories: Array<{ id: string; title: string; depth: number; node_path: string }>;
+  flatCategories: Array<{
+    id: string;
+    title: string;
+    depth: number;
+    node_path: string;
+  }>;
   loadSuppliers: () => Promise<void>;
   loadCategories: () => Promise<void>;
-
-  // Products
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   totalProductsCount: number;
   setTotalProductsCount: React.Dispatch<React.SetStateAction<number>>;
   loadingProducts: boolean;
   setLoadingProducts: React.Dispatch<React.SetStateAction<boolean>>;
-  loadProducts: (limit?: number, offset?: number, categoryId?: string, search?: string) => Promise<void>;
+  loadProducts: (
+    limit?: number,
+    offset?: number,
+    categoryId?: string,
+    search?: string
+  ) => Promise<void>;
+}
 
-  // Storefront Settings
+export interface AdminSettingsSlice {
   storeSettings: StoreSettingsData;
   setStoreSettings: React.Dispatch<React.SetStateAction<StoreSettingsData>>;
   loadingSettings: boolean;
@@ -82,92 +104,89 @@ export interface AdminContextType {
   loadStoreSettings: () => Promise<void>;
 }
 
+export interface AdminContextType
+  extends AdminAuthSlice,
+    AdminShellSlice,
+    AdminFeedsSlice,
+    AdminCatalogSlice,
+    AdminSettingsSlice {}
+
 const AdminContext = createContext<AdminContextType | null>(null);
 
-export function AdminProvider({ children }: { readonly children: React.ReactNode }) {
-  // Shell Layout State
+export function AdminProvider({
+  children,
+}: {
+  readonly children: React.ReactNode;
+}) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
-  // Theme State (default: light)
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("merter_admin_theme");
-      if (saved === "light" || saved === "dark") return saved;
-    }
-    return "light";
-  });
+  const apiUrl = useMemo(() => AdminApiService.resolveDefaultApiUrl(), []);
 
-  // Sync theme changes to localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("merter_admin_theme", theme);
-    }
-  }, [theme]);
-
-  const toggleTheme = useCallback(() => {
-    setTheme(prev => (prev === "light" ? "dark" : "light"));
-  }, []);
-
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed(prev => !prev);
-  }, []);
-
-  // API URL
-  const apiUrl = useMemo(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("merter_api_url");
-      if (saved) return saved;
-      const hostname = window.location.hostname;
-      if (hostname === "localhost" || hostname === "127.0.0.1") {
-        return "http://localhost:8080";
-      }
-      return `${window.location.protocol}//${window.location.host}`;
-    }
-    return "http://localhost:8080";
-  }, []);
-
-  // Auth State
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [dbStatus, setDbStatus] = useState<"connected" | "disconnected" | "checking">("checking");
-
-  const login = useCallback((newToken: string, newUser: UserInfo) => {
-    setToken(newToken);
-    setUser(newUser);
-    localStorage.setItem("admin_token", newToken);
-    localStorage.setItem("admin_user", JSON.stringify(newUser));
-  }, []);
+  const [dbStatus, setDbStatus] = useState<
+    "connected" | "disconnected" | "checking"
+  >("checking");
 
   const handleLogout = useCallback(() => {
     setToken(null);
     setUser(null);
-    localStorage.removeItem("admin_token");
-    localStorage.removeItem("admin_user");
     if (typeof window !== "undefined") {
+      localStorage.removeItem("admin_token");
+      localStorage.removeItem("admin_user");
       window.location.href = "/";
     }
   }, []);
 
-  const fetchWithConfig = useCallback(async (path: string, options?: RequestInit) => {
-    const headers = new Headers(options?.headers);
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
+  const sessionBootstrapService = useMemo(
+    () => new AdminApiService(new FetchHttpClient({ baseUrl: apiUrl })),
+    [apiUrl]
+  );
 
-    const res = await fetch(`${apiUrl}${path}`, {
-      ...options,
-      headers
+  const { httpClient, adminService } = useMemo(() => {
+    const client = new FetchHttpClient({
+      baseUrl: apiUrl,
+      authStrategy: new BearerTokenHeaderStrategy(() => token),
+      onUnauthorized: handleLogout,
     });
-
-    if (res.status === 401) {
-      handleLogout();
-    }
-    return res;
+    return {
+      httpClient: client,
+      adminService: new AdminApiService(client),
+    };
   }, [apiUrl, token, handleLogout]);
 
-  // Core Data
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    sessionBootstrapService.readSavedTheme()
+  );
+
+  useEffect(() => {
+    sessionBootstrapService.saveTheme(theme);
+  }, [sessionBootstrapService, theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
+
+  const login = useCallback(
+    (newToken: string, newUser: UserInfo) => {
+      setToken(newToken);
+      setUser(newUser);
+      sessionBootstrapService.saveSession(newToken, newUser);
+    },
+    [sessionBootstrapService]
+  );
+
+  const fetchWithConfig = useCallback(
+    (path: string, options?: RequestInit) => httpClient.rawFetch(path, options),
+    [httpClient]
+  );
+
   const [feeds, setFeeds] = useState<XmlFeed[]>([]);
   const [syncHistory, setSyncHistory] = useState<Record<string, SyncRun[]>>({});
   const [suppliers, setSuppliers] = useState<Brand[]>([]);
@@ -175,24 +194,27 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
   const [products, setProducts] = useState<Product[]>([]);
   const [totalProductsCount, setTotalProductsCount] = useState<number>(0);
   const [loadingProducts, setLoadingProducts] = useState(false);
-  const [activeSyncing, setActiveSyncing] = useState<Record<string, string>>({});
+  const [activeSyncing, setActiveSyncing] = useState<Record<string, string>>(
+    {}
+  );
 
-  // Storefront Settings
   const [storeSettings, setStoreSettings] = useState<StoreSettingsData>({
     address: "",
     phone: "",
     whatsapp: "",
     email: "",
-    show_single_price: false
+    show_single_price: false,
   });
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsError, setSettingsError] = useState("");
   const [settingsSuccess, setSettingsSuccess] = useState(false);
 
-  const flatCategories = useMemo(() => getFlatCategoriesList(categories), [categories]);
+  const flatCategories = useMemo(
+    () => getFlatCategoriesList(categories),
+    [categories]
+  );
 
-  // Load Session and handle Keycloak callback
   useEffect(() => {
     const initSession = async () => {
       if (typeof window === "undefined") return;
@@ -203,19 +225,11 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
       if (code) {
         setIsInitialized(false);
         try {
-          const redirectUri = window.location.origin + "/admin";
-          const res = await fetch(`${apiUrl}/api/v1/auth/keycloak-callback`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code, redirect_uri: redirectUri })
-          });
-
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || "Oturum doğrulama başarısız oldu.");
-          }
-
-          const data = await res.json();
+          const redirectUri = `${window.location.origin}/admin`;
+          const data = await sessionBootstrapService.exchangeKeycloakCode(
+            code,
+            redirectUri
+          );
           login(data.token, data.user);
         } catch (err: unknown) {
           console.error("Keycloak OIDC callback error:", err);
@@ -225,16 +239,16 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
           params.delete("session_state");
           params.delete("iss");
           const newSearch = params.toString();
-          const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "");
+          const newUrl =
+            window.location.pathname + (newSearch ? `?${newSearch}` : "");
           window.history.replaceState({}, "", newUrl);
           setIsInitialized(true);
         }
       } else {
-        const savedToken = localStorage.getItem("admin_token");
-        const savedUser = localStorage.getItem("admin_user");
-        if (savedToken && savedUser) {
-          setToken(savedToken);
-          setUser(JSON.parse(savedUser) as UserInfo);
+        const saved = sessionBootstrapService.readSavedSession();
+        if (saved) {
+          setToken(saved.token);
+          setUser(saved.user);
         }
         setIsInitialized(true);
       }
@@ -244,300 +258,253 @@ export function AdminProvider({ children }: { readonly children: React.ReactNode
       void initSession();
     }, 0);
     return () => clearTimeout(timer);
-  }, [apiUrl, login, handleLogout]);
+  }, [sessionBootstrapService, login, handleLogout]);
 
-  // Load Feeds & History
   const loadFeedsAndHistory = useCallback(async () => {
     try {
-      const res = await fetchWithConfig("/api/v1/feeds");
-      if (res.ok) {
-        const data = await res.json();
-        setFeeds(data || []);
+      const feedList = await adminService.listFeeds();
+      setFeeds(feedList);
 
-        // Load sync history for feeds
-        if (Array.isArray(data)) {
-          const historyMap: Record<string, SyncRun[]> = {};
-          await Promise.all(
-            data.map(async (f: XmlFeed) => {
-              try {
-                const hRes = await fetchWithConfig(`/api/v1/feeds/${f.id}/history`);
-                if (hRes.ok) {
-                  const runs = await hRes.json();
-                  historyMap[f.id] = runs || [];
-                }
-              } catch {
-                historyMap[f.id] = [];
-              }
-            })
-          );
-          setSyncHistory(historyMap);
-        }
-      }
+      const historyMap: Record<string, SyncRun[]> = {};
+      await Promise.all(
+        feedList.map(async (f) => {
+          try {
+            historyMap[f.id] = await adminService.listFeedHistory(f.id);
+          } catch {
+            historyMap[f.id] = [];
+          }
+        })
+      );
+      setSyncHistory(historyMap);
     } catch (e) {
       console.error("Feeds loading error:", e);
     }
-  }, [fetchWithConfig]);
+  }, [adminService]);
 
-  // Load Categories
   const loadCategories = useCallback(async () => {
     try {
-      const res = await fetchWithConfig("/api/v1/categories");
-      if (res.ok) {
-        const data = await res.json();
-        setCategories(data || []);
-      }
+      setCategories(await adminService.listCategories());
     } catch (e) {
       console.error("Categories loading error:", e);
     }
-  }, [fetchWithConfig]);
+  }, [adminService]);
 
-  // Load Suppliers
   const loadSuppliers = useCallback(async () => {
     try {
-      const res = await fetchWithConfig("/api/v1/suppliers");
-      if (res.ok) {
-        const data = await res.json();
-        setSuppliers(data || []);
-      }
+      setSuppliers(await adminService.listSuppliers());
     } catch (e) {
       console.error("Suppliers loading error:", e);
     }
-  }, [fetchWithConfig]);
+  }, [adminService]);
 
-  // Load Products
-  const loadProducts = useCallback(async (limit = 24, offset = 0, categoryId = "", search = "") => {
-    setLoadingProducts(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("limit", limit.toString());
-      params.set("offset", offset.toString());
-      if (categoryId) params.set("category_id", categoryId);
-      if (search) params.set("search", search);
-
-      const res = await fetchWithConfig(`/api/v1/products?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setProducts(data.products || []);
-        setTotalProductsCount(data.total || 0);
+  const loadProducts = useCallback(
+    async (limit = 24, offset = 0, categoryId = "", search = "") => {
+      setLoadingProducts(true);
+      try {
+        const page = await adminService.listProducts({
+          limit,
+          offset,
+          categoryId,
+          search,
+        });
+        setProducts(page.products);
+        setTotalProductsCount(page.total);
+      } catch (e) {
+        console.error("Products loading error:", e);
+      } finally {
+        setLoadingProducts(false);
       }
-    } catch (e) {
-      console.error("Products loading error:", e);
-    } finally {
-      setLoadingProducts(false);
-    }
-  }, [fetchWithConfig]);
+    },
+    [adminService]
+  );
 
-  // Load Settings
   const loadStoreSettings = useCallback(async () => {
     setLoadingSettings(true);
     try {
-      const res = await fetchWithConfig("/api/v1/settings");
-      if (res.ok) {
-        const data = await res.json();
-        setStoreSettings({
-          address: data.address || "",
-          phone: data.phone || "",
-          whatsapp: data.whatsapp || "",
-          email: data.email || "",
-          show_single_price: Boolean(data.show_single_price)
-        });
-      }
+      setStoreSettings(await adminService.getStoreSettings());
     } catch (e) {
       console.error("Settings loading error:", e);
     } finally {
       setLoadingSettings(false);
     }
-  }, [fetchWithConfig]);
+  }, [adminService]);
 
-  // Update Settings
-  const handleUpdateSettings = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingSettings(true);
-    setSettingsError("");
-    setSettingsSuccess(false);
+  const handleUpdateSettings = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setSavingSettings(true);
+      setSettingsError("");
+      setSettingsSuccess(false);
 
-    try {
-      const res = await fetchWithConfig("/api/v1/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(storeSettings)
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Ayarlar kaydedilemedi.");
+      try {
+        await adminService.updateStoreSettings(storeSettings);
+        setSettingsSuccess(true);
+        setTimeout(() => setSettingsSuccess(false), 4000);
+      } catch (err: unknown) {
+        setSettingsError(
+          err instanceof Error
+            ? err.message
+            : "Beklenmedik bir hata oluştu."
+        );
+      } finally {
+        setSavingSettings(false);
       }
+    },
+    [adminService, storeSettings]
+  );
 
-      setSettingsSuccess(true);
-      setTimeout(() => setSettingsSuccess(false), 4000);
-    } catch (err: unknown) {
-      setSettingsError((err as Error).message || "Beklenmedik bir hata oluştu.");
-    } finally {
-      setSavingSettings(false);
-    }
-  }, [fetchWithConfig, storeSettings]);
-
-  // Trigger Feed Sync
-  const triggerSync = useCallback(async (feedId: string) => {
-    try {
-      const res = await fetchWithConfig(`/api/v1/feeds/${feedId}/sync`, { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        setActiveSyncing(prev => ({ ...prev, [feedId]: data.sync_run_id || "running" }));
+  const triggerSync = useCallback(
+    async (feedId: string) => {
+      try {
+        const runId = await adminService.triggerSync(feedId);
+        setActiveSyncing((prev) => ({ ...prev, [feedId]: runId }));
         void loadFeedsAndHistory();
+      } catch (e) {
+        console.error("Sync trigger error:", e);
       }
-    } catch (e) {
-      console.error("Sync trigger error:", e);
-    }
-  }, [fetchWithConfig, loadFeedsAndHistory]);
+    },
+    [adminService, loadFeedsAndHistory]
+  );
 
-  // Cancel Feed Sync
-  const cancelSync = useCallback(async (feedId: string) => {
-    try {
-      const res = await fetchWithConfig(`/api/v1/feeds/${feedId}/cancel`, { method: "POST" });
-      if (res.ok) {
-        setActiveSyncing(prev => {
-          const next = { ...prev };
-          delete next[feedId];
-          return next;
-        });
-        void loadFeedsAndHistory();
+  const cancelSync = useCallback(
+    async (feedId: string) => {
+      try {
+        const ok = await adminService.cancelSync(feedId);
+        if (ok) {
+          setActiveSyncing((prev) => {
+            const next = { ...prev };
+            delete next[feedId];
+            return next;
+          });
+          void loadFeedsAndHistory();
+        }
+      } catch (e) {
+        console.error("Sync cancel error:", e);
       }
-    } catch (e) {
-      console.error("Sync cancel error:", e);
-    }
-  }, [fetchWithConfig, loadFeedsAndHistory]);
+    },
+    [adminService, loadFeedsAndHistory]
+  );
 
-  // Clear History
-  const handleClearHistory = useCallback(async (feedId: string) => {
-    try {
-      const res = await fetchWithConfig(`/api/v1/feeds/${feedId}/history`, { method: "DELETE" });
-      if (res.ok) {
-        setSyncHistory(prev => ({ ...prev, [feedId]: [] }));
+  const handleClearHistory = useCallback(
+    async (feedId: string) => {
+      try {
+        const ok = await adminService.clearFeedHistory(feedId);
+        if (ok) {
+          setSyncHistory((prev) => ({ ...prev, [feedId]: [] }));
+        }
+      } catch (e) {
+        console.error("Clear history error:", e);
       }
-    } catch (e) {
-      console.error("Clear history error:", e);
-    }
-  }, [fetchWithConfig]);
+    },
+    [adminService]
+  );
 
-  // Check DB status and preload initial data when token is valid
   useEffect(() => {
     if (!token) return;
 
-    const checkHealth = async () => {
-      try {
-        const res = await fetch(`${apiUrl}/api/v1/health`);
-        if (res.ok) {
-          setDbStatus("connected");
-        } else {
-          setDbStatus("disconnected");
-        }
-      } catch {
-        setDbStatus("disconnected");
-      }
-    };
-
     const timer = setTimeout(() => {
-      void checkHealth();
+      void adminService
+        .checkHealth()
+        .then((healthy) => setDbStatus(healthy ? "connected" : "disconnected"));
       void loadFeedsAndHistory();
       void loadSuppliers();
       void loadCategories();
     }, 0);
     return () => clearTimeout(timer);
-  }, [token, apiUrl, loadFeedsAndHistory, loadSuppliers, loadCategories]);
+  }, [token, adminService, loadFeedsAndHistory, loadSuppliers, loadCategories]);
 
-  const value = useMemo<AdminContextType>(() => ({
-    apiUrl,
-    token,
-    user,
-    isInitialized,
-    dbStatus,
-    login,
-    handleLogout,
-    fetchWithConfig,
-    sidebarCollapsed,
-    setSidebarCollapsed,
-    mobileSidebarOpen,
-    setMobileSidebarOpen,
-    toggleSidebar,
-    feeds,
-    setFeeds,
-    syncHistory,
-    setSyncHistory,
-    activeSyncing,
-    triggerSync,
-    cancelSync,
-    handleClearHistory,
-    loadFeedsAndHistory,
-    suppliers,
-    setSuppliers,
-    categories,
-    setCategories,
-    flatCategories,
-    loadSuppliers,
-    loadCategories,
-    products,
-    setProducts,
-    totalProductsCount,
-    setTotalProductsCount,
-    loadingProducts,
-    setLoadingProducts,
-    loadProducts,
-    storeSettings,
-    setStoreSettings,
-    loadingSettings,
-    savingSettings,
-    settingsError,
-    settingsSuccess,
-    handleUpdateSettings,
-    loadStoreSettings,
-    theme,
-    setTheme,
-    toggleTheme
-  }), [
-    apiUrl,
-    token,
-    user,
-    isInitialized,
-    dbStatus,
-    login,
-    handleLogout,
-    fetchWithConfig,
-    sidebarCollapsed,
-    mobileSidebarOpen,
-    toggleSidebar,
-    theme,
-    setTheme,
-    toggleTheme,
-    feeds,
-    syncHistory,
-    activeSyncing,
-    triggerSync,
-    cancelSync,
-    handleClearHistory,
-    loadFeedsAndHistory,
-    suppliers,
-    categories,
-    flatCategories,
-    loadSuppliers,
-    loadCategories,
-    products,
-    totalProductsCount,
-    loadingProducts,
-    loadProducts,
-    storeSettings,
-    loadingSettings,
-    savingSettings,
-    settingsError,
-    settingsSuccess,
-    handleUpdateSettings,
-    loadStoreSettings
-  ]);
+  const value = useMemo<AdminContextType>(
+    () => ({
+      apiUrl,
+      token,
+      user,
+      isInitialized,
+      dbStatus,
+      login,
+      handleLogout,
+      fetchWithConfig,
+      sidebarCollapsed,
+      setSidebarCollapsed,
+      mobileSidebarOpen,
+      setMobileSidebarOpen,
+      toggleSidebar,
+      feeds,
+      setFeeds,
+      syncHistory,
+      setSyncHistory,
+      activeSyncing,
+      triggerSync,
+      cancelSync,
+      handleClearHistory,
+      loadFeedsAndHistory,
+      suppliers,
+      setSuppliers,
+      categories,
+      setCategories,
+      flatCategories,
+      loadSuppliers,
+      loadCategories,
+      products,
+      setProducts,
+      totalProductsCount,
+      setTotalProductsCount,
+      loadingProducts,
+      setLoadingProducts,
+      loadProducts,
+      storeSettings,
+      setStoreSettings,
+      loadingSettings,
+      savingSettings,
+      settingsError,
+      settingsSuccess,
+      handleUpdateSettings,
+      loadStoreSettings,
+      theme,
+      setTheme,
+      toggleTheme,
+    }),
+    [
+      apiUrl,
+      token,
+      user,
+      isInitialized,
+      dbStatus,
+      login,
+      handleLogout,
+      fetchWithConfig,
+      sidebarCollapsed,
+      mobileSidebarOpen,
+      toggleSidebar,
+      theme,
+      toggleTheme,
+      feeds,
+      syncHistory,
+      activeSyncing,
+      triggerSync,
+      cancelSync,
+      handleClearHistory,
+      loadFeedsAndHistory,
+      suppliers,
+      categories,
+      flatCategories,
+      loadSuppliers,
+      loadCategories,
+      products,
+      totalProductsCount,
+      loadingProducts,
+      loadProducts,
+      storeSettings,
+      loadingSettings,
+      savingSettings,
+      settingsError,
+      settingsSuccess,
+      handleUpdateSettings,
+      loadStoreSettings,
+    ]
+  );
 
   return (
-    <AdminContext.Provider value={value}>
-      {children}
-    </AdminContext.Provider>
+    <AdminContext.Provider value={value}>{children}</AdminContext.Provider>
   );
 }
 
@@ -547,4 +514,85 @@ export function useAdmin(): AdminContextType {
     throw new Error("useAdmin must be used within an AdminProvider");
   }
   return context;
+}
+
+// ============================================================================
+// SEGREGATED DOMAIN HOOKS (ISP)
+// ============================================================================
+
+export function useAdminAuth(): AdminAuthSlice {
+  const ctx = useAdmin();
+  return {
+    apiUrl: ctx.apiUrl,
+    token: ctx.token,
+    user: ctx.user,
+    isInitialized: ctx.isInitialized,
+    dbStatus: ctx.dbStatus,
+    login: ctx.login,
+    handleLogout: ctx.handleLogout,
+    fetchWithConfig: ctx.fetchWithConfig,
+  };
+}
+
+export function useAdminShell(): AdminShellSlice {
+  const ctx = useAdmin();
+  return {
+    sidebarCollapsed: ctx.sidebarCollapsed,
+    setSidebarCollapsed: ctx.setSidebarCollapsed,
+    mobileSidebarOpen: ctx.mobileSidebarOpen,
+    setMobileSidebarOpen: ctx.setMobileSidebarOpen,
+    toggleSidebar: ctx.toggleSidebar,
+    theme: ctx.theme,
+    setTheme: ctx.setTheme,
+    toggleTheme: ctx.toggleTheme,
+  };
+}
+
+export function useAdminFeeds(): AdminFeedsSlice {
+  const ctx = useAdmin();
+  return {
+    feeds: ctx.feeds,
+    setFeeds: ctx.setFeeds,
+    syncHistory: ctx.syncHistory,
+    setSyncHistory: ctx.setSyncHistory,
+    activeSyncing: ctx.activeSyncing,
+    triggerSync: ctx.triggerSync,
+    cancelSync: ctx.cancelSync,
+    handleClearHistory: ctx.handleClearHistory,
+    loadFeedsAndHistory: ctx.loadFeedsAndHistory,
+  };
+}
+
+export function useAdminCatalog(): AdminCatalogSlice {
+  const ctx = useAdmin();
+  return {
+    suppliers: ctx.suppliers,
+    setSuppliers: ctx.setSuppliers,
+    categories: ctx.categories,
+    setCategories: ctx.setCategories,
+    flatCategories: ctx.flatCategories,
+    loadSuppliers: ctx.loadSuppliers,
+    loadCategories: ctx.loadCategories,
+    products: ctx.products,
+    setProducts: ctx.setProducts,
+    totalProductsCount: ctx.totalProductsCount,
+    setTotalProductsCount: ctx.setTotalProductsCount,
+    loadingProducts: ctx.loadingProducts,
+    setLoadingProducts: ctx.setLoadingProducts,
+    loadProducts: ctx.loadProducts,
+  };
+}
+
+export function useAdminStoreSettings(): AdminSettingsSlice {
+  const ctx = useAdmin();
+  return {
+    storeSettings: ctx.storeSettings,
+    setStoreSettings: ctx.setStoreSettings,
+    loadingSettings: ctx.loadingSettings,
+    savingSettings: ctx.savingSettings,
+    settingsError: ctx.settingsError,
+    settingsSuccess: ctx.settingsSuccess,
+    handleUpdateSettings: ctx.handleUpdateSettings,
+    loadStoreSettings: ctx.loadStoreSettings,
+  };
 }

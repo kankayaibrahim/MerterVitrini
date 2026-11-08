@@ -1110,9 +1110,9 @@ func upsertCatalogProduct(ctx context.Context, p SingleProductImportParams, sour
 				feed_id, source_product_id, title, category_id, gender, 
 				last_sync_run_id, is_active, brand_id, series_ratio, packing_ratio, 
 				shipping_weight_kg, minimum_order_quantity,
-				price, discounted_price, currency, tax_rate, stock, sku, barcode
+				buying_price, price, discounted_price, currency, tax_rate, stock, sku, barcode
 			) 
-			VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) 
+			VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $12, $12, $13, $14, $15, $16, $17, $18) 
 			RETURNING id`
 		err = db.Pool.QueryRow(ctx, insertQuery, p.FeedID, sourceProductID, title, fields.CategoryID, fields.Gender, p.SyncRunID, p.BrandID, 
 			fields.SeriesRatio, fields.PackingRatio, fields.Weight, fields.MinOrderQty,
@@ -1130,7 +1130,7 @@ func upsertCatalogProduct(ctx context.Context, p SingleProductImportParams, sour
 		UPDATE catalog.products 
 		SET title = $1, category_id = $2, gender = $3, last_sync_run_id = $4, is_active = true, brand_id = $5, 
 		    series_ratio = $6, packing_ratio = $7, shipping_weight_kg = $8, minimum_order_quantity = $9,
-		    price = $10, discounted_price = $11, currency = $12, tax_rate = $13, stock = $14, sku = $15, barcode = $16,
+		    buying_price = $10, price = $10, discounted_price = $11, currency = $12, tax_rate = $13, stock = $14, sku = $15, barcode = $16,
 		    updated_at = CURRENT_TIMESTAMP 
 		WHERE id = $17`
 	_, err = db.Pool.Exec(ctx, updateQuery, title, fields.CategoryID, fields.Gender, p.SyncRunID, p.BrandID, 
@@ -1781,9 +1781,9 @@ func upsertStandardizedProductRecord(ctx context.Context, params StandardizedUps
 				feed_id, source_product_id, source_product_group_id, title, category_id, gender, 
 				last_sync_run_id, is_active, brand_id, series_ratio, packing_ratio, 
 				shipping_weight_kg, minimum_order_quantity, season,
-				price, discounted_price, currency, tax_rate, stock, sku, barcode
+				buying_price, price, discounted_price, currency, tax_rate, stock, sku, barcode
 			) 
-			VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) 
+			VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $14, $15, $16, $17, $18, $19, $20) 
 			RETURNING id`
 		err = db.Pool.QueryRow(ctx, insertQuery, params.FeedID, p.SourceProductID, p.SourceProductGroupID, p.Title, params.CategoryID, p.Gender, params.SyncRunID, params.BrandID, 
 			params.SeriesRatioPtr, params.PackingRatioPtr, p.ShippingWeightKg, p.MinimumOrderQuantity, p.Season,
@@ -1801,7 +1801,7 @@ func upsertStandardizedProductRecord(ctx context.Context, params StandardizedUps
 		UPDATE catalog.products 
 		SET title = $1, category_id = $2, gender = $3, last_sync_run_id = $4, is_active = true, brand_id = $5, 
 		    series_ratio = $6, packing_ratio = $7, shipping_weight_kg = $8, minimum_order_quantity = $9, season = $10,
-		    source_product_group_id = $11, price = $12, discounted_price = $13, currency = $14, tax_rate = $15, stock = $16, sku = $17, barcode = $18,
+		    source_product_group_id = $11, buying_price = $12, price = $12, discounted_price = $13, currency = $14, tax_rate = $15, stock = $16, sku = $17, barcode = $18,
 		    updated_at = CURRENT_TIMESTAMP 
 		WHERE id = $19`
 	_, err = db.Pool.Exec(ctx, updateQuery, p.Title, params.CategoryID, p.Gender, params.SyncRunID, params.BrandID, 

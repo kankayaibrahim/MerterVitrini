@@ -16,6 +16,7 @@ import (
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/middleware"
+	"mertervitrini/backend/services"
 )
 
 const (
@@ -24,8 +25,9 @@ const (
 )
 
 type ChatHandler struct {
-	Cfg  *config.Config
-	Node *centrifuge.Node
+	Cfg      *config.Config
+	Node     *centrifuge.Node
+	Notifier services.NotificationDispatcher
 }
 
 type SupplierAgentDTO struct {
@@ -93,7 +95,7 @@ type ChatMessageDTO struct {
 	SenderType  string            `json:"sender_type"`
 	SenderID    string            `json:"sender_id"`
 	SenderName  string            `json:"sender_name"`
-	MessageType string            `json:"message_type"` // "text", "product_card", "custom_offer"
+	MessageType string            `json:"message_type"` // "text", "product_card", "custom_offer", "image"
 	Content     string            `json:"content"`
 	Metadata    ChatOfferMetadata `json:"metadata"`
 	IsRead      bool              `json:"is_read"`
@@ -113,11 +115,14 @@ type InitChatRoomRequest struct {
 type SendCustomerMessageRequest struct {
 	CustomerID   string `json:"customer_id"`
 	CustomerName string `json:"customer_name"`
+	MessageType  string `json:"message_type,omitempty"` // "text" or "image"
+	ImageUrl     string `json:"image_url,omitempty"`
 	Content      string `json:"content"`
 }
 
 type SendSupplierMessageRequest struct {
-	MessageType      string  `json:"message_type"` // "text" or "custom_offer"
+	MessageType      string  `json:"message_type"` // "text", "custom_offer", or "image"
+	ImageUrl         string  `json:"image_url,omitempty"`
 	Content          string  `json:"content"`
 	ProductID        string  `json:"product_id,omitempty"`
 	PackagesQty      int     `json:"packages_qty,omitempty"`
@@ -125,7 +130,7 @@ type SendSupplierMessageRequest struct {
 	DiscountPercent  float64 `json:"discount_percent,omitempty"`
 }
 
-func NewChatHandler(cfg *config.Config) *ChatHandler {
+func NewChatHandler(cfg *config.Config, notifiers ...services.NotificationDispatcher) *ChatHandler {
 	node, err := centrifuge.New(centrifuge.Config{})
 	if err != nil {
 		log.Fatalf("CRITICAL: Failed to initialize Centrifuge node: %v", err)
@@ -160,10 +165,18 @@ func NewChatHandler(cfg *config.Config) *ChatHandler {
 		log.Fatalf("CRITICAL: Failed to start Centrifuge node: %v", err)
 	}
 
+	var notifier services.NotificationDispatcher
+	if len(notifiers) > 0 && notifiers[0] != nil {
+		notifier = notifiers[0]
+	} else {
+		notifier = services.NewPostgresNotificationDispatcher(db.Pool)
+	}
+
 	log.Println("[CENTRIFUGE] Embedded real-time B2B multi-agent chat engine started successfully.")
 	return &ChatHandler{
-		Cfg:  cfg,
-		Node: node,
+		Cfg:      cfg,
+		Node:     node,
+		Notifier: notifier,
 	}
 }
 
@@ -352,7 +365,7 @@ func resolveTargetSupplierAgent(ctx context.Context, brandID, requestedSupplierU
 
 func enrichRoomDetails(ctx context.Context, room *ChatRoomDTO) {
 	_ = db.Pool.QueryRow(ctx, `
-		SELECT COALESCE(NULLIF(alias_code, ''), brand_name) FROM catalog.brands WHERE id = $1
+		SELECT brand_name FROM catalog.brands WHERE id = $1
 	`, room.BrandID).Scan(&room.SupplierName)
 
 	if room.SupplierUserID != nil && *room.SupplierUserID != "" {
@@ -485,34 +498,46 @@ func (h *ChatHandler) InitOrGetRoom(w http.ResponseWriter, r *http.Request) {
 
 	// Automatically insert product context card if a product was specified and not yet posted in this room
 	if hasProduct {
-		var existingProductCardCount int
-		_ = db.Pool.QueryRow(ctx, `
-			SELECT COUNT(*) FROM catalog.chat_messages
-			WHERE room_id = $1 AND message_type = 'product_card' AND metadata->>'product_id' = $2
-		`, room.ID, productMeta.ProductID).Scan(&existingProductCardCount)
-
-		if existingProductCardCount == 0 {
-			metaBytes, _ := json.Marshal(productMeta)
-			previewText := fmt.Sprintf("📦 Ürün: %s (%s)", productMeta.Title, productMeta.CustomSku)
-			msg, errMsg := insertChatMessage(ctx, insertChatMessageParams{
-				roomID:                  room.ID,
-				senderType:              "customer",
-				senderID:                customerID,
-				senderName:              customerName,
-				messageType:             "product_card",
-				content:                 previewText,
-				metaBytes:               metaBytes,
-				incrementSupplierUnread: true,
-			})
-			if errMsg == nil {
-				room.LastMessagePreview = previewText
-				h.publishEvent(chatRoomChannelPrefix+room.ID, "new_message", msg)
-				h.publishToSupplierChannels(room.BrandID, room.SupplierUserID, "room_updated", room)
-			}
-		}
+		h.postInitialProductCardIfMissing(ctx, &room, productMeta, customerID, customerName)
 	}
 
 	writeSupplierJSON(w, http.StatusOK, room)
+}
+
+func (h *ChatHandler) postInitialProductCardIfMissing(
+	ctx context.Context,
+	room *ChatRoomDTO,
+	productMeta ChatOfferMetadata,
+	customerID, customerName string,
+) {
+	var existingProductCardCount int
+	_ = db.Pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM catalog.chat_messages
+		WHERE room_id = $1 AND message_type = 'product_card' AND metadata->>'product_id' = $2
+	`, room.ID, productMeta.ProductID).Scan(&existingProductCardCount)
+	if existingProductCardCount > 0 {
+		return
+	}
+
+	metaBytes, _ := json.Marshal(productMeta)
+	previewText := fmt.Sprintf("📦 Ürün: %s (%s)", productMeta.Title, productMeta.CustomSku)
+	msg, err := insertChatMessage(ctx, insertChatMessageParams{
+		roomID:                  room.ID,
+		senderType:              "customer",
+		senderID:                customerID,
+		senderName:              customerName,
+		messageType:             "product_card",
+		content:                 previewText,
+		metaBytes:               metaBytes,
+		incrementSupplierUnread: true,
+	})
+	if err != nil {
+		return
+	}
+
+	room.LastMessagePreview = previewText
+	h.publishEvent(chatRoomChannelPrefix+room.ID, "new_message", msg)
+	h.publishToSupplierChannels(room.BrandID, room.SupplierUserID, "room_updated", *room)
 }
 
 type insertChatMessageParams struct {
@@ -612,7 +637,7 @@ func scanRoomRows(rows pgx.Rows) []ChatRoomDTO {
 }
 
 const baseSelectRoomsSQL = `
-	SELECT r.id::text, r.brand_id::text, COALESCE(NULLIF(b.alias_code, ''), b.brand_name) AS supplier_name,
+	SELECT r.id::text, r.brand_id::text, b.brand_name AS supplier_name,
 	       r.supplier_user_id::text,
 	       COALESCE(su.contact_name, ''), COALESCE(su.job_title, ''), COALESCE(su.spoken_languages, ''),
 	       r.customer_id, r.customer_name, COALESCE(r.customer_email, ''), COALESCE(r.customer_phone, ''),
@@ -664,6 +689,45 @@ func (h *ChatHandler) ListCustomerMessages(w http.ResponseWriter, r *http.Reques
 	writeSupplierJSON(w, http.StatusOK, messages)
 }
 
+func inferChatMessageType(rawType, imageURL string) string {
+	if trimmed := strings.TrimSpace(rawType); trimmed != "" {
+		return trimmed
+	}
+	if strings.TrimSpace(imageURL) != "" {
+		return "image"
+	}
+	return "text"
+}
+
+func buildImageMessagePayload(imageURL, rawContent string) (string, []byte, error) {
+	if imageURL == "" {
+		return "", nil, fmt.Errorf("Görsel URL bilgisi zorunludur.")
+	}
+	metaBytes, _ := json.Marshal(ChatOfferMetadata{ImageUrl: imageURL})
+	if rawContent == "" {
+		rawContent = "📷 Fotoğraf"
+	}
+	return rawContent, metaBytes, nil
+}
+
+func buildCustomerMessagePayload(req SendCustomerMessageRequest) (string, string, []byte, error) {
+	imgURL := strings.TrimSpace(req.ImageUrl)
+	content := strings.TrimSpace(req.Content)
+	msgType := inferChatMessageType(req.MessageType, imgURL)
+
+	if msgType == "image" {
+		imgContent, metaBytes, err := buildImageMessagePayload(imgURL, content)
+		if err != nil {
+			return "", "", nil, err
+		}
+		return "image", imgContent, metaBytes, nil
+	}
+	if content == "" {
+		return "", "", nil, fmt.Errorf("Mesaj içeriği boş olamaz.")
+	}
+	return msgType, content, nil, nil
+}
+
 func (h *ChatHandler) SendCustomerMessage(w http.ResponseWriter, r *http.Request) {
 	roomID := r.PathValue("room_id")
 	if roomID == "" {
@@ -677,9 +741,9 @@ func (h *ChatHandler) SendCustomerMessage(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	content := strings.TrimSpace(req.Content)
-	if content == "" {
-		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": "Mesaj içeriği boş olamaz."})
+	msgType, content, metaBytes, err := buildCustomerMessagePayload(req)
+	if err != nil {
+		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
@@ -691,7 +755,7 @@ func (h *ChatHandler) SendCustomerMessage(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 	var brandID string
 	var supplierUserID *string
-	err := db.Pool.QueryRow(ctx, `
+	err = db.Pool.QueryRow(ctx, `
 		SELECT brand_id::text, supplier_user_id::text FROM catalog.chat_rooms WHERE id = $1
 	`, roomID).Scan(&brandID, &supplierUserID)
 	if err != nil {
@@ -704,9 +768,9 @@ func (h *ChatHandler) SendCustomerMessage(w http.ResponseWriter, r *http.Request
 		senderType:              "customer",
 		senderID:                customerID,
 		senderName:              customerName,
-		messageType:             "text",
+		messageType:             msgType,
 		content:                 content,
-		metaBytes:               nil,
+		metaBytes:               metaBytes,
 		incrementSupplierUnread: true,
 	})
 	if err != nil {
@@ -716,6 +780,9 @@ func (h *ChatHandler) SendCustomerMessage(w http.ResponseWriter, r *http.Request
 
 	h.publishEvent(chatRoomChannelPrefix+roomID, "new_message", msg)
 	h.publishToSupplierChannels(brandID, supplierUserID, "new_message", msg)
+	if h.Notifier != nil {
+		h.Notifier.NotifySupplierChatAsync(brandID, supplierUserID, customerName, content, roomID)
+	}
 
 	writeSupplierJSON(w, http.StatusCreated, msg)
 }
@@ -906,6 +973,52 @@ func (h *ChatHandler) ListSupplierMessages(w http.ResponseWriter, r *http.Reques
 	writeSupplierJSON(w, http.StatusOK, messages)
 }
 
+func resolveSupplierSender(claims *middleware.SupplierClaims) (string, string) {
+	brandLabel := claims.AliasCode
+	if brandLabel == "" {
+		brandLabel = claims.BrandName
+	}
+	senderName := brandLabel
+	if claims.ContactName != "" {
+		senderName = fmt.Sprintf("%s (%s)", claims.ContactName, brandLabel)
+	}
+	senderID := claims.UserID
+	if senderID == "" {
+		senderID = claims.BrandID
+	}
+	return senderID, senderName
+}
+
+func buildSupplierMessagePayload(ctx context.Context, brandID string, req SendSupplierMessageRequest) (string, string, []byte, error) {
+	imgURL := strings.TrimSpace(req.ImageUrl)
+	content := strings.TrimSpace(req.Content)
+	msgType := inferChatMessageType(req.MessageType, imgURL)
+
+	switch msgType {
+	case "custom_offer":
+		offerMeta, offerPreview, err := buildCustomOfferMeta(ctx, brandID, req)
+		if err != nil {
+			return "", "", nil, err
+		}
+		metaBytes, _ := json.Marshal(offerMeta)
+		if content == "" {
+			content = offerPreview
+		}
+		return "custom_offer", content, metaBytes, nil
+	case "image":
+		imgContent, metaBytes, err := buildImageMessagePayload(imgURL, content)
+		if err != nil {
+			return "", "", nil, err
+		}
+		return "image", imgContent, metaBytes, nil
+	default:
+		if content == "" {
+			return "", "", nil, fmt.Errorf("Mesaj metni boş olamaz.")
+		}
+		return "text", content, nil, nil
+	}
+}
+
 func (h *ChatHandler) SendSupplierMessage(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
@@ -931,43 +1044,13 @@ func (h *ChatHandler) SendSupplierMessage(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	brandLabel := claims.AliasCode
-	if brandLabel == "" {
-		brandLabel = claims.BrandName
-	}
-	senderName := brandLabel
-	if claims.ContactName != "" {
-		senderName = fmt.Sprintf("%s (%s)", claims.ContactName, brandLabel)
-	}
-
-	senderID := claims.UserID
-	if senderID == "" {
-		senderID = claims.BrandID
-	}
-
-	msgType := strings.TrimSpace(req.MessageType)
-	if msgType == "" {
-		msgType = "text"
-	}
-
-	var metaBytes []byte
-	content := strings.TrimSpace(req.Content)
-
-	if msgType == "custom_offer" {
-		offerMeta, offerPreview, errOffer := buildCustomOfferMeta(ctx, claims.BrandID, req)
-		if errOffer != nil {
-			writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": errOffer.Error()})
-			return
-		}
-		metaBytes, _ = json.Marshal(offerMeta)
-		if content == "" {
-			content = offerPreview
-		}
-	} else if content == "" {
-		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": "Mesaj metni boş olamaz."})
+	msgType, content, metaBytes, err := buildSupplierMessagePayload(ctx, claims.BrandID, req)
+	if err != nil {
+		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
+	senderID, senderName := resolveSupplierSender(claims)
 	msg, err := insertChatMessage(ctx, insertChatMessageParams{
 		roomID:                  roomID,
 		senderType:              "supplier",
@@ -985,6 +1068,9 @@ func (h *ChatHandler) SendSupplierMessage(w http.ResponseWriter, r *http.Request
 
 	h.publishEvent(chatRoomChannelPrefix+roomID, "new_message", msg)
 	h.publishEvent("chat:customer#"+customerID, "new_message", msg)
+	if h.Notifier != nil {
+		h.Notifier.NotifyUserAsync(customerID, "customer", senderName, content, "chat_message", map[string]any{"room_id": roomID})
+	}
 
 	writeSupplierJSON(w, http.StatusCreated, msg)
 }

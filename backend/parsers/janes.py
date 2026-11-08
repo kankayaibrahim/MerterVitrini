@@ -21,8 +21,8 @@ import re
 # ==============================================================================
 # CONFIGURATION BLOCK
 # ==============================================================================
-# Configurable markup/profit rate (e.g., 20% by default)
-PROFIT_RATE = 0.20
+# Tedarikçi fiyatı doğrudan (0% kar marjı ile birebir) vitrine yansıtılır
+PROFIT_RATE = 0.0
 
 STANDARD_SIZE_MAP = {
     "XS": 30, "S": 40, "M": 50, "L": 60, "XL": 70, 
@@ -1442,7 +1442,7 @@ def _collect_secenek_images(secenek, product_uuid, title, category_tag, desc_tr_
             "subject": category_tag or "Giyim",
             "tags": tags_str,
             "description": desc_tr_val or title,
-            "brand": "Merter Vitrini"
+            "brand": "Jane's Toptan"
         }
 
 def _collect_secenek_attributes(secenek):

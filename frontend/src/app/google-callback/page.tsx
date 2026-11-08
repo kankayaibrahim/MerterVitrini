@@ -3,7 +3,7 @@
 import React, { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, CheckCircle2, Loader2, Home, Phone } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Home, Phone, RefreshCw } from "lucide-react";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import { Category, CartItem } from "@/types/store";
@@ -96,14 +96,19 @@ function GoogleCallbackHandler() {
           },
         });
 
-        const data = await response.json();
+        let data: { error?: string; token?: string; user?: CallbackUserInfo } = {};
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error(t("google_auth_failed", lang) || "Giriş işlemi sırasında sunucu ile bağlantı kurulamadı. Lütfen tekrar deneyiniz.");
+        }
 
         if (!response.ok) {
           throw new Error(data.error || t("google_auth_failed", lang));
         }
 
         // Save token & user to localStorage
-        localStorage.setItem("store_user_token", data.token);
+        localStorage.setItem("store_user_token", data.token || "");
         localStorage.setItem("store_user_info", JSON.stringify(data.user));
 
         // Dispatch auth-change event to update headers
@@ -111,8 +116,8 @@ function GoogleCallbackHandler() {
 
         const userPhone = data.user?.phone ? String(data.user.phone).trim() : "";
         if (!userPhone) {
-          setPendingToken(data.token);
-          setPendingUser(data.user);
+          setPendingToken(data.token || "");
+          setPendingUser(data.user || null);
           setNeedsPhone(true);
           return;
         }
@@ -131,6 +136,28 @@ function GoogleCallbackHandler() {
 
     void exchangeCode();
   }, [searchParams, router, lang]);
+
+  const handleGoogleRetry = () => {
+    if (typeof window !== "undefined") {
+      const origin = window.location.origin;
+      const keycloakUrl = "https://auth.mertervitrini.com.tr";
+      const realm = "merter";
+      const clientId = "admin-client";
+      const redirectUri = `${origin}/google-callback/`;
+      const scope = "openid profile email";
+      const idpHint = "google";
+
+      const authUrl = `${keycloakUrl}/realms/${realm}/protocol/openid-connect/auth` +
+        `?client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=code` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&prompt=select_account` +
+        `&kc_idp_hint=${encodeURIComponent(idpHint)}`;
+
+      window.location.href = authUrl;
+    }
+  };
 
   const handleSavePhone = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,15 +319,23 @@ function GoogleCallbackHandler() {
                 {error}
               </p>
               
-              <div className="w-full border-t border-cultured my-4" />
-              
-              <Link 
-                href="/" 
-                className="w-full py-3 bg-eerie-black hover:bg-salmon-pink text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-md flex items-center justify-center gap-2 no-underline"
-              >
-                <Home className="w-4 h-4" />
-                <span>{t("back_to_homepage", lang)}</span>
-              </Link>
+              <div className="w-full flex flex-col gap-2.5 mt-2">
+                <button 
+                  type="button"
+                  onClick={handleGoogleRetry}
+                  className="w-full py-3 bg-salmon-pink hover:bg-salmon-pink/90 text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-md flex items-center justify-center gap-2 border-none"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Google ile Tekrar Dene</span>
+                </button>
+                <Link 
+                  href="/" 
+                  className="w-full py-3 bg-eerie-black hover:bg-zinc-800 text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-md flex items-center justify-center gap-2 no-underline text-center"
+                >
+                  <Home className="w-4 h-4" />
+                  <span>{t("back_to_homepage", lang)}</span>
+                </Link>
+              </div>
             </div>
           )}
         </div>

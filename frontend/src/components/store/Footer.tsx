@@ -5,7 +5,7 @@ import Link from "next/link";
 import { t, getCategoryPrefix } from "../../app/i18n";
 import { apiFetch } from "../../app/utils";
 import SupplierApplicationSection from "./SupplierApplicationSection";
-import { Building2 } from "lucide-react";
+import { Building2, Smartphone } from "lucide-react";
 
 interface Settings {
   id: string;
@@ -225,6 +225,15 @@ function FooterAboutColumn({ lang }: { readonly lang: string }) {
           <Link href="/supplier/login" className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5">
             <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <span>{t("supplier_portal_login", lang)}</span>
+          </Link>
+        </li>
+        <li className="pt-1">
+          <Link
+            href="/mobil-uygulama"
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#111111] hover:bg-zinc-800 text-white text-xs font-extrabold tracking-wider uppercase transition-colors no-underline"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+            <span>{lang === "tr" ? "Android Uygulama (APK)" : "Android App (APK)"}</span>
           </Link>
         </li>
       </ul>

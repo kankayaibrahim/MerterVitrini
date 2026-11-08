@@ -4,21 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/middleware"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/httpx"
+	"mertervitrini/backend/services"
 )
 
 const (
@@ -26,9 +26,7 @@ const (
 )
 
 func writeSupplierJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set(headerContentType, mimeApplicationJSON)
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
+	httpx.JSON(w, status, data)
 }
 
 func triggerProductMVRefresh() {
@@ -162,14 +160,45 @@ func updateProductImages(ctx context.Context, tx pgx.Tx, productID string, image
 }
 
 type SupplierPortalHandler struct {
-	Cfg *config.Config
+	Cfg   *config.Config
+	Media services.MediaProcessor
 }
 
-func NewSupplierPortalHandler(cfg *config.Config) *SupplierPortalHandler {
-	return &SupplierPortalHandler{Cfg: cfg}
+func NewSupplierPortalHandler(cfg *config.Config, mediaProcessors ...services.MediaProcessor) *SupplierPortalHandler {
+	var media services.MediaProcessor
+	if len(mediaProcessors) > 0 && mediaProcessors[0] != nil {
+		media = mediaProcessors[0]
+	} else {
+		media = services.NewLocalImageMediaService("")
+	}
+	return &SupplierPortalHandler{Cfg: cfg, Media: media}
 }
 
-// attemptLegacySupplierMigration provisions legacy bcrypt users into Keycloak on first login
+func issueLocalSupplierJWT(jwtSecret string, u *models.SupplierUser) string {
+	if jwtSecret == "" || u == nil {
+		return ""
+	}
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"sub":          u.ID,
+		"brand_id":     u.BrandID,
+		"brand_name":   u.BrandName,
+		"alias_code":   u.AliasCode,
+		"email":        u.Email,
+		"contact_name": u.ContactName,
+		"role":         "supplier",
+		"iat":          now.Unix(),
+		"exp":          now.Add(7 * 24 * time.Hour).Unix(),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString([]byte(jwtSecret))
+	if err != nil {
+		return ""
+	}
+	return signed
+}
+
+// attemptLegacySupplierMigration provisions legacy bcrypt users into Keycloak on first login, falling back to local HS256 JWT
 func (h *SupplierPortalHandler) attemptLegacySupplierMigration(ctx context.Context, u *models.SupplierUser, passwordHash *string, password string) string {
 	if passwordHash == nil || *passwordHash == "" {
 		return ""
@@ -184,18 +213,18 @@ func (h *SupplierPortalHandler) attemptLegacySupplierMigration(ctx context.Conte
 	}
 
 	newKCID, err := createKeycloakSupplierUser(ctx, h.Cfg, u.Email, u.ContactName, password, phoneStr, u.BrandID)
-	if err != nil || newKCID == "" {
-		return ""
+	if err == nil && newKCID != "" {
+		u.KeycloakID = &newKCID
+		_, _ = db.Pool.Exec(ctx, "UPDATE catalog.supplier_users SET keycloak_id = $1 WHERE id = $2", newKCID, u.ID)
+		if kcToken, kcErr := loginKeycloakUser(ctx, h.Cfg, u.Email, password); kcErr == nil && kcToken != "" {
+			return kcToken
+		}
 	}
 
-	u.KeycloakID = &newKCID
-	_, _ = db.Pool.Exec(ctx, "UPDATE catalog.supplier_users SET keycloak_id = $1 WHERE id = $2", newKCID, u.ID)
-
-	token, _ := loginKeycloakUser(ctx, h.Cfg, u.Email, password)
-	return token
+	return issueLocalSupplierJWT(h.Cfg.JWTSecret, u)
 }
 
-// Login authenticates a supplier user with email and password via Keycloak (with legacy fallback)
+// Login authenticates a supplier user with email and password via Keycloak (with legacy/sub-user fallback)
 func (h *SupplierPortalHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.SupplierLoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -212,45 +241,7 @@ func (h *SupplierPortalHandler) Login(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	var u models.SupplierUser
-	var passwordHash *string
-	var brandActive bool
-
-	query := `
-		SELECT 
-			u.id, 
-			u.brand_id, 
-			b.brand_name, 
-			coalesce(b.alias_code, '') as alias_code,
-			u.email, 
-			u.password_hash, 
-			u.contact_name, 
-			u.phone, 
-			u.keycloak_id,
-			u.is_active, 
-			b.is_active as brand_active,
-			u.created_at, 
-			u.updated_at
-		FROM catalog.supplier_users u
-		JOIN catalog.brands b ON u.brand_id = b.id
-		WHERE lower(u.email) = $1`
-
-	err := db.Pool.QueryRow(ctx, query, email).Scan(
-		&u.ID,
-		&u.BrandID,
-		&u.BrandName,
-		&u.AliasCode,
-		&u.Email,
-		&passwordHash,
-		&u.ContactName,
-		&u.Phone,
-		&u.KeycloakID,
-		&u.IsActive,
-		&brandActive,
-		&u.CreatedAt,
-		&u.UpdatedAt,
-	)
-
+	u, passwordHash, brandActive, err := lookupSupplierUserByEmail(ctx, email)
 	if err != nil {
 		http.Error(w, `{"error":"E-posta veya şifre hatalı"}`, http.StatusUnauthorized)
 		return
@@ -269,7 +260,7 @@ func (h *SupplierPortalHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// 1. Try Keycloak Direct Access Grant authentication first
 	tokenString, kcErr := loginKeycloakUser(ctx, h.Cfg, email, req.Password)
 	if kcErr != nil {
-		tokenString = h.attemptLegacySupplierMigration(ctx, &u, passwordHash, req.Password)
+		tokenString = h.attemptLegacySupplierMigration(ctx, u, passwordHash, req.Password)
 	}
 
 	// If tokenString is still empty, authentication has failed
@@ -283,15 +274,66 @@ func (h *SupplierPortalHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	writeSupplierJSON(w, http.StatusOK, models.SupplierLoginResponse{
 		Token: tokenString,
-		User:  &u,
+		User:  u,
 	})
+}
+
+func lookupSupplierUserByEmail(ctx context.Context, email string) (*models.SupplierUser, *string, bool, error) {
+	var u models.SupplierUser
+	var passwordHash *string
+	var brandActive bool
+
+	query := `
+		SELECT 
+			u.id, 
+			u.brand_id, 
+			b.brand_name, 
+			coalesce(b.alias_code, '') as alias_code,
+			u.email, 
+			u.password_hash, 
+			u.contact_name, 
+			u.phone, 
+			coalesce(u.job_title, 'Firma Yetkilisi'),
+			coalesce(u.spoken_languages, 'TR'),
+			coalesce(u.is_owner, true),
+			u.keycloak_id,
+			u.is_active, 
+			b.is_active as brand_active,
+			u.created_at, 
+			u.updated_at
+		FROM catalog.supplier_users u
+		JOIN catalog.brands b ON u.brand_id = b.id
+		WHERE lower(u.email) = $1`
+
+	err := db.Pool.QueryRow(ctx, query, email).Scan(
+		&u.ID,
+		&u.BrandID,
+		&u.BrandName,
+		&u.AliasCode,
+		&u.Email,
+		&passwordHash,
+		&u.ContactName,
+		&u.Phone,
+		&u.JobTitle,
+		&u.SpokenLanguages,
+		&u.IsOwner,
+		&u.KeycloakID,
+		&u.IsActive,
+		&brandActive,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return &u, passwordHash, brandActive, nil
 }
 
 // GetProfile returns logged-in supplier info and dashboard statistics
 func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
@@ -326,7 +368,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
@@ -440,13 +482,13 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
 	id := r.PathValue("id")
 	if id == "" {
-		http.Error(w, `{"error":"ID zorunludur"}`, http.StatusBadRequest)
+		http.Error(w, errJSONMissingID, http.StatusBadRequest)
 		return
 	}
 
@@ -488,6 +530,8 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 		&p.CreatedAt,
 		&p.UpdatedAt,
 	)
+	p.ColorID = colorID
+	p.FabricID = fabricID
 	p.BuyingPrice = &buyingPrice
 	p.Price = price
 	p.MinimumOrderQty = minOrderQty
@@ -531,7 +575,7 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
@@ -648,13 +692,13 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
 	id := r.PathValue("id")
 	if id == "" {
-		http.Error(w, `{"error":"ID zorunludur"}`, http.StatusBadRequest)
+		http.Error(w, errJSONMissingID, http.StatusBadRequest)
 		return
 	}
 
@@ -749,13 +793,13 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 func (h *SupplierPortalHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
 	id := r.PathValue("id")
 	if id == "" {
-		http.Error(w, `{"error":"ID zorunludur"}`, http.StatusBadRequest)
+		http.Error(w, errJSONMissingID, http.StatusBadRequest)
 		return
 	}
 
@@ -773,17 +817,16 @@ func (h *SupplierPortalHandler) DeleteProduct(w http.ResponseWriter, r *http.Req
 	writeSupplierJSON(w, http.StatusOK, map[string]string{"message": "Ürün kalıcı olarak silindi."})
 }
 
-// UploadImage handles file upload for product photos
+// UploadImage handles file upload for product photos (supports up to 25MB mobile camera photos with auto-optimization)
 func (h *SupplierPortalHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	_, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
-	// Limit to 10MB
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		http.Error(w, `{"error":"Dosya boyutu çok büyük (Max: 10MB)"}`, http.StatusBadRequest)
+	if err := r.ParseMultipartForm(25 << 20); err != nil {
+		http.Error(w, `{"error":"Dosya boyutu çok büyük (Max: 25MB)"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -794,36 +837,18 @@ func (h *SupplierPortalHandler) UploadImage(w http.ResponseWriter, r *http.Reque
 	}
 	defer file.Close()
 
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" {
-		http.Error(w, `{"error":"Desteklenmeyen dosya formatı. Sadece JPG, PNG ve WebP kabul edilir."}`, http.StatusBadRequest)
-		return
+	mediaSvc := h.Media
+	if mediaSvc == nil {
+		mediaSvc = services.NewLocalImageMediaService("")
 	}
-
-	mediaRoot := getMediaDir()
-	productsDir := filepath.Join(mediaRoot, "products")
-	_ = os.MkdirAll(productsDir, 0755)
-
-	filename := fmt.Sprintf("sup_%d_%s", time.Now().UnixNano(), header.Filename)
-	filename = strings.ReplaceAll(filename, " ", "_")
-	destPath := filepath.Join(productsDir, filename)
-
-	dst, err := os.Create(destPath)
+	imageURL, err := mediaSvc.SaveUploadedImage(file, header.Filename, "products", "sup")
 	if err != nil {
-		log.Printf("[IMAGE UPLOAD] File create error: %v", err)
-		http.Error(w, `{"error":"Dosya sunucuya yazılamadı"}`, http.StatusInternalServerError)
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		http.Error(w, `{"error":"Dosya kopyalanamadı"}`, http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
 		return
 	}
 
-	imageUrl := fmt.Sprintf("/uploads/products/%s", filename)
 	writeSupplierJSON(w, http.StatusOK, map[string]string{
-		"image_url": imageUrl,
+		"image_url": imageURL,
 	})
 }
 
@@ -1023,6 +1048,9 @@ func (h *SupplierPortalHandler) SetupPassword(w http.ResponseWriter, r *http.Req
 
 	// Direct login
 	tokenString, _ := loginKeycloakUser(ctx, h.Cfg, u.Email, req.Password)
+	if tokenString == "" {
+		tokenString = issueLocalSupplierJWT(h.Cfg.JWTSecret, &u)
+	}
 
 	// Update last login
 	_, _ = db.Pool.Exec(ctx, "UPDATE catalog.supplier_users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1", u.ID)

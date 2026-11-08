@@ -1,0 +1,5 @@
+storePassword=CHANGE_ME_KEYSTORE_PASSWORD
+keyPassword=CHANGE_ME_KEY_PASSWORD
+keyAlias=mertervitrini
+storeFile=../keystore/mertervitrini-release.jks
+

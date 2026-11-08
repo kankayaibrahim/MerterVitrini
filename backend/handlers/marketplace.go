@@ -19,14 +19,22 @@ import (
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/middleware"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/services"
 )
 
 type MarketplaceHandler struct {
-	Cfg *config.Config
+	Cfg      *config.Config
+	Notifier services.NotificationDispatcher
 }
 
-func NewMarketplaceHandler(cfg *config.Config) *MarketplaceHandler {
-	return &MarketplaceHandler{Cfg: cfg}
+func NewMarketplaceHandler(cfg *config.Config, notifiers ...services.NotificationDispatcher) *MarketplaceHandler {
+	var notifier services.NotificationDispatcher
+	if len(notifiers) > 0 && notifiers[0] != nil {
+		notifier = notifiers[0]
+	} else {
+		notifier = services.NewPostgresNotificationDispatcher(db.Pool)
+	}
+	return &MarketplaceHandler{Cfg: cfg, Notifier: notifier}
 }
 
 // splitOrderIntoSupplierSubOrders groups order items by BrandID and creates supplier sub-orders & ledger entries
@@ -142,6 +150,14 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 		) VALUES ($1, $2, 'PENDING_ORDER_INCOME', $3, $4, 'TRY', $5)
 	`, brandID, subOrderID, grossAmount, updatedPending, desc)
 
+	services.NewPostgresNotificationDispatcher(db.Pool).NotifySupplierBrandAsync(
+		brandID,
+		"Yeni B2B Siparişi Geldi!",
+		fmt.Sprintf("%s numaralı yeni toptan siparişiniz oluşturuldu (Brüt: ₺%.2f).", subOrderNumber, grossAmount),
+		"sub_order",
+		map[string]any{"sub_order_id": subOrderID, "sub_order_number": subOrderNumber},
+	)
+
 	return nil
 }
 
@@ -153,7 +169,7 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
@@ -162,7 +178,7 @@ func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.R
 
 	query := `
 		SELECT 
-			so.id, so.order_id, so.brand_id, b.name as brand_name, so.sub_order_number, 
+			so.id, so.order_id, so.brand_id, b.brand_name, so.sub_order_number, 
 			so.gross_amount, so.commission_rate, so.commission_amount, so.net_payout_amount, 
 			so.currency, so.status, so.tracking_company, so.tracking_number, so.notes, 
 			so.created_at, so.updated_at
@@ -214,7 +230,7 @@ func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.R
 func (h *MarketplaceHandler) GetSupplierOrder(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
@@ -228,7 +244,7 @@ func (h *MarketplaceHandler) GetSupplierOrder(w http.ResponseWriter, r *http.Req
 	var o models.SupplierSubOrder
 	err := db.Pool.QueryRow(ctx, `
 		SELECT 
-			so.id, so.order_id, so.brand_id, b.name as brand_name, so.sub_order_number, 
+			so.id, so.order_id, so.brand_id, b.brand_name, so.sub_order_number, 
 			so.gross_amount, so.commission_rate, so.commission_amount, so.net_payout_amount, 
 			so.currency, so.status, so.tracking_company, so.tracking_number, so.notes, 
 			so.created_at, so.updated_at
@@ -270,14 +286,14 @@ func (h *MarketplaceHandler) GetSupplierOrder(w http.ResponseWriter, r *http.Req
 func (h *MarketplaceHandler) UpdateSupplierOrderStatus(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
 	subOrderID := r.PathValue("id")
 	var req models.UpdateSubOrderStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Geçersiz veri"}`, http.StatusBadRequest)
+		http.Error(w, errJSONInvalidPayload, http.StatusBadRequest)
 		return
 	}
 
@@ -297,7 +313,7 @@ func (h *MarketplaceHandler) UpdateSupplierOrderStatus(w http.ResponseWriter, r 
 	ctx := r.Context()
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		http.Error(w, `{"error":"İşlem başlatılamadı"}`, http.StatusInternalServerError)
+		http.Error(w, errJSONTxBeginFailed, http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -377,7 +393,7 @@ func (h *MarketplaceHandler) UpdateSupplierOrderStatus(w http.ResponseWriter, r 
 func (h *MarketplaceHandler) GetSupplierWallet(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
@@ -441,13 +457,13 @@ func (h *MarketplaceHandler) GetSupplierWallet(w http.ResponseWriter, r *http.Re
 func (h *MarketplaceHandler) UpdateSupplierWalletIban(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
 	var req models.UpdateSupplierWalletIbanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Geçersiz veri"}`, http.StatusBadRequest)
+		http.Error(w, errJSONInvalidPayload, http.StatusBadRequest)
 		return
 	}
 
@@ -481,7 +497,7 @@ func (h *MarketplaceHandler) UpdateSupplierWalletIban(w http.ResponseWriter, r *
 func (h *MarketplaceHandler) CreateSupplierPayoutRequest(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
@@ -494,7 +510,7 @@ func (h *MarketplaceHandler) CreateSupplierPayoutRequest(w http.ResponseWriter, 
 	ctx := r.Context()
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		http.Error(w, `{"error":"İşlem başlatılamadı"}`, http.StatusInternalServerError)
+		http.Error(w, errJSONTxBeginFailed, http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -570,7 +586,7 @@ func (h *MarketplaceHandler) CreateSupplierPayoutRequest(w http.ResponseWriter, 
 func (h *MarketplaceHandler) ListSupplierPayoutRequests(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
-		http.Error(w, `{"error":"Yetkisiz erişim"}`, http.StatusUnauthorized)
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
@@ -615,7 +631,7 @@ func (h *MarketplaceHandler) ListAdminSubOrders(w http.ResponseWriter, r *http.R
 
 	query := `
 		SELECT 
-			so.id, so.order_id, so.brand_id, b.name as brand_name, so.sub_order_number, 
+			so.id, so.order_id, so.brand_id, b.brand_name, so.sub_order_number, 
 			so.gross_amount, so.commission_rate, so.commission_amount, so.net_payout_amount, 
 			so.currency, so.status, so.tracking_company, so.tracking_number, so.notes, 
 			so.created_at, so.updated_at
@@ -671,7 +687,7 @@ func (h *MarketplaceHandler) ListAdminPayoutRequests(w http.ResponseWriter, r *h
 	status := r.URL.Query().Get("status")
 
 	query := `
-		SELECT pr.id, pr.brand_id, b.name as brand_name, pr.amount, pr.currency, pr.status, 
+		SELECT pr.id, pr.brand_id, b.brand_name, pr.amount, pr.currency, pr.status, 
 		       pr.iban, pr.bank_name, pr.account_holder, pr.admin_notes, pr.processed_at, 
 		       pr.created_at, pr.updated_at
 		FROM catalog.supplier_payout_requests pr
@@ -713,7 +729,7 @@ func (h *MarketplaceHandler) ProcessAdminPayoutRequest(w http.ResponseWriter, r 
 	payoutID := r.PathValue("id")
 	var req models.ProcessPayoutRequestInput
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Geçersiz veri"}`, http.StatusBadRequest)
+		http.Error(w, errJSONInvalidPayload, http.StatusBadRequest)
 		return
 	}
 
@@ -726,7 +742,7 @@ func (h *MarketplaceHandler) ProcessAdminPayoutRequest(w http.ResponseWriter, r 
 	ctx := r.Context()
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		http.Error(w, `{"error":"İşlem başlatılamadı"}`, http.StatusInternalServerError)
+		http.Error(w, errJSONTxBeginFailed, http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -847,7 +863,7 @@ func (h *MarketplaceHandler) CreateB2BApiKey(w http.ResponseWriter, r *http.Requ
 	}
 
 	if req.MarginRate <= 0 {
-		req.MarginRate = 1.15 // Default %15 margin
+		req.MarginRate = 1.00 // Default 0% margin (exact supplier price)
 	}
 	if req.Currency == "" {
 		req.Currency = "TRY"
@@ -950,8 +966,8 @@ func (h *MarketplaceHandler) ExportB2BXmlFeed(w http.ResponseWriter, r *http.Req
 	rows, err := db.Pool.Query(ctx, `
 		SELECT 
 			p.id, p.custom_sku, p.title, coalesce(p.description, ''),
-			coalesce(b.brand_name, 'Merter Vitrini') as brand_alias,
-			coalesce(c.name, 'Tekstil') as cat_name,
+			coalesce(NULLIF(b.brand_name, ''), b.alias_code, 'Merter Vitrini') as brand_alias,
+			coalesce(c.title, 'Tekstil') as cat_name,
 			p.price, p.currency, p.stock, coalesce(p.series_ratio, '1'), coalesce(p.packing_ratio, '1')
 		FROM catalog.products p
 		LEFT JOIN catalog.brands b ON b.id = p.brand_id
@@ -1004,8 +1020,8 @@ func (h *MarketplaceHandler) ExportB2BJsonFeed(w http.ResponseWriter, r *http.Re
 	rows, err := db.Pool.Query(ctx, `
 		SELECT 
 			p.id, p.custom_sku, p.title, coalesce(p.description, ''),
-			coalesce(b.brand_name, 'Merter Vitrini') as brand_alias,
-			coalesce(c.name, 'Tekstil') as cat_name,
+			coalesce(NULLIF(b.brand_name, ''), b.alias_code, 'Merter Vitrini') as brand_alias,
+			coalesce(c.title, 'Tekstil') as cat_name,
 			p.price, p.currency, p.stock, coalesce(p.series_ratio, '1'), coalesce(p.packing_ratio, '1')
 		FROM catalog.products p
 		LEFT JOIN catalog.brands b ON b.id = p.brand_id
