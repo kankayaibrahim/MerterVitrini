@@ -15,9 +15,10 @@ import {
   Package,
   ArrowRight,
   CreditCard,
+  BookOpen,
 } from "lucide-react";
 import { Brand, Category } from "@/types/store";
-import { apiFetch, trackBrandEvent } from "@/app/utils";
+import { apiFetch } from "@/app/utils";
 import { syncShowPricesToGuestsSetting } from "@/app/storeAuth";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
@@ -39,19 +40,6 @@ const COMPANY_TYPE_LABELS: Record<string, string> = {
   aksesuar: "Tekstil Aksesuar & Yan Sanayi",
 };
 
-function normalizeWaPhone(raw?: string): string {
-  if (!raw) return "";
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("00")) return digits.slice(2);
-  if (digits.startsWith("0") && digits.length === 11) {
-    return "90" + digits.slice(1);
-  }
-  if (digits.length === 10 && digits.startsWith("5")) {
-    return "90" + digits;
-  }
-  return digits;
-}
-
 function matchesSupplierFilter(
   brand: Brand,
   query: string,
@@ -59,6 +47,9 @@ function matchesSupplierFilter(
   onlyPrivateLabel: boolean,
   onlyFason: boolean
 ): boolean {
+  if ((brand.active_product_count ?? 0) <= 0) {
+    return false;
+  }
   if (selectedType !== "all" && (brand.company_type || "uretici_toptanci") !== selectedType) {
     return false;
   }
@@ -88,34 +79,100 @@ interface SupplierDirectoryCardProps {
   readonly brand: Brand;
 }
 
+function SupplierCardContactDetails({ brand }: SupplierDirectoryCardProps) {
+  const waRaw = brand.whatsapp_phone || brand.phone || "";
+  const callRaw = brand.phone || brand.whatsapp_phone || "";
+  const addressText =
+    brand.location_address || "Merter Tekstil Merkezi, Güngören / İstanbul";
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs text-slate-700">
+      <div className="flex items-start gap-1.5 sm:col-span-2">
+        <MapPin size={13} className="text-emerald-600 shrink-0 mt-0.5" />
+        <span className="text-slate-600 font-medium">{addressText}</span>
+      </div>
+      {waRaw && (
+        <div className="flex items-center gap-1.5">
+          <MessageCircle size={13} className="text-emerald-600 shrink-0" />
+          <span className="font-bold text-emerald-700">WhatsApp: {waRaw}</span>
+        </div>
+      )}
+      {callRaw && (
+        <div className="flex items-center gap-1.5">
+          <Phone size={13} className="text-slate-400 shrink-0" />
+          <a
+            href={`tel:${callRaw}`}
+            className="font-semibold text-slate-800 hover:text-emerald-700 no-underline"
+          >
+            Tel: {callRaw}
+          </a>
+        </div>
+      )}
+      {brand.public_email && (
+        <div className="flex items-center gap-1.5">
+          <Mail size={13} className="text-slate-400 shrink-0" />
+          <a
+            href={`mailto:${brand.public_email}`}
+            className="font-semibold text-slate-700 hover:text-emerald-700 no-underline truncate"
+          >
+            {brand.public_email}
+          </a>
+        </div>
+      )}
+      {brand.website && (
+        <div className="flex items-center gap-1.5">
+          <Globe size={13} className="text-slate-400 shrink-0" />
+          <a
+            href={brand.website}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-slate-700 hover:text-emerald-700 no-underline truncate"
+          >
+            {brand.website.replace(/^https?:\/\//, "")}
+          </a>
+        </div>
+      )}
+      {brand.iban && (
+        <div className="flex items-center gap-1.5 sm:col-span-2 text-[11px] text-slate-600">
+          <CreditCard size={12} className="text-emerald-600 shrink-0" />
+          <span className="truncate">
+            Doğrudan Havale IBAN ({brand.bank_name || "Banka"}):{" "}
+            <strong className="font-mono text-slate-900">{brand.iban}</strong>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SupplierDirectoryCard({ brand }: SupplierDirectoryCardProps) {
   const companyLabel =
     COMPANY_TYPE_LABELS[brand.company_type || "uretici_toptanci"] ||
     "Üretici & Toptan Satış";
-  const waRaw = brand.whatsapp_phone || brand.phone || "";
-  const callRaw = brand.phone || brand.whatsapp_phone || "";
-  const waDigits = normalizeWaPhone(waRaw);
-  const waMessage = `Merhaba *${brand.name}*,\nMerter Vitrini Firma Rehberi üzerinden firmanızla toptan alım / üretim için doğrudan iletişime geçmek istiyorum.`;
-  const waUrl = waDigits
-    ? `https://wa.me/${waDigits}?text=${encodeURIComponent(waMessage)}`
-    : "";
-  const showcaseHref = `/ureticiler/${encodeURIComponent(brand.slug || brand.id)}`;
+  const slugPart = encodeURIComponent(brand.slug || brand.id);
+  const showcaseHref = `/ureticiler/${slugPart}`;
+  const editorialHref = `/ureticiler/${slugPart}/tanitim`;
   const productCount = brand.active_product_count ?? 0;
+  const descText =
+    brand.description ||
+    `${brand.name}, İstanbul Merter tekstil merkezinde orijinal seri (asorti) paket yapısıyla butik ve mağazalara doğrudan imalatçı fiyatlarıyla toptan koleksiyon sunan doğrulanmış üreticidir.`;
+  const exportText =
+    brand.export_countries || "Avrupa, Balkanlar, BDT & Körfez";
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 hover:border-slate-300 shadow-xs hover:shadow-md transition-all p-5 flex flex-col justify-between gap-4">
+    <div className="bg-white rounded-2xl border border-slate-200/90 hover:border-emerald-300 shadow-xs hover:shadow-md transition-all p-5 flex flex-col justify-between gap-4">
       <div className="space-y-3">
         {/* Top Row */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0">
               <Building2 size={20} />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <Link
                   href={showcaseHref}
-                  className="text-base font-extrabold text-slate-900 hover:text-salmon-pink transition-colors no-underline"
+                  className="text-base font-extrabold text-slate-900 hover:text-emerald-700 transition-colors no-underline"
                 >
                   {brand.name}
                 </Link>
@@ -132,14 +189,18 @@ function SupplierDirectoryCard({ brand }: SupplierDirectoryCardProps) {
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 text-xs font-extrabold shrink-0">
-            <Package size={13} className="text-salmon-pink" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-extrabold shrink-0">
+            <Package size={13} className="text-amber-600" />
             <span>{productCount} Ürün</span>
           </span>
         </div>
 
         {/* Capabilities */}
         <div className="flex flex-wrap gap-1.5">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
+            <CheckCircle2 size={11} />
+            <span>Orijinal Seri (Asorti Paket)</span>
+          </span>
           {brand.supports_private_label && (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-200 text-[11px] font-bold">
               <CheckCircle2 size={11} />
@@ -152,114 +213,35 @@ function SupplierDirectoryCard({ brand }: SupplierDirectoryCardProps) {
               <span>Fason Üretim</span>
             </span>
           )}
-          {(brand.min_order_quantity ?? 1) > 1 && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-semibold">
-              <span>Min. Sipariş: {brand.min_order_quantity} Seri</span>
-            </span>
-          )}
-          {brand.export_countries && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200 text-[11px] font-semibold">
-              <span>İhracat: {brand.export_countries}</span>
-            </span>
-          )}
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200 text-[11px] font-semibold">
+            <span>İhracat: {exportText}</span>
+          </span>
         </div>
 
-        {brand.description && (
-          <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-            {brand.description}
-          </p>
-        )}
+        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+          {descText}
+        </p>
 
-        {/* Open Contact Details */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs text-slate-700">
-          {brand.location_address && (
-            <div className="flex items-start gap-1.5 sm:col-span-2">
-              <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" />
-              <span className="text-slate-600">{brand.location_address}</span>
-            </div>
-          )}
-          {waRaw && (
-            <div className="flex items-center gap-1.5">
-              <MessageCircle size={13} className="text-emerald-600 shrink-0" />
-              <span className="font-bold text-emerald-700">WhatsApp: {waRaw}</span>
-            </div>
-          )}
-          {callRaw && (
-            <div className="flex items-center gap-1.5">
-              <Phone size={13} className="text-slate-400 shrink-0" />
-              <a
-                href={`tel:${callRaw}`}
-                className="font-semibold text-slate-800 hover:text-salmon-pink no-underline"
-              >
-                Tel: {callRaw}
-              </a>
-            </div>
-          )}
-          {brand.public_email && (
-            <div className="flex items-center gap-1.5">
-              <Mail size={13} className="text-slate-400 shrink-0" />
-              <a
-                href={`mailto:${brand.public_email}`}
-                className="font-semibold text-slate-700 hover:text-salmon-pink no-underline truncate"
-              >
-                {brand.public_email}
-              </a>
-            </div>
-          )}
-          {brand.website && (
-            <div className="flex items-center gap-1.5">
-              <Globe size={13} className="text-slate-400 shrink-0" />
-              <a
-                href={brand.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-slate-700 hover:text-salmon-pink no-underline truncate"
-              >
-                {brand.website.replace(/^https?:\/\//, "")}
-              </a>
-            </div>
-          )}
-          {brand.iban && (
-            <div className="flex items-center gap-1.5 sm:col-span-2 text-[11px] text-slate-600">
-              <CreditCard size={12} className="text-emerald-600 shrink-0" />
-              <span className="truncate">
-                Doğrudan Havale IBAN ({brand.bank_name || "Banka"}):{" "}
-                <strong className="font-mono text-slate-900">{brand.iban}</strong>
-              </span>
-            </div>
-          )}
-        </div>
+        <SupplierCardContactDetails brand={brand} />
       </div>
 
-      {/* Action Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+      {/* Distinct Action Buttons: 1) Product Collection Showcase, 2) Brand Story & Guide Blog Page */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3 border-t border-slate-100">
         <Link
           href={showcaseHref}
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-salmon-pink text-white text-xs font-extrabold transition-colors no-underline"
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold transition-colors no-underline shadow-xs"
         >
-          <span>Firma Vitrini &amp; Koleksiyon</span>
+          <span>Koleksiyon &amp; Ürünler</span>
           <ArrowRight size={14} />
         </Link>
 
-        {waUrl ? (
-          <a
-            href={waUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => trackBrandEvent(brand.id, "whatsapp_click")}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition-colors no-underline"
-          >
-            <MessageCircle size={14} />
-            <span>Doğrudan WhatsApp</span>
-          </a>
-        ) : (
-          <Link
-            href={showcaseHref}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-extrabold transition-colors no-underline"
-          >
-            <span>İletişim &amp; Detaylar</span>
-          </Link>
-        )}
+        <Link
+          href={editorialHref}
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-extrabold transition-colors no-underline"
+        >
+          <BookOpen size={14} className="text-emerald-600" />
+          <span>Firma Hikayesi &amp; Rehber</span>
+        </Link>
       </div>
     </div>
   );
@@ -292,7 +274,7 @@ function DirectoryContent({
         <button
           type="button"
           onClick={onResetFilters}
-          className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer"
+          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer border-none"
         >
           Filtreleri Temizle
         </button>
@@ -364,16 +346,16 @@ export default function SuppliersDirectoryClient() {
 
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 py-8 space-y-6">
         {/* Hero Banner */}
-        <div className="rounded-2xl bg-slate-900 text-white p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-extrabold">
-              <ShieldCheck size={14} />
+        <div className="rounded-3xl bg-gradient-to-br from-amber-50/80 via-white to-emerald-50/60 border border-amber-200/80 text-slate-900 p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xs">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 border border-emerald-200 text-emerald-800 text-xs font-extrabold">
+              <ShieldCheck size={14} className="text-emerald-600" />
               <span>AÇIK ÜRETİCİ VİTRİNİ • %0 KOMİSYON DOĞRUDAN TİCARET</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
               Merter Doğrulanmış Üretici &amp; Toptan Giyim Firmaları Rehberi
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
               Merter tekstil merkezindeki üretici, toptancı, Private Label ve fason üretim firmalarının açık iletişim, WhatsApp, Merter mağaza adresi ve doğrudan fabrika çıkış koleksiyonlarına aracısız ulaşın.
             </p>
           </div>
@@ -381,13 +363,13 @@ export default function SuppliersDirectoryClient() {
           <div className="flex flex-col sm:flex-row gap-2.5 shrink-0">
             <Link
               href="/tedarikci-basvuru"
-              className="px-4 py-2.5 rounded-xl bg-salmon-pink hover:bg-rose-500 text-white text-xs font-extrabold no-underline text-center transition-colors"
+              className="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold no-underline text-center transition-colors shadow-xs"
             >
               Üretici Olarak Yerinizi Alın (Ücretsiz)
             </Link>
             <Link
               href="/supplier"
-              className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-extrabold no-underline text-center transition-colors"
+              className="px-4 py-3 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 text-xs font-extrabold no-underline text-center transition-colors shadow-xs"
             >
               Tedarikçi Portalı Girişi
             </Link>
@@ -407,7 +389,7 @@ export default function SuppliersDirectoryClient() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Firma adı, Merter adresi, ihracat ülkesi veya üretim alanı ara..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-slate-900"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-emerald-600"
               />
             </div>
 
@@ -445,8 +427,8 @@ export default function SuppliersDirectoryClient() {
                 onClick={() => setSelectedType(opt.value)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer border ${
                   selectedType === opt.value
-                    ? "bg-slate-900 text-white border-slate-900"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                    : "bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-emerald-50/60 hover:text-emerald-800 hover:border-emerald-200"
                 }`}
               >
                 {opt.label}

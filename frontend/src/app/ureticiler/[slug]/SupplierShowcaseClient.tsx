@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   Package,
   Lock,
+  BookOpen,
 } from "lucide-react";
 import { Brand, Category, Product } from "@/types/store";
 import { apiFetch, ExchangeRate, trackBrandEvent } from "@/app/utils";
@@ -81,10 +82,10 @@ function SupplierProfileBanner({
     : "";
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-5">
+    <div className="bg-gradient-to-br from-amber-50/80 via-white to-emerald-50/50 rounded-3xl border border-amber-200/80 shadow-xs p-6 sm:p-8 space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
         <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
             <Building2 size={28} />
           </div>
           <div className="space-y-1.5">
@@ -93,31 +94,38 @@ function SupplierProfileBanner({
                 {brand.name}
               </h1>
               {(brand.is_verified ?? true) && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-extrabold">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100/80 text-emerald-800 border border-emerald-200 text-xs font-extrabold">
                   <ShieldCheck size={13} />
                   <span>Doğrulanmış Merter Üreticisi</span>
                 </span>
               )}
             </div>
-            <p className="text-xs sm:text-sm font-bold text-slate-500">
+            <p className="text-xs sm:text-sm font-bold text-slate-600">
               {companyLabel} • %0 Komisyon Doğrudan Fabrika Çıkış Fiyatları
             </p>
-            {brand.description && (
-              <p className="text-xs sm:text-sm text-slate-600 max-w-3xl leading-relaxed pt-1">
-                {brand.description}
-              </p>
-            )}
+            <p className="text-xs sm:text-sm text-slate-600 max-w-3xl leading-relaxed pt-1">
+              {brand.description ||
+                `${brand.name}, İstanbul Merter tekstil merkezinde orijinal seri (asorti) paket yapısıyla butik ve mağazalara doğrudan imalatçı fiyatlarıyla toptan koleksiyon sunan doğrulanmış üreticidir.`}
+            </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <Link
+            href={`/ureticiler/${encodeURIComponent(brand.slug || brand.id)}/tanitim`}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-extrabold no-underline transition-colors"
+          >
+            <BookOpen size={15} className="text-amber-600" />
+            <span>Firma Hikayesi &amp; Rehberi</span>
+          </Link>
+
           {waUrl && (
             <a
               href={waUrl}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackBrandEvent(brand.id, "whatsapp_click")}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold no-underline transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
             >
               <MessageCircle size={16} />
               <span>WhatsApp ile Doğrudan Yaz</span>
@@ -127,7 +135,7 @@ function SupplierProfileBanner({
           <button
             type="button"
             onClick={isMemberLoggedIn ? onOpenChat : () => openStoreAuthModal("login")}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold cursor-pointer transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold cursor-pointer border-none transition-colors shadow-xs"
           >
             {isMemberLoggedIn ? (
               <>
@@ -358,14 +366,33 @@ export default function SupplierShowcaseClient({
       />
 
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 py-6 space-y-6">
-        <div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <Link
             href="/ureticiler"
-            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-salmon-pink no-underline"
+            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-emerald-700 no-underline"
           >
             <ChevronLeft size={15} />
             <span>Tüm Doğrulanmış Merter Üreticileri Rehberine Dön</span>
           </Link>
+
+          {brand && (
+            <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              <Link
+                href={`/ureticiler/${encodeURIComponent(slug)}`}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-extrabold no-underline shadow-xs"
+              >
+                <Package size={14} />
+                <span>Koleksiyon &amp; Ürün Vitrini ({totalProducts})</span>
+              </Link>
+              <Link
+                href={`/ureticiler/${encodeURIComponent(slug)}/tanitim`}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 no-underline transition-colors"
+              >
+                <BookOpen size={14} />
+                <span>Firma Hikayesi &amp; Rehberi (Blog)</span>
+              </Link>
+            </div>
+          )}
         </div>
 
         {loadingBrand && (

@@ -904,4 +904,189 @@ E-Posta: destek@mertervitrini.com.tr`, contactName, companyName, setupURL, email
 	})
 }
 
+// ServiceProviderApplicationEmailData holds fields for service provider directory onboarding emails.
+type ServiceProviderApplicationEmailData struct {
+	CompanyName     string
+	ContactName     string
+	Email           string
+	Phone           string
+	ServiceCategory string
+	ShortDesc       string
+	Address         string
+}
+
+// SendServiceProviderVerificationEmail sends a 30-minute email verification link to a prospective service provider.
+func SendServiceProviderVerificationEmail(cfg *config.Config, companyName, contactName, email, verifyURL string) {
+	if email == "" || !strings.Contains(email, "@") {
+		return
+	}
+
+	safe.Go("SendServiceProviderVerificationEmail", func() {
+		subject := fmt.Sprintf("✉️ Hizmet Sağlayıcı Başvurunuzu Doğrulayın (30 Dk Geçerli) - %s", companyName)
+
+		textBody := fmt.Sprintf(`Sayın %s,
+
+%s adına Merter Vitrini Sektörel Hizmet Sağlayıcılar Rehberi'ne yapmış olduğunuz başvuru alınmıştır.
+
+Başvurunuzun yönetici onayına iletilebilmesi için lütfen 30 dakika içinde aşağıdaki bağlantıya tıklayarak e-posta adresinizi doğrulayınız:
+
+Doğrulama Bağlantısı: %s
+
+ÖNEMLİ GÜVENLİK BİLGİSİ:
+Bu bağlantı 30 dakika süreyle geçerlidir. 30 dakika içinde doğrulanmayan başvurular güvenlik politikamız gereğince sistemden otomatik olarak silinmektedir.
+
+Merter Vitrini B2B Destek Ekibi
+Web: https://mertervitrini.com.tr/hizmet-saglayicilar`, contactName, companyName, verifyURL)
+
+		htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; padding: 24px 12px; color: #1e293b; margin: 0;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px;">
+    <div style="text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 18px; margin-bottom: 24px;">
+      <h2 style="color: #0f172a; margin: 0; font-size: 24px; font-weight: 900;">MERTER VİTRİNİ</h2>
+      <p style="color: #d97706; font-size: 11px; font-weight: 800; letter-spacing: 2px; margin: 4px 0 0 0; text-transform: uppercase;">Sektörel Hizmet Sağlayıcı Doğrulama Servisi</p>
+    </div>
+    <h3 style="color: #0f172a; margin: 0 0 14px 0; font-size: 18px;">Sayın %s,</h3>
+    <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 16px 0;">
+      <strong>%s</strong> adına yapmış olduğunuz Sektörel Hizmet Sağlayıcılar Rehberi başvurusunun yönetici onayına sunulabilmesi için lütfen e-posta adresinizi doğrulayın.
+    </p>
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="%s" style="background-color: #0f172a; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-weight: 800; font-size: 14px; display: inline-block;">
+        ✓ E-Posta Adresimi Doğrula ve Başvuruyu Tamamla
+      </a>
+    </div>
+    <div style="background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 10px; padding: 14px; margin-bottom: 20px;">
+      <p style="margin: 0; font-size: 12px; color: #991b1b; line-height: 1.6; font-weight: 600;">
+        ⚠️ Güvenlik Uyarısı: Bu doğrulama bağlantısı <strong>30 dakika</strong> geçerlidir. Süresi içinde doğrulanmayan başvurular otomatik olarak silinmektedir.
+      </p>
+    </div>
+    <p style="font-size: 11px; color: #0284c7; word-break: break-all; margin: 0 0 24px 0;">
+      <a href="%s" style="color: #0284c7;">%s</a>
+    </p>
+  </div>
+</body>
+</html>`,
+			html.EscapeString(contactName),
+			html.EscapeString(companyName),
+			verifyURL,
+			verifyURL, verifyURL,
+		)
+
+		_ = SendRawMail(cfg, email, subject, htmlBody, textBody)
+	})
+}
+
+// SendServiceProviderAdminNotification notifies admin after applicant verifies their email.
+func SendServiceProviderAdminNotification(cfg *config.Config, app ServiceProviderApplicationEmailData, meta ClientMeta) {
+	adminEmail := cfg.AdminEmail
+	if adminEmail == "" {
+		adminEmail = defaultAdminEmail
+	}
+
+	safe.Go("SendServiceProviderAdminNotification", func() {
+		subject := fmt.Sprintf("🚚 Yeni Doğrulanmış Hizmet Sağlayıcı Başvurusu: %s (%s)", app.CompanyName, app.ServiceCategory)
+		nowStr := time.Now().Format(dateTimeFormatTR)
+		geoHTML := formatGeoLocationHTML(meta)
+
+		textBody := fmt.Sprintf(`Sayın Yönetici,
+
+Sektörel Hizmet Sağlayıcılar Rehberi için e-posta doğrulaması tamamlanmış yeni bir başvuru alındı:
+
+• Firma Unvanı: %s
+• Yetkili: %s
+• Hizmet Kategorisi: %s
+• E-Posta: %s (Doğrulandı)
+• Telefon / WhatsApp: %s
+• Kısa Tanıtım: %s
+• Adres: %s
+• Tarih: %s
+
+Başvuruyu İncelemek ve Onaylamak İçin: https://mertervitrini.com.tr/admin/service-providers`,
+			app.CompanyName, app.ContactName, app.ServiceCategory, app.Email, app.Phone, app.ShortDesc, app.Address, nowStr)
+
+		htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f1f5f9; padding: 24px 12px; color: #1e293b; margin: 0;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #cbd5e1; padding: 32px;">
+    <h2 style="color: #0f172a; margin: 0 0 8px 0; font-size: 20px; font-weight: 900;">Yeni Hizmet Sağlayıcı Başvurusu (E-Posta Doğrulandı)</h2>
+    <p style="font-size: 13px; color: #475569; margin: 0 0 18px 0;"><strong>%s</strong> (%s) rehberde yayınlanmak üzere yönetici onayı bekliyor.</p>
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; font-size: 13px; line-height: 1.7;">
+      <div><strong>🏢 Firma:</strong> %s</div>
+      <div><strong>👤 Yetkili:</strong> %s</div>
+      <div><strong>🏷️ Kategori:</strong> %s</div>
+      <div><strong>✉️ E-Posta:</strong> %s</div>
+      <div><strong>📞 Telefon:</strong> %s</div>
+      <div><strong>📝 Tanıtım:</strong> %s</div>
+      <div><strong>📍 Adres:</strong> %s</div>
+    </div>
+    %s
+    <div style="margin-top: 24px; text-align: center;">
+      <a href="https://mertervitrini.com.tr/admin/service-providers" style="background-color: #0f172a; color: #ffffff; text-decoration: none; padding: 12px 22px; border-radius: 10px; font-weight: 800; font-size: 13px; display: inline-block;">
+        Yönetim Panelinde İncele &amp; Onayla →
+      </a>
+    </div>
+  </div>
+</body>
+</html>`,
+			html.EscapeString(app.CompanyName),
+			html.EscapeString(app.ContactName),
+			html.EscapeString(app.CompanyName),
+			html.EscapeString(app.ContactName),
+			html.EscapeString(app.ServiceCategory),
+			html.EscapeString(app.Email),
+			html.EscapeString(app.Phone),
+			html.EscapeString(app.ShortDesc),
+			html.EscapeString(app.Address),
+			geoHTML,
+		)
+
+		_ = SendRawMail(cfg, adminEmail, subject, htmlBody, textBody)
+	})
+}
+
+// SendServiceProviderApprovedEmail notifies the service provider when admin approves their listing.
+func SendServiceProviderApprovedEmail(cfg *config.Config, companyName, contactName, email string) {
+	if email == "" || !strings.Contains(email, "@") {
+		return
+	}
+
+	safe.Go("SendServiceProviderApprovedEmail", func() {
+		subject := fmt.Sprintf("🎉 Tebrikler! Hizmet Sağlayıcı Rehber Kaydınız Onaylandı - %s", companyName)
+
+		textBody := fmt.Sprintf(`Sayın %s,
+
+Tebrik ederiz! %s adına Merter Vitrini Sektörel Hizmet Sağlayıcılar Rehberi için yapmış olduğunuz başvuru yönetici ekibimiz tarafından onaylanmış ve yayına alınmıştır.
+
+Rehber Sayfası: https://mertervitrini.com.tr/hizmet-saglayicilar
+
+Merter Vitrini B2B Destek Ekibi`, contactName, companyName)
+
+		htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; padding: 24px 12px; color: #1e293b; margin: 0;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px;">
+    <h2 style="color: #15803d; margin: 0 0 12px 0; font-size: 20px; font-weight: 900;">🎉 Rehber Kaydınız Onaylandı ve Yayına Alındı!</h2>
+    <p style="font-size: 14px; line-height: 1.6; color: #475569;">
+      Sayın <strong>%s</strong>, <strong>%s</strong> firmanızın Sektörel Hizmet Sağlayıcılar Rehberi başvurusu onaylanmıştır. Küresel B2B alıcıları ve Merter üreticileri artık rehber üzerinden doğrudan firmanızla iletişime geçebilir.
+    </p>
+    <div style="text-align: center; margin: 24px 0;">
+      <a href="https://mertervitrini.com.tr/hizmet-saglayicilar" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 800; font-size: 13px; display: inline-block;">
+        Sektörel Hizmet Sağlayıcılar Rehberini Görüntüle →
+      </a>
+    </div>
+  </div>
+</body>
+</html>`,
+			html.EscapeString(contactName),
+			html.EscapeString(companyName),
+		)
+
+		_ = SendRawMail(cfg, email, subject, htmlBody, textBody)
+	})
+}
+
+
 

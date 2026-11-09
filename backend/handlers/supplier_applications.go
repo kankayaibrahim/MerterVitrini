@@ -63,6 +63,10 @@ func StartUnverifiedApplicationsCleaner() {
 				DELETE FROM catalog.supplier_applications 
 				WHERE email_verified = false AND verification_expires_at < CURRENT_TIMESTAMP
 			`)
+			_, _ = db.Pool.Exec(ctx, `
+				DELETE FROM catalog.service_providers 
+				WHERE email_verified = false AND verification_expires_at IS NOT NULL AND verification_expires_at < CURRENT_TIMESTAMP
+			`)
 			cancel()
 			if err != nil {
 				log.Printf("[SUPPLIER CLEANER ERROR] Failed to purge unverified applications: %v", err)

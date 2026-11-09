@@ -159,30 +159,30 @@ function HeaderTopBar({
         </div>
 
         {/* Language & Currency Selectors */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Link
             href="/ureticiler"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
           >
             <span>{lang === "tr" ? "ÜRETİCİ FİRMALAR" : "MANUFACTURERS"}</span>
           </Link>
           <Link
             href="/alim-talepleri"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
           >
             <span>{lang === "tr" ? "ALIM TALEPLERİ (RFQ)" : "BUYING LEADS (RFQ)"}</span>
           </Link>
           <Link
             href="/hizmet-saglayicilar"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-sky-700 hover:bg-sky-800 text-white font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
           >
             <span>{lang === "tr" ? "LOJİSTİK & HİZMETLER" : "B2B SERVICES"}</span>
           </Link>
           <Link
             href="/mobil-uygulama"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#111111] hover:bg-zinc-800 text-white font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-50 hover:bg-violet-100 text-violet-800 border border-violet-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
           >
-            <Smartphone className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
+            <Smartphone className="w-3.5 h-3.5 text-violet-600 shrink-0" />
             <span>{lang === "tr" ? "ANDROID APK" : "ANDROID APP"}</span>
           </Link>
           {/* Language selector */}

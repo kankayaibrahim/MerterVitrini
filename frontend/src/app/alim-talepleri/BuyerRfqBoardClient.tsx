@@ -78,7 +78,7 @@ function BuyerRfqCard({ item }: { readonly item: BuyerRfqItem }) {
     <div className="bg-white rounded-2xl border border-slate-200 hover:border-slate-300 p-5 shadow-xs flex flex-col justify-between gap-4">
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[11px] font-mono font-bold">
+          <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-mono font-bold">
             {item.rfq_number}
           </span>
           <span className="px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[11px] font-bold">
@@ -135,7 +135,7 @@ function BuyerRfqCard({ item }: { readonly item: BuyerRfqItem }) {
 
         <Link
           href="/supplier"
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-salmon-pink text-white text-xs font-extrabold no-underline transition-colors"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
         >
           <Building2 size={13} />
           <span>Üretici Olarak Teklif Ver</span>
@@ -474,12 +474,12 @@ function RfqBoardListContent({
 
 function MemberOnlyRfqGate() {
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 sm:p-12 text-center max-w-2xl mx-auto my-6 space-y-5">
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-8 sm:p-12 text-center max-w-2xl mx-auto my-6 space-y-5">
       <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
         <Lock size={30} />
       </div>
       <div className="space-y-2">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-white text-[11px] font-extrabold uppercase tracking-wider">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-extrabold uppercase tracking-wider">
           ÜYELERE ÖZEL B2B TALEP MERKEZİ
         </span>
         <h2 className="text-xl sm:text-2xl font-black text-slate-900">
@@ -494,7 +494,7 @@ function MemberOnlyRfqGate() {
         <button
           type="button"
           onClick={() => openStoreAuthModal("login")}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-extrabold cursor-pointer border-none"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-extrabold cursor-pointer border-none shadow-xs"
         >
           <LogIn size={16} />
           <span>Üye Girişi Yap</span>
@@ -503,7 +503,7 @@ function MemberOnlyRfqGate() {
         <button
           type="button"
           onClick={() => openStoreAuthModal("register")}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-extrabold cursor-pointer border-none"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs sm:text-sm font-extrabold cursor-pointer border-none shadow-xs"
         >
           <UserPlus size={16} />
           <span>Ücretsiz B2B Üye Ol</span>
@@ -511,7 +511,7 @@ function MemberOnlyRfqGate() {
 
         <Link
           href="/supplier"
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-bold no-underline"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs sm:text-sm font-bold no-underline"
         >
           <Building2 size={16} />
           <span>Üretici / Tedarikçi Girişi</span>
@@ -625,16 +625,16 @@ export default function BuyerRfqBoardClient() {
 
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 py-8 space-y-6">
         {/* Hero */}
-        <div className="rounded-2xl bg-slate-900 text-white p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-extrabold">
-              <CheckCircle2 size={14} />
+        <div className="rounded-3xl bg-gradient-to-br from-emerald-50/90 via-white to-amber-50/60 border border-emerald-200/80 text-slate-900 p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xs">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 border border-emerald-200 text-emerald-800 text-xs font-extrabold">
+              <CheckCircle2 size={14} className="text-emerald-600" />
               <span>B2B ALICI TALEP PANOSU (BUYING LEADS / RFQ)</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
               Aradığınız Ürünü İlan Edin, Merter Üreticileri Teklif Versin
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
               &quot;500 adet kadın kabanı arıyoruz&quot;, &quot;Özel etiketli (Private Label) tişört yaptırmak istiyoruz&quot; gibi toptan alım ve üretim taleplerinizi ücretsiz açın; doğrulanmış Merter üreticileri doğrudan sizinle iletişime geçsin.
             </p>
           </div>
@@ -642,10 +642,10 @@ export default function BuyerRfqBoardClient() {
           <button
             type="button"
             onClick={handleOpenCreateClick}
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-extrabold cursor-pointer shrink-0 shadow-md"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-extrabold cursor-pointer shrink-0 shadow-xs border-none transition-colors"
           >
             <Plus size={18} />
-            <span>+ Yeni Alım İlanı (RFQ) Oluştur</span>
+            <span>Yeni Alım İlanı (RFQ) Oluştur</span>
           </button>
         </div>
 
@@ -665,7 +665,7 @@ export default function BuyerRfqBoardClient() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="İlan başlığı, kategori veya alıcı ülkeye göre ara..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-slate-900"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-emerald-600"
                 />
               </div>
 
@@ -675,10 +675,10 @@ export default function BuyerRfqBoardClient() {
                     key={pt.value}
                     type="button"
                     onClick={() => setSelectedProdType(pt.value)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer border ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer border transition-colors ${
                       selectedProdType === pt.value
-                        ? "bg-slate-900 text-white border-slate-900"
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                        : "bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-emerald-50/60 hover:text-emerald-800 hover:border-emerald-200"
                     }`}
                   >
                     <FileText size={12} className="inline mr-1" />

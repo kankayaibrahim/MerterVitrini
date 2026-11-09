@@ -203,6 +203,7 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 	mux.HandleFunc("POST /api/v1/store/newsletter/subscribe", h.Marketplace.SubscribeNewsletter)
 	mux.HandleFunc("GET /api/v1/store/service-providers", h.Marketplace.ListPublicServiceProviders)
 	mux.HandleFunc("POST /api/v1/store/service-providers", h.Marketplace.CreatePublicServiceProviderApplication)
+	mux.HandleFunc("GET /api/v1/store/service-providers/verify", h.Marketplace.VerifyServiceProviderEmail)
 	mux.HandleFunc("POST /api/v1/store/service-providers/{id}/click", h.Marketplace.TrackServiceProviderClick)
 
 	// Dynamic WebP Image Resizing

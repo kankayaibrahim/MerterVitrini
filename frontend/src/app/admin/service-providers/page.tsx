@@ -10,6 +10,8 @@ import {
   MessageCircle,
   CheckCircle2,
   XCircle,
+  Mail,
+  User,
 } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminContext";
 
@@ -17,6 +19,10 @@ interface AdminServiceProvider {
   id: string;
   slug: string;
   company_name: string;
+  contact_name: string;
+  email: string;
+  status: string;
+  email_verified: boolean;
   service_category: string;
   short_description: string;
   services_offered: string;
@@ -68,7 +74,12 @@ export default function AdminServiceProvidersPage() {
 
   const handleUpdateFlags = async (
     id: string,
-    patch: { is_active?: boolean; is_verified?: boolean; is_sponsored?: boolean }
+    patch: {
+      status?: string;
+      is_active?: boolean;
+      is_verified?: boolean;
+      is_sponsored?: boolean;
+    }
   ) => {
     await fetchWithConfig(`/api/v1/admin/service-providers/${id}`, {
       method: "PUT",
@@ -94,10 +105,10 @@ export default function AdminServiceProvidersPage() {
           </div>
           <div>
             <h1 className="text-lg font-extrabold text-zinc-900 dark:text-white">
-              Sektörel Hizmet Sağlayıcılar Rehberi Yönetimi
+              Sektörel Hizmet Sağlayıcı Başvuruları &amp; Rehber Yönetimi
             </h1>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Kargo/Lojistik, Fotoğraf Stüdyosu, Ambalaj/Etiket, Modelhane ve İhracat Danışmanı çözüm ortaklarını yönetin.
+              Google reCAPTCHA v3 ve 30 dk e-posta doğrulamasından geçen hizmet sağlayıcı başvurularını inceleyin, onaylayın veya sponsorlu olarak öne çıkarın.
             </p>
           </div>
         </div>
@@ -111,13 +122,19 @@ export default function AdminServiceProvidersPage() {
         </button>
       </div>
 
+      {items.length === 0 && !loading && (
+        <div className="bg-white dark:bg-zinc-950 p-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-center text-xs font-bold text-zinc-500">
+          Henüz bekleyen veya onaylanmış hizmet sağlayıcı başvurusu bulunmuyor.
+        </div>
+      )}
+
       <div className="space-y-3">
         {items.map((item) => {
           const catLabel =
             CATEGORY_NAMES[item.service_category] || item.service_category;
           const activeBadgeCls = item.is_active
             ? "bg-emerald-50 text-emerald-700"
-            : "bg-zinc-100 text-zinc-600";
+            : "bg-amber-50 text-amber-800";
 
           return (
             <div
@@ -130,11 +147,23 @@ export default function AdminServiceProvidersPage() {
                     {catLabel}
                   </span>
                   <span className={`px-2 py-0.5 rounded font-bold ${activeBadgeCls}`}>
-                    {item.is_active ? "YAYINDA" : "GİZLİ"}
+                    {item.is_active ? "ONAYLI & YAYINDA" : "ONAY BEKLİYOR"}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded font-bold inline-flex items-center gap-1 ${
+                      item.email_verified
+                        ? "bg-emerald-500/15 text-emerald-700"
+                        : "bg-rose-500/15 text-rose-700"
+                    }`}
+                  >
+                    <Mail size={11} />
+                    {item.email_verified
+                      ? "E-Posta Doğrulandı"
+                      : "E-Posta Bekliyor (30dk)"}
                   </span>
                   {item.is_verified && (
                     <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 font-bold inline-flex items-center gap-1">
-                      <ShieldCheck size={12} /> Doğrulanmış
+                      <ShieldCheck size={12} /> Doğrulanmış Rozet
                     </span>
                   )}
                   {item.is_sponsored && (
@@ -152,13 +181,42 @@ export default function AdminServiceProvidersPage() {
                   {item.company_name}
                 </h3>
                 <p className="text-xs text-zinc-500">{item.short_description}</p>
-                <p className="text-xs text-zinc-600">
-                  Tel: <strong>{item.phone}</strong> • Bölgeler:{" "}
-                  {item.target_countries || "-"}
+                <p className="text-xs text-zinc-600 flex flex-wrap items-center gap-3">
+                  {item.contact_name && (
+                    <span className="inline-flex items-center gap-1">
+                      <User size={12} />
+                      <strong>{item.contact_name}</strong>
+                    </span>
+                  )}
+                  {item.email && (
+                    <span>
+                      E-Posta: <strong>{item.email}</strong>
+                    </span>
+                  )}
+                  <span>
+                    Tel: <strong>{item.phone}</strong>
+                  </span>
+                  <span>Bölgeler: {item.target_countries || "-"}</span>
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {!item.is_active && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleUpdateFlags(item.id, {
+                        status: "approved",
+                        is_active: true,
+                        is_verified: true,
+                      })
+                    }
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold cursor-pointer border-none"
+                  >
+                    <CheckCircle2 size={13} />
+                    <span>Onayla &amp; Yayınla</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() =>
@@ -169,7 +227,7 @@ export default function AdminServiceProvidersPage() {
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold cursor-pointer border-none"
                 >
                   <ShieldCheck size={13} />
-                  <span>{item.is_verified ? "Doğrulamayı Kaldır" : "Doğrula"}</span>
+                  <span>{item.is_verified ? "Rozeti Kaldır" : "Doğrula"}</span>
                 </button>
                 <button
                   type="button"
@@ -181,29 +239,25 @@ export default function AdminServiceProvidersPage() {
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold cursor-pointer border-none"
                 >
                   <Sparkles size={13} />
-                  <span>{item.is_sponsored ? "Sponsorluğu Kaldır" : "Sponsorlu Yap"}</span>
+                  <span>
+                    {item.is_sponsored ? "Sponsorluğu Kaldır" : "Sponsorlu Yap"}
+                  </span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    void handleUpdateFlags(item.id, {
-                      is_active: !item.is_active,
-                    })
-                  }
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-bold cursor-pointer border-none"
-                >
-                  {item.is_active ? (
-                    <>
-                      <XCircle size={13} />
-                      <span>Gizle</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={13} />
-                      <span>Yayınla</span>
-                    </>
-                  )}
-                </button>
+                {item.is_active && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleUpdateFlags(item.id, {
+                        status: "pending",
+                        is_active: false,
+                      })
+                    }
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-bold cursor-pointer border-none"
+                  >
+                    <XCircle size={13} />
+                    <span>Yayından Kaldır</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => void handleDelete(item.id)}
@@ -220,4 +274,3 @@ export default function AdminServiceProvidersPage() {
     </div>
   );
 }
-

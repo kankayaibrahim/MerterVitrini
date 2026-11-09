@@ -974,6 +974,7 @@ func (h *StoreCatalogHandler) ListBrands(w http.ResponseWriter, r *http.Request)
 		       b.addresses, b.is_active, b.created_at, b.updated_at
 		FROM catalog.brands b
 		WHERE b.is_active = true
+		  AND EXISTS (SELECT 1 FROM catalog.products p WHERE p.brand_id = b.id AND p.is_active = true)
 		ORDER BY b.brand_name ASC`
 
 	rows, err := db.Pool.Query(ctx, query)

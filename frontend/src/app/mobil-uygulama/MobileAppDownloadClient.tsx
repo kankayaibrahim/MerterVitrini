@@ -111,19 +111,19 @@ export default function MobileAppDownloadClient() {
         </div>
 
         {/* Hero Download Card */}
-        <section className="bg-white border border-[#EAEAEA] shadow-sm overflow-hidden">
-          <div className="bg-[#111111] text-white px-6 sm:px-10 py-10 sm:py-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 border border-white/15 text-[11px] font-extrabold tracking-[2px] uppercase text-[#D4AF37] mb-5">
-              <Sparkles className="w-3.5 h-3.5" />
+        <section className="bg-white rounded-3xl border border-amber-200/80 shadow-xs overflow-hidden">
+          <div className="bg-gradient-to-br from-amber-50/90 via-white to-emerald-50/50 border-b border-amber-200/60 text-slate-900 px-6 sm:px-10 py-10 sm:py-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100/80 border border-amber-200 text-[11px] font-extrabold tracking-[1.5px] uppercase text-amber-800 mb-5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
               <span>RESMİ ANDROID PAKETİ • OTOMATİK GÜNCELLEME DESTEKLİ</span>
             </div>
-            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight text-slate-900">
               Merter Vitrini B2B Mobil Uygulaması
             </h1>
-            <p className="mt-3 text-sm sm:text-base text-zinc-300 max-w-2xl leading-relaxed">
+            <p className="mt-3 text-sm sm:text-base text-slate-600 max-w-2xl leading-relaxed">
               Toptan hazır giyim kataloğu, canlı üretici pazarlık sohbeti ve tedarikçi
               kamera stüdyosu tek uygulamada. Telefonunuza yalnızca{" "}
-              <strong className="text-white">bir kez</strong> kurun; yeni sürümler
+              <strong className="text-slate-900">bir kez</strong> kurun; yeni sürümler
               yayınlandığında uygulama açılışta kendisini otomatik kontrol edip tek
               dokunuşla günceller.
             </p>
@@ -133,24 +133,24 @@ export default function MobileAppDownloadClient() {
                 <a
                   href="/api/v1/mobile/apk"
                   download
-                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-[#D4AF37] hover:bg-[#c39e2c] text-[#111111] font-extrabold text-xs sm:text-sm tracking-[1.8px] uppercase transition-colors no-underline"
+                  className="inline-flex items-center justify-center gap-3 px-8 py-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs sm:text-sm tracking-[1.5px] uppercase transition-colors no-underline shadow-xs"
                 >
                   <Download className="w-5 h-5 shrink-0" />
                   <span>ANDROID APK İNDİR ({versionLabel})</span>
                 </a>
               ) : (
-                <div className="inline-flex items-center gap-3 px-6 py-4 bg-zinc-800 text-zinc-300 text-xs font-bold uppercase tracking-wider">
+                <div className="inline-flex items-center gap-3 px-6 py-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold uppercase tracking-wider">
                   <span>Yeni APK paketi hazırlanıyor, lütfen birazdan yenileyin.</span>
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-300">
-                <span className="inline-flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4 text-[#D4AF37]" />
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-600">
+                <span className="inline-flex items-center gap-1.5 font-semibold">
+                  <Smartphone className="w-4 h-4 text-amber-600" />
                   <span>Android 7.0+ (ARM64 / Universal)</span>
                 </span>
                 {sizeLabel !== "—" && (
-                  <span className="font-mono text-zinc-200">Boyut: {sizeLabel}</span>
+                  <span className="font-mono text-slate-700 font-bold">Boyut: {sizeLabel}</span>
                 )}
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function MobileAppDownloadClient() {
             </div>
 
             {manifest?.sha256 && (
-              <div className="p-4 bg-[#FAFAFA] border border-[#EAEAEA] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="p-4 rounded-xl bg-[#FAFAFA] border border-[#EAEAEA] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-zinc-700">
                   <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>SHA-256 Doğrulama Özeti:</span>
@@ -210,9 +210,9 @@ export default function MobileAppDownloadClient() {
 
         {/* How Self-Update Works + Dual Role Highlights */}
         <section className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div className="bg-white border border-[#EAEAEA] p-6">
-            <div className="w-9 h-9 bg-[#111111] text-white flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-4 h-4 text-[#D4AF37]" />
+          <div className="bg-white rounded-2xl border border-[#EAEAEA] p-6">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center mb-4">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             </div>
             <h3 className="text-xs font-extrabold uppercase tracking-[1.5px] mb-2">
               1. Tek Seferlik Kurulum
@@ -225,9 +225,9 @@ export default function MobileAppDownloadClient() {
             </p>
           </div>
 
-          <div className="bg-white border border-[#EAEAEA] p-6">
-            <div className="w-9 h-9 bg-[#111111] text-white flex items-center justify-center mb-4">
-              <RefreshCw className="w-4 h-4 text-[#D4AF37]" />
+          <div className="bg-white rounded-2xl border border-[#EAEAEA] p-6">
+            <div className="w-9 h-9 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center mb-4">
+              <RefreshCw className="w-4 h-4 text-sky-600" />
             </div>
             <h3 className="text-xs font-extrabold uppercase tracking-[1.5px] mb-2">
               2. Otomatik Sürüm Kontrolü (OTA)
@@ -240,11 +240,11 @@ export default function MobileAppDownloadClient() {
             </p>
           </div>
 
-          <div className="bg-white border border-[#EAEAEA] p-6">
-            <div className="w-9 h-9 bg-[#111111] text-white flex items-center justify-center mb-4">
+          <div className="bg-white rounded-2xl border border-[#EAEAEA] p-6">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mb-4">
               <div className="flex items-center gap-0.5">
-                <ShoppingBag className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <Camera className="w-3.5 h-3.5 text-white" />
+                <ShoppingBag className="w-3.5 h-3.5 text-amber-600" />
+                <Camera className="w-3.5 h-3.5 text-amber-700" />
               </div>
             </div>
             <h3 className="text-xs font-extrabold uppercase tracking-[1.5px] mb-2">

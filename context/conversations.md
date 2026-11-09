@@ -1903,11 +1903,104 @@
 - **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
 - **Kullanıcı İstemi:** `"commitle ve site açılmıyor kontrol et"`
 - **Yapılan İşlemler ve Cevap Özeti:**
-  1. **Git Commit:** Kullanıcının açık onayıyla tüm SonarLint temizleme değişiklikleri (`brand_analytics.go`, `marketplace.go`, `supplier_portal.go`, `BuyerRfqBoardClient.tsx`, `SupplierDashboardClient.tsx`, `SupplierProductModal.tsx`) Conventional Commits (`refactor: resolve SonarLint cognitive complexity, unused functions, and parameter count rules`, commit `891ed10`) formatında yerel depoya commit'lendi; `git push` çalıştırılmadı.
+  1. **Git Commit:** Kullanıcının açık onayıyla tüm SonarLint temizleme değişiklikleri (`brand_analytics.go`, `marketplace.go`, `supplier_portal.go`, `BuyerRfqBoardClient.tsx`, `SupplierDashboardClient.tsx`, `SupplierProductModal.tsx`) Conventional Commits (`refactor: resolve SonarLint cognitive complexity, unused functions, and parameter count rules`, commit `dcbe565`) formatında yerel depoya commit'lendi; `git push` çalıştırılmadı.
   2. **Sunucu & Site Durumu Teşhisi:**
      - **Canlı Sunucu (`mertervitrini.com.tr`):** Uçtan uca test edildi. `merter-frontend.service` (Next.js SSR, Port 3000), `merter-backend.service` (Go API, Port 8080) ve `nginx` servislerinin tümü `active (running)` durumdadır. Tüm ana rotalar (`/`, `/kadin-giyim`, `/admin`, `/supplier`, `/hizmet-saglayicilar`, `/alim-talepleri`, `/api/v1/health`) HTTP 200 OK yanıtı vermektedir.
      - **Yerel Geliştirme Ortamı (`localhost:3000` / `localhost:8080`):** Yerel makinede şu an Next.js (`npm run dev`) veya Go (`go run .`) dev sunucusu çalışmamaktadır; eğer kullanıcı tarayıcıda `localhost` üzerinden açmaya çalışıyorsa `ERR_CONNECTION_REFUSED` alacaktır.
      - **Tarayıcı / Sayfa Bazlı Kontrol:** Eğer tarayıcıda beyaz ekran veya belirli bir URL açılmıyorsa tam URL ve ekrandaki hata mesajı kullanıcıya sorulmuştur.
 
 
+### [2026-11-09 11:43:30] - Oturum #103 (Sektörel Hizmet Sağlayıcı Başvurularına Google reCAPTCHA v3, 30 Dk E-Posta Doğrulama ve Admin Onay Mekanizması Entegrasyonu)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"burada google recaptcha devrede mi bir onay mekanizması yoksa tıpkı tedarikçi de olduğu gibi bir onay mekanizması lazım"` (Ekran görüntüsü: Sektörel Hizmet Sağlayıcı Rehber Kaydı modalı)
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Google reCAPTCHA v3 Koruması (`ServiceProvidersClient.tsx` & `service_providers.go`):**
+     - İstemci tarafında Google reCAPTCHA v3 (`https://www.google.com/recaptcha/api.js?render=...`) dinamik olarak yüklendi ve başvuru esnasında `service_provider_apply` aksiyonu ile `recaptcha_token` üretildi.
+     - Backend `CreatePublicServiceProviderApplication` içinde `verifyServiceProviderReCaptcha` ile Google `siteverify` API doğrulaması (bot skoru < 0.2 reddi) devreye alındı.
+  2. **Tedarikçi Başvurusundaki Gibi 30 Dakikalık E-Posta Doğrulama + Otomatik Temizlik (`service_providers.go`, `supplier_applications.go`, `mailer.go`, `router.go`):**
+     - `catalog.service_providers` tablosuna `contact_name`, `status` (`pending`/`approved`/`rejected`), `email_verified`, `verification_token`, `verification_expires_at` ve `ip_address` kolonları eklendi.
+     - Başvuru formuna **Yetkili Adı Soyadı * ** ve **Kurumsal E-Posta (Doğrulama İçin) * ** alanları eklendi.
+     - Başvuru yapıldığında 30 dakika geçerli doğrulama e-postası (`SendServiceProviderVerificationEmail` -> `/hizmet-saglayicilar?verify_token=...`) gönderilir; 30 dakika içinde doğrulanmayan kayıtlar `StartUnverifiedApplicationsCleaner` tarafından otomatik silinir.
+     - `GET /api/v1/store/service-providers/verify` uç noktası ile e-posta doğrulandığında sistem yöneticisine GeoIP/Cihaz analizli bildirim e-postası (`SendServiceProviderAdminNotification`) gönderilir.
+  3. **Yönetici (Admin) Onay Mekanizması (`/admin/service-providers/page.tsx`):**
+     - Admin panelinde başvurunun e-posta doğrulama durumu (`E-Posta Doğrulandı` / `E-Posta Bekliyor (30dk)`), yetkili kişi ve e-posta bilgisi gösterilir.
+     - Admin **"Onayla & Yayınla"** butonuna bastığında kayıt `status = 'approved'`, `is_active = true`, `is_verified = true` olarak yayına alınır ve başvuru sahibine otomatik onay e-postası (`SendServiceProviderApprovedEmail`) gönderilir.
+
+
+
+
+### [2026-11-09 11:50:30] - Oturum #104 (ServiceProvidersClient.tsx SonarLint S6747, S6438, S6853 ve S3776 Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `frontend/src/app/hizmet-saglayicilar/ServiceProvidersClient.tsx` dosyasındaki SonarLint (`typescript:S6747`, `typescript:S6438`, `typescript:S6853`, `typescript:S3776`) uyarılarının giderilmesi.
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Modüler Alt Bileşen Ayrıştırması (`typescript:S3776` & `typescript:S6747`):**
+     - `ServiceProvidersClient.tsx` temiz ve modüler alt bileşenlere (`parseServiceTags`, `ServiceProviderBadges`, `ServiceProviderContactMeta`, `ServiceProviderCard`, `ServiceProviderVerifyAlert`, `ServiceProviderSubmittedNotice`, `ServiceProviderApplyModal`) bölünerek yeniden oluşturuldu. Böylece hem VS Code SonarLint tampon senkronizasyon kayması (`S6747` / `S6438`) giderildi hem de tüm fonksiyonların bilişsel karmaşıklığı (Cognitive Complexity) <= 8 seviyesine indirildi.
+  2. **Erişilebilirlik Etiketleri (`typescript:S6853`):**
+     - Arama kutusu ve başvuru formundaki tüm `input`/`select` alanları benzersiz `id` ve `<label htmlFor="...">` ile eşleştirildi.
+  3. **Doğrulama:** `npx eslint src/app/hizmet-saglayicilar/ServiceProvidersClient.tsx src/app/admin/service-providers/page.tsx` sıfır hata ve sıfır uyarı ile tamamlandı.
+
+### [2026-11-09 11:52:45] - Oturum #105 (ServiceProvidersClient.tsx SonarLint S9381 Avoid Nesting Promises Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `frontend/src/app/hizmet-saglayicilar/ServiceProvidersClient.tsx` dosyasındaki SonarLint `typescript:S9381` ("Avoid nesting promises") uyarısının giderilmesi.
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. `safeParseJson<T>(res)` ve `verifyServiceProviderToken(verifyToken)` yardımcı `async/await` fonksiyonları oluşturularak `.then(async (res) => { await res.json().catch(...) })` şeklindeki iç içe Promise (nested promise) zincirleri düzleştirildi.
+  2. `executeServiceProviderCaptcha` fonksiyonu da iç içe `new Promise` + `.then().catch()` yapısından çıkarılarak düz `async/await` + `try/catch` yapısına dönüştürüldü.
+  3. `npx eslint src/app/hizmet-saglayicilar/ServiceProvidersClient.tsx` sıfır hata ve sıfır uyarı ile doğrulandı.
+
+### [2026-11-09 12:00:45] - Oturum #106 (Siyah/Koyu Blok Tasarımların Ferah ve Aydınlık B2B Showroom Temasına Dönüştürülmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"böyle siyah bir tasarım olmamalı"` (Ekran görüntüsü: `/alim-talepleri` sayfasındaki siyah `bg-slate-900` hero kutusu, siyah aktif filtre sekmesi ve üst bardaki siyah `ANDROID APK` butonu; ayrıca açık olan `/mobil-uygulama` sayfası).
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Alıcı Talep Panosu (`frontend/src/app/alim-talepleri/BuyerRfqBoardClient.tsx`):**
+     - Siyah `bg-slate-900` hero alanı yerine ferah pastel geçişli (`bg-gradient-to-br from-emerald-50/90 via-white to-amber-50/60 border border-emerald-200/80`) aydınlık kart tasarımı uygulandı.
+     - Siyah aktif filtre sekmesi, siyah RFQ numarası rozeti ve siyah butonlar zümrüt yeşili/kehribar (`emerald-600`, `emerald-50`, `amber-500`) açık showroom renkleriyle değiştirildi.
+  2. **Üretici Firmalar Rehberi (`frontend/src/app/ureticiler/SuppliersDirectoryClient.tsx`):**
+     - Siyah `bg-slate-900` hero alanı, siyah firma ikonu ve siyah filtre sekmeleri aydınlık kehribar/zümrüt (`from-amber-50/80 via-white to-emerald-50/60`) vitrin temasına dönüştürüldü.
+  3. **Sektörel Hizmet Sağlayıcılar Rehberi (`frontend/src/app/hizmet-saglayicilar/ServiceProvidersClient.tsx`):**
+     - Siyah `bg-slate-900` hero alanı, siyah aktif kategori sekmeleri ve siyah modal/kart butonları aydınlık gök mavisi/kehribar (`from-sky-50/90 via-white to-amber-50/60`, `bg-sky-600`) temasına geçirildi.
+  4. **Mobil Uygulama İndirme Sayfası (`frontend/src/app/mobil-uygulama/MobileAppDownloadClient.tsx`):**
+     - Siyah `bg-[#111111]` hero kartı ve siyah adım ikonları aydınlık kehribar/zümrüt (`from-amber-50/90 via-white to-emerald-50/50`) tasarımına dönüştürüldü.
+  5. **Üst Bar Hızlı Erişim Rozetleri (`frontend/src/components/store/Header.tsx`):**
+     - Üst bardaki koyu/siyah (`bg-[#111111]`) butonlar yumuşak çerçeveli aydınlık pastel rozetlere (`bg-emerald-50`, `bg-amber-50`, `bg-sky-50`, `bg-violet-50`) dönüştürüldü.
+  6. **Doğrulama & Canlıya Aktarım:** Tüm değiştirilen dosyalarda `eslint` sıfır hata/uyarı ile geçti ve canlı sunucuya (`213.202.255.80`) dağıtım başlatıldı.
+
+### [2026-11-09 12:08:10] - Oturum #107 (Üretici Firmalar Rehberinde Aktif Ürünü Olmayan Firmaların Gizlenmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"kayıtlı ürünü yoksa https://mertervitrini.com.tr/ureticiler burada görünmesin"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Backend (`backend/handlers/store_catalog.go` - `ListBrands`):**
+     - `/api/v1/store/brands` sorgusuna `AND EXISTS (SELECT 1 FROM catalog.products p WHERE p.brand_id = b.id AND p.is_active = true)` koşulu eklendi; böylece aktif ürünü olmayan markalar/üreticiler vitrin API'sinden döndürülmez.
+  2. **Frontend (`frontend/src/app/ureticiler/SuppliersDirectoryClient.tsx` - `matchesSupplierFilter`):**
+     - İstemci tarafında da `if ((brand.active_product_count ?? 0) <= 0) return false;` kontrolü eklenerek `0 Ürün` olan firmaların `/ureticiler` sayfasında listelenmesi engellendi.
+  3. **Doğrulama & Canlıya Aktarım:** `go vet ./...` ve `eslint` sıfır hata/uyarı ile geçti; backend canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+### [2026-11-09 12:21:15] - Oturum #108 (Her Üretici Firma İçin Özel Blog/Editöryel Tanıtım Sayfası `/ureticiler/[slug]/tanitim` ve Ayrıştırılmış Kart Aksiyonları)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"bu linkler aynı yere bağlanıyor ama sanki daha farklı daha güzel olmalı her firmanın nerdeyse bir blog sayfası gibi sayfası olmalı"` (Ekran görüntüsü: `/ureticiler` kartlarındaki iki alt buton)
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Üretici Kartlarındaki İki Butonun Ayrıştırılması (`frontend/src/app/ureticiler/SuppliersDirectoryClient.tsx`):**
+     - **1. Buton (`Koleksiyon & Ürünler →`):** `/ureticiler/[slug]` rotasına (üreticinin 2.147 / 3.683 ürünlük toptan koleksiyon vitrinine) bağlanır.
+     - **2. Buton (`📖 Firma Hikayesi & Rehber`):** Yeni oluşturulan `/ureticiler/[slug]/tanitim` rotasına (her üreticiye özel blog/dergi formatındaki kurumsal tanıtım ve toptan alım rehberi sayfasına) bağlanır.
+     - Kart üzerindeki firma özeti, Merter üretim merkezi konumu, ihracat bölgeleri ve `Orijinal Seri (Asorti Paket)` etiketleri zenginleştirildi.
+  2. **Her Firmaya Özel Blog Formatında Kurumsal Tanıtım Sayfası (`frontend/src/app/ureticiler/[slug]/tanitim/page.tsx` & `SupplierEditorialProfileClient.tsx`):**
+     - Her üretici için dergi/blog düzeninde 4 ana bölümden oluşan zengin içerikli bir sayfa oluşturuldu:
+       1. *01 - Marka Profili ve Merter Üretim Gücü* (Birinci sınıf kumaş/kalıp, haftalık kapsül koleksiyon döngüsü, doğrulanmış imalatçı statüsü)
+       2. *02 - Öne Çıkan Koleksiyon Yapısı ve Ürün Grupları*
+       3. *03 - Toptan Seri (Asorti) Paketleme ve B2B Kârlılık Avantajları* (MOQ ve ihracat bölgeleri)
+       4. *04 - Sıkça Sorulan B2B Soruları (SSS)* + *Seçkin Koleksiyon Modelleri Önizlemesi (8 Ürün)*
+     - Sağ sütunda yapışkan (sticky) **Kurumsal Üretici Künyesi** kartı, **Üreticiyle Canlı B2B Sohbet Başlat** (`StoreChatDrawer`) ve **Koleksiyon Vitrinini İncele** aksiyonları yer alır.
+     - Ayrıca `/ureticiler/[slug]` ve `/ureticiler/[slug]/tanitim` sayfalarının üst kısmına iki görünüm arasında tek tıkla geçiş sağlayan sekme çubuğu eklendi.
+  3. **Doğrulama & Canlıya Aktarım:** `eslint` kontrolleri sıfır hata/uyarı ile geçti ve canlı sunucuya (`213.202.255.80`) dağıtım başlatıldı.
+
+### [2026-11-09 14:40:30] - Oturum #109 (Tüm Değişikliklerin Yerel Git Depolaması / Commit)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. `backend` (`go vet ./...`) ve `frontend` (`npm run lint`) kalite ve derleyici testleri çalıştırıldı; sıfır hata/uyarı ile onaylandı.
+  2. Yapılan tüm geliştirmeler:
+     - Sektörel hizmet sağlayıcılar için Google reCAPTCHA v3, 30 dakikalık e-posta doğrulaması ve yönetici onay mekanizması
+     - Koyu/siyah blokların aydınlık ve ferah B2B Showroom temasına dönüştürülmesi
+     - Üretici rehberinde aktif ürünü olmayan firmaların filtrelenmesi
+     - Üretici firmalar için özel dergi/blog formatında kurumsal tanıtım ve rehber sayfalarının (`/ureticiler/[slug]/tanitim`) eklenmesi ve kart butonlarının ayrıştırılması
+  3. Conventional Commits standardında yerel depoya commit'lendi (`git push` çalıştırılmadı).
 
