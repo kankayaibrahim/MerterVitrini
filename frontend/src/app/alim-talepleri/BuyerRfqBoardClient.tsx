@@ -255,10 +255,11 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
 
         <form onSubmit={handleSubmit} className="space-y-3 text-xs">
           <div>
-            <label className="font-bold text-slate-700 block mb-1">
+            <label htmlFor="rfq-title" className="font-bold text-slate-700 block mb-1">
               Alım İlanı Başlığı *
             </label>
             <input
+              id="rfq-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -270,10 +271,11 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
+              <label htmlFor="rfq-production-type" className="font-bold text-slate-700 block mb-1">
                 Talep Türü
               </label>
               <select
+                id="rfq-production-type"
                 value={productionType}
                 onChange={(e) => setProductionType(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white"
@@ -286,10 +288,11 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
+              <label htmlFor="rfq-target-quantity" className="font-bold text-slate-700 block mb-1">
                 Hedef Miktar *
               </label>
               <input
+                id="rfq-target-quantity"
                 type="number"
                 min={1}
                 value={targetQuantity}
@@ -300,10 +303,11 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
+              <label htmlFor="rfq-category-name" className="font-bold text-slate-700 block mb-1">
                 Birim / Kategori
               </label>
               <input
+                id="rfq-category-name"
                 type="text"
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
@@ -314,10 +318,11 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">
+            <label htmlFor="rfq-description" className="font-bold text-slate-700 block mb-1">
               Teknik Detaylar (Kumaş, Beden Serisi, Teslimat Beklentisi)
             </label>
             <textarea
+              id="rfq-description"
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -328,10 +333,11 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
+              <label htmlFor="rfq-buyer-name" className="font-bold text-slate-700 block mb-1">
                 Adınız Soyadınız *
               </label>
               <input
+                id="rfq-buyer-name"
                 type="text"
                 value={buyerName}
                 onChange={(e) => setBuyerName(e.target.value)}
@@ -342,11 +348,12 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
+              <label htmlFor="rfq-buyer-company" className="font-bold text-slate-700 block mb-1">
                 Firma Adı &amp; Ülke *
               </label>
               <div className="flex gap-1.5">
                 <input
+                  id="rfq-buyer-company"
                   type="text"
                   value={buyerCompany}
                   onChange={(e) => setBuyerCompany(e.target.value)}
@@ -354,10 +361,12 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
                   className="w-1/2 px-3 py-2 rounded-lg border border-slate-300"
                 />
                 <input
+                  id="rfq-buyer-country"
                   type="text"
                   value={buyerCountry}
                   onChange={(e) => setBuyerCountry(e.target.value)}
                   placeholder="Ülke (Örn: Almanya)"
+                  aria-label="Alıcı Ülke"
                   className="w-1/2 px-3 py-2 rounded-lg border border-slate-300"
                   required
                 />
@@ -365,10 +374,11 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
+              <label htmlFor="rfq-buyer-phone" className="font-bold text-slate-700 block mb-1">
                 Doğrudan WhatsApp / Telefon *
               </label>
               <input
+                id="rfq-buyer-phone"
                 type="text"
                 value={buyerPhone}
                 onChange={(e) => setBuyerPhone(e.target.value)}
@@ -379,10 +389,11 @@ function RfqCreateModal({ isOpen, onClose, onCreated }: RfqCreateModalProps) {
             </div>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1">
+              <label htmlFor="rfq-buyer-email" className="font-bold text-slate-700 block mb-1">
                 E-Posta Adresi
               </label>
               <input
+                id="rfq-buyer-email"
                 type="email"
                 value={buyerEmail}
                 onChange={(e) => setBuyerEmail(e.target.value)}

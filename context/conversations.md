@@ -1842,3 +1842,72 @@
 - **Yapılan İşlemler ve Cevap Özeti:**
   1. **Yerel Git Commit (Conventional Commits):**
      - Kullanıcının açık talimatı doğrultusunda tüm yeni modüller ve güncellemeler (Üretici Rehberi, Ziyaretçi/ROI Analitiği, Üyelere Özel Alıcı Talep Panosu RFQ, 4 Dilde Manuel/Otomatik Çeviri Yönetimi, Gelişmiş B2B Katalog Filtreleri, Sponsorlu Vitrin & E-Bülten, Sektörel Hizmet Sağlayıcılar Rehberi, Excel/CSV Toplu Ürün Yükleme ve Eski Koleksiyon Arşivleme) `git add -A` ile sahnelenip Conventional Commits standardında (`feat: ...`) yerel depoya commit'lendi; `git push` çalıştırılmadı.
+
+
+### [2026-11-09 11:13:40] - Oturum #96 (BuyerRfqBoardClient SonarLint S6853 Form Label Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** SonarLint `typescript:S6853` - "A form label must be associated with a control." uyarılarının giderilmesi (`frontend/src/app/alim-talepleri/BuyerRfqBoardClient.tsx`).
+- **Yapılan İşlemler ve Cevap Özeti:**
+  - `BuyerRfqBoardClient.tsx` dosyasındaki RFQ modal formunda yer alan tüm `<label>` etiketlerine ilgili form kontrollerinin `id` değerleriyle eşleşen `htmlFor` özellikleri (`rfq-title`, `rfq-production-type`, `rfq-target-quantity`, `rfq-category-name`, `rfq-description`, `rfq-buyer-name`, `rfq-buyer-company`, `rfq-buyer-phone`, `rfq-buyer-email`) eklendi ve `npm run lint` denetiminden başarıyla geçirildi.
+
+
+### [2026-11-09 11:15:00] - Oturum #97 (supplier_portal.go SonarLint S3776 Cognitive Complexity Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** SonarLint `go:S3776` - "Refactor this method to reduce its Cognitive Complexity from 20/19 to the 15 allowed." uyarılarının giderilmesi (`backend/handlers/supplier_portal.go`).
+- **Yapılan İşlemler ve Cevap Özeti:**
+  - `UpdateProfile` (Karmaşıklık: 20 -> 4): `handleQuickWhatsappUpdate`, `prepareBrandDescriptionTranslations`, `getOptionalContactPointers` ve `syncSupplierWalletIBAN` yardımcı fonksiyonlarına ayrılarak tek sorumluluk prensibine (SRP) uygun hale getirildi.
+  - `AutoTranslateFields` (Karmaşıklık: 19 -> 3): `isValidTargetLang`, `translateSingleField` ve `translateFieldsForTargetLang` yardımcı fonksiyonlarına bölünerek iç içe döngü ve karmaşık mantıksal kontroller sadeleştirildi.
+  - `go vet ./...` ve Linux cross-compile denetimleri sıfır hata/uyarı ile tamamlandı.
+
+
+### [2026-11-09 11:16:15] - Oturum #98 (SupplierDashboardClient SonarLint S107 ve S6509 Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** SonarLint `typescript:S107` (Function has too many parameters) ve `typescript:S6509` (Redundant Boolean call) uyarılarının giderilmesi (`frontend/src/app/supplier/SupplierDashboardClient.tsx`).
+- **Yapılan İşlemler ve Cevap Özeti:**
+  - `applyProfileDataToSetters` fonksiyonunun 8 adet tekil setter parametresi `ProfileDataSetters` arayüzü altında nesne olarak gruplanarak parametre sayısı 3'e düşürüldü (`S107`).
+  - `handleToggleProductArchive` içindeki `!Boolean(prod.is_archived)` ifadesi doğrudan `!prod.is_archived` yapılarak gereksiz `Boolean()` çağrısı kaldırıldı (`S6509`).
+  - `npm run lint` denetimi hatasız geçti.
+
+
+### [2026-11-09 11:18:10] - Oturum #99 (SupplierProductModal SonarLint S4323 Type Alias Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** SonarLint `typescript:S4323` (Replace this union type with a type alias) uyarısının giderilmesi (`frontend/src/app/supplier/SupplierProductModal.tsx`).
+- **Yapılan İşlemler ve Cevap Özeti:**
+  - Tekrarlanan union tipleri (`"en" | "ru" | "ar"` ve `"title" | "short_description" | "description"`) `SupportedTranslationLang` ve `TranslationFieldKey` tip takma adları (type alias) olarak tanımlandı.
+  - `SupplierProductModal.tsx` ve `SupplierDashboardClient.tsx` bileşenlerindeki ilgili prop ve durum tipleri bu takma adlarla güncellendi.
+  - `npm run lint` denetimi hatasız geçti.
+
+
+### [2026-11-09 11:20:15] - Oturum #100 (Marketplace SonarLint S3776 Cognitive Complexity ve unusedfunc Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** SonarLint `go:S3776` (Cognitive Complexity 17 -> <= 15) ve gopls `unusedfunc` ("splitOrderIntoSupplierSubOrders is unused") uyarılarının giderilmesi (`backend/handlers/marketplace.go`).
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. `unusedfunc`: `splitOrderIntoSupplierSubOrders` özel fonksiyonunun çağrılmadığı ve `store_inquiry.go` ile `store_orders.go` tarafından doğrudan `splitOrderIntoSupplierSubOrdersWithSummary` fonksiyonunun kullanıldığı tespit edilerek ölü kod temizlendi.
+  2. `go:S3776` (ListSupplierOrders, Bilişsel Karmaşıklık: 17 -> 2):
+     - SQL sorgu oluşturma mantığı `buildSupplierOrdersQuery`, satır tarama `scanSupplierSubOrders` ve alt sipariş kalemlerini önden yükleme `preloadSupplierSubOrderItems` yardımcı fonksiyonlarına ayrılarak tek sorumluluk prensibi (SRP) uygulandı.
+  3. `go vet ./...` ve Linux AMD64 cross-compile denetimleri sıfır hata/uyarı ile tamamlandı.
+
+
+### [2026-11-09 11:21:40] - Oturum #101 (Brand Analytics SonarLint S3776 Cognitive Complexity ve S107 Parameter Count Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** SonarLint `go:S3776` (Cognitive Complexity 17 -> <= 15) ve `go:S107` (8 parameters > 7 authorized) uyarılarının giderilmesi (`backend/handlers/brand_analytics.go`).
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. `go:S3776` (`resolveVisitorCountryAndLang`, Bilişsel Karmaşıklık: 17 -> 1):
+     - Dil çözümleme `resolveVisitorLang`, dile göre varsayılan ülke `fallbackCountryForLang` ve ülke çözümleme `resolveVisitorCountry` alt yardımcı fonksiyonlarına ayrılarak tek sorumluluk prensibi (SRP) uygulandı.
+  2. `go:S107` (`insertBrandEventRecord`, Parametre Sayısı: 8 -> 1):
+     - Bağımsız 8 dize parametresi `brandEventRecordParams` struct yapısı altında toplanarak parametre sayısı 1'e düşürüldü.
+  3. `go vet ./...` ve Linux AMD64 cross-compile denetimleri sıfır hata/uyarı ile tamamlandı.
+
+
+### [2026-11-09 11:26:15] - Oturum #102 (Yerel Git Commit ve Canlı/Yerel Sunucu Durum Teşhisi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle ve site açılmıyor kontrol et"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Git Commit:** Kullanıcının açık onayıyla tüm SonarLint temizleme değişiklikleri (`brand_analytics.go`, `marketplace.go`, `supplier_portal.go`, `BuyerRfqBoardClient.tsx`, `SupplierDashboardClient.tsx`, `SupplierProductModal.tsx`) Conventional Commits (`refactor: resolve SonarLint cognitive complexity, unused functions, and parameter count rules`, commit `891ed10`) formatında yerel depoya commit'lendi; `git push` çalıştırılmadı.
+  2. **Sunucu & Site Durumu Teşhisi:**
+     - **Canlı Sunucu (`mertervitrini.com.tr`):** Uçtan uca test edildi. `merter-frontend.service` (Next.js SSR, Port 3000), `merter-backend.service` (Go API, Port 8080) ve `nginx` servislerinin tümü `active (running)` durumdadır. Tüm ana rotalar (`/`, `/kadin-giyim`, `/admin`, `/supplier`, `/hizmet-saglayicilar`, `/alim-talepleri`, `/api/v1/health`) HTTP 200 OK yanıtı vermektedir.
+     - **Yerel Geliştirme Ortamı (`localhost:3000` / `localhost:8080`):** Yerel makinede şu an Next.js (`npm run dev`) veya Go (`go run .`) dev sunucusu çalışmamaktadır; eğer kullanıcı tarayıcıda `localhost` üzerinden açmaya çalışıyorsa `ERR_CONNECTION_REFUSED` alacaktır.
+     - **Tarayıcı / Sayfa Bazlı Kontrol:** Eğer tarayıcıda beyaz ekran veya belirli bir URL açılmıyorsa tam URL ve ekrandaki hata mesajı kullanıcıya sorulmuştur.
+
+
+

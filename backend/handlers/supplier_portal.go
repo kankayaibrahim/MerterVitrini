@@ -439,6 +439,80 @@ type UpdateSupplierBrandProfileRequest struct {
 	QuickWhatsappOnly       bool              `json:"quick_whatsapp_only"`
 }
 
+func handleQuickWhatsappUpdate(ctx context.Context, w http.ResponseWriter, brandID, rawWhatsapp string) {
+	waTrim := strings.TrimSpace(rawWhatsapp)
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE catalog.brands
+		SET whatsapp_phone = $1,
+		    phone = CASE WHEN phone IS NULL OR phone = '' THEN $1 ELSE phone END,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+	`, waTrim, brandID)
+	if err != nil {
+		log.Printf("[SUPPLIER PORTAL] QuickWhatsappOnly error: %v", err)
+		writeSupplierJSON(w, http.StatusInternalServerError, map[string]string{"error": "WhatsApp numarası güncellenemedi."})
+		return
+	}
+	writeSupplierJSON(w, http.StatusOK, map[string]any{
+		"success":        true,
+		"whatsapp_phone": waTrim,
+		"message":        "Doğrudan sipariş WhatsApp hattınız başarıyla kaydedildi.",
+	})
+}
+
+func isSupportedBrandLang(lang string) bool {
+	return lang == "tr" || lang == "en" || lang == "ru" || lang == "ar"
+}
+
+func prepareBrandDescriptionTranslations(desc string, rawTrans map[string]string) (string, []byte) {
+	descTrim := strings.TrimSpace(desc)
+	descMap := make(map[string]string)
+	for k, v := range rawTrans {
+		lang := strings.ToLower(strings.TrimSpace(k))
+		if isSupportedBrandLang(lang) {
+			descMap[lang] = strings.TrimSpace(v)
+		}
+	}
+	if descTrim == "" {
+		descTrim = descMap["tr"]
+	} else {
+		descMap["tr"] = descTrim
+	}
+	descTransBytes, _ := json.Marshal(descMap)
+	return descTrim, descTransBytes
+}
+
+func getOptionalContactPointers(website, phone, whatsapp string) (*string, *string) {
+	var websitePtr, phonePtr *string
+	if wStr := strings.TrimSpace(website); wStr != "" {
+		websitePtr = &wStr
+	}
+	pStr := strings.TrimSpace(phone)
+	if pStr == "" {
+		pStr = strings.TrimSpace(whatsapp)
+	}
+	if pStr != "" {
+		phonePtr = &pStr
+	}
+	return websitePtr, phonePtr
+}
+
+func syncSupplierWalletIBAN(ctx context.Context, brandID, ibanClean, bankName, bankHolder string) {
+	if ibanClean == "" && strings.TrimSpace(bankName) == "" {
+		return
+	}
+	_, _ = db.Pool.Exec(ctx, `
+		INSERT INTO catalog.supplier_wallets (brand_id, iban, bank_name, bank_account_holder, commission_rate)
+		VALUES ($1, $2, $3, $4, 0.00)
+		ON CONFLICT (brand_id) DO UPDATE SET
+			iban = EXCLUDED.iban,
+			bank_name = EXCLUDED.bank_name,
+			bank_account_holder = EXCLUDED.bank_account_holder,
+			updated_at = CURRENT_TIMESTAMP`,
+		brandID, ibanClean, strings.TrimSpace(bankName), strings.TrimSpace(bankHolder),
+	)
+}
+
 // UpdateProfile allows a supplier to update their own open company profile, contact channels, capabilities, and direct payment IBAN
 func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
@@ -457,24 +531,7 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 	defer cancel()
 
 	if req.QuickWhatsappOnly {
-		waTrim := strings.TrimSpace(req.WhatsappPhone)
-		_, err := db.Pool.Exec(ctx, `
-			UPDATE catalog.brands
-			SET whatsapp_phone = $1,
-			    phone = CASE WHEN phone IS NULL OR phone = '' THEN $1 ELSE phone END,
-			    updated_at = CURRENT_TIMESTAMP
-			WHERE id = $2
-		`, waTrim, claims.BrandID)
-		if err != nil {
-			log.Printf("[SUPPLIER PORTAL] QuickWhatsappOnly error: %v", err)
-			writeSupplierJSON(w, http.StatusInternalServerError, map[string]string{"error": "WhatsApp numarası güncellenemedi."})
-			return
-		}
-		writeSupplierJSON(w, http.StatusOK, map[string]any{
-			"success":        true,
-			"whatsapp_phone": waTrim,
-			"message":        "Doğrudan sipariş WhatsApp hattınız başarıyla kaydedildi.",
-		})
+		handleQuickWhatsappUpdate(ctx, w, claims.BrandID, req.WhatsappPhone)
 		return
 	}
 
@@ -492,33 +549,8 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 	}
 	ibanClean := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(req.IBAN), " ", ""))
 
-	var websitePtr, phonePtr *string
-	if wStr := strings.TrimSpace(req.Website); wStr != "" {
-		websitePtr = &wStr
-	}
-	pStr := strings.TrimSpace(req.Phone)
-	if pStr == "" {
-		pStr = strings.TrimSpace(req.WhatsappPhone)
-	}
-	if pStr != "" {
-		phonePtr = &pStr
-	}
-
-	descTrim := strings.TrimSpace(req.Description)
-	descMap := make(map[string]string)
-	for k, v := range req.DescriptionTranslations {
-		lang := strings.ToLower(strings.TrimSpace(k))
-		if lang == "tr" || lang == "en" || lang == "ru" || lang == "ar" {
-			descMap[lang] = strings.TrimSpace(v)
-		}
-	}
-	if descTrim == "" && descMap["tr"] != "" {
-		descTrim = descMap["tr"]
-	}
-	if descTrim != "" {
-		descMap["tr"] = descTrim
-	}
-	descTransBytes, _ := json.Marshal(descMap)
+	websitePtr, phonePtr := getOptionalContactPointers(req.Website, req.Phone, req.WhatsappPhone)
+	descTrim, descTransBytes := prepareBrandDescriptionTranslations(req.Description, req.DescriptionTranslations)
 
 	updateQuery := `
 		UPDATE catalog.brands
@@ -569,20 +601,7 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Synchronize IBAN & bank info with supplier_wallets as well
-	if ibanClean != "" || strings.TrimSpace(req.BankName) != "" {
-		_, _ = db.Pool.Exec(ctx, `
-			INSERT INTO catalog.supplier_wallets (brand_id, iban, bank_name, bank_account_holder, commission_rate)
-			VALUES ($1, $2, $3, $4, 0.00)
-			ON CONFLICT (brand_id) DO UPDATE SET
-				iban = EXCLUDED.iban,
-				bank_name = EXCLUDED.bank_name,
-				bank_account_holder = EXCLUDED.bank_account_holder,
-				updated_at = CURRENT_TIMESTAMP`,
-			claims.BrandID, ibanClean, strings.TrimSpace(req.BankName), strings.TrimSpace(req.BankAccountHolder),
-		)
-	}
-
+	syncSupplierWalletIBAN(ctx, claims.BrandID, ibanClean, req.BankName, req.BankAccountHolder)
 	triggerProductMVRefresh()
 	h.GetProfile(w, r)
 }
@@ -1484,6 +1503,38 @@ func (h *SupplierPortalHandler) UpdateProductTranslations(w http.ResponseWriter,
 	})
 }
 
+func isValidTargetLang(lang, sourceLang string) bool {
+	if lang == sourceLang {
+		return false
+	}
+	switch lang {
+	case "en", "ru", "ar", "tr":
+		return true
+	default:
+		return false
+	}
+}
+
+func translateSingleField(ctx context.Context, text, sourceLang, targetLang string) string {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return ""
+	}
+	translated, err := translateText(ctx, trimmed, sourceLang, targetLang)
+	if err != nil || strings.TrimSpace(translated) == "" {
+		return trimmed
+	}
+	return strings.TrimSpace(translated)
+}
+
+func translateFieldsForTargetLang(ctx context.Context, fields map[string]string, sourceLang, targetLang string) map[string]string {
+	langMap := make(map[string]string, len(fields))
+	for fieldKey, sourceText := range fields {
+		langMap[fieldKey] = translateSingleField(ctx, sourceText, sourceLang, targetLang)
+	}
+	return langMap
+}
+
 // AutoTranslateFields translates given text fields from source language (default 'tr') into target languages ('en', 'ru', 'ar') using LibreTranslate
 func (h *SupplierPortalHandler) AutoTranslateFields(w http.ResponseWriter, r *http.Request) {
 	_, ok := middleware.GetSupplierFromContext(r.Context())
@@ -1514,30 +1565,13 @@ func (h *SupplierPortalHandler) AutoTranslateFields(w http.ResponseWriter, r *ht
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 
-	results := make(map[string]map[string]string)
+	results := make(map[string]map[string]string, len(targetLangs))
 	for _, rawLang := range targetLangs {
 		lang := strings.ToLower(strings.TrimSpace(rawLang))
-		if lang != "en" && lang != "ru" && lang != "ar" && lang != "tr" {
+		if !isValidTargetLang(lang, sourceLang) {
 			continue
 		}
-		if lang == sourceLang {
-			continue
-		}
-		langMap := make(map[string]string)
-		for fieldKey, sourceText := range req.Fields {
-			trimmed := strings.TrimSpace(sourceText)
-			if trimmed == "" {
-				langMap[fieldKey] = ""
-				continue
-			}
-			translated, err := translateText(ctx, trimmed, sourceLang, lang)
-			if err != nil || strings.TrimSpace(translated) == "" {
-				langMap[fieldKey] = trimmed
-			} else {
-				langMap[fieldKey] = strings.TrimSpace(translated)
-			}
-		}
-		results[lang] = langMap
+		results[lang] = translateFieldsForTargetLang(ctx, req.Fields, sourceLang, lang)
 	}
 
 	writeSupplierJSON(w, http.StatusOK, map[string]any{

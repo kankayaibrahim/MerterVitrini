@@ -38,12 +38,6 @@ func NewMarketplaceHandler(cfg *config.Config, notifiers ...services.Notificatio
 	return &MarketplaceHandler{Cfg: cfg, Notifier: notifier}
 }
 
-// splitOrderIntoSupplierSubOrders groups order items by BrandID and creates supplier sub-orders & ledger entries
-func splitOrderIntoSupplierSubOrders(ctx context.Context, tx pgx.Tx, orderID, orderNumber string, items []orderCartItem) error {
-	_, err := splitOrderIntoSupplierSubOrdersWithSummary(ctx, tx, orderID, orderNumber, items)
-	return err
-}
-
 func splitOrderIntoSupplierSubOrdersWithSummary(ctx context.Context, tx pgx.Tx, orderID, orderNumber string, items []orderCartItem) ([]models.SupplierDirectOrderSummary, error) {
 	brandGroups := groupOrderItemsByBrand(items)
 
@@ -285,17 +279,7 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 // SUPPLIER PORTAL HANDLERS
 // -----------------------------------------------------------------------------
 
-// ListSupplierOrders lists sub-orders belonging to the authenticated supplier
-func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.GetSupplierFromContext(r.Context())
-	if !ok {
-		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
-		return
-	}
-
-	status := r.URL.Query().Get("status")
-	limit, offset := parseSupplierPagination(r)
-
+func buildSupplierOrdersQuery(brandID, status string, limit, offset int) (string, []any) {
 	query := `
 		SELECT 
 			so.id, so.order_id, so.brand_id, b.brand_name, so.sub_order_number, 
@@ -313,7 +297,7 @@ func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.R
 		LEFT JOIN catalog.orders o ON o.id = so.order_id
 		WHERE so.brand_id = $1
 	`
-	args := []any{claims.BrandID}
+	args := []any{brandID}
 	argIdx := 2
 
 	if status != "" && status != "ALL" {
@@ -324,15 +308,10 @@ func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.R
 
 	query += fmt.Sprintf(" ORDER BY so.created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, limit, offset)
+	return query, args
+}
 
-	rows, err := db.Pool.Query(r.Context(), query, args...)
-	if err != nil {
-		log.Printf("[MARKETPLACE] Failed to query supplier orders: %v", err)
-		http.Error(w, `{"error":"Siparişler yüklenemedi"}`, http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
+func scanSupplierSubOrders(rows pgx.Rows) []models.SupplierSubOrder {
 	orders := []models.SupplierSubOrder{}
 	for rows.Next() {
 		var o models.SupplierSubOrder
@@ -343,31 +322,58 @@ func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.R
 			&o.CustomerName, &o.CustomerCompany, &o.CustomerPhone, &o.CustomerEmail,
 			&o.DeliveryAddress, &o.BillingAddress,
 			&o.CreatedAt, &o.UpdatedAt,
-		); err != nil {
-			continue
+		); err == nil {
+			orders = append(orders, o)
 		}
-		orders = append(orders, o)
 	}
-	rows.Close()
+	return orders
+}
 
-	// Preload items for each order so the supplier portal can display line items immediately
+func preloadSupplierSubOrderItems(ctx context.Context, orders []models.SupplierSubOrder) {
 	for idx := range orders {
-		itemRows, err := db.Pool.Query(r.Context(), `
+		itemRows, err := db.Pool.Query(ctx, `
 			SELECT id, sub_order_id, product_id, product_name, product_sku, quantity, price_at_purchase, total_price, image_url, series_ratio
 			FROM catalog.supplier_sub_order_items
 			WHERE sub_order_id = $1
 			ORDER BY created_at ASC
 		`, orders[idx].ID)
-		if err == nil {
-			for itemRows.Next() {
-				var it models.SupplierSubOrderItem
-				if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.ImageURL, &it.SeriesRatio); err == nil {
-					orders[idx].Items = append(orders[idx].Items, it)
-				}
-			}
-			itemRows.Close()
+		if err != nil {
+			continue
 		}
+		for itemRows.Next() {
+			var it models.SupplierSubOrderItem
+			if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.ImageURL, &it.SeriesRatio); err == nil {
+				orders[idx].Items = append(orders[idx].Items, it)
+			}
+		}
+		itemRows.Close()
 	}
+}
+
+// ListSupplierOrders lists sub-orders belonging to the authenticated supplier
+func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.GetSupplierFromContext(r.Context())
+	if !ok {
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
+		return
+	}
+
+	status := r.URL.Query().Get("status")
+	limit, offset := parseSupplierPagination(r)
+	query, args := buildSupplierOrdersQuery(claims.BrandID, status, limit, offset)
+
+	rows, err := db.Pool.Query(r.Context(), query, args...)
+	if err != nil {
+		log.Printf("[MARKETPLACE] Failed to query supplier orders: %v", err)
+		http.Error(w, `{"error":"Siparişler yüklenemedi"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	orders := scanSupplierSubOrders(rows)
+	rows.Close()
+
+	preloadSupplierSubOrderItems(r.Context(), orders)
 
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
 		"orders": orders,

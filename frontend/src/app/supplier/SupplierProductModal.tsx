@@ -26,6 +26,9 @@ import type {
   ProductTranslationsFormMap,
 } from "./SupplierDashboardClient";
 
+export type SupportedTranslationLang = "en" | "ru" | "ar";
+export type TranslationFieldKey = "title" | "short_description" | "description";
+
 // Helper to strip any raw HTML tags from attribute names (e.g. "<p>Siyah - Beyaz</p>" -> "Siyah - Beyaz")
 export function cleanAttributeName(name?: string | null): string {
   if (!name) return "";
@@ -871,8 +874,8 @@ interface SupplierProductTranslationsTabProps {
   formDescription: string;
   formTranslations: ProductTranslationsFormMap;
   onUpdateTranslationField: (
-    lang: "en" | "ru" | "ar",
-    field: "title" | "short_description" | "description",
+    lang: SupportedTranslationLang,
+    field: TranslationFieldKey,
     val: string
   ) => void;
   autoTranslating: boolean;
@@ -892,7 +895,7 @@ export function SupplierProductTranslationsTab(
     onAutoTranslateFromTurkish,
   } = props;
 
-  const [activeLang, setActiveLang] = useState<"en" | "ru" | "ar">("en");
+  const [activeLang, setActiveLang] = useState<SupportedTranslationLang>("en");
 
   const langs = [
     { code: "en" as const, label: "🇬🇧 English (İngilizce)", dir: "ltr" as const },
@@ -1100,8 +1103,8 @@ export interface SupplierProductModalProps {
   // Translations Tab
   formTranslations: ProductTranslationsFormMap;
   onUpdateTranslationField: (
-    lang: "en" | "ru" | "ar",
-    field: "title" | "short_description" | "description",
+    lang: SupportedTranslationLang,
+    field: TranslationFieldKey,
     val: string
   ) => void;
   autoTranslating: boolean;

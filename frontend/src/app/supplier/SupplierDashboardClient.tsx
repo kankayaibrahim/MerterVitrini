@@ -26,7 +26,11 @@ import {
   ArchiveRestore
 } from "lucide-react";
 import { SupplierProductRow } from "@/types/integration";
-import { SupplierProductModal } from "./SupplierProductModal";
+import {
+  SupplierProductModal,
+  type SupportedTranslationLang,
+  type TranslationFieldKey,
+} from "./SupplierProductModal";
 import {
   SupplierExcelImportModal,
   SupplierCollectionArchiveModal,
@@ -1274,6 +1278,15 @@ function SupplierSectionContent({
   );
 }
 
+interface ProfileDataSetters {
+  setProfile: (p: SupplierProfile) => void;
+  setStats: (s: DashboardStats) => void;
+  setQuickWhatsapp: (w: string) => void;
+  setCategories?: (c: CategoryOption[]) => void;
+  setColors?: (c: AttributeItem[]) => void;
+  setFabrics?: (f: AttributeItem[]) => void;
+}
+
 function applyProfileDataToSetters(
   res: {
     user?: SupplierProfile;
@@ -1285,23 +1298,18 @@ function applyProfileDataToSetters(
     isAuthError?: boolean;
   },
   onLogout: () => void,
-  setProfile: (p: SupplierProfile) => void,
-  setStats: (s: DashboardStats) => void,
-  setQuickWhatsapp: (w: string) => void,
-  setCategories?: (c: CategoryOption[]) => void,
-  setColors?: (c: AttributeItem[]) => void,
-  setFabrics?: (f: AttributeItem[]) => void
+  setters: ProfileDataSetters
 ) {
   if (res.isAuthError) {
     onLogout();
     return;
   }
-  if (res.user) setProfile(res.user);
-  if (res.stats) setStats(res.stats);
-  if (res.whatsappPhone !== undefined) setQuickWhatsapp(res.whatsappPhone);
-  if (setCategories && res.categories) setCategories(res.categories);
-  if (setColors && res.colors) setColors(res.colors);
-  if (setFabrics && res.fabrics) setFabrics(res.fabrics);
+  if (res.user) setters.setProfile(res.user);
+  if (res.stats) setters.setStats(res.stats);
+  if (res.whatsappPhone !== undefined) setters.setQuickWhatsapp(res.whatsappPhone);
+  if (setters.setCategories && res.categories) setters.setCategories(res.categories);
+  if (setters.setColors && res.colors) setters.setColors(res.colors);
+  if (setters.setFabrics && res.fabrics) setters.setFabrics(res.fabrics);
 }
 
 function useSupplierAuthAndProfile(router: ReturnType<typeof useRouter>) {
@@ -1330,7 +1338,11 @@ function useSupplierAuthAndProfile(router: ReturnType<typeof useRouter>) {
     const token = getToken();
     if (!token) return handleLogout();
     const res = await fetchSupplierProfile(token);
-    applyProfileDataToSetters(res, handleLogout, setProfile, setStats, setQuickWhatsapp);
+    applyProfileDataToSetters(res, handleLogout, {
+      setProfile,
+      setStats,
+      setQuickWhatsapp,
+    });
   }, [getToken, handleLogout]);
 
   const handleSaveQuickWhatsapp = async (e: React.FormEvent) => {
@@ -1356,16 +1368,14 @@ function useSupplierAuthAndProfile(router: ReturnType<typeof useRouter>) {
     let ignore = false;
     void fetchInitialSupplierData(token).then((data) => {
       if (!ignore) {
-        applyProfileDataToSetters(
-          data,
-          handleLogout,
+        applyProfileDataToSetters(data, handleLogout, {
           setProfile,
           setStats,
           setQuickWhatsapp,
           setCategories,
           setColors,
-          setFabrics
-        );
+          setFabrics,
+        });
       }
     });
     return () => {
@@ -1524,7 +1534,7 @@ export default function SupplierDashboardClient() {
   const handleToggleProductArchive = async (prod: SupplierProductRow) => {
     const token = getToken();
     if (!token) return;
-    const nextArchived = !Boolean(prod.is_archived);
+    const nextArchived = !prod.is_archived;
     const ok = await toggleSupplierProductArchiveApi(token, prod.id, nextArchived, true);
     if (ok) {
       void loadProducts();
@@ -1624,8 +1634,8 @@ export default function SupplierDashboardClient() {
   };
 
   const handleUpdateTranslationField = (
-    lang: "en" | "ru" | "ar",
-    field: "title" | "short_description" | "description",
+    lang: SupportedTranslationLang,
+    field: TranslationFieldKey,
     val: string
   ) => {
     setFormTranslations((prev) => ({

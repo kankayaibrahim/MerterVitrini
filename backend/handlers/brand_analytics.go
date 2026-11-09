@@ -107,7 +107,7 @@ type SupplierBrandAnalyticsResponse struct {
 	DailyTrend          []BrandDailyStat              `json:"daily_trend"`
 }
 
-func resolveVisitorCountryAndLang(r *http.Request, explicitCountry, explicitLang string) (string, string) {
+func resolveVisitorLang(r *http.Request, explicitLang string) string {
 	lang := strings.ToLower(strings.TrimSpace(explicitLang))
 	if lang == "" && r != nil {
 		acceptLang := strings.ToLower(r.Header.Get("Accept-Language"))
@@ -118,7 +118,31 @@ func resolveVisitorCountryAndLang(r *http.Request, explicitCountry, explicitLang
 	if lang == "" || len(lang) > 5 {
 		lang = "tr"
 	}
+	return lang
+}
 
+func fallbackCountryForLang(lang string) string {
+	switch lang {
+	case "ru":
+		return "RU"
+	case "ar":
+		return "AE"
+	case "de":
+		return "DE"
+	case "fr":
+		return "FR"
+	case "pl":
+		return "PL"
+	case "bg":
+		return "BG"
+	case "en":
+		return "EU"
+	default:
+		return "TR"
+	}
+}
+
+func resolveVisitorCountry(r *http.Request, explicitCountry, lang string) string {
 	country := strings.ToUpper(strings.TrimSpace(explicitCountry))
 	if country == "" && r != nil {
 		for _, hdr := range []string{"CF-IPCountry", "X-Country-Code", "X-Geo-Country"} {
@@ -131,25 +155,14 @@ func resolveVisitorCountryAndLang(r *http.Request, explicitCountry, explicitLang
 	}
 
 	if len(country) != 2 {
-		switch lang {
-		case "ru":
-			country = "RU"
-		case "ar":
-			country = "AE"
-		case "de":
-			country = "DE"
-		case "fr":
-			country = "FR"
-		case "pl":
-			country = "PL"
-		case "bg":
-			country = "BG"
-		case "en":
-			country = "EU"
-		default:
-			country = "TR"
-		}
+		return fallbackCountryForLang(lang)
 	}
+	return country
+}
+
+func resolveVisitorCountryAndLang(r *http.Request, explicitCountry, explicitLang string) (string, string) {
+	lang := resolveVisitorLang(r, explicitLang)
+	country := resolveVisitorCountry(r, explicitCountry, lang)
 	return country, lang
 }
 
@@ -162,6 +175,17 @@ func formatCountryLabel(code string) string {
 		return "🌍 Küresel Alıcı"
 	}
 	return "🌍 " + upper
+}
+
+type brandEventRecordParams struct {
+	BrandID     string
+	ProductID   string
+	EventType   string
+	VisitorID   string
+	CountryCode string
+	LangCode    string
+	DeviceType  string
+	RefHost     string
 }
 
 // RecordBrandAnalyticsEvent asynchronously records a brand event from backend handlers.
@@ -184,10 +208,19 @@ func RecordBrandAnalyticsEvent(brandID, productID, eventType string, r *http.Req
 		deviceType = "desktop"
 	}
 
-	go insertBrandEventRecord(brandID, strings.TrimSpace(productID), eventType, visitorID, countryCode, langCode, deviceType, refHost)
+	go insertBrandEventRecord(brandEventRecordParams{
+		BrandID:     brandID,
+		ProductID:   strings.TrimSpace(productID),
+		EventType:   eventType,
+		VisitorID:   visitorID,
+		CountryCode: countryCode,
+		LangCode:    langCode,
+		DeviceType:  deviceType,
+		RefHost:     refHost,
+	})
 }
 
-func insertBrandEventRecord(brandID, productID, eventType, visitorID, countryCode, langCode, deviceType, refHost string) {
+func insertBrandEventRecord(p brandEventRecordParams) {
 	if db.Pool == nil {
 		return
 	}
@@ -195,15 +228,15 @@ func insertBrandEventRecord(brandID, productID, eventType, visitorID, countryCod
 	defer cancel()
 
 	var prodPtr *string
-	if productID != "" {
-		prodPtr = &productID
+	if p.ProductID != "" {
+		prodPtr = &p.ProductID
 	}
 
 	_, _ = db.Pool.Exec(ctx, `
 		INSERT INTO analytics.brand_events (
 			brand_id, product_id, event_type, visitor_id, country_code, language_code, device_type, referrer_host
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, brandID, prodPtr, eventType, visitorID, countryCode, langCode, deviceType, refHost)
+	`, p.BrandID, prodPtr, p.EventType, p.VisitorID, p.CountryCode, p.LangCode, p.DeviceType, p.RefHost)
 }
 
 // TrackBrandEvent handles POST /api/v1/store/brand-events from web & mobile clients.
@@ -242,7 +275,16 @@ func (h *AnalyticsHandler) TrackBrandEvent(w http.ResponseWriter, r *http.Reques
 	deviceType, _, _ := parseDeviceAndBrowser(r.UserAgent(), 0)
 	refHost := parseReferrerHost(r.Referer())
 
-	go insertBrandEventRecord(brandID, strings.TrimSpace(req.ProductID), eventType, visitorID, countryCode, langCode, deviceType, refHost)
+	go insertBrandEventRecord(brandEventRecordParams{
+		BrandID:     brandID,
+		ProductID:   strings.TrimSpace(req.ProductID),
+		EventType:   eventType,
+		VisitorID:   visitorID,
+		CountryCode: countryCode,
+		LangCode:    langCode,
+		DeviceType:  deviceType,
+		RefHost:     refHost,
+	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Write([]byte(`{"ok":true}`))
