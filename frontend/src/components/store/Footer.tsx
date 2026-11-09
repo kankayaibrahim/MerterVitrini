@@ -5,6 +5,7 @@ import Link from "next/link";
 import { t, getCategoryPrefix } from "../../app/i18n";
 import { apiFetch } from "../../app/utils";
 import SupplierApplicationSection from "./SupplierApplicationSection";
+import NewsletterSubscriptionBox from "./NewsletterSubscriptionBox";
 import { Building2, Smartphone } from "lucide-react";
 
 interface Settings {
@@ -214,6 +215,11 @@ function FooterAboutColumn({ lang }: { readonly lang: string }) {
           <a href={`/${prefix}/blog`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
             {t("blog", lang)}
           </a>
+        </li>
+        <li>
+          <Link href="/hizmet-saglayicilar" className="text-sky-700 font-bold hover:text-sky-800 hover:underline transition-colors duration-200">
+            {lang === "tr" ? "Sektörel Hizmet Sağlayıcılar (Kargo / Stüdyo)" : "B2B Sectoral Service Providers"}
+          </Link>
         </li>
         <li>
           <Link href={`/${prefix}/tedarikci-basvuru`} className="text-amber-600 font-bold hover:text-amber-700 hover:underline transition-colors duration-200 flex items-center gap-1.5">
@@ -470,6 +476,7 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = false
     <>
       {showApplicationForm && <SupplierApplicationSection lang={lang} />}
       <footer className="bg-white border-t border-cultured text-sonic-silver py-16 px-6 md:px-12 mt-0 font-sans">
+        <NewsletterSubscriptionBox lang={lang} />
         <div className="max-w-[1720px] mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
           <FooterContactColumn settings={settings} lang={lang} />
           <FooterAboutColumn lang={lang} />

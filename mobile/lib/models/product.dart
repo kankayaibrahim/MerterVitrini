@@ -113,6 +113,14 @@ class Product {
   final String description;
   final String brandId;
   final String brandName;
+  final String brandPhone;
+  final String brandWhatsapp;
+  final String brandEmail;
+  final String brandAddress;
+  final String brandIban;
+  final String brandBankName;
+  final String brandBankHolder;
+  final bool brandVerified;
   final String categoryId;
   final String categoryTitle;
   final String? colorId;
@@ -146,6 +154,14 @@ class Product {
     required this.description,
     required this.brandId,
     required this.brandName,
+    this.brandPhone = '',
+    this.brandWhatsapp = '',
+    this.brandEmail = '',
+    this.brandAddress = '',
+    this.brandIban = '',
+    this.brandBankName = '',
+    this.brandBankHolder = '',
+    this.brandVerified = true,
     required this.categoryId,
     required this.categoryTitle,
     this.colorId,
@@ -299,6 +315,10 @@ class Product {
       });
     }
 
+    final bp = json['brand_profile'] is Map<String, dynamic>
+        ? json['brand_profile'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+
     return Product(
       id: (json['id'] ?? '').toString(),
       title: (json['title'] ?? '').toString(),
@@ -309,7 +329,15 @@ class Product {
       shortDescription: (json['short_description'] ?? '').toString(),
       description: (json['description'] ?? '').toString(),
       brandId: (json['brand_id'] ?? '').toString(),
-      brandName: (json['brand_name'] ?? 'Merter Vitrini').toString(),
+      brandName: (json['brand_name'] ?? bp['name'] ?? 'Merter Vitrini').toString(),
+      brandPhone: (bp['phone'] ?? '').toString(),
+      brandWhatsapp: (bp['whatsapp_phone'] ?? bp['phone'] ?? '').toString(),
+      brandEmail: (bp['public_email'] ?? '').toString(),
+      brandAddress: (bp['location_address'] ?? '').toString(),
+      brandIban: (bp['iban'] ?? '').toString(),
+      brandBankName: (bp['bank_name'] ?? '').toString(),
+      brandBankHolder: (bp['bank_account_holder'] ?? '').toString(),
+      brandVerified: bp['is_verified'] != false,
       categoryId: (json['category_id'] ?? '').toString(),
       categoryTitle:
           (json['category_title'] ?? json['category_name'] ?? '').toString(),
@@ -414,7 +442,7 @@ class BrandSummary {
   });
 
   String get maskedDisplayName =>
-      aliasCode.trim().isNotEmpty ? aliasCode.trim() : name;
+      name.trim().isNotEmpty ? name.trim() : aliasCode.trim();
 
   factory BrandSummary.fromJson(Map<String, dynamic> json) {
     return BrandSummary(

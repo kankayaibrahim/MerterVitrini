@@ -59,7 +59,7 @@ class ChatProvider extends ChangeNotifier {
       _realtimeClient.connect(clientId: sup.id);
       _realtimeClient.subscribeChannel('chat:supplier#${sup.brandId}');
       _realtimeClient.subscribeChannel('chat:supplier_user#${sup.id}');
-    } else {
+    } else if (session.isCustomerLoggedIn) {
       final cid = session.effectiveChatCustomerId;
       _realtimeClient.connect(clientId: cid);
       _realtimeClient.subscribeChannel('chat:customer#$cid');
@@ -67,6 +67,11 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> loadRoomsForCurrentRole() async {
+    if (!session.isSupplierLoggedIn && !session.isCustomerLoggedIn) {
+      _customerRooms = <ChatRoom>[];
+      notifyListeners();
+      return;
+    }
     syncRealtimeConnection();
     _loadingRooms = true;
     notifyListeners();

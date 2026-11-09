@@ -19,13 +19,115 @@ class SupplierWalletTeamScreen extends StatefulWidget {
 }
 
 class _SupplierWalletTeamScreenState extends State<SupplierWalletTeamScreen> {
+  String _supplierWhatsapp = '';
+  bool _loadingProfile = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<SupplierProvider>().loadWalletAndTeam();
+      _loadSupplierWhatsappProfile();
     });
+  }
+
+  Future<void> _loadSupplierWhatsappProfile() async {
+    if (!mounted) return;
+    setState(() => _loadingProfile = true);
+    try {
+      final resp = await context
+          .read<SessionProvider>()
+          .apiClient
+          .dio
+          .get<dynamic>('/api/v1/supplier/profile');
+      final data = resp.data;
+      if (data is Map<String, dynamic> && mounted) {
+        setState(() {
+          _supplierWhatsapp =
+              (data['whatsapp_phone'] ?? data['phone'] ?? '').toString();
+        });
+      }
+    } catch (_) {
+      // Ignore quietly if offline
+    } finally {
+      if (mounted) setState(() => _loadingProfile = false);
+    }
+  }
+
+  Future<void> _openWhatsappDialog() async {
+    final dio = context.read<SessionProvider>().apiClient.dio;
+    final waCtrl = TextEditingController(text: _supplierWhatsapp);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Doğrudan Müşteri WhatsApp Hattım'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Vitrindeki tüm ürünlerinizde alıcıların tek tıkla size doğrudan ulaşacağı WhatsApp sipariş numaranızı girin.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: waCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'WhatsApp Numaranız *',
+                  hintText: '+90 5XX XXX XX XX',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (waCtrl.text.trim().isEmpty) return;
+              try {
+                await dio.put<dynamic>(
+                  '/api/v1/supplier/profile',
+                  data: <String, dynamic>{
+                    'whatsapp_phone': waCtrl.text.trim(),
+                    'quick_whatsapp_only': true,
+                  },
+                );
+                if (ctx.mounted) Navigator.of(ctx).pop(true);
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(e.toString())),
+                  );
+                }
+              }
+            },
+            child: const Text('Kaydet'),
+          ),
+        ],
+      ),
+    );
+
+    final updatedVal = waCtrl.text.trim();
+    waCtrl.dispose();
+
+    if (saved == true && mounted) {
+      setState(() => _supplierWhatsapp = updatedVal);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'WhatsApp hattınız güncellendi! Müşteriler artık doğrudan size ulaşabilir.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _openIbanDialog() async {
@@ -565,6 +667,52 @@ class _SupplierWalletTeamScreenState extends State<SupplierWalletTeamScreen> {
                 ListView(
                   padding: const EdgeInsets.all(14),
                   children: [
+                    Card(
+                      child: ListTile(
+                        leading: const CircleAvatar(
+                          backgroundColor: AppColors.emerald,
+                          child: Icon(
+                            Icons.chat_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                        title: const Text(
+                          'Doğrudan Müşteri & Sipariş WhatsApp Hattım',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                        subtitle: Text(
+                          _loadingProfile
+                              ? 'Yükleniyor...'
+                              : (_supplierWhatsapp.isNotEmpty
+                                  ? 'Aktif Hat: $_supplierWhatsapp (Müşteriler doğrudan size yazabilir)'
+                                  : 'Henüz WhatsApp numaranızı eklemediniz. Hemen ekleyin!'),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.emerald,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                          ),
+                          onPressed: _openWhatsappDialog,
+                          child: Text(
+                            _supplierWhatsapp.isNotEmpty ? 'Düzenle' : 'Ekle',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(14),

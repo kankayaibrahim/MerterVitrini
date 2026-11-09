@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Centrifuge, PublicationContext } from "centrifuge";
-import { X, Send, Sparkles, ChevronLeft, Store } from "lucide-react";
+import { X, Send, Sparkles, ChevronLeft, Store, Lock } from "lucide-react";
 import {
   ChatRoom,
   ChatMessage,
@@ -13,6 +13,7 @@ import {
   getOrInitCustomerChatIdentity,
 } from "@/types/chat";
 import { ExchangeRate } from "@/app/utils";
+import { useIsStoreMemberLoggedIn, openStoreAuthModal } from "@/app/storeAuth";
 import {
   IStoreChatService,
   storeChatService,
@@ -44,6 +45,7 @@ export default function StoreChatDrawer({
   onAcceptOfferToCart,
   chatService = storeChatService,
 }: Readonly<StoreChatDrawerProps>) {
+  const isAuthenticated = useIsStoreMemberLoggedIn();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [brandAgents, setBrandAgents] = useState<SupplierAgent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
@@ -187,7 +189,7 @@ export default function StoreChatDrawer({
   );
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen || !isAuthenticated) {
       initializedKeyRef.current = "";
       return;
     }
@@ -199,7 +201,7 @@ export default function StoreChatDrawer({
     initializedKeyRef.current = currentKey;
 
     void initProductRoom();
-  }, [isOpen, initialBrandId, initialProductId, initProductRoom]);
+  }, [isOpen, isAuthenticated, initialBrandId, initialProductId, initProductRoom]);
 
   const handleSwitchSupplierAgent = (agent: SupplierAgent) => {
     setSelectedAgentId(agent.id);
@@ -207,7 +209,7 @@ export default function StoreChatDrawer({
   };
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !isAuthenticated) return;
     const identity = getOrInitCustomerChatIdentity();
     const wsUrl = getCentrifugeWsUrl();
 
@@ -265,7 +267,7 @@ export default function StoreChatDrawer({
       client.disconnect();
       centrifugeRef.current = null;
     };
-  }, [isOpen, activeRoom?.id, loadCustomerRooms, scrollToBottom]);
+  }, [isOpen, isAuthenticated, activeRoom?.id, loadCustomerRooms, scrollToBottom]);
 
   const handleSaveGuestName = () => {
     chatService.saveGuestDisplayName(customerNameInput);
@@ -327,6 +329,54 @@ export default function StoreChatDrawer({
   };
 
   if (!isOpen) return null;
+
+  if (!isAuthenticated) {
+    return (
+      <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity">
+        <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col border-l border-slate-200">
+          <div className="bg-slate-900 text-white px-4 py-3.5 flex items-center justify-between shadow-md">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-purple-600/20 border border-purple-400/30 flex items-center justify-center shrink-0">
+                <Lock className="w-4 h-4 text-purple-300" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-white">Canlı B2B Sohbet (Üyelere Özel)</h3>
+                <p className="text-[11px] text-slate-300">Tedarikçi Temsilcisi ile Doğrudan İletişim</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer border-none"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-md">
+              <Lock className="w-6 h-6" />
+            </div>
+            <h4 className="text-base font-extrabold text-slate-900">
+              Canlı Sohbet İçin Üye Girişi Gerekli
+            </h4>
+            <p className="text-xs font-semibold text-slate-600 leading-relaxed max-w-xs">
+              Üretici ve toptancı firma temsilcileriyle canlı görüşmek, stok sormak ve özel seri fiyat teklifi almak için üye girişi yapmanız gerekmektedir.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                openStoreAuthModal("login");
+              }}
+              className="w-full max-w-xs py-3 px-4 rounded-xl bg-slate-900 hover:bg-salmon-pink text-white text-xs font-extrabold uppercase tracking-wider transition-colors cursor-pointer border-none shadow-sm"
+            >
+              Üye Girişi Yap / Kayıt Ol
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-xs transition-opacity">

@@ -185,6 +185,38 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
     }
   }
 
+  @override
+  Future<Map<String, Map<String, String>>> autoTranslateSupplierFields(
+    Map<String, String> fields,
+  ) async {
+    try {
+      final resp = await _client.dio.post<Map<String, dynamic>>(
+        '/api/v1/supplier/translate',
+        data: {
+          'source_lang': 'tr',
+          'target_langs': ['en', 'ru', 'ar'],
+          'fields': fields,
+        },
+      );
+      final raw = resp.data?['translations'];
+      final result = <String, Map<String, String>>{};
+      if (raw is Map) {
+        raw.forEach((langKey, langVal) {
+          if (langVal is Map) {
+            final fieldMap = <String, String>{};
+            langVal.forEach((k, v) {
+              fieldMap[k.toString()] = (v ?? '').toString();
+            });
+            result[langKey.toString()] = fieldMap;
+          }
+        });
+      }
+      return result;
+    } catch (e) {
+      throw ApiClient.mapError(e);
+    }
+  }
+
   List<T> _parseList<T>(
     dynamic raw,
     T Function(Map<String, dynamic>) mapper,

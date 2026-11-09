@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import { X, ShoppingBag } from "lucide-react";
+import { X, ShoppingBag, Lock } from "lucide-react";
 import { CartItem } from "@/types/store";
 import { t, getCategoryPrefix } from "@/app/i18n";
 import { convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
+import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { UserAddress } from "@/app/profile/components/types";
 
 export interface InquiryFormData {
@@ -182,6 +183,7 @@ function CartItemCard({
   onAdjustQty,
   onRemove,
 }: Readonly<CartItemCardProps>) {
+  const isAuthenticated = useIsStoreAuthenticated();
   const itemTotalUnits = item.packages_qty * item.units_per_package;
   const rawItemPricePerUnit = item.price_per_unit;
   const rawItemTotalPrice = itemTotalUnits * rawItemPricePerUnit;
@@ -238,12 +240,24 @@ function CartItemCard({
         </div>
 
         <span className="text-xs font-semibold text-sonic-silver mt-1.5 block">
-          {itemTotalUnits} {lang === "tr" ? "Adet" : t("piece", lang)} ({item.units_per_package} {lang === "tr" ? "Adet/Paket" : "Pcs/Pack"}) x {pricePerUnit.toFixed(2)} {currency}
+          {itemTotalUnits} {lang === "tr" ? "Adet" : t("piece", lang)} ({item.units_per_package} {lang === "tr" ? "Adet/Paket" : "Pcs/Pack"})
+          {isAuthenticated ? ` x ${pricePerUnit.toFixed(2)} ${currency}` : ""}
         </span>
       </div>
 
       <div className="shrink-0 self-center font-extrabold text-sm text-eerie-black text-right pl-1">
-        {itemTotalPrice.toFixed(2)} {currency}
+        {isAuthenticated ? (
+          `${itemTotalPrice.toFixed(2)} ${currency}`
+        ) : (
+          <button
+            type="button"
+            onClick={() => openStoreAuthModal("login")}
+            className="inline-flex items-center gap-1 text-[10px] font-extrabold text-salmon-pink hover:underline bg-transparent border-none p-0 cursor-pointer"
+          >
+            <Lock className="w-2.5 h-2.5 shrink-0" />
+            <span>{getShortMemberPriceLabel(lang)}</span>
+          </button>
+        )}
       </div>
 
       <button
@@ -348,6 +362,7 @@ function CartTotalsSection({
   grandTotalInTRY,
   exchangeRates,
 }: Readonly<CartTotalsSectionProps>) {
+  const isAuthenticated = useIsStoreAuthenticated();
   return (
     <div className="border border-cultured bg-[#fafafa] p-4 rounded-[10px] flex flex-col gap-2.5 shadow-sm shrink-0">
       <div className="flex justify-between text-sm font-bold text-onyx">
@@ -362,16 +377,29 @@ function CartTotalsSection({
         <span>{t("total_weight", lang)}:</span>
         <span className="text-eerie-black font-extrabold">{totalWeight.toFixed(2)} kg</span>
       </div>
-      <div className="flex justify-between text-base font-extrabold text-salmon-pink border-t border-cultured pt-2.5 mt-1 select-none">
+      <div className="flex justify-between items-center text-base font-extrabold text-salmon-pink border-t border-cultured pt-2.5 mt-1 select-none">
         <span>{t("grand_total", lang)}:</span>
-        <span>{finalTotalPrice.toFixed(2)} {displayCurrency}</span>
+        {isAuthenticated ? (
+          <span>{finalTotalPrice.toFixed(2)} {displayCurrency}</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openStoreAuthModal("login")}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 hover:bg-salmon-pink text-white text-xs font-extrabold transition-colors cursor-pointer border-none"
+          >
+            <Lock className="w-3 h-3 shrink-0" />
+            <span>{getShortMemberPriceLabel(lang)}</span>
+          </button>
+        )}
       </div>
 
-      <CartCurrencyEquivalents
-        grandTotalInTRY={grandTotalInTRY}
-        exchangeRates={exchangeRates}
-        lang={lang}
-      />
+      {isAuthenticated && (
+        <CartCurrencyEquivalents
+          grandTotalInTRY={grandTotalInTRY}
+          exchangeRates={exchangeRates}
+          lang={lang}
+        />
+      )}
     </div>
   );
 }

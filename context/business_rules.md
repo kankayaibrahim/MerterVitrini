@@ -9,10 +9,11 @@ Merter Vitrini, İstanbul Merter'deki tekstil üreticilerini ve toptancı firmal
      ```sql
      b.brand_name AS brand_name
      ```
-2. **Açık Firma İletişimi ve Entegrasyon Kaynağı Ayrımı:**
-   - Firmanın vitrinde paylaşmayı seçtiği iletişim bilgileri (WhatsApp hattı, telefon, e-posta, açık adres, web sitesi) firma profil sayfasında ve ürün detaylarında alıcılara açıkça gösterilir.
+2. **Açık Firma İletişimi, Self-Servis Profil ve Entegrasyon Kaynağı Ayrımı:**
+   - Tedarikçiler kendi Tedarikçi Portalı (`/supplier` -> `PUT /api/v1/supplier/profile`) üzerinden firma tanıtım yazısı, faaliyet türü, üretim yetenekleri (`supports_private_label`, `supports_fason`, `export_countries`), doğrudan iletişim kanalları (`whatsapp_phone`, `phone`, `public_email`, `website`, `instagram_handle`, `location_address`) ve doğrudan tahsilat banka/IBAN (`bank_name`, `bank_account_holder`, `iban`) bilgilerini self-servis olarak ekleyip güncelleyebilirler.
+   - Firmanın vitrinde paylaştığı iletişim ve banka/IBAN bilgileri ürün detaylarında (`SupplierDirectCard`) alıcılara açıkça gösterilir.
    - `alias_code` (`MIMOZA`, `FLORA`, `EDUSA` vb.) yalnızca otomatik üretilen benzersiz ürün stok kodlarında (`custom_sku`) kısa ön ek olarak kullanılır; firma adını gizlemek için **kullanılmaz**.
-   - Yalnızca tedarikçiye ait arka plan XML entegrasyon adresi (`integration.xml_feeds.feed_url`) ve tedarikçi alış maliyeti (`buying_price`) dışa açık (public) API çıktılarından gizlenir.
+   - Yalnızca tedarikçiye ait arka plan XML entegrasyon adresi (`integration.xml_feeds.feed_url`) ve tedarikçi iç alış maliyeti (`buying_price`) dışa açık (public) API çıktılarından gizlenir.
 
 ---
 
@@ -43,6 +44,9 @@ Merter Vitrini, İstanbul Merter'deki tekstil üreticilerini ve toptancı firmal
    - Sistem ayarlarında (`catalog.settings.show_single_price`) açık ise seriye ek olarak tek parça birim fiyatı vitrinde hesaplanarak gösterilir.
 3. **Doğrudan Tedarikçi Fiyatı Kuralı (%0 Platform Fiyat Marjı):**
    - Tedarikçilerin XML entegrasyonlarından (`etika.py`, `janes.py`, Go XML Sync) veya Tedarikçi Portalı'ndan girilen fiyatlar, üzerine herhangi bir komisyon veya kâr marjı (`PROFIT_RATE = 0.0`) eklenmeden **birebir tedarikçinin kendi fiyatı** olarak vitrinde gösterilir (`price = buying_price`).
+4. **Sadece Üyelere Özel Toptan Fiyat Gösterimi (Members-Only Pricing Guard):**
+   - B2B ticari gizliliği korumak amacıyla **üye olmayan (giriş yapmamış) ziyaretçiler** web vitrininde (`ProductCard`, `ProductDetailsModal`, `ProductSpecs`, `OrderCalculator`, `WishlistDrawer`, `CartDrawer`) ve mobil uygulamada (`SessionProvider.canViewPrices`, `B2BProductCard`, `ProductDetailScreen`) ürün birim fiyatlarını, seri paket fiyatlarını, indirim oranlarını ve sipariş toplam tutarlarını **göremez**.
+   - Giriş yapmamış kullanıcılara fiyat alanlarında **"🔒 Üyelere Özel Fiyat (Giriş Yap)"** / **"🔒 Fiyatları Görmek İçin Giriş Yapın / Üye Olun"** butonu gösterilir ve tıklandığında doğrudan Üye Giriş / Kayıt ekranı (`openStoreAuthModal("login")` / `AuthScreen`) açılır.
 
 ---
 
@@ -69,7 +73,12 @@ Merter Vitrini, İstanbul Merter'deki tekstil üreticilerini ve toptancı firmal
 
 ---
 
-## 6. Sipariş ve Havale/EFT Yaşam Döngüsü (Order Lifecycle)
+## 6. Doğrudan Tedarikçiye Sipariş Yönlendirme (%0 Komisyon) ve Sipariş Yaşam Döngüsü
+
+1. **Doğrudan Tedarikçiye Sipariş ve Tahsilat Kuralı (`%0.00` Komisyon):**
+   - Merter Vitrini üzerinden oluşturulan tüm siparişler (`POST /api/v1/store/orders`) ve sepet/teklif talepleri (`POST /api/v1/store/inquiries`), içindeki ürünlerin ait olduğu tedarikçi firmalara göre otomatik olarak ayrıştırılır (`catalog.supplier_sub_orders`, `%0.00` komisyon).
+   - Alıcının tüm iletişim bilgileri (`customer_name`, `customer_company`, `customer_phone`, `customer_email`) ve teslimat adresi (`delivery_address`) doğrudan ilgili tedarikçinin **Tedarikçi Portalı -> Gelen Siparişlerim** ekranına düşer ve tedarikçiye anında bildirim gönderilir.
+   - Sipariş yanıtında alıcıya her tedarikçinin doğrudan WhatsApp sipariş bağlantısı (`whatsapp_url`) ve doğrudan banka/IBAN bilgileri (`supplier_orders`) döner; alıcı ödemeyi ve sevkiyat iletişimini doğrudan tedarikçi firmayla yürütür.
 
 ```mermaid
 stateDiagram-v2
@@ -100,3 +109,20 @@ stateDiagram-v2
    - Orijinal yüksek çözünürlüklü görseller sunucu kaynaklarını tüketmemek için WebP formatına sıkıştırılır.
 2. **Toplu Önceden Üretim (Bulk Pre-generation):**
    - Yeni XML entegrasyonu tamamlandığında binlerce görselin mağaza açılışını yavaşlatmaması için `StartBulkResize` ile arka planda toplu optimizasyon başlatılır ve `bulk-status` üzerinden takip edilir.
+
+
+---
+
+## 8. Tedarikçi Üyelik Paketleri, Sınırsız Ürün Kotası, Muhasebe ve Faturalandırma (`0021`)
+
+1. **Sınırsız Ürün Yükleme Kuralı (`max_products = -1`):**
+   - Platformda hiçbir tedarikçi için ürün yükleme sınırı (kota) uygulanmaz (`catalog.subscription_plans.max_products = -1`). Ücretsiz, Profesyonel ve Premium paketlerin tamamında ürün yükleme sınırsızdır.
+2. **Şimdilik Ücretsiz (`is_complimentary = true`) & Aylık Ödeme Altyapısı:**
+   - Tedarikçiler varsayılan olarak **Ücretsiz Vitrin (`FREE`, `is_complimentary = true`)** statüsünde başlar.
+   - Dileyen tedarikçiler **Profesyonel Vitrin (`PRO` - 990 TL/Ay)** veya **Premium & Sponsorlu Vitrin (`PREMIUM` - 2.490 TL/Ay)** paketleri ya da reklam alanları için aylık/yıllık ödeme yapabilir.
+3. **Muhasebe, Tahsilat ve Faturalandırma Tabloları:**
+   - `catalog.subscription_plans`: Paket tanımları ve fiyatları (`max_products = -1`).
+   - `catalog.supplier_subscriptions`: Tedarikçinin aktif paketi, `total_paid_amount` (bugüne kadar ödediği toplam tutar), `total_invoiced_amount` (kesilen toplam fatura), `outstanding_balance` (kalan cari bakiye) ve resmi vergi/fatura bilgileri (`billing_company_title`, `tax_office`, `tax_number`, `billing_address`, `billing_email`).
+   - `catalog.supplier_invoices`: Kesilen resmi fatura kayıtları (`MV-FAT-...`, KDV %20 hesaplamalı).
+   - `catalog.supplier_subscription_payments`: Tedarikçinin Merter Vitrini'ne yaptığı aylık ödeme/tahsilat kayıtları (`MV-THS-...`).
+   - `catalog.supplier_accounting_ledger`: Çift taraflı cari hesap ekstresi (`INVOICE_DEBIT` borç tahakkuku ve `PAYMENT_CREDIT` ödeme alacağı).

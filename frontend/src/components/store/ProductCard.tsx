@@ -5,7 +5,8 @@ import Image from "next/image";
 import { Product } from "@/types/store";
 import { getProductTitle, t } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/utils";
-import { Heart, ShoppingBag, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
+import { Heart, ShoppingBag, Eye, ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import Link from "next/link";
 import { useWishlistStore } from "@/store/useWishlistStore";
 
@@ -177,6 +178,7 @@ export default function ProductCard({
     toggleWishlist(product.id, title, lang);
   };
 
+  const isAuthenticated = useIsStoreAuthenticated();
   const displayImages = getSortedProductImages(product);
   const units = getUnitsFromSeriesRatio(product.series_ratio);
   const colorText = getColorText(product, lang);
@@ -283,9 +285,8 @@ export default function ProductCard({
               >
                 <div className="w-full h-[2px] bg-[#E0E0E0] relative overflow-hidden transition-all group-hover/bar:h-[3px]">
                   <div
-                    className={`absolute inset-0 bg-black transition-opacity duration-200 ${
-                      activeImgIndex === idx ? "opacity-100" : "opacity-0"
-                    }`}
+                    className={`absolute inset-0 bg-black transition-opacity duration-200 ${activeImgIndex === idx ? "opacity-100" : "opacity-0"
+                      }`}
                   />
                 </div>
               </button>
@@ -293,15 +294,15 @@ export default function ProductCard({
           </div>
         )}
 
-        {/* Discount Badge */}
-        {hasDiscount && (
+        {/* Discount Badge (Only for authenticated members) */}
+        {isAuthenticated && hasDiscount && (
           <span className="absolute top-3 left-3 bg-[#A30000] text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10 pointer-events-none">
             {discountPct}% {lang === "tr" ? "İNDİRİM" : "OFF"}
           </span>
         )}
 
         {/* Gender Badge */}
-        {!hasDiscount && product.gender && (
+        {(!isAuthenticated || !hasDiscount) && product.gender && (
           <span className="absolute top-3 left-3 bg-white border border-black/10 text-onyx text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10 pointer-events-none">
             {t(product.gender, lang)}
           </span>
@@ -336,11 +337,10 @@ export default function ProductCard({
 
           <button
             type="button"
-            className={`w-9 h-9 border rounded-none flex items-center justify-center shadow-none transition-all cursor-pointer animate-in fade-in duration-200 ${
-              isFavorite
+            className={`w-9 h-9 border rounded-none flex items-center justify-center shadow-none transition-all cursor-pointer animate-in fade-in duration-200 ${isFavorite
                 ? "bg-black border-black text-white hover:bg-black"
                 : "bg-white border-black/10 text-onyx hover:bg-black hover:text-white hover:border-black"
-            }`}
+              }`}
             onClick={toggleFavorite}
             title={lang === "tr" ? "Favorilerime Ekle" : "Add to Favorites"}
           >
@@ -380,19 +380,34 @@ export default function ProductCard({
         </div>
 
         <div className="flex items-baseline justify-end gap-2 mt-auto pt-2 border-t border-cultured">
-          {hasDiscount ? (
-            <>
-              <span className="text-[11px] text-sonic-silver line-through font-normal">
-                {origPrice.toFixed(2)} {currency}
+          {isAuthenticated ? (
+            hasDiscount ? (
+              <>
+                <span className="text-[11px] text-sonic-silver line-through font-normal">
+                  {origPrice.toFixed(2)} {currency}
+                </span>
+                <span className="text-xs font-bold text-[#A30000]">
+                  {discPrice.toFixed(2)} {currency}
+                </span>
+              </>
+            ) : (
+              <span className="text-xs font-bold text-eerie-black">
+                {price}
               </span>
-              <span className="text-xs font-bold text-[#A30000]">
-                {discPrice.toFixed(2)} {currency}
-              </span>
-            </>
+            )
           ) : (
-            <span className="text-xs font-bold text-eerie-black">
-              {price}
-            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openStoreAuthModal("login");
+              }}
+              className="w-full py-1 px-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-colors"
+            >
+              <Lock className="w-3 h-3 shrink-0" />
+              <span className="truncate">{getShortMemberPriceLabel(lang)}</span>
+            </button>
           )}
         </div>
 
@@ -401,6 +416,10 @@ export default function ProductCard({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (!isAuthenticated) {
+              openStoreAuthModal("login");
+              return;
+            }
             const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
             const minPkgs = Math.max(1, Math.ceil((product.minimum_order_quantity || 1) / (unitsPerPkg || 1)));
             window.dispatchEvent(
@@ -411,8 +430,17 @@ export default function ProductCard({
           }}
           className="mt-3 relative z-10 w-full bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-[11px] font-bold uppercase py-2 sm:py-2.5 px-2 sm:px-4 rounded-none transition-all duration-300 flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-none select-none border-none cursor-pointer tracking-wider"
         >
-          <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
-          <span>{btnText}</span>
+          {isAuthenticated ? (
+            <>
+              <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+              <span>{btnText}</span>
+            </>
+          ) : (
+            <>
+              <Lock className="w-3.5 h-3.5 shrink-0" />
+              <span>{lang === "tr" ? "Üye Girişi Yap / Fiyat Gör" : "Login to See Price"}</span>
+            </>
+          )}
         </button>
       </div>
     </article>

@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -39,17 +40,27 @@ func NewMarketplaceHandler(cfg *config.Config, notifiers ...services.Notificatio
 
 // splitOrderIntoSupplierSubOrders groups order items by BrandID and creates supplier sub-orders & ledger entries
 func splitOrderIntoSupplierSubOrders(ctx context.Context, tx pgx.Tx, orderID, orderNumber string, items []orderCartItem) error {
+	_, err := splitOrderIntoSupplierSubOrdersWithSummary(ctx, tx, orderID, orderNumber, items)
+	return err
+}
+
+func splitOrderIntoSupplierSubOrdersWithSummary(ctx context.Context, tx pgx.Tx, orderID, orderNumber string, items []orderCartItem) ([]models.SupplierDirectOrderSummary, error) {
 	brandGroups := groupOrderItemsByBrand(items)
 
+	var summaries []models.SupplierDirectOrderSummary
 	subOrderIdx := 1
 	for brandID, brandItems := range brandGroups {
-		if err := processSupplierSubOrder(ctx, tx, orderID, orderNumber, brandID, subOrderIdx, brandItems); err != nil {
-			return err
+		summary, err := processSupplierSubOrder(ctx, tx, orderID, orderNumber, brandID, subOrderIdx, brandItems)
+		if err != nil {
+			return nil, err
+		}
+		if summary != nil {
+			summaries = append(summaries, *summary)
 		}
 		subOrderIdx++
 	}
 
-	return nil
+	return summaries, nil
 }
 
 func groupOrderItemsByBrand(items []orderCartItem) map[string][]orderCartItem {
@@ -78,10 +89,10 @@ func calculateBrandGrossAmount(brandItems []orderCartItem) float64 {
 }
 
 func getSupplierCommissionRate(ctx context.Context, tx pgx.Tx, brandID string) float64 {
-	var commissionRate float64 = 10.00
+	var commissionRate float64 = 0.00
 	err := tx.QueryRow(ctx, `
 		INSERT INTO catalog.supplier_wallets (brand_id, commission_rate)
-		VALUES ($1, 10.00)
+		VALUES ($1, 0.00)
 		ON CONFLICT (brand_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
 		RETURNING commission_rate
 	`, brandID).Scan(&commissionRate)
@@ -89,6 +100,24 @@ func getSupplierCommissionRate(ctx context.Context, tx pgx.Tx, brandID string) f
 		log.Printf("[MARKETPLACE] Failed to get/create supplier wallet: %v", err)
 	}
 	return commissionRate
+}
+
+func normalizeWhatsappDigits(raw string) string {
+	var b strings.Builder
+	for _, r := range raw {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	digits := b.String()
+	if strings.HasPrefix(digits, "00") {
+		digits = digits[2:]
+	} else if strings.HasPrefix(digits, "0") && len(digits) == 11 {
+		digits = "90" + digits[1:]
+	} else if len(digits) == 10 && strings.HasPrefix(digits, "5") {
+		digits = "90" + digits
+	}
+	return digits
 }
 
 func insertSupplierSubOrderItems(ctx context.Context, tx pgx.Tx, subOrderID string, brandItems []orderCartItem) error {
@@ -107,27 +136,50 @@ func insertSupplierSubOrderItems(ctx context.Context, tx pgx.Tx, subOrderID stri
 	return nil
 }
 
-func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumber, brandID string, subOrderIdx int, brandItems []orderCartItem) error {
+func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumber, brandID string, subOrderIdx int, brandItems []orderCartItem) (*models.SupplierDirectOrderSummary, error) {
 	grossAmount := calculateBrandGrossAmount(brandItems)
 	commissionRate := getSupplierCommissionRate(ctx, tx, brandID)
 	commissionAmount := math.Round((grossAmount*commissionRate/100.0)*100) / 100
 	netPayoutAmount := math.Round((grossAmount-commissionAmount)*100) / 100
 	subOrderNumber := fmt.Sprintf("%s-S%d", orderNumber, subOrderIdx)
 
+	var custName, custCompany, custPhone, custEmail, delivAddr, billAddr, orderNotes string
+	_ = tx.QueryRow(ctx, `
+		SELECT 
+			COALESCE(NULLIF(o.customer_name, ''), TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, ''))),
+			COALESCE(o.customer_company, ''),
+			COALESCE(NULLIF(o.customer_phone, ''), COALESCE(u.phone, '')),
+			COALESCE(NULLIF(o.customer_email, ''), COALESCE(u.email, '')),
+			COALESCE(o.delivery_address::text, ''),
+			COALESCE(o.billing_address::text, ''),
+			COALESCE(o.notes, '')
+		FROM catalog.orders o
+		LEFT JOIN identity.users u ON u.id = o.user_id
+		WHERE o.id = $1
+	`, orderID).Scan(&custName, &custCompany, &custPhone, &custEmail, &delivAddr, &billAddr, &orderNotes)
+
+	var notesPtr *string
+	if strings.TrimSpace(orderNotes) != "" {
+		n := strings.TrimSpace(orderNotes)
+		notesPtr = &n
+	}
+
 	var subOrderID string
 	err := tx.QueryRow(ctx, `
 		INSERT INTO catalog.supplier_sub_orders (
 			order_id, brand_id, sub_order_number, gross_amount, commission_rate, 
-			commission_amount, net_payout_amount, currency, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, 'TRY', 'PENDING')
+			commission_amount, net_payout_amount, currency, status, notes,
+			customer_name, customer_company, customer_phone, customer_email, delivery_address, billing_address
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, 'TRY', 'PENDING', $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id
-	`, orderID, brandID, subOrderNumber, grossAmount, commissionRate, commissionAmount, netPayoutAmount).Scan(&subOrderID)
+	`, orderID, brandID, subOrderNumber, grossAmount, commissionRate, commissionAmount, netPayoutAmount,
+		notesPtr, custName, custCompany, custPhone, custEmail, delivAddr, billAddr).Scan(&subOrderID)
 	if err != nil {
-		return fmt.Errorf("failed to create sub order: %w", err)
+		return nil, fmt.Errorf("failed to create sub order: %w", err)
 	}
 
 	if err := insertSupplierSubOrderItems(ctx, tx, subOrderID, brandItems); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Update supplier wallet pending balance
@@ -139,26 +191,94 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 		RETURNING pending_balance
 	`, grossAmount, brandID).Scan(&updatedPending)
 	if err != nil {
-		return fmt.Errorf("failed to update supplier wallet: %w", err)
+		return nil, fmt.Errorf("failed to update supplier wallet: %w", err)
 	}
 
 	// Add audit ledger entry
-	desc := fmt.Sprintf("Yeni B2B Siparişi (%s) - Provizyon Bekleyen Bakiye", subOrderNumber)
+	desc := fmt.Sprintf("Doğrudan Tedarikçi Siparişi (%s) - Müşteri: %s", subOrderNumber, custName)
 	_, _ = tx.Exec(ctx, `
 		INSERT INTO catalog.supplier_ledger (
 			brand_id, sub_order_id, transaction_type, amount, balance_after, currency, description
 		) VALUES ($1, $2, 'PENDING_ORDER_INCOME', $3, $4, 'TRY', $5)
 	`, brandID, subOrderID, grossAmount, updatedPending, desc)
 
+	var brandName, whatsappPhone, phone, publicEmail, locationAddr, bankName, bankHolder, iban string
+	_ = tx.QueryRow(ctx, `
+		SELECT 
+			b.brand_name,
+			COALESCE(
+				NULLIF(b.whatsapp_phone, ''),
+				NULLIF(b.phone, ''),
+				(SELECT COALESCE(NULLIF(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+				''
+			),
+			COALESCE(b.phone, ''),
+			COALESCE(b.public_email, ''),
+			COALESCE(b.location_address, ''),
+			COALESCE(NULLIF(b.bank_name, ''), COALESCE(w.bank_name, '')),
+			COALESCE(NULLIF(b.bank_account_holder, ''), COALESCE(w.bank_account_holder, '')),
+			COALESCE(NULLIF(b.iban, ''), COALESCE(w.iban, ''))
+		FROM catalog.brands b
+		LEFT JOIN catalog.supplier_wallets w ON w.brand_id = b.id
+		WHERE b.id = $1
+	`, brandID).Scan(&brandName, &whatsappPhone, &phone, &publicEmail, &locationAddr, &bankName, &bankHolder, &iban)
+
+	var msgBuilder strings.Builder
+	fmt.Fprintf(&msgBuilder, "Merhaba *%s*,\n*Merter Vitrini* üzerinden doğrudan firmanıza toptan sipariş oluşturdum.\n\n", brandName)
+	fmt.Fprintf(&msgBuilder, "*Sipariş No:* %s\n", subOrderNumber)
+	fmt.Fprintf(&msgBuilder, "*Alıcı:* %s", custName)
+	if custCompany != "" {
+		fmt.Fprintf(&msgBuilder, " (%s)", custCompany)
+	}
+	msgBuilder.WriteString("\n")
+	if custPhone != "" {
+		fmt.Fprintf(&msgBuilder, "*Telefon:* %s\n", custPhone)
+	}
+	msgBuilder.WriteString("\n*Sipariş Kalemleri:*\n")
+	for _, bi := range brandItems {
+		unitPrice := getEffectiveItemPrice(bi)
+		fmt.Fprintf(&msgBuilder, "• %s (%s) x %d Seri = %.2f TL\n", bi.Title, bi.CustomSku, bi.Quantity, unitPrice*float64(bi.Quantity))
+	}
+	fmt.Fprintf(&msgBuilder, "\n*Toplam Tutar:* %.2f TL", grossAmount)
+
+	waDigits := normalizeWhatsappDigits(whatsappPhone)
+	var waURL string
+	if waDigits != "" {
+		waURL = fmt.Sprintf("https://wa.me/%s?text=%s", waDigits, url.QueryEscape(msgBuilder.String()))
+	} else {
+		waURL = fmt.Sprintf("https://wa.me/?text=%s", url.QueryEscape(msgBuilder.String()))
+	}
+
 	services.NewPostgresNotificationDispatcher(db.Pool).NotifySupplierBrandAsync(
 		brandID,
-		"Yeni B2B Siparişi Geldi!",
-		fmt.Sprintf("%s numaralı yeni toptan siparişiniz oluşturuldu (Brüt: ₺%.2f).", subOrderNumber, grossAmount),
+		"Yeni Doğrudan Toptan Sipariş!",
+		fmt.Sprintf("%s numaralı doğrudan siparişiniz geldi (%s - ₺%.2f).", subOrderNumber, custName, grossAmount),
 		"sub_order",
-		map[string]any{"sub_order_id": subOrderID, "sub_order_number": subOrderNumber},
+		map[string]any{"sub_order_id": subOrderID, "sub_order_number": subOrderNumber, "customer_name": custName},
 	)
 
-	return nil
+	firstProdID := ""
+	if len(brandItems) > 0 {
+		firstProdID = brandItems[0].ProductID
+	}
+	RecordBrandAnalyticsEvent(brandID, firstProdID, "inquiry_submit", nil)
+
+	return &models.SupplierDirectOrderSummary{
+		SubOrderID:        subOrderID,
+		SubOrderNumber:    subOrderNumber,
+		BrandID:           brandID,
+		BrandName:         brandName,
+		GrossAmount:       grossAmount,
+		Currency:          "TRY",
+		WhatsappPhone:     whatsappPhone,
+		Phone:             phone,
+		PublicEmail:       publicEmail,
+		LocationAddress:   locationAddr,
+		BankName:          bankName,
+		BankAccountHolder: bankHolder,
+		IBAN:              iban,
+		WhatsappURL:       waURL,
+	}, nil
 }
 
 // -----------------------------------------------------------------------------
@@ -180,10 +300,17 @@ func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.R
 		SELECT 
 			so.id, so.order_id, so.brand_id, b.brand_name, so.sub_order_number, 
 			so.gross_amount, so.commission_rate, so.commission_amount, so.net_payout_amount, 
-			so.currency, so.status, so.tracking_company, so.tracking_number, so.notes, 
+			so.currency, so.status, so.tracking_company, so.tracking_number, so.notes,
+			COALESCE(NULLIF(so.customer_name, ''), COALESCE(o.customer_name, '')),
+			COALESCE(NULLIF(so.customer_company, ''), COALESCE(o.customer_company, '')),
+			COALESCE(NULLIF(so.customer_phone, ''), COALESCE(o.customer_phone, '')),
+			COALESCE(NULLIF(so.customer_email, ''), COALESCE(o.customer_email, '')),
+			COALESCE(NULLIF(so.delivery_address, ''), COALESCE(o.delivery_address::text, '')),
+			COALESCE(NULLIF(so.billing_address, ''), COALESCE(o.billing_address::text, '')),
 			so.created_at, so.updated_at
 		FROM catalog.supplier_sub_orders so
 		JOIN catalog.brands b ON b.id = so.brand_id
+		LEFT JOIN catalog.orders o ON o.id = so.order_id
 		WHERE so.brand_id = $1
 	`
 	args := []any{claims.BrandID}
@@ -213,11 +340,33 @@ func (h *MarketplaceHandler) ListSupplierOrders(w http.ResponseWriter, r *http.R
 			&o.ID, &o.OrderID, &o.BrandID, &o.BrandName, &o.SubOrderNumber,
 			&o.GrossAmount, &o.CommissionRate, &o.CommissionAmount, &o.NetPayoutAmount,
 			&o.Currency, &o.Status, &o.TrackingCompany, &o.TrackingNumber, &o.Notes,
+			&o.CustomerName, &o.CustomerCompany, &o.CustomerPhone, &o.CustomerEmail,
+			&o.DeliveryAddress, &o.BillingAddress,
 			&o.CreatedAt, &o.UpdatedAt,
 		); err != nil {
 			continue
 		}
 		orders = append(orders, o)
+	}
+	rows.Close()
+
+	// Preload items for each order so the supplier portal can display line items immediately
+	for idx := range orders {
+		itemRows, err := db.Pool.Query(r.Context(), `
+			SELECT id, sub_order_id, product_id, product_name, product_sku, quantity, price_at_purchase, total_price, image_url, series_ratio
+			FROM catalog.supplier_sub_order_items
+			WHERE sub_order_id = $1
+			ORDER BY created_at ASC
+		`, orders[idx].ID)
+		if err == nil {
+			for itemRows.Next() {
+				var it models.SupplierSubOrderItem
+				if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.ImageURL, &it.SeriesRatio); err == nil {
+					orders[idx].Items = append(orders[idx].Items, it)
+				}
+			}
+			itemRows.Close()
+		}
 	}
 
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
@@ -246,15 +395,24 @@ func (h *MarketplaceHandler) GetSupplierOrder(w http.ResponseWriter, r *http.Req
 		SELECT 
 			so.id, so.order_id, so.brand_id, b.brand_name, so.sub_order_number, 
 			so.gross_amount, so.commission_rate, so.commission_amount, so.net_payout_amount, 
-			so.currency, so.status, so.tracking_company, so.tracking_number, so.notes, 
+			so.currency, so.status, so.tracking_company, so.tracking_number, so.notes,
+			COALESCE(NULLIF(so.customer_name, ''), COALESCE(ord.customer_name, '')),
+			COALESCE(NULLIF(so.customer_company, ''), COALESCE(ord.customer_company, '')),
+			COALESCE(NULLIF(so.customer_phone, ''), COALESCE(ord.customer_phone, '')),
+			COALESCE(NULLIF(so.customer_email, ''), COALESCE(ord.customer_email, '')),
+			COALESCE(NULLIF(so.delivery_address, ''), COALESCE(ord.delivery_address::text, '')),
+			COALESCE(NULLIF(so.billing_address, ''), COALESCE(ord.billing_address::text, '')),
 			so.created_at, so.updated_at
 		FROM catalog.supplier_sub_orders so
 		JOIN catalog.brands b ON b.id = so.brand_id
+		LEFT JOIN catalog.orders ord ON ord.id = so.order_id
 		WHERE so.id = $1 AND so.brand_id = $2
 	`, subOrderID, claims.BrandID).Scan(
 		&o.ID, &o.OrderID, &o.BrandID, &o.BrandName, &o.SubOrderNumber,
 		&o.GrossAmount, &o.CommissionRate, &o.CommissionAmount, &o.NetPayoutAmount,
 		&o.Currency, &o.Status, &o.TrackingCompany, &o.TrackingNumber, &o.Notes,
+		&o.CustomerName, &o.CustomerCompany, &o.CustomerPhone, &o.CustomerEmail,
+		&o.DeliveryAddress, &o.BillingAddress,
 		&o.CreatedAt, &o.UpdatedAt,
 	)
 	if err != nil {
@@ -413,7 +571,7 @@ func (h *MarketplaceHandler) GetSupplierWallet(w http.ResponseWriter, r *http.Re
 		// Initialize wallet if not present
 		err = db.Pool.QueryRow(ctx, `
 			INSERT INTO catalog.supplier_wallets (brand_id, commission_rate)
-			VALUES ($1, 10.00)
+			VALUES ($1, 0.00)
 			RETURNING id, brand_id, currency, pending_balance, available_balance, withdrawn_balance,
 			          commission_rate, iban, bank_name, bank_account_holder, created_at, updated_at
 		`, claims.BrandID).Scan(
@@ -486,6 +644,12 @@ func (h *MarketplaceHandler) UpdateSupplierWalletIban(w http.ResponseWriter, r *
 		http.Error(w, `{"error":"IBAN güncellenemedi"}`, http.StatusInternalServerError)
 		return
 	}
+
+	_, _ = db.Pool.Exec(r.Context(), `
+		UPDATE catalog.brands
+		SET iban = $1, bank_name = $2, bank_account_holder = $3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $4
+	`, req.IBAN, req.BankName, req.BankAccountHolder, claims.BrandID)
 
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
 		"success": true,
@@ -633,10 +797,17 @@ func (h *MarketplaceHandler) ListAdminSubOrders(w http.ResponseWriter, r *http.R
 		SELECT 
 			so.id, so.order_id, so.brand_id, b.brand_name, so.sub_order_number, 
 			so.gross_amount, so.commission_rate, so.commission_amount, so.net_payout_amount, 
-			so.currency, so.status, so.tracking_company, so.tracking_number, so.notes, 
+			so.currency, so.status, so.tracking_company, so.tracking_number, so.notes,
+			COALESCE(NULLIF(so.customer_name, ''), COALESCE(o.customer_name, '')),
+			COALESCE(NULLIF(so.customer_company, ''), COALESCE(o.customer_company, '')),
+			COALESCE(NULLIF(so.customer_phone, ''), COALESCE(o.customer_phone, '')),
+			COALESCE(NULLIF(so.customer_email, ''), COALESCE(o.customer_email, '')),
+			COALESCE(NULLIF(so.delivery_address, ''), COALESCE(o.delivery_address::text, '')),
+			COALESCE(NULLIF(so.billing_address, ''), COALESCE(o.billing_address::text, '')),
 			so.created_at, so.updated_at
 		FROM catalog.supplier_sub_orders so
 		JOIN catalog.brands b ON b.id = so.brand_id
+		LEFT JOIN catalog.orders o ON o.id = so.order_id
 		WHERE 1=1
 	`
 	var args []any
@@ -670,6 +841,8 @@ func (h *MarketplaceHandler) ListAdminSubOrders(w http.ResponseWriter, r *http.R
 			&o.ID, &o.OrderID, &o.BrandID, &o.BrandName, &o.SubOrderNumber,
 			&o.GrossAmount, &o.CommissionRate, &o.CommissionAmount, &o.NetPayoutAmount,
 			&o.Currency, &o.Status, &o.TrackingCompany, &o.TrackingNumber, &o.Notes,
+			&o.CustomerName, &o.CustomerCompany, &o.CustomerPhone, &o.CustomerEmail,
+			&o.DeliveryAddress, &o.BillingAddress,
 			&o.CreatedAt, &o.UpdatedAt,
 		); err == nil {
 			orders = append(orders, o)

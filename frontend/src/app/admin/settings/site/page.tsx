@@ -11,7 +11,9 @@ import {
   CheckCircle2, 
   AlertTriangle,
   Save,
-  Tag
+  Tag,
+  Eye,
+  Lock
 } from "lucide-react";
 import { useAdmin } from "@/context/AdminContext";
 
@@ -164,6 +166,47 @@ export default function AdminSettingsSitePage() {
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-hidden rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600" />
+                </label>
+              </div>
+
+              {/* Guest Price Visibility Toggle */}
+              <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                      storeSettings.show_prices_to_guests
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : "bg-rose-500/10 text-rose-600"
+                    }`}
+                  >
+                    {storeSettings.show_prices_to_guests ? <Eye size={16} /> : <Lock size={16} />}
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-zinc-900 dark:text-white block">
+                      Ziyaretçilere (Üye Olmayanlara) Fiyatları Göster
+                    </span>
+                    <span className="text-[11px] text-zinc-500">
+                      {storeSettings.show_prices_to_guests
+                        ? "AÇIK: Giriş yapmamış ziyaretçiler web vitrininde ve mobil uygulamada fiyatları görebilir."
+                        : "KAPALI: Yalnızca üye girişi yapmış kullanıcılar fiyatları görebilir (Üyelere Özel Fiyat modu)."}
+                    </span>
+                  </div>
+                </div>
+
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <span className="sr-only">Ziyaretçilere (Üye Olmayanlara) Fiyatları Göster</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(storeSettings.show_prices_to_guests)}
+                    onChange={(e) =>
+                      setStoreSettings((prev) => ({
+                        ...prev,
+                        show_prices_to_guests: e.target.checked,
+                      }))
+                    }
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-hidden rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600" />
                 </label>
               </div>
             </div>

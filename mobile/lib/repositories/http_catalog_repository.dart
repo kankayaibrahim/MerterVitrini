@@ -116,6 +116,11 @@ class HttpCatalogRepository implements ICatalogRepository {
     String brandId = '',
     String gender = '',
     String season = '',
+    bool fason = false,
+    bool privateLabel = false,
+    String companyType = '',
+    String maxMoq = '',
+    String exportCountry = '',
     String sortBy = 'newest',
     int limit = 24,
     int offset = 0,
@@ -131,6 +136,11 @@ class HttpCatalogRepository implements ICatalogRepository {
       if (brandId.isNotEmpty) params['brand_id'] = brandId;
       if (gender.isNotEmpty) params['gender'] = gender;
       if (season.isNotEmpty) params['season'] = season;
+      if (fason) params['fason'] = 'true';
+      if (privateLabel) params['private_label'] = 'true';
+      if (companyType.isNotEmpty) params['company_type'] = companyType;
+      if (maxMoq.isNotEmpty) params['max_moq'] = maxMoq;
+      if (exportCountry.isNotEmpty) params['export_country'] = exportCountry;
 
       final resp = await _client.dio.get<Map<String, dynamic>>(
         '/api/v1/store/products',

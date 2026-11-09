@@ -211,40 +211,30 @@ func (h *ChatHandler) publishToSupplierChannels(brandID string, supplierUserID *
 	}
 }
 
-func resolveCustomerIdentity(r *http.Request, fallbackID, fallbackName, fallbackEmail, fallbackPhone string) (string, string, string, string) {
-	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
-		if userID, err := verifyTokenAndGetUserID(authHeader); err == nil && userID != "" {
-			var firstName, lastName, email, phone string
-			errScan := db.Pool.QueryRow(r.Context(), `
-				SELECT COALESCE(first_name, ''), COALESCE(last_name, ''), COALESCE(email, ''), COALESCE(phone_number, '')
-				FROM identity.users WHERE id = $1
-			`, userID).Scan(&firstName, &lastName, &email, &phone)
-			if errScan == nil {
-				fullName := strings.TrimSpace(firstName + " " + lastName)
-				if fullName == "" {
-					fullName = email
-				}
-				return userID, fullName, email, phone
-			}
-			return userID, fallbackName, fallbackEmail, fallbackPhone
-		}
+func resolveCustomerIdentity(r *http.Request, _, fallbackName, fallbackEmail, fallbackPhone string) (string, string, string, string) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return "", "", "", ""
 	}
 
-	cid := strings.TrimSpace(fallbackID)
-	if cid == "" {
-		cid = strings.TrimSpace(r.Header.Get("X-Chat-Customer-Id"))
+	userID, err := verifyTokenAndGetUserID(authHeader)
+	if err != nil || userID == "" {
+		return "", "", "", ""
 	}
-	if cid == "" {
-		cid = strings.TrimSpace(r.URL.Query().Get("customer_id"))
+
+	var firstName, lastName, email, phone string
+	errScan := db.Pool.QueryRow(r.Context(), `
+		SELECT COALESCE(first_name, ''), COALESCE(last_name, ''), COALESCE(email, ''), COALESCE(phone_number, '')
+		FROM identity.users WHERE id = $1
+	`, userID).Scan(&firstName, &lastName, &email, &phone)
+	if errScan == nil {
+		fullName := strings.TrimSpace(firstName + " " + lastName)
+		if fullName == "" {
+			fullName = email
+		}
+		return userID, fullName, email, phone
 	}
-	cname := strings.TrimSpace(fallbackName)
-	if cname == "" {
-		cname = strings.TrimSpace(r.Header.Get("X-Chat-Customer-Name"))
-	}
-	if cname == "" {
-		cname = "B2B Müşteri"
-	}
-	return cid, cname, strings.TrimSpace(fallbackEmail), strings.TrimSpace(fallbackPhone)
+	return userID, strings.TrimSpace(fallbackName), strings.TrimSpace(fallbackEmail), strings.TrimSpace(fallbackPhone)
 }
 
 func fetchProductCardMetadata(ctx context.Context, productID string) (ChatOfferMetadata, string, error) {
@@ -448,7 +438,7 @@ func (h *ChatHandler) InitOrGetRoom(w http.ResponseWriter, r *http.Request) {
 		r, req.CustomerID, req.CustomerName, req.CustomerEmail, req.CustomerPhone,
 	)
 	if customerID == "" {
-		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": "Müşteri kimliği (customer_id) gereklidir."})
+		writeSupplierJSON(w, http.StatusUnauthorized, map[string]string{"error": "Canlı B2B sohbet başlatmak için üye girişi yapmanız gerekmektedir."})
 		return
 	}
 
@@ -471,6 +461,8 @@ func (h *ChatHandler) InitOrGetRoom(w http.ResponseWriter, r *http.Request) {
 		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": "Tedarikçi (brand_id) veya geçerli ürün (product_id) belirtilmelidir."})
 		return
 	}
+
+	RecordBrandAnalyticsEvent(brandID, strings.TrimSpace(req.ProductID), "chat_start", r)
 
 	supplierUserPtr := resolveTargetSupplierAgent(ctx, brandID, req.SupplierUserID)
 
@@ -669,6 +661,12 @@ func (h *ChatHandler) ListCustomerRooms(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ChatHandler) ListCustomerMessages(w http.ResponseWriter, r *http.Request) {
+	customerID, _, _, _ := resolveCustomerIdentity(r, "", "", "", "")
+	if customerID == "" {
+		writeSupplierJSON(w, http.StatusUnauthorized, map[string]string{"error": "Canlı B2B sohbet mesajlarını görüntülemek için üye girişi yapmanız gerekmektedir."})
+		return
+	}
+
 	roomID := r.PathValue("room_id")
 	if roomID == "" {
 		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": "Oda kimliği eksik."})
@@ -749,7 +747,8 @@ func (h *ChatHandler) SendCustomerMessage(w http.ResponseWriter, r *http.Request
 
 	customerID, customerName, _, _ := resolveCustomerIdentity(r, req.CustomerID, req.CustomerName, "", "")
 	if customerID == "" {
-		customerID = "guest"
+		writeSupplierJSON(w, http.StatusUnauthorized, map[string]string{"error": "Canlı B2B sohbet mesajı göndermek için üye girişi yapmanız gerekmektedir."})
+		return
 	}
 
 	ctx := r.Context()
@@ -788,6 +787,12 @@ func (h *ChatHandler) SendCustomerMessage(w http.ResponseWriter, r *http.Request
 }
 
 func (h *ChatHandler) AcceptCustomOffer(w http.ResponseWriter, r *http.Request) {
+	authUserID, errAuth := verifyTokenAndGetUserID(r.Header.Get("Authorization"))
+	if errAuth != nil || authUserID == "" {
+		writeSupplierJSON(w, http.StatusUnauthorized, map[string]string{"error": "Özel fiyat teklifini kabul etmek için üye girişi yapmanız gerekmektedir."})
+		return
+	}
+
 	messageID := r.PathValue("message_id")
 	if messageID == "" {
 		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": "Mesaj kimliği eksik."})

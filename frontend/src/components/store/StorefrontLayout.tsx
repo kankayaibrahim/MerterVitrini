@@ -4,10 +4,11 @@ import React, { useState, useEffect, Suspense } from "react";
 import { Product, Brand, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getCategoryPrefix } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, apiFetch, showToast, ExchangeRate } from "@/app/utils";
+import { syncShowPricesToGuestsSetting } from "@/app/storeAuth";
 
 // Import modular, premium Tailwind E-Commerce subcomponents
 import Header from "@/components/store/Header";
-import FilterSidebar from "@/components/store/FilterSidebar";
+import FilterSidebar, { B2BSourcingFilters } from "@/components/store/FilterSidebar";
 import ProductDetailsModal from "@/components/store/ProductDetailsModal";
 import CartDrawer, { InquiryFormData } from "@/components/store/CartDrawer";
 import SuccessModal from "@/components/store/SuccessModal";
@@ -66,10 +67,31 @@ interface CatalogQueryParams {
   activeCategoryId: string;
   activeBrandIds: string[];
   activeSpecs: { gender: string[]; season: string[] };
+  b2bFilters: B2BSourcingFilters;
   searchQuery: string;
   minPrice: string;
   maxPrice: string;
   activeAttributes: Record<string, string[]>;
+}
+
+function appendB2bQueryParams(b2b: B2BSourcingFilters): string {
+  let fragment = "";
+  if (b2b.fason) fragment += "&fason=true";
+  if (b2b.privateLabel) fragment += "&private_label=true";
+  if (b2b.companyType) fragment += `&company_type=${encodeURIComponent(b2b.companyType)}`;
+  if (b2b.maxMoq) fragment += `&max_moq=${encodeURIComponent(b2b.maxMoq)}`;
+  if (b2b.exportCountry) fragment += `&export_country=${encodeURIComponent(b2b.exportCountry)}`;
+  return fragment;
+}
+
+function countActiveB2bFilters(b2b: B2BSourcingFilters): number {
+  let count = 0;
+  if (b2b.fason) count += 1;
+  if (b2b.privateLabel) count += 1;
+  if (b2b.companyType !== "") count += 1;
+  if (b2b.maxMoq !== "") count += 1;
+  if (b2b.exportCountry !== "") count += 1;
+  return count;
 }
 
 function buildCatalogQueryParams(params: CatalogQueryParams): string {
@@ -91,6 +113,8 @@ function buildCatalogQueryParams(params: CatalogQueryParams): string {
   if (params.activeSpecs.season.length > 0) {
     queryParams += `&season=${encodeURIComponent(params.activeSpecs.season.join(","))}`;
   }
+
+  queryParams += appendB2bQueryParams(params.b2bFilters);
 
   if (params.searchQuery) {
     queryParams += `&q=${encodeURIComponent(params.searchQuery)}`;
@@ -114,6 +138,7 @@ function buildCatalogQueryParams(params: CatalogQueryParams): string {
 
 interface StoreSettings {
   show_single_price?: boolean;
+  show_prices_to_guests?: boolean;
   [key: string]: unknown;
 }
 
@@ -196,6 +221,13 @@ export default function StorefrontLayout({
     gender: [],
     season: [],
   });
+  const [b2bFilters, setB2bFilters] = useState<B2BSourcingFilters>({
+    fason: false,
+    privateLabel: false,
+    companyType: "",
+    maxMoq: "",
+    exportCountry: "",
+  });
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("newest");
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -246,6 +278,7 @@ export default function StorefrontLayout({
       const data = await apiFetch<StoreSettings>("/settings");
       if (data) {
         setStoreSettings(data);
+        syncShowPricesToGuestsSetting(Boolean(data.show_prices_to_guests));
       }
     }
     void loadSettings();
@@ -435,6 +468,7 @@ export default function StorefrontLayout({
         activeCategoryId,
         activeBrandIds,
         activeSpecs,
+        b2bFilters,
         searchQuery,
         minPrice,
         maxPrice,
@@ -462,7 +496,7 @@ export default function StorefrontLayout({
     };
     
     void loadProducts();
-  }, [currentPage, itemsPerPage, activeCategoryId, activeBrandIds, searchQuery, sortBy, activeSpecs, activeAttributes, minPrice, maxPrice, mode, displayCurrency]);
+  }, [currentPage, itemsPerPage, activeCategoryId, activeBrandIds, searchQuery, sortBy, activeSpecs, b2bFilters, activeAttributes, minPrice, maxPrice, mode, displayCurrency]);
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
@@ -514,9 +548,21 @@ export default function StorefrontLayout({
     setCurrentPage(1);
   };
 
+  const handleB2bFilterChange = (patch: Partial<B2BSourcingFilters>) => {
+    setB2bFilters((prev) => ({ ...prev, ...patch }));
+    setCurrentPage(1);
+  };
+
   const handleClearAllFilters = () => {
     setActiveBrandIds([]);
     setActiveSpecs({ gender: [], season: [] });
+    setB2bFilters({
+      fason: false,
+      privateLabel: false,
+      companyType: "",
+      maxMoq: "",
+      exportCountry: "",
+    });
     setSearchQuery("");
     setMinPrice("");
     setMaxPrice("");
@@ -713,6 +759,7 @@ export default function StorefrontLayout({
     activeBrandIds.length +
     activeSpecs.gender.length +
     activeSpecs.season.length +
+    countActiveB2bFilters(b2bFilters) +
     (minPrice !== "" ? 1 : 0) +
     (maxPrice !== "" ? 1 : 0) +
     Object.values(activeAttributes).reduce((sum, values) => sum + (values ? values.length : 0), 0);
@@ -778,6 +825,8 @@ export default function StorefrontLayout({
               handleBrandChange={handleBrandChange}
               activeSpecs={activeSpecs}
               handleSpecChange={handleSpecChange}
+              b2bFilters={b2bFilters}
+              onB2bFilterChange={handleB2bFilterChange}
               attributes={attributes}
               activeAttributes={activeAttributes}
               handleAttributeChange={handleAttributeChange}

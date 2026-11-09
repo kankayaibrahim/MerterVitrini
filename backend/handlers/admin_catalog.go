@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type AdminCatalogHandler struct{}
@@ -84,9 +85,9 @@ func (h *AdminCatalogHandler) CreateCategory(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		ParentID     *string                                `json:"parent_id"`
-		Title        string                                 `json:"title"`
-		IsActive     bool                                   `json:"is_active"`
+		ParentID     *string                               `json:"parent_id"`
+		Title        string                                `json:"title"`
+		IsActive     bool                                  `json:"is_active"`
 		Translations map[string]models.CategoryTranslation `json:"translations"`
 	}
 
@@ -159,9 +160,9 @@ func (h *AdminCatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		ParentID     *string                                `json:"parent_id"`
-		Title        string                                 `json:"title"`
-		IsActive     bool                                   `json:"is_active"`
+		ParentID     *string                               `json:"parent_id"`
+		Title        string                                `json:"title"`
+		IsActive     bool                                  `json:"is_active"`
 		Translations map[string]models.CategoryTranslation `json:"translations"`
 	}
 
@@ -412,7 +413,7 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	q := r.URL.Query().Get("q")
 	brandID := r.URL.Query().Get("brand_id")
 	categoryID := r.URL.Query().Get("category_id")
-	
+
 	limit := 20
 	offset := 0
 
@@ -655,8 +656,8 @@ func (h *AdminCatalogHandler) GetSettings(w http.ResponseWriter, r *http.Request
 	defer cancel()
 
 	var s models.Settings
-	query := `SELECT id, address, phone, whatsapp, email, show_single_price, updated_at FROM catalog.settings LIMIT 1`
-	err := db.Pool.QueryRow(ctx, query).Scan(&s.ID, &s.Address, &s.Phone, &s.Whatsapp, &s.Email, &s.ShowSinglePrice, &s.UpdatedAt)
+	query := `SELECT id, address, phone, whatsapp, email, show_single_price, COALESCE(show_prices_to_guests, false), updated_at FROM catalog.settings LIMIT 1`
+	err := db.Pool.QueryRow(ctx, query).Scan(&s.ID, &s.Address, &s.Phone, &s.Whatsapp, &s.Email, &s.ShowSinglePrice, &s.ShowPricesToGuests, &s.UpdatedAt)
 	if err != nil {
 		log.Printf("[ADMIN API ERROR] Failed to fetch settings: %v", err)
 		http.Error(w, `{"error":"Failed to fetch settings"}`, http.StatusInternalServerError)
@@ -675,11 +676,12 @@ func (h *AdminCatalogHandler) UpdateSettings(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		Address         string `json:"address"`
-		Phone           string `json:"phone"`
-		Whatsapp        string `json:"whatsapp"`
-		Email           string `json:"email"`
-		ShowSinglePrice bool   `json:"show_single_price"`
+		Address            string `json:"address"`
+		Phone              string `json:"phone"`
+		Whatsapp           string `json:"whatsapp"`
+		Email              string `json:"email"`
+		ShowSinglePrice    bool   `json:"show_single_price"`
+		ShowPricesToGuests bool   `json:"show_prices_to_guests"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -696,20 +698,21 @@ func (h *AdminCatalogHandler) UpdateSettings(w http.ResponseWriter, r *http.Requ
 	defer cancel()
 
 	query := `
-		INSERT INTO catalog.settings (address, phone, whatsapp, email, show_single_price)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO catalog.settings (address, phone, whatsapp, email, show_single_price, show_prices_to_guests)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (singleton_guard) DO UPDATE SET
 			address = EXCLUDED.address,
 			phone = EXCLUDED.phone,
 			whatsapp = EXCLUDED.whatsapp,
 			email = EXCLUDED.email,
 			show_single_price = EXCLUDED.show_single_price,
+			show_prices_to_guests = EXCLUDED.show_prices_to_guests,
 			updated_at = CURRENT_TIMESTAMP
-		RETURNING id, address, phone, whatsapp, email, show_single_price, updated_at`
+		RETURNING id, address, phone, whatsapp, email, show_single_price, COALESCE(show_prices_to_guests, false), updated_at`
 
 	var s models.Settings
-	err := db.Pool.QueryRow(ctx, query, req.Address, req.Phone, req.Whatsapp, req.Email, req.ShowSinglePrice).Scan(
-		&s.ID, &s.Address, &s.Phone, &s.Whatsapp, &s.Email, &s.ShowSinglePrice, &s.UpdatedAt,
+	err := db.Pool.QueryRow(ctx, query, req.Address, req.Phone, req.Whatsapp, req.Email, req.ShowSinglePrice, req.ShowPricesToGuests).Scan(
+		&s.ID, &s.Address, &s.Phone, &s.Whatsapp, &s.Email, &s.ShowSinglePrice, &s.ShowPricesToGuests, &s.UpdatedAt,
 	)
 	if err != nil {
 		log.Printf("[ADMIN API ERROR] Failed to update settings: %v", err)

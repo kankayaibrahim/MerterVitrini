@@ -129,8 +129,17 @@ export interface Brand {
   name: string;
   slug: string;
   alias_code: string | null;
+  company_type?: string;
+  description?: string;
   website?: string | null;
   phone?: string | null;
+  whatsapp_phone?: string | null;
+  public_email?: string | null;
+  instagram_handle?: string | null;
+  location_address?: string | null;
+  bank_name?: string | null;
+  bank_account_holder?: string | null;
+  iban?: string | null;
   addresses?: SupplierAddress[] | null;
   is_active: boolean;
   created_at: string;
@@ -167,6 +176,8 @@ export interface SupplierProductRow {
   packing_ratio?: string | null;
   minimum_order_quantity: number;
   is_active: boolean;
+  is_archived?: boolean;
+  season?: string;
   created_at: string;
   updated_at: string;
   cover_image: string;

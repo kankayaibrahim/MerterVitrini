@@ -122,9 +122,9 @@ func (h *MobileHandler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 
 	var settings models.Settings
 	_ = db.Pool.QueryRow(ctx, `
-		SELECT id, address, phone, whatsapp, email, show_single_price, updated_at
+		SELECT id, address, phone, whatsapp, email, show_single_price, COALESCE(show_prices_to_guests, false), updated_at
 		FROM catalog.settings LIMIT 1
-	`).Scan(&settings.ID, &settings.Address, &settings.Phone, &settings.Whatsapp, &settings.Email, &settings.ShowSinglePrice, &settings.UpdatedAt)
+	`).Scan(&settings.ID, &settings.Address, &settings.Phone, &settings.Whatsapp, &settings.Email, &settings.ShowSinglePrice, &settings.ShowPricesToGuests, &settings.UpdatedAt)
 
 	release := h.loadMobileReleaseManifest()
 
@@ -225,9 +225,19 @@ func fetchBootstrapCategories(ctx context.Context) []*models.CategoryNode {
 func fetchBootstrapMaskedBrands(ctx context.Context) []map[string]any {
 	brands := make([]map[string]any, 0, 16)
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id::text, brand_name AS display_name, slug, COALESCE(alias_code, '')
-		FROM catalog.brands
-		WHERE is_active = true
+		SELECT b.id::text, b.brand_name AS display_name, b.slug, COALESCE(b.alias_code, ''),
+		       COALESCE(b.company_type, 'uretici_toptanci'),
+		       COALESCE(
+		           NULLIF(b.whatsapp_phone, ''),
+		           NULLIF(b.phone, ''),
+		           (SELECT COALESCE(NULLIF(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+		           ''
+		       ),
+		       COALESCE(b.phone, ''),
+		       COALESCE(b.location_address, ''),
+		       COALESCE(b.is_verified, true)
+		FROM catalog.brands b
+		WHERE b.is_active = true
 		ORDER BY display_name ASC
 	`)
 	if err != nil {
@@ -235,13 +245,19 @@ func fetchBootstrapMaskedBrands(ctx context.Context) []map[string]any {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, displayName, slug, aliasCode string
-		if err := rows.Scan(&id, &displayName, &slug, &aliasCode); err == nil {
+		var id, displayName, slug, aliasCode, companyType, whatsappPhone, phone, locationAddress string
+		var isVerified bool
+		if err := rows.Scan(&id, &displayName, &slug, &aliasCode, &companyType, &whatsappPhone, &phone, &locationAddress, &isVerified); err == nil {
 			brands = append(brands, map[string]any{
-				"id":         id,
-				"name":       displayName,
-				"slug":       slug,
-				"alias_code": aliasCode,
+				"id":               id,
+				"name":             displayName,
+				"slug":             slug,
+				"alias_code":       aliasCode,
+				"company_type":     companyType,
+				"whatsapp_phone":   whatsappPhone,
+				"phone":            phone,
+				"location_address": locationAddress,
+				"is_verified":      isVerified,
 			})
 		}
 	}

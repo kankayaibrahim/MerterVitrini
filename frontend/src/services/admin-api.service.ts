@@ -14,6 +14,7 @@ export interface StoreSettingsDTO {
   whatsapp: string;
   email: string;
   show_single_price: boolean;
+  show_prices_to_guests: boolean;
 }
 
 export interface AdminProductsPage {
@@ -240,6 +241,7 @@ export class AdminApiService
       whatsapp: data.whatsapp ?? "",
       email: data.email ?? "",
       show_single_price: Boolean(data.show_single_price),
+      show_prices_to_guests: Boolean(data.show_prices_to_guests),
     };
   }
 

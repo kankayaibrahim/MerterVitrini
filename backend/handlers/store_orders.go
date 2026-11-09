@@ -364,12 +364,21 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	var custName, custPhone, custEmail string
+	_ = tx.QueryRow(ctx, `
+		SELECT TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')), COALESCE(phone, ''), COALESCE(email, '')
+		FROM identity.users WHERE id = $1
+	`, userID).Scan(&custName, &custPhone, &custEmail)
+
 	var orderID string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO catalog.orders (order_number, user_id, total_amount, payment_method, order_status, billing_address, delivery_address)
-		VALUES ($1, $2, $3, $4, 'PENDING_PAYMENT', $5, $6)
+		INSERT INTO catalog.orders (
+			order_number, user_id, total_amount, payment_method, order_status,
+			billing_address, delivery_address, customer_name, customer_phone, customer_email
+		)
+		VALUES ($1, $2, $3, $4, 'PENDING_PAYMENT', $5, $6, $7, $8, $9)
 		RETURNING id
-	`, orderNumber, userID, totalAmount, req.PaymentMethod, req.BillingAddress, req.DeliveryAddress).Scan(&orderID)
+	`, orderNumber, userID, totalAmount, req.PaymentMethod, req.BillingAddress, req.DeliveryAddress, custName, custPhone, custEmail).Scan(&orderID)
 	if err != nil {
 		http.Error(w, `{"error":"Sipariş oluşturulamadı"}`, http.StatusInternalServerError)
 		return
@@ -381,7 +390,8 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Split order items to supplier sub-orders and allocate pending balances
-	if err := splitOrderIntoSupplierSubOrders(ctx, tx, orderID, orderNumber, items); err != nil {
+	supplierOrders, err := splitOrderIntoSupplierSubOrdersWithSummary(ctx, tx, orderID, orderNumber, items)
+	if err != nil {
 		log.Printf("[ORDER_SPLIT_WARNING] Failed to split sub-orders: %v", err)
 	}
 
@@ -393,9 +403,10 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
-		"success":      true,
-		"order_id":     orderID,
-		"order_number": orderNumber,
+		"success":         true,
+		"order_id":        orderID,
+		"order_number":    orderNumber,
+		"supplier_orders": supplierOrders,
 	})
 }
 

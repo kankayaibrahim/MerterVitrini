@@ -13,9 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type StoreCatalogHandler struct{}
@@ -177,6 +178,32 @@ func appendCatalogPriceFilter(sqlBase *string, query url.Values, displayRate flo
 	}
 }
 
+func appendCatalogB2BFilters(sqlBase *string, query url.Values, argIndex *int, args *[]any) {
+	if strings.EqualFold(strings.TrimSpace(query.Get("fason")), "true") {
+		*sqlBase += " AND EXISTS (SELECT 1 FROM catalog.brands b WHERE b.id = p.brand_id AND b.supports_fason = true)"
+	}
+	if strings.EqualFold(strings.TrimSpace(query.Get("private_label")), "true") {
+		*sqlBase += " AND EXISTS (SELECT 1 FROM catalog.brands b WHERE b.id = p.brand_id AND b.supports_private_label = true)"
+	}
+	if companyType := strings.TrimSpace(query.Get("company_type")); companyType != "" {
+		*sqlBase += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM catalog.brands b WHERE b.id = p.brand_id AND COALESCE(b.company_type, 'uretici_toptanci') = $%d)", *argIndex)
+		*args = append(*args, companyType)
+		*argIndex++
+	}
+	if maxMoqStr := strings.TrimSpace(query.Get("max_moq")); maxMoqStr != "" {
+		if maxMoq, err := strconv.Atoi(maxMoqStr); err == nil && maxMoq > 0 {
+			*sqlBase += fmt.Sprintf(" AND (p.minimum_order_quantity <= $%d OR EXISTS (SELECT 1 FROM catalog.brands b WHERE b.id = p.brand_id AND COALESCE(b.min_order_quantity, 1) <= $%d))", *argIndex, *argIndex)
+			*args = append(*args, maxMoq)
+			*argIndex++
+		}
+	}
+	if exportCountry := strings.TrimSpace(query.Get("export_country")); exportCountry != "" {
+		*sqlBase += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM catalog.brands b WHERE b.id = p.brand_id AND b.export_countries ILIKE $%d)", *argIndex)
+		*args = append(*args, "%"+exportCountry+"%")
+		*argIndex++
+	}
+}
+
 func buildCatalogFilterSQL(query url.Values, displayRate float64, sqlPriceInTRY string) (string, []any, int) {
 	sqlBase := `
 		FROM catalog.mv_products p
@@ -203,6 +230,7 @@ func buildCatalogFilterSQL(query url.Values, displayRate float64, sqlPriceInTRY 
 	appendCatalogPriceFilter(&sqlBase, query, displayRate, sqlPriceInTRY, &argIndex, &args)
 	appendCatalogInFilter(&sqlBase, "p.gender", query.Get("gender"), &argIndex, &args)
 	appendCatalogInFilter(&sqlBase, "p.season", query.Get("season"), &argIndex, &args)
+	appendCatalogB2BFilters(&sqlBase, query, &argIndex, &args)
 
 	return sqlBase, args, argIndex
 }
@@ -239,7 +267,7 @@ func scanCatalogProducts(rows pgx.Rows) ([]*models.Product, error) {
 			&p.Gender, &p.Season, &p.KumasFabric, &p.DesiVolume, &p.ShippingWeightKg,
 			&p.PackingRatio, &p.SeriesRatio, &p.MinimumOrderQty,
 			&p.Price, &p.DiscountedPrice, &p.SinglePrice, &p.BuyingPrice, &p.Currency, &p.TaxRate, &p.Color, &p.Stock, &p.Sku, &p.Barcode,
-			&p.IsActive, 
+			&p.IsActive,
 			&p.CreatedAt, &p.UpdatedAt, &p.BrandName, &p.CategoryTitle,
 			&imagesBytes, &translationsBytes,
 		)
@@ -475,6 +503,7 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	rows.Close()
 
 	fetchCatalogSiblingVariants(ctx, products)
+	fetchCatalogBrandProfiles(ctx, products)
 	facets := fetchCatalogFacets(ctx, sqlBase, args[:argIndex-1])
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
@@ -485,8 +514,70 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+func fetchCatalogBrandProfiles(ctx context.Context, products []*models.Product) {
+	if len(products) == 0 {
+		return
+	}
+	brandRows, err := db.Pool.Query(ctx, `
+		SELECT b.id, b.brand_name AS name, b.slug, b.alias_code,
+		       COALESCE(b.company_type, 'uretici_toptanci'),
+		       COALESCE(b.description, ''),
+		       b.website, b.phone,
+		       COALESCE(
+		           NULLIF(b.whatsapp_phone, ''),
+		           NULLIF(b.phone, ''),
+		           (SELECT COALESCE(NULLIF(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+		           ''
+		       ),
+		       COALESCE(b.public_email, ''),
+		       COALESCE(b.instagram_handle, ''),
+		       COALESCE(b.location_address, ''),
+		       COALESCE(b.export_countries, ''),
+		       COALESCE(b.min_order_quantity, 1),
+		       COALESCE(b.supports_private_label, false),
+		       COALESCE(b.supports_fason, false),
+		       COALESCE(b.is_verified, true),
+		       COALESCE(b.bank_name, ''),
+		       COALESCE(b.bank_account_holder, ''),
+		       COALESCE(b.iban, '')
+		FROM catalog.brands b
+		WHERE b.is_active = true
+	`)
+	if err != nil {
+		return
+	}
+	defer brandRows.Close()
+
+	brandMap := make(map[string]*models.Brand)
+	for brandRows.Next() {
+		var b models.Brand
+		if err := brandRows.Scan(
+			&b.ID, &b.Name, &b.Slug, &b.AliasCode,
+			&b.CompanyType, &b.Description,
+			&b.Website, &b.Phone,
+			&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
+			&b.LocationAddress, &b.ExportCountries, &b.MinOrderQuantity,
+			&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified,
+			&b.BankName, &b.BankAccountHolder, &b.IBAN,
+		); err == nil {
+			b.IsActive = true
+			brandCopy := b
+			brandMap[b.ID] = &brandCopy
+		}
+	}
+
+	for _, p := range products {
+		if p.BrandID != nil {
+			if bp, ok := brandMap[*p.BrandID]; ok {
+				p.BrandProfile = bp
+			}
+		}
+	}
+}
+
 func fetchProductBase(ctx context.Context, id string) (*models.Product, error) {
 	var p models.Product
+	var b models.Brand
 	var translationsBytes []byte
 	prodQuery := `
 		SELECT p.id, p.feed_id, p.source_product_id, p.source_product_group_id, p.title, p.slug, p.slug_id, p.custom_sku, 
@@ -496,6 +587,27 @@ func fetchProductBase(ctx context.Context, id string) (*models.Product, error) {
 		       p.price, p.discounted_price, p.single_price, p.buying_price, p.currency, p.tax_rate, COALESCE(col.color_name, 'Standart') as color, p.stock, p.sku, p.barcode,
 		       p.is_active, 
 		       p.created_at, p.updated_at, b.brand_name as brand_name, c.title as category_title,
+		       b.id, b.brand_name, b.slug, b.alias_code,
+		       COALESCE(b.company_type, 'uretici_toptanci'),
+		       COALESCE(b.description, ''),
+		       b.website, b.phone,
+		       COALESCE(
+		           NULLIF(b.whatsapp_phone, ''),
+		           NULLIF(b.phone, ''),
+		           (SELECT COALESCE(NULLIF(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+		           ''
+		       ),
+		       COALESCE(b.public_email, ''),
+		       COALESCE(b.instagram_handle, ''),
+		       COALESCE(b.location_address, ''),
+		       COALESCE(b.export_countries, ''),
+		       COALESCE(b.min_order_quantity, 1),
+		       COALESCE(b.supports_private_label, false),
+		       COALESCE(b.supports_fason, false),
+		       COALESCE(b.is_verified, true),
+		       COALESCE(b.bank_name, ''),
+		       COALESCE(b.bank_account_holder, ''),
+		       COALESCE(b.iban, ''),
 		       COALESCE(
 		           (SELECT json_object_agg(t.language_code, json_build_object('title', t.title, 'short_description', t.short_description, 'description', t.description))
 		            FROM catalog.product_translations t
@@ -514,13 +626,22 @@ func fetchProductBase(ctx context.Context, id string) (*models.Product, error) {
 		&p.Gender, &p.Season, &p.KumasFabric, &p.DesiVolume, &p.ShippingWeightKg,
 		&p.PackingRatio, &p.SeriesRatio, &p.MinimumOrderQty,
 		&p.Price, &p.DiscountedPrice, &p.SinglePrice, &p.BuyingPrice, &p.Currency, &p.TaxRate, &p.Color, &p.Stock, &p.Sku, &p.Barcode,
-		&p.IsActive, 
+		&p.IsActive,
 		&p.CreatedAt, &p.UpdatedAt, &p.BrandName, &p.CategoryTitle,
+		&b.ID, &b.Name, &b.Slug, &b.AliasCode,
+		&b.CompanyType, &b.Description,
+		&b.Website, &b.Phone,
+		&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
+		&b.LocationAddress, &b.ExportCountries, &b.MinOrderQuantity,
+		&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified,
+		&b.BankName, &b.BankAccountHolder, &b.IBAN,
 		&translationsBytes,
 	)
 	if err != nil {
 		return nil, err
 	}
+	b.IsActive = true
+	p.BrandProfile = &b
 	if len(translationsBytes) > 0 {
 		_ = json.Unmarshal(translationsBytes, &p.Translations)
 	}
@@ -688,6 +809,10 @@ func (h *StoreCatalogHandler) GetProductByID(w http.ResponseWriter, r *http.Requ
 	fetchAndInjectAttributeTranslations(ctx, p)
 	fetchProductSiblings(ctx, p)
 
+	if p.BrandID != nil && *p.BrandID != "" {
+		RecordBrandAnalyticsEvent(*p.BrandID, p.ID, "product_view", r)
+	}
+
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(p)
 }
@@ -823,10 +948,33 @@ func (h *StoreCatalogHandler) ListBrands(w http.ResponseWriter, r *http.Request)
 	defer cancel()
 
 	query := `
-		SELECT id, brand_name AS name, slug, alias_code, website, phone, addresses, is_active, created_at, updated_at
-		FROM catalog.brands
-		WHERE is_active = true
-		ORDER BY brand_name ASC`
+		SELECT b.id, b.brand_name AS name, b.slug, b.alias_code,
+		       COALESCE(b.company_type, 'uretici_toptanci'),
+		       COALESCE(b.description, ''),
+		       COALESCE(b.description_translations, '{}'::jsonb),
+		       b.website, b.phone,
+		       COALESCE(
+		           NULLIF(b.whatsapp_phone, ''),
+		           NULLIF(b.phone, ''),
+		           (SELECT COALESCE(NULLIF(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+		           ''
+		       ),
+		       COALESCE(b.public_email, ''),
+		       COALESCE(b.instagram_handle, ''),
+		       COALESCE(b.location_address, ''),
+		       COALESCE(b.export_countries, ''),
+		       COALESCE(b.min_order_quantity, 1),
+		       COALESCE(b.supports_private_label, false),
+		       COALESCE(b.supports_fason, false),
+		       COALESCE(b.is_verified, true),
+		       COALESCE(b.bank_name, ''),
+		       COALESCE(b.bank_account_holder, ''),
+		       COALESCE(b.iban, ''),
+		       (SELECT COUNT(*)::int FROM catalog.products p WHERE p.brand_id = b.id AND p.is_active = true) AS active_product_count,
+		       b.addresses, b.is_active, b.created_at, b.updated_at
+		FROM catalog.brands b
+		WHERE b.is_active = true
+		ORDER BY b.brand_name ASC`
 
 	rows, err := db.Pool.Query(ctx, query)
 	if err != nil {
@@ -839,11 +987,24 @@ func (h *StoreCatalogHandler) ListBrands(w http.ResponseWriter, r *http.Request)
 	brands := []*models.Brand{}
 	for rows.Next() {
 		var b models.Brand
-		var addressesBytes []byte
-		err := rows.Scan(&b.ID, &b.Name, &b.Slug, &b.AliasCode, &b.Website, &b.Phone, &addressesBytes, &b.IsActive, &b.CreatedAt, &b.UpdatedAt)
+		var addressesBytes, descTransBytes []byte
+		err := rows.Scan(
+			&b.ID, &b.Name, &b.Slug, &b.AliasCode,
+			&b.CompanyType, &b.Description, &descTransBytes,
+			&b.Website, &b.Phone,
+			&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
+			&b.LocationAddress, &b.ExportCountries, &b.MinOrderQuantity,
+			&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified,
+			&b.BankName, &b.BankAccountHolder, &b.IBAN,
+			&b.ActiveProductCount,
+			&addressesBytes, &b.IsActive, &b.CreatedAt, &b.UpdatedAt,
+		)
 		if err == nil {
 			if len(addressesBytes) > 0 {
 				json.Unmarshal(addressesBytes, &b.Addresses)
+			}
+			if len(descTransBytes) > 0 {
+				json.Unmarshal(descTransBytes, &b.DescriptionTranslations)
 			}
 			brands = append(brands, &b)
 		}
@@ -851,6 +1012,81 @@ func (h *StoreCatalogHandler) ListBrands(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(brands)
+}
+
+// GetBrandBySlug queries a single active wholesale brand/supplier by slug or ID
+func (h *StoreCatalogHandler) GetBrandBySlug(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	slugOrID := strings.TrimSpace(r.PathValue("slug"))
+	if slugOrID == "" {
+		http.Error(w, `{"error":"Supplier slug is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT b.id, b.brand_name AS name, b.slug, b.alias_code,
+		       COALESCE(b.company_type, 'uretici_toptanci'),
+		       COALESCE(b.description, ''),
+		       COALESCE(b.description_translations, '{}'::jsonb),
+		       b.website, b.phone,
+		       COALESCE(
+		           NULLIF(b.whatsapp_phone, ''),
+		           NULLIF(b.phone, ''),
+		           (SELECT COALESCE(NULLIF(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+		           ''
+		       ),
+		       COALESCE(b.public_email, ''),
+		       COALESCE(b.instagram_handle, ''),
+		       COALESCE(b.location_address, ''),
+		       COALESCE(b.export_countries, ''),
+		       COALESCE(b.min_order_quantity, 1),
+		       COALESCE(b.supports_private_label, false),
+		       COALESCE(b.supports_fason, false),
+		       COALESCE(b.is_verified, true),
+		       COALESCE(b.bank_name, ''),
+		       COALESCE(b.bank_account_holder, ''),
+		       COALESCE(b.iban, ''),
+		       (SELECT COUNT(*)::int FROM catalog.products p WHERE p.brand_id = b.id AND p.is_active = true) AS active_product_count,
+		       b.addresses, b.is_active, b.created_at, b.updated_at
+		FROM catalog.brands b
+		WHERE b.is_active = true AND (b.slug = $1 OR b.id::text = $1)
+		LIMIT 1`
+
+	var b models.Brand
+	var addressesBytes, descTransBytes []byte
+	err := db.Pool.QueryRow(ctx, query, slugOrID).Scan(
+		&b.ID, &b.Name, &b.Slug, &b.AliasCode,
+		&b.CompanyType, &b.Description, &descTransBytes,
+		&b.Website, &b.Phone,
+		&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
+		&b.LocationAddress, &b.ExportCountries, &b.MinOrderQuantity,
+		&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified,
+		&b.BankName, &b.BankAccountHolder, &b.IBAN,
+		&b.ActiveProductCount,
+		&addressesBytes, &b.IsActive, &b.CreatedAt, &b.UpdatedAt,
+	)
+	if err != nil {
+		http.Error(w, `{"error":"Supplier not found"}`, http.StatusNotFound)
+		return
+	}
+	if len(addressesBytes) > 0 {
+		json.Unmarshal(addressesBytes, &b.Addresses)
+	}
+	if len(descTransBytes) > 0 {
+		json.Unmarshal(descTransBytes, &b.DescriptionTranslations)
+	}
+
+	RecordBrandAnalyticsEvent(b.ID, "", "profile_view", r)
+
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	json.NewEncoder(w).Encode(b)
 }
 
 // ListAttributes queries the active distinct product attributes for sidebar filtering
@@ -908,8 +1144,8 @@ func (h *StoreCatalogHandler) GetStoreSettings(w http.ResponseWriter, r *http.Re
 	defer cancel()
 
 	var s models.Settings
-	query := `SELECT id, address, phone, whatsapp, email, show_single_price, updated_at FROM catalog.settings LIMIT 1`
-	err := db.Pool.QueryRow(ctx, query).Scan(&s.ID, &s.Address, &s.Phone, &s.Whatsapp, &s.Email, &s.ShowSinglePrice, &s.UpdatedAt)
+	query := `SELECT id, address, phone, whatsapp, email, show_single_price, COALESCE(show_prices_to_guests, false), updated_at FROM catalog.settings LIMIT 1`
+	err := db.Pool.QueryRow(ctx, query).Scan(&s.ID, &s.Address, &s.Phone, &s.Whatsapp, &s.Email, &s.ShowSinglePrice, &s.ShowPricesToGuests, &s.UpdatedAt)
 	if err != nil {
 		log.Printf("[STORE API ERROR] Failed to fetch settings: %v", err)
 		http.Error(w, `{"error":"Failed to fetch settings"}`, http.StatusInternalServerError)
@@ -1040,11 +1276,11 @@ func (h *StoreCatalogHandler) GetPageBySlug(w http.ResponseWriter, r *http.Reque
 
 	for rows.Next() {
 		var (
-			pageID, pageSlug              string
-			isActive                      bool
-			createdAt, updatedAt          time.Time
-			langCode, title, content      *string
-			metaTitle, metaDescription    *string
+			pageID, pageSlug           string
+			isActive                   bool
+			createdAt, updatedAt       time.Time
+			langCode, title, content   *string
+			metaTitle, metaDescription *string
 		)
 
 		err := rows.Scan(
@@ -1113,11 +1349,11 @@ func (h *StoreCatalogHandler) ListPages(w http.ResponseWriter, r *http.Request) 
 
 	for rows.Next() {
 		var (
-			pageID, pageSlug              string
-			isActive                      bool
-			createdAt, updatedAt          time.Time
-			langCode, title, content      *string
-			metaTitle, metaDescription    *string
+			pageID, pageSlug           string
+			isActive                   bool
+			createdAt, updatedAt       time.Time
+			langCode, title, content   *string
+			metaTitle, metaDescription *string
 		)
 
 		err := rows.Scan(
@@ -1195,13 +1431,13 @@ func (h *StoreCatalogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Reque
 
 	for rows.Next() {
 		var (
-			postID, slug                  string
-			coverImage                    *string
-			isActive                      bool
-			createdAt, updatedAt          time.Time
-			langCode, title, summary      *string
+			postID, slug                 string
+			coverImage                   *string
+			isActive                     bool
+			createdAt, updatedAt         time.Time
+			langCode, title, summary     *string
 			content, metaTitle, metaDesc *string
-			transSlug                     *string
+			transSlug                    *string
 		)
 
 		err := rows.Scan(
@@ -1292,13 +1528,13 @@ func (h *StoreCatalogHandler) GetBlogPostBySlug(w http.ResponseWriter, r *http.R
 
 	for rows.Next() {
 		var (
-			postID, postSlug              string
-			coverImage                    *string
-			isActive                      bool
-			createdAt, updatedAt          time.Time
-			langCode, title, summary      *string
+			postID, postSlug             string
+			coverImage                   *string
+			isActive                     bool
+			createdAt, updatedAt         time.Time
+			langCode, title, summary     *string
 			content, metaTitle, metaDesc *string
-			transSlug                     *string
+			transSlug                    *string
 		)
 
 		err := rows.Scan(
@@ -1345,34 +1581,34 @@ func (h *StoreCatalogHandler) GetBlogPostBySlug(w http.ResponseWriter, r *http.R
 }
 
 type gItem struct {
-	ID                    string   `xml:"g:id"`
-	Title                 string   `xml:"g:title"`
-	Description           string   `xml:"g:description"`
-	Link                  string   `xml:"g:link"`
-	ImageLink             string   `xml:"g:image_link"`
-	AdditionalImageLinks  []string `xml:"g:additional_image_link,omitempty"`
-	Availability          string   `xml:"g:availability"`
-	Price                 string   `xml:"g:price"`
-	SalePrice             string   `xml:"g:sale_price,omitempty"`
-	Brand                 string   `xml:"g:brand,omitempty"`
-	GoogleProductCategory string   `xml:"g:google_product_category,omitempty"`
-	Condition             string   `xml:"g:condition"`
-	Gender                string   `xml:"g:gender,omitempty"`
-	ItemGroupID           string   `xml:"g:item_group_id,omitempty"`
-	Multipack             int      `xml:"g:multipack,omitempty"`
-	UnitPricingMeasure    string   `xml:"g:unit_pricing_measure,omitempty"`
-	UnitPricingBaseMeasure string  `xml:"g:unit_pricing_base_measure,omitempty"`
-	CustomLabel0          string   `xml:"g:custom_label_0,omitempty"`
-	CustomLabel1          string   `xml:"g:custom_label_1,omitempty"`
-	CustomLabel2          string   `xml:"g:custom_label_2,omitempty"`
-	CustomLabel3          string   `xml:"g:custom_label_3,omitempty"`
+	ID                     string   `xml:"g:id"`
+	Title                  string   `xml:"g:title"`
+	Description            string   `xml:"g:description"`
+	Link                   string   `xml:"g:link"`
+	ImageLink              string   `xml:"g:image_link"`
+	AdditionalImageLinks   []string `xml:"g:additional_image_link,omitempty"`
+	Availability           string   `xml:"g:availability"`
+	Price                  string   `xml:"g:price"`
+	SalePrice              string   `xml:"g:sale_price,omitempty"`
+	Brand                  string   `xml:"g:brand,omitempty"`
+	GoogleProductCategory  string   `xml:"g:google_product_category,omitempty"`
+	Condition              string   `xml:"g:condition"`
+	Gender                 string   `xml:"g:gender,omitempty"`
+	ItemGroupID            string   `xml:"g:item_group_id,omitempty"`
+	Multipack              int      `xml:"g:multipack,omitempty"`
+	UnitPricingMeasure     string   `xml:"g:unit_pricing_measure,omitempty"`
+	UnitPricingBaseMeasure string   `xml:"g:unit_pricing_base_measure,omitempty"`
+	CustomLabel0           string   `xml:"g:custom_label_0,omitempty"`
+	CustomLabel1           string   `xml:"g:custom_label_1,omitempty"`
+	CustomLabel2           string   `xml:"g:custom_label_2,omitempty"`
+	CustomLabel3           string   `xml:"g:custom_label_3,omitempty"`
 }
 
 type gChannel struct {
-	Title       string   `xml:"title"`
-	Link        string   `xml:"link"`
-	Description string   `xml:"description"`
-	Items       []gItem  `xml:"item"`
+	Title       string  `xml:"title"`
+	Link        string  `xml:"link"`
+	Description string  `xml:"description"`
+	Items       []gItem `xml:"item"`
 }
 
 type gRSS struct {
@@ -1755,8 +1991,3 @@ func (h *StoreCatalogHandler) CatalogDelta(w http.ResponseWriter, r *http.Reques
 		DeltaToken: time.Now().UTC().Format(time.RFC3339),
 	})
 }
-
-
-
-
-

@@ -32,6 +32,7 @@ import { XmlFeed, Brand, CategoryNode } from "@/types/integration";
 import XmlImportWizard from "./XmlImportWizard";
 import SupplierUsersSection from "./SupplierUsersSection";
 import SupplierApplicationsSection from "./SupplierApplicationsSection";
+import SupplierBillingAdminSection from "./SupplierBillingAdminSection";
 
 // Strict internationalization safe LABELS dictionary
 const LABELS = {
@@ -145,7 +146,7 @@ interface SupplierAddress {
   coordinates: string;
 }
 
-export type SupplierSubTab = "suppliers" | "users" | "applications";
+export type SupplierSubTab = "suppliers" | "users" | "applications" | "billing";
 
 interface SuppliersManagerProps {
   suppliers: Brand[];
@@ -490,10 +491,20 @@ function SupplierCard({
             </div>
           )}
 
-          {supplier.phone ? (
-            <div className="flex items-center gap-2 text-zinc-700 font-semibold">
-              <Phone size={15} className="text-emerald-500 shrink-0" />
-              <span>{supplier.phone}</span>
+          {(supplier.whatsapp_phone || supplier.phone) ? (
+            <div className="flex flex-col gap-0.5 text-zinc-700 font-semibold">
+              {supplier.whatsapp_phone && (
+                <div className="flex items-center gap-2 text-emerald-700">
+                  <Phone size={15} className="text-emerald-600 shrink-0" />
+                  <span>WhatsApp: {supplier.whatsapp_phone}</span>
+                </div>
+              )}
+              {supplier.phone && supplier.phone !== supplier.whatsapp_phone && (
+                <div className="flex items-center gap-2 text-zinc-600 text-xs">
+                  <Phone size={13} className="text-zinc-400 shrink-0" />
+                  <span>Tel: {supplier.phone}</span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2 text-zinc-400">
@@ -644,6 +655,7 @@ interface SupplierFormFieldsProps {
   supplierAlias: string;
   supplierWebsite: string;
   supplierPhone: string;
+  supplierWhatsapp: string;
   supplierAddresses: SupplierAddress[];
   supplierIsActive: boolean;
   selectedParserScript: string;
@@ -653,6 +665,7 @@ interface SupplierFormFieldsProps {
   onAliasChange: (val: string) => void;
   onWebsiteChange: (val: string) => void;
   onPhoneChange: (val: string) => void;
+  onWhatsappChange: (val: string) => void;
   onIsActiveToggle: () => void;
   onAddAddressLine: () => void;
   onRemoveAddressLine: (idx: number) => void;
@@ -668,6 +681,7 @@ function SupplierFormFields({
   supplierAlias,
   supplierWebsite,
   supplierPhone,
+  supplierWhatsapp,
   supplierAddresses,
   supplierIsActive,
   selectedParserScript,
@@ -677,6 +691,7 @@ function SupplierFormFields({
   onAliasChange,
   onWebsiteChange,
   onPhoneChange,
+  onWhatsappChange,
   onIsActiveToggle,
   onAddAddressLine,
   onRemoveAddressLine,
@@ -766,6 +781,21 @@ function SupplierFormFields({
             disabled={isPending}
           />
         </div>
+      </div>
+
+      {/* Direct WhatsApp Line */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
+          Doğrudan Sipariş &amp; Müşteri WhatsApp Hattı
+        </label>
+        <input 
+          type="text"
+          value={supplierWhatsapp}
+          onChange={(e) => onWhatsappChange(e.target.value)}
+          className="w-full px-4 py-2.5 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:border-emerald-500 focus:bg-white text-sm font-semibold transition-all"
+          placeholder="Örn: +90 532 000 00 00 (Ürün sayfasında doğrudan tedarikçi WhatsApp hattı olarak görünür)"
+          disabled={isPending}
+        />
       </div>
 
       {/* ADDRESSES SUB-FORM */}
@@ -914,6 +944,7 @@ interface SupplierModalsProps {
   supplierAlias: string;
   supplierWebsite: string;
   supplierPhone: string;
+  supplierWhatsapp: string;
   supplierAddresses: SupplierAddress[];
   supplierIsActive: boolean;
   selectedParserScript: string;
@@ -926,6 +957,7 @@ interface SupplierModalsProps {
   onAliasChange: (val: string) => void;
   onWebsiteChange: (val: string) => void;
   onPhoneChange: (val: string) => void;
+  onWhatsappChange: (val: string) => void;
   onIsActiveToggle: () => void;
   onAddAddressLine: () => void;
   onRemoveAddressLine: (idx: number) => void;
@@ -944,6 +976,7 @@ function SupplierModals({
   supplierAlias,
   supplierWebsite,
   supplierPhone,
+  supplierWhatsapp,
   supplierAddresses,
   supplierIsActive,
   selectedParserScript,
@@ -956,6 +989,7 @@ function SupplierModals({
   onAliasChange,
   onWebsiteChange,
   onPhoneChange,
+  onWhatsappChange,
   onIsActiveToggle,
   onAddAddressLine,
   onRemoveAddressLine,
@@ -1065,6 +1099,7 @@ function SupplierModals({
                 supplierAlias={supplierAlias}
                 supplierWebsite={supplierWebsite}
                 supplierPhone={supplierPhone}
+                supplierWhatsapp={supplierWhatsapp}
                 supplierAddresses={supplierAddresses}
                 supplierIsActive={supplierIsActive}
                 selectedParserScript={selectedParserScript}
@@ -1074,6 +1109,7 @@ function SupplierModals({
                 onAliasChange={onAliasChange}
                 onWebsiteChange={onWebsiteChange}
                 onPhoneChange={onPhoneChange}
+                onWhatsappChange={onWhatsappChange}
                 onIsActiveToggle={onIsActiveToggle}
                 onAddAddressLine={onAddAddressLine}
                 onRemoveAddressLine={onRemoveAddressLine}
@@ -1152,6 +1188,7 @@ export default function SuppliersManager({
   const [supplierAlias, setSupplierAlias] = useState("");
   const [supplierWebsite, setSupplierWebsite] = useState("");
   const [supplierPhone, setSupplierPhone] = useState("");
+  const [supplierWhatsapp, setSupplierWhatsapp] = useState("");
   const [supplierAddresses, setSupplierAddresses] = useState<SupplierAddress[]>([]);
   const [supplierIsActive, setSupplierIsActive] = useState(true);
 
@@ -1282,6 +1319,7 @@ export default function SuppliersManager({
     setSupplierAlias("");
     setSupplierWebsite("");
     setSupplierPhone("");
+    setSupplierWhatsapp("");
     setSupplierAddresses([]);
     setFormError(null);
     setActiveModal("create_supplier");
@@ -1294,6 +1332,7 @@ export default function SuppliersManager({
     setSupplierAlias(supplier.alias_code || "");
     setSupplierWebsite(supplier.website || "");
     setSupplierPhone(supplier.phone || "");
+    setSupplierWhatsapp(supplier.whatsapp_phone || supplier.phone || "");
     setSupplierAddresses(
       ((supplier.addresses as SupplierAddress[]) || []).map((addr, i) => ({
         ...addr,
@@ -1495,6 +1534,7 @@ export default function SuppliersManager({
           alias_code: supplierAlias.trim() || null,
           website: supplierWebsite.trim() || null,
           phone: supplierPhone.trim() || null,
+          whatsapp_phone: supplierWhatsapp.trim() || supplierPhone.trim() || null,
           addresses: supplierAddresses.filter(addr => addr.title.trim() && addr.text.trim()),
           is_active: supplierIsActive
         });
@@ -1602,6 +1642,19 @@ export default function SuppliersManager({
           <FileText size={15} />
           Tedarikçi Başvuruları (Yeni)
         </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange("billing")}
+          className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
+            subTab === "billing"
+              ? "text-emerald-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-emerald-600"
+              : "text-zinc-500 hover:text-zinc-900"
+          }`}
+        >
+          <Database size={15} />
+          Tedarikçi Muhasebe, Abonelik & Faturalandırma
+        </button>
       </div>
 
       {subTab === "users" && (
@@ -1610,6 +1663,10 @@ export default function SuppliersManager({
 
       {subTab === "applications" && (
         <SupplierApplicationsSection apiUrl={apiUrl} token={token} />
+      )}
+
+      {subTab === "billing" && (
+        <SupplierBillingAdminSection apiUrl={apiUrl} token={token} />
       )}
 
       {subTab === "suppliers" && (
@@ -1889,6 +1946,7 @@ export default function SuppliersManager({
         supplierAlias={supplierAlias}
         supplierWebsite={supplierWebsite}
         supplierPhone={supplierPhone}
+        supplierWhatsapp={supplierWhatsapp}
         supplierAddresses={supplierAddresses}
         supplierIsActive={supplierIsActive}
         selectedParserScript={selectedParserScript}
@@ -1901,6 +1959,7 @@ export default function SuppliersManager({
         onAliasChange={setSupplierAlias}
         onWebsiteChange={setSupplierWebsite}
         onPhoneChange={setSupplierPhone}
+        onWhatsappChange={setSupplierWhatsapp}
         onIsActiveToggle={() => setSupplierIsActive(!supplierIsActive)}
         onAddAddressLine={addAddressLine}
         onRemoveAddressLine={removeAddressLine}

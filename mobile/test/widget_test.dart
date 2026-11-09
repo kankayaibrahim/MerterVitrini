@@ -120,6 +120,11 @@ class _FakeCatalogRepository implements ICatalogRepository {
     String brandId = '',
     String gender = '',
     String season = '',
+    bool fason = false,
+    bool privateLabel = false,
+    String companyType = '',
+    String maxMoq = '',
+    String exportCountry = '',
     String sortBy = 'newest',
     int limit = 24,
     int offset = 0,
@@ -355,7 +360,8 @@ void main() {
       expect(session.initialized, isTrue);
       expect(session.currencyCode, 'USD');
       expect(session.newestProducts.length, 1);
-      expect(session.formatPrice(400.0, sourceCurrency: 'TRY'), r'$10.00');
+      expect(session.canViewPrices, isFalse);
+      expect(session.formatPrice(400.0, sourceCurrency: 'TRY'), 'Üyelere Özel');
     });
 
     test('CartProvider operates against segregated ICommerceRepository', () async {
@@ -378,6 +384,8 @@ void main() {
         commerceRepo: commerce,
       );
       await session.initialize();
+      expect(session.canViewPrices, isTrue);
+      expect(session.formatPrice(400.0, sourceCurrency: 'TRY'), r'$10.00');
 
       final cart = CartProvider(api: commerce, session: session);
       final product = Product.fromJson({

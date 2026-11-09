@@ -36,6 +36,7 @@ export interface Product {
   brand_id: string;
   category_id?: string;
   brand_name?: string;
+  brand_profile?: Brand;
   source_product_id?: string;
   source_product_group_id?: string;
   custom_sku?: string;
@@ -78,7 +79,25 @@ export interface SiblingProduct {
 export interface Brand {
   id: string;
   name: string;
+  slug?: string;
   alias_code?: string;
+  company_type?: string;
+  description?: string;
+  website?: string;
+  phone?: string;
+  whatsapp_phone?: string;
+  public_email?: string;
+  instagram_handle?: string;
+  location_address?: string;
+  export_countries?: string;
+  min_order_quantity?: number;
+  supports_private_label?: boolean;
+  supports_fason?: boolean;
+  is_verified?: boolean;
+  bank_name?: string;
+  bank_account_holder?: string;
+  iban?: string;
+  active_product_count?: number;
 }
 
 export interface CategoryTranslation {

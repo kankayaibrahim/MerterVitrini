@@ -7,6 +7,7 @@ import { Product, Category } from "@/types/store";
 import { t, getCategoryPrefix, getCategoryTitle } from "@/app/i18n";
 import { ExchangeRate } from "@/app/utils";
 import ProductCard from "@/components/store/ProductCard";
+import { PortalSponsoredSuppliersSection } from "@/components/store/SponsoredShowcaseSection";
 
 interface PortalViewProps {
   readonly lang: string;
@@ -276,6 +277,9 @@ export default function PortalView({
           )}
         </div>
       </div>
+
+      {/* B.5 SPONSORED FEATURED MANUFACTURERS & SHOWCASE SLOTS */}
+      <PortalSponsoredSuppliersSection lang={lang} />
 
       {/* C. VISUAL PREMIUM COLLECTIONS GRID */}
       <div className="mb-16 select-none">

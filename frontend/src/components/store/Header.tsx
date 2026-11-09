@@ -7,6 +7,7 @@ import { languages, t, getCategoryPrefix as getCategoryPrefixFn, getCategoryTitl
 import { Category } from "@/types/store";
 import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/app/utils";
+import { getValidStoreUser } from "@/app/storeAuth";
 import AuthModal from "./AuthModal";
 import WishlistDrawer from "./WishlistDrawer";
 import { useWishlistStore } from "@/store/useWishlistStore";
@@ -158,7 +159,25 @@ function HeaderTopBar({
         </div>
 
         {/* Language & Currency Selectors */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/ureticiler"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+          >
+            <span>{lang === "tr" ? "ÜRETİCİ FİRMALAR" : "MANUFACTURERS"}</span>
+          </Link>
+          <Link
+            href="/alim-talepleri"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+          >
+            <span>{lang === "tr" ? "ALIM TALEPLERİ (RFQ)" : "BUYING LEADS (RFQ)"}</span>
+          </Link>
+          <Link
+            href="/hizmet-saglayicilar"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-sky-700 hover:bg-sky-800 text-white font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+          >
+            <span>{lang === "tr" ? "LOJİSTİK & HİZMETLER" : "B2B SERVICES"}</span>
+          </Link>
           <Link
             href="/mobil-uygulama"
             className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#111111] hover:bg-zinc-800 text-white font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
@@ -600,17 +619,7 @@ export default function Header({
   const router = useRouter();
 
   const [activeLanguages, setActiveLanguages] = useState<LanguageItem[]>(languages);
-  const [user, setUser] = useState<StoreUser | null>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const userInfo = localStorage.getItem("store_user_info");
-        return userInfo ? JSON.parse(userInfo) : null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [user, setUser] = useState<StoreUser | null>(() => getValidStoreUser<StoreUser>());
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
 
@@ -633,18 +642,7 @@ export default function Header({
   };
 
   const checkAuth = () => {
-    if (typeof window !== "undefined") {
-      const userInfo = localStorage.getItem("store_user_info");
-      if (userInfo) {
-        try {
-          setUser(JSON.parse(userInfo));
-        } catch {
-          setUser(null);
-        }
-      } else {
-        setUser(null);
-      }
-    }
+    setUser(getValidStoreUser<StoreUser>());
   };
 
   useEffect(() => {

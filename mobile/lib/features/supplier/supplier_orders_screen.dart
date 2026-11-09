@@ -94,13 +94,77 @@ class _SupplierOrdersScreenState extends State<SupplierOrdersScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Alt Sipariş Yönetimi (#${detailed.subOrderNumber})',
+                      'Sipariş Yönetimi (#${detailed.subOrderNumber})',
                       style: const TextStyle(
                         fontSize: 16.5,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 10),
+                    if (detailed.customerName.isNotEmpty ||
+                        detailed.customerPhone.isNotEmpty ||
+                        detailed.deliveryAddress.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'ALICI İLETİŞİM & TESLİMAT BİLGİLERİ',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            if (detailed.customerName.isNotEmpty)
+                              Text(
+                                detailed.customerCompany.isNotEmpty
+                                    ? '${detailed.customerName} (${detailed.customerCompany})'
+                                    : detailed.customerName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            if (detailed.customerPhone.isNotEmpty)
+                              Text(
+                                'Tel: ${detailed.customerPhone}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            if (detailed.customerEmail.isNotEmpty)
+                              Text(
+                                'E-posta: ${detailed.customerEmail}',
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            if (detailed.deliveryAddress.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Adres: ${detailed.deliveryAddress}',
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     if (detailed.items.isNotEmpty) ...[
                       ...detailed.items.map(
                         (it) => Padding(
@@ -377,6 +441,37 @@ class _SupplierOrdersScreenState extends State<SupplierOrdersScreen> {
                                       color: AppColors.textSecondary,
                                     ),
                                   ),
+                                  if (o.customerName.isNotEmpty ||
+                                      o.customerPhone.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      [
+                                        if (o.customerName.isNotEmpty)
+                                          o.customerName,
+                                        if (o.customerCompany.isNotEmpty)
+                                          '(${o.customerCompany})',
+                                        if (o.customerPhone.isNotEmpty)
+                                          '• ${o.customerPhone}',
+                                      ].join(' '),
+                                      style: const TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                  if (o.deliveryAddress.isNotEmpty) ...[
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      o.deliveryAddress,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
                                   const Divider(height: 18),
                                   Row(
                                     mainAxisAlignment:

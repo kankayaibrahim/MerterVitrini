@@ -107,17 +107,33 @@ type CategoryNode struct {
 }
 
 type Brand struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	Slug      string     `json:"slug"`
-	AliasCode *string    `json:"alias_code,omitempty"`
-	Website   *string    `json:"website,omitempty"`
-	Phone     *string    `json:"phone,omitempty"`
-	Addresses []any      `json:"addresses,omitempty"`
-	IsActive  bool       `json:"is_active"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	Feeds     []*XmlFeed `json:"feeds,omitempty"`
+	ID                   string     `json:"id"`
+	Name                 string     `json:"name"`
+	Slug                 string     `json:"slug"`
+	AliasCode            *string    `json:"alias_code,omitempty"`
+	CompanyType          string     `json:"company_type"`
+	Description             string            `json:"description"`
+	DescriptionTranslations map[string]string `json:"description_translations,omitempty"`
+	Website                 *string           `json:"website,omitempty"`
+	Phone                *string    `json:"phone,omitempty"`
+	WhatsappPhone        string     `json:"whatsapp_phone"`
+	PublicEmail          string     `json:"public_email"`
+	InstagramHandle      string     `json:"instagram_handle"`
+	LocationAddress      string     `json:"location_address"`
+	ExportCountries      string     `json:"export_countries"`
+	MinOrderQuantity     int        `json:"min_order_quantity"`
+	SupportsPrivateLabel bool       `json:"supports_private_label"`
+	SupportsFason        bool       `json:"supports_fason"`
+	IsVerified           bool       `json:"is_verified"`
+	BankName             string     `json:"bank_name"`
+	BankAccountHolder    string     `json:"bank_account_holder"`
+	IBAN                 string     `json:"iban"`
+	ActiveProductCount   int        `json:"active_product_count"`
+	Addresses            []any      `json:"addresses,omitempty"`
+	IsActive             bool       `json:"is_active"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	Feeds                []*XmlFeed `json:"feeds,omitempty"`
 }
 
 type Product struct {
@@ -162,6 +178,7 @@ type Product struct {
 	Variants             []*ProductVariant    `json:"variants,omitempty"`
 	Images               []*ProductImage      `json:"images,omitempty"`
 	BrandName            *string              `json:"brand_name,omitempty"`
+	BrandProfile         *Brand               `json:"brand_profile,omitempty"`
 	CategoryTitle        *string              `json:"category_title,omitempty"`
 	SourceURL            *string              `json:"source_url,omitempty"`
 	Translations         map[string]any       `json:"translations,omitempty"`
@@ -275,13 +292,14 @@ type InquiryItem struct {
 }
 
 type Settings struct {
-	ID              string    `json:"id"`
-	Address         string    `json:"address"`
-	Phone           string    `json:"phone"`
-	Whatsapp        string    `json:"whatsapp"`
-	Email           string    `json:"email"`
-	ShowSinglePrice bool      `json:"show_single_price"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID                 string    `json:"id"`
+	Address            string    `json:"address"`
+	Phone              string    `json:"phone"`
+	Whatsapp           string    `json:"whatsapp"`
+	Email              string    `json:"email"`
+	ShowSinglePrice    bool      `json:"show_single_price"`
+	ShowPricesToGuests bool      `json:"show_prices_to_guests"`
+	UpdatedAt          time.Time `json:"updated_at"`
 }
 
 // --- Geographic & Localization Models ---
@@ -462,24 +480,31 @@ type SupplierProductVariantInput struct {
 	Price    float64 `json:"price,omitempty"`
 }
 
+type SupplierTranslationInput struct {
+	Title            string `json:"title"`
+	ShortDescription string `json:"short_description,omitempty"`
+	Description      string `json:"description,omitempty"`
+}
+
 type SupplierProductInput struct {
-	Title                string                        `json:"title"`
-	ShortDescription     string                        `json:"short_description,omitempty"`
-	Description          string                        `json:"description,omitempty"`
-	CategoryID           string                        `json:"category_id"`
-	ColorID              *string                       `json:"color_id,omitempty"`
-	FabricID             *string                       `json:"fabric_id,omitempty"`
-	Gender               string                        `json:"gender,omitempty"`
-	Season               string                        `json:"season,omitempty"`
-	BuyingPrice          float64                       `json:"buying_price"`
-	Price                float64                       `json:"price"`
-	Currency             string                        `json:"currency"`
-	PackingRatio         string                        `json:"packing_ratio,omitempty"`
-	SeriesRatio          string                        `json:"series_ratio,omitempty"`
-	MinimumOrderQuantity int                           `json:"minimum_order_quantity"`
-	IsActive             bool                          `json:"is_active"`
-	Images               []string                      `json:"images,omitempty"`
-	Variants             []SupplierProductVariantInput `json:"variants,omitempty"`
+	Title                string                              `json:"title"`
+	ShortDescription     string                              `json:"short_description,omitempty"`
+	Description          string                              `json:"description,omitempty"`
+	CategoryID           string                              `json:"category_id"`
+	ColorID              *string                             `json:"color_id,omitempty"`
+	FabricID             *string                             `json:"fabric_id,omitempty"`
+	Gender               string                              `json:"gender,omitempty"`
+	Season               string                              `json:"season,omitempty"`
+	BuyingPrice          float64                             `json:"buying_price"`
+	Price                float64                             `json:"price"`
+	Currency             string                              `json:"currency"`
+	PackingRatio         string                              `json:"packing_ratio,omitempty"`
+	SeriesRatio          string                              `json:"series_ratio,omitempty"`
+	MinimumOrderQuantity int                                 `json:"minimum_order_quantity"`
+	IsActive             bool                                `json:"is_active"`
+	Images               []string                            `json:"images,omitempty"`
+	Variants             []SupplierProductVariantInput       `json:"variants,omitempty"`
+	Translations         map[string]SupplierTranslationInput `json:"translations,omitempty"`
 }
 
 type SupplierApplication struct {
@@ -579,9 +604,32 @@ type SupplierSubOrder struct {
 	TrackingCompany  *string                `json:"tracking_company,omitempty"`
 	TrackingNumber   *string                `json:"tracking_number,omitempty"`
 	Notes            *string                `json:"notes,omitempty"`
+	CustomerName     string                 `json:"customer_name,omitempty"`
+	CustomerCompany  string                 `json:"customer_company,omitempty"`
+	CustomerPhone    string                 `json:"customer_phone,omitempty"`
+	CustomerEmail    string                 `json:"customer_email,omitempty"`
+	DeliveryAddress  string                 `json:"delivery_address,omitempty"`
+	BillingAddress   string                 `json:"billing_address,omitempty"`
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`
 	Items            []SupplierSubOrderItem `json:"items,omitempty"`
+}
+
+type SupplierDirectOrderSummary struct {
+	SubOrderID        string  `json:"sub_order_id"`
+	SubOrderNumber    string  `json:"sub_order_number"`
+	BrandID           string  `json:"brand_id"`
+	BrandName         string  `json:"brand_name"`
+	GrossAmount       float64 `json:"gross_amount"`
+	Currency          string  `json:"currency"`
+	WhatsappPhone     string  `json:"whatsapp_phone"`
+	Phone             string  `json:"phone"`
+	PublicEmail       string  `json:"public_email"`
+	LocationAddress   string  `json:"location_address"`
+	BankName          string  `json:"bank_name"`
+	BankAccountHolder string  `json:"bank_account_holder"`
+	IBAN              string  `json:"iban"`
+	WhatsappURL       string  `json:"whatsapp_url"`
 }
 
 type UpdateSubOrderStatusRequest struct {

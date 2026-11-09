@@ -32,6 +32,11 @@ class _CustomerCatalogScreenState extends State<CustomerCatalogScreen> {
   String _categoryId = '';
   String _brandId = '';
   String _gender = '';
+  bool _fason = false;
+  bool _privateLabel = false;
+  String _companyType = '';
+  String _maxMoq = '';
+  String _exportCountry = '';
   String _sortBy = 'newest';
   bool _singleColumn = false;
 
@@ -74,6 +79,11 @@ class _CustomerCatalogScreenState extends State<CustomerCatalogScreen> {
       (_categoryId.isNotEmpty ? 1 : 0) +
       (_brandId.isNotEmpty ? 1 : 0) +
       (_gender.isNotEmpty ? 1 : 0) +
+      (_fason ? 1 : 0) +
+      (_privateLabel ? 1 : 0) +
+      (_companyType.isNotEmpty ? 1 : 0) +
+      (_maxMoq.isNotEmpty ? 1 : 0) +
+      (_exportCountry.isNotEmpty ? 1 : 0) +
       (_sortBy != 'newest' ? 1 : 0);
 
   String _sortShortLabel(String sort) {
@@ -116,6 +126,11 @@ class _CustomerCatalogScreenState extends State<CustomerCatalogScreen> {
         categoryId: _categoryId,
         brandId: _brandId,
         gender: _gender,
+        fason: _fason,
+        privateLabel: _privateLabel,
+        companyType: _companyType,
+        maxMoq: _maxMoq,
+        exportCountry: _exportCountry,
         sortBy: _sortBy,
         limit: 24,
         offset: reset ? 0 : _products.length,
@@ -175,6 +190,11 @@ class _CustomerCatalogScreenState extends State<CustomerCatalogScreen> {
                                   _categoryId = '';
                                   _brandId = '';
                                   _gender = '';
+                                  _fason = false;
+                                  _privateLabel = false;
+                                  _companyType = '';
+                                  _maxMoq = '';
+                                  _exportCountry = '';
                                   _sortBy = 'newest';
                                 });
                               },
@@ -281,6 +301,134 @@ class _CustomerCatalogScreenState extends State<CustomerCatalogScreen> {
                         ),
                       ],
                       onChanged: (v) => setModalState(() => _gender = v ?? ''),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilterChip(
+                            label: const Text(
+                              'Private Label',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            selected: _privateLabel,
+                            selectedColor: AppColors.obsidian.withValues(alpha: 0.12),
+                            onSelected: (val) =>
+                                setModalState(() => _privateLabel = val),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: FilterChip(
+                            label: const Text(
+                              'Fason Üretim',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            selected: _fason,
+                            selectedColor: AppColors.obsidian.withValues(alpha: 0.12),
+                            onSelected: (val) =>
+                                setModalState(() => _fason = val),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _companyType,
+                      decoration: const InputDecoration(
+                        labelText: 'Tedarikçi Faaliyet Türü',
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: '', child: Text('Tümü')),
+                        DropdownMenuItem(
+                          value: 'uretici_toptanci',
+                          child: Text('Hazır Giyim Üretici & Toptancı'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'private_label',
+                          child: Text('Private Label Üretici'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'fason_atolye',
+                          child: Text('Fason Dikim Atölyesi'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'kumas_tedarikcisi',
+                          child: Text('Kumaş Tedarikçisi'),
+                        ),
+                      ],
+                      onChanged: (v) =>
+                          setModalState(() => _companyType = v ?? ''),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _maxMoq,
+                            decoration: const InputDecoration(
+                              labelText: 'Maks. MOQ',
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: '', child: Text('Tümü')),
+                              DropdownMenuItem(
+                                value: '6',
+                                child: Text('≤ 6 Adet'),
+                              ),
+                              DropdownMenuItem(
+                                value: '30',
+                                child: Text('≤ 30 Adet'),
+                              ),
+                              DropdownMenuItem(
+                                value: '60',
+                                child: Text('≤ 60 Adet'),
+                              ),
+                            ],
+                            onChanged: (v) =>
+                                setModalState(() => _maxMoq = v ?? ''),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _exportCountry,
+                            decoration: const InputDecoration(
+                              labelText: 'İhracat Pazarı',
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: '', child: Text('Tümü')),
+                              DropdownMenuItem(
+                                value: 'Almanya',
+                                child: Text('Almanya'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Rusya',
+                                child: Text('Rusya'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'İngiltere',
+                                child: Text('İngiltere'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'BAE',
+                                child: Text('BAE'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Polonya',
+                                child: Text('Polonya'),
+                              ),
+                            ],
+                            onChanged: (v) =>
+                                setModalState(() => _exportCountry = v ?? ''),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 20),
                     SizedBox(

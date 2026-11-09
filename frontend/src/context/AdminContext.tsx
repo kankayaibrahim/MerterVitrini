@@ -204,6 +204,7 @@ export function AdminProvider({
     whatsapp: "",
     email: "",
     show_single_price: false,
+    show_prices_to_guests: false,
   });
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -338,6 +339,13 @@ export function AdminProvider({
 
       try {
         await adminService.updateStoreSettings(storeSettings);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            "merter_show_prices_to_guests",
+            storeSettings.show_prices_to_guests ? "1" : "0"
+          );
+          window.dispatchEvent(new Event("auth-change"));
+        }
         setSettingsSuccess(true);
         setTimeout(() => setSettingsSuccess(false), 4000);
       } catch (err: unknown) {

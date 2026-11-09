@@ -1484,3 +1484,361 @@
   > "commitle pushlama"
 - **Yapılan İşlemler:**
   - Açık firma kimliği standardı, %0 marjlı birebir tedarikçi fiyatı (`PROFIT_RATE = 0.0`), mobil uygulama lüks vitrin / seri hesaplama / OTA güncelleme altyapısı, iş modeli karşılaştırma raporu (`docs/is_modeli_karsilastirma_ve_eksik_analizi.md`) ve veritabanı migration dosyası (`database/0019_set_direct_supplier_prices.sql`) Conventional Commits standardına uygun olarak yerel git deposuna commit edildi (`git push` çalıştırılmadı).
+
+
+---
+
+## Oturum #77 — 09.11.2026 (00:35)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "Artık tedarikçiler kendileri kendi bilgilerini ekleyebilmeli direk sipariş onlara gidebilmeli"
+- **Yapılan İşlemler ve Mimari Özet:**
+  - **Veritabanı (`database/0020_supplier_open_profile_and_direct_orders.sql` & `backend/db/db.go`):** `catalog.brands` tablosuna tedarikçi self-servis açık profil, iletişim, üretim kapasitesi (`company_type`, `description`, `whatsapp_phone`, `public_email`, `instagram_handle`, `location_address`, `export_countries`, `min_order_quantity`, `supports_private_label`, `supports_fason`, `is_verified`) ve doğrudan tahsilat (`bank_name`, `bank_account_holder`, `iban`) alanları eklendi. `catalog.orders` ve `catalog.supplier_sub_orders` tablolarına doğrudan alıcı iletişim ve teslimat alanları eklendi; komisyon oranları `%0.00` olarak güncellendi.
+  - **Go Backend (`supplier_portal.go`, `store_catalog.go`, `marketplace.go`, `store_orders.go`, `store_inquiry.go`, `router.go`):** `GET /api/v1/supplier/profile` ve `PUT /api/v1/supplier/profile` uç noktalarıyla tedarikçilerin kendi firma/iletişim/IBAN bilgilerini yönetmesi sağlandı; sipariş ve teklif uç noktaları (`POST /api/v1/store/orders` ve `POST /api/v1/store/inquiries`) siparişleri `%0` komisyonla doğrudan ilgili tedarikçiye (`catalog.supplier_sub_orders`) yönlendirecek ve tedarikçinin doğrudan WhatsApp/IBAN bilgilerini dönecek şekilde güncellendi.
+  - **Web & Mobil Ön Yüz (`SupplierDashboardClient.tsx`, `SupplierOrdersPanel.tsx`, `SupplierProfilePanel.tsx`, `SupplierDirectCard.tsx`, `ProductDetailClient.tsx`, `mobile/lib/`):** Tedarikçi Portalı'na **Gelen Siparişlerim** ve **Firma Vitrin & İletişim Bilgilerim** sekmeleri eklendi; ürün detay sayfalarında açık üretici iletişim/IBAN kartı ve doğrudan WhatsApp sipariş butonu devreye alındı.
+
+---
+
+## Oturum #78 — 09.11.2026 (00:58)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "bizde artık açık üretici kimliği kullanacağız yuap ve @[c:\Projects\mertervitrini.com.tr\docs\is_modeli_karsilastirma_ve_eksik_analizi.md] bu raporuda yaptıklarımıza bakarak güncelle"
+- **Yapılan İşlemler ve Mimari Özet:**
+  - Web vitrin sol filtre menüsünde (`frontend/src/components/store/FilterSidebar.tsx`), tedarikçi ürün modalında (`frontend/src/app/supplier/SupplierProductModal.tsx`) ve mobil katalog marka filtresinde (`mobile/lib/models/product.dart` -> `BrandSummary.maskedDisplayName`) kalan son `alias_code` gösterimleri açık firma adına (`brand.name`) çevrildi.
+  - `docs/is_modeli_karsilastirma_ve_eksik_analizi.md` raporu ve ilgili artifact belgesi; tamamlanan **Açık Üretici Kimliği**, **%0 Marj Doğrudan Tedarikçi Fiyatı**, **Self-Servis Tedarikçi Vitrin/İletişim/IBAN Yönetimi** ve **%0 Komisyonlu Doğrudan Tedarikçiye Sipariş Yönlendirme** mimarilerini yansıtacak şekilde güncellendi.
+
+
+---
+
+### [2026-11-09 02:00:00] — Session #79
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > `İletişim Kanalı | Alıcı doğrudan üreticinin WhatsApp, telefon veya iletişim formuna ulaşır. | Alıcı yalnızca platform içi Canlı B2B Sohbet (WebSocket Chat) üzerinden maskeli markayla konuşur. | 🟡 Kısmen Var (WhatsApp & açık profil eksik)`
+  > `tedarikçiler direk whatsappını ekleyebilsin direk tedarikçi ile iletişime geçebilsin`
+- **Yapılan İşlemler ve Mimari Özeti:**
+  1. **Tedarikçilerin Doğrudan WhatsApp Hattını 1-Tıkla Ekleyebilmesi (Web, Admin & Mobil):**
+     - **Web Tedarikçi Portalı (`frontend/src/app/supplier/SupplierDashboardClient.tsx`):** Tedarikçi paneli üst kısmına kalıcı **"Doğrudan Müşteri & Sipariş WhatsApp Hattınız"** hızlı kaydetme çubuğu (`quick_whatsapp_only: true` ile `PUT /api/v1/supplier/profile`) eklendi. Ayrıca **Firma Vitrin & İletişim Bilgilerim** (`SupplierProfilePanel.tsx`) sekmesinden tüm iletişim kanalları yönetilebilmektedir.
+     - **Web Admin Paneli (`frontend/src/components/admin/integrations/SuppliersManager.tsx` & `backend/handlers/suppliers.go`):** Yöneticilerin tedarikçi oluştururken veya düzenlerken doğrudan **WhatsApp Sipariş Hattı (`whatsapp_phone`)** ekleyip görebilmesi sağlandı.
+     - **Mobil Tedarikçi Stüdyosu (`mobile/lib/features/supplier/supplier_wallet_team_screen.dart`):** Mobil uygulama içerisindeki Tedarikçi paneline **"Doğrudan Müşteri & Sipariş WhatsApp Hattım"** kartı ve tek dokunuşla WhatsApp numarası ekleme/düzenleme penceresi eklendi.
+     - **Otomatik Numara Fallback (`supplier_portal.go`, `suppliers.go`, `store_catalog.go`, `marketplace.go`, `mobile.go`):** Tedarikçi henüz özel bir `whatsapp_phone` girmemişse sistem otomatik olarak firmanın `phone` alanına ve tedarikçi sahibinin `catalog.supplier_users.phone` numarasına fallback yapar.
+  2. **Alıcıların Doğrudan Tedarikçi ile İletişime Geçebilmesi (WhatsApp, Telefon, Doğrudan İletişim Formu & Canlı Sohbet):**
+     - **Ürün Detay Sayfası (`frontend/src/app/product/[slug]/components/SupplierDirectCard.tsx`):**
+       - **WhatsApp ile Doğrudan Tedarikçiye Yaz (`https://wa.me/<tedarikci_no>`):** Ürün adı, SKU, seri adedi ve toplam tutarı hazır mesaj olarak içeren doğrudan üretici WhatsApp bağlantısı.
+       - **Doğrudan Tedarikçi İletişim & Sipariş Formu:** Alıcının Ad Soyad, Telefon/WhatsApp, Firma Adı ve Mesajını girerek doğrudan ilgili tedarikçinin paneline (`POST /api/v1/store/inquiries` -> `catalog.supplier_sub_orders`) talep düşürdüğü ve anında üreticinin WhatsApp hattını açtığı gömülü form.
+       - **Doğrudan Telefon (`tel:`) ve Canlı B2B Sohbet (`WebSocket Chat`):** Tek tıkla arama ve canlı temsilci sohbeti.
+     - **Hızlı Bakış (Quick View) Modalı (`frontend/src/components/store/ProductDetailsModal.tsx` & `backend/handlers/store_catalog.go`):** `ListProducts` yanıtlarına `brand_profile` eklendi ve Hızlı Bakış penceresine **"WhatsApp ile Tedarikçiye Yaz"** ve **"Ara"** butonları yerleştirildi.
+     - **Mobil Müşteri Ürün Detay Ekranı (`mobile/lib/features/customer/product_detail_screen.dart`):** Üretici kartı içerisine **"WHATSAPP İLE TEDARİKÇİYE YAZ"** ve **"ARA"** etkileşimli butonları (`url_launcher`) eklendi.
+  3. **Derleme, Denetim ve Canlı Dağıtım:**
+     - `go vet ./...`, `npm run lint` ve `flutter analyze` sıfır hata/uyarı ile doğrulandı; Go Linux binary (`backend/bin/backend`) derlendi ve canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+---
+
+### [2026-11-09 02:18:00] — Session #80
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > `Gelir Modeli | Aylık Üyelik Paketi (0 TL / 990 TL / 2.490 TL) + Sponsorlu Reklam Alanları. | Sipariş Komisyonu (MarketplaceHandler); üyelik paketi veya ilan sınırı yok. | ❌ Abonelik & Reklam Modülü Eksik`
+  > `şimdilik ücretsiz ama bizim alt yapımız bunu desteklemeli aylık bizede ödeme yapabilmeliler tedarikçiler o yüzden muhasbe tabloları ne kadar ödedi faturalandırma vb şeyleri tut bizde ürün sınırı yok`
+- **Yapılan İşlemler ve Mimari Özeti:**
+  1. **Sınırsız Ürün Kotalı (`max_products = -1`) Abonelik Paketleri, Muhasebe, Tahsilat ve Faturalandırma Veritabanı Şeması (`database/0021_supplier_subscriptions_accounting_billing.sql` & `backend/db/db.go`):**
+     - `catalog.subscription_plans`: **Ücretsiz Vitrin (`FREE` - 0 TL)**, **Profesyonel Vitrin (`PRO` - 990 TL/Ay)** ve **Premium & Sponsorlu Vitrin (`PREMIUM` - 2.490 TL/Ay)** paketleri tanımlandı. Tüm paketlerde ürün yükleme kotası **Sınırsız (`max_products = -1`)** olarak ayarlandı (*"bizde ürün sınırı yok"*).
+     - `catalog.supplier_subscriptions`: Her tedarikçi için varsayılan olarak **Ücretsiz & Sınırsız Ürün (`is_complimentary = true`)** abonelik kartı açıldı; tedarikçinin bugüne kadar yaptığı toplam ödeme (`total_paid_amount`), kesilen toplam fatura (`total_invoiced_amount`), güncel cari bakiye (`outstanding_balance`) ve resmi vergi/fatura bilgileri (`billing_company_title`, `tax_office`, `tax_number`, `billing_address`, `billing_email`) tutuldu.
+     - `catalog.supplier_invoices`: Tedarikçilere kesilen abonelik ve reklam faturaları (`MV-FAT-...`, %20 KDV hesaplamalı).
+     - `catalog.supplier_subscription_payments`: Tedarikçilerin Merter Vitrini'ne yaptığı aylık/yıllık ödeme ve tahsilat kayıtları (`MV-THS-...`).
+     - `catalog.supplier_accounting_ledger`: Çift taraflı muhasebe cari hesap ekstresi (`INVOICE_DEBIT` borç tahakkuku ve `PAYMENT_CREDIT` ödeme alacağı).
+  2. **Backend API (`backend/handlers/supplier_billing.go` & `backend/router.go`):**
+     - Tedarikçi uçları: `GET /api/v1/supplier/billing`, `PUT /api/v1/supplier/billing/tax-info`, `POST /api/v1/supplier/billing/payments`.
+     - Admin muhasebe uçları: `GET /api/v1/admin/billing/overview`, `PUT /api/v1/admin/billing/subscriptions/{brand_id}`, `POST /api/v1/admin/billing/invoices`, `POST /api/v1/admin/billing/payments`, `PUT /api/v1/admin/billing/payments/{id}/status`.
+  3. **Web Tedarikçi Portalı (`/supplier` -> `SupplierBillingPanel.tsx`) & Admin Paneli (`/admin/suppliers?tab=billing` -> `SupplierBillingAdminSection.tsx`):**
+     - Tedarikçi paneline **"Üyelik, Muhasebe & Faturalarım"** sekmesi eklendi (Aktif paket, Sınırsız Ürün garantisi, ne kadar ödediği, kesilen faturalar, cari ekstre, aylık ödeme bildirimi formu ve resmi vergi dairesi/VKN formu).
+     - Admin paneline **"Tedarikçi Muhasebe, Abonelik & Faturalandırma"** sekmesi eklendi (Toplam tahsilat, toplam fatura, her tedarikçinin ne kadar ödediği, tek tıkla tahsilat işleme, fatura kesme, ödeme onaylama ve paket/muafiyet yönetimi).
+  4. **Derleme ve Canlı Dağıtım:**
+     - `go vet ./...` ve `npm run lint` sıfır hata ile doğrulandı; Go Linux binary derlendi ve canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+---
+
+### Oturum #81 — Üye Olmayan Ziyaretçilere Toptan Fiyatların Gizlenmesi (Members-Only Pricing Guard: Web + Mobil)
+- **Tarih / Saat:** 09.11.2026
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > *"üye olmayan fiyatları göremez artık o şekle getir siteyi mobil uygulamayı falan"*
+- **Yapılan İşlemler & Aksiyon Özeti:**
+  1. **Web Mağazası (`frontend/`) Üyelere Özel Fiyat Koruması:**
+     - [`frontend/src/app/storeAuth.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/storeAuth.ts) oluşturuldu: `useSyncExternalStore` tabanlı SSR-uyumlu `useIsStoreAuthenticated()`, `openStoreAuthModal("login" | "register")`, `getMemberPriceLabel(lang)` ve `getShortMemberPriceLabel(lang)` yardımcıları eklendi.
+     - [`frontend/src/components/store/ProductCard.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/ProductCard.tsx): Giriş yapmamış ziyaretçilerde (`!isAuthenticated`) indirim yüzdesi rozeti ve birim/seri fiyatları gizlenerek **"🔒 Üyelere Özel Fiyat (Giriş Yap)"** butonu gösterildi; tıklanınca doğrudan giriş penceresi (`AuthModal`) açılması sağlandı.
+     - [`frontend/src/components/store/ProductDetailsModal.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/ProductDetailsModal.tsx): Hızlı bakış modalında birim fiyat, sipariş özeti toplam tutarı ve sepete ekle butonu üye olmayan kullanıcılara kapatılarak giriş ekranına yönlendirildi.
+     - [`frontend/src/app/product/[slug]/components/ProductSpecs.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/[slug]/components/ProductSpecs.tsx), [`OrderCalculator.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/[slug]/components/OrderCalculator.tsx), [`SupplierDirectCard.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/[slug]/components/SupplierDirectCard.tsx) ve [`ProductDetailClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/[slug]/ProductDetailClient.tsx): Ürün detay sayfasında birim fiyat, toplam tutar ve sepete ekleme aksiyonları sadece giriş yapmış üyelere açıldı.
+     - [`frontend/src/components/store/WishlistDrawer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/WishlistDrawer.tsx) ve [`frontend/src/components/store/CartDrawer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/CartDrawer.tsx): Favori ve sepet çekmecelerinde üye olmayanlar için fiyatlar gizlendi.
+  2. **Mobil Uygulama (`mobile/`) Üyelere Özel Fiyat Koruması:**
+     - [`mobile/lib/providers/session_provider.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/providers/session_provider.dart): `canViewPrices` (`isCustomerLoggedIn || isSupplierLoggedIn`) eklendi ve `formatPrice` metodu giriş yapılmadığında `'Üyelere Özel'` dönecek şekilde korumaya alındı.
+     - [`mobile/lib/widgets/product_card.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/widgets/product_card.dart) ve [`mobile/lib/features/customer/product_detail_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/product_detail_screen.dart): Ürün kartlarında, ürün detayında ve hızlı sepete ekleme butonlarında üye olmayan kullanıcılara **"🔒 ÜYELERE ÖZEL FİYAT (GİRİŞ YAP)"** / **"🔒 FİYATLARI GÖRMEK İÇİN GİRİŞ YAPIN / ÜYE OLUN"** butonu gösterilerek tıklandığında `AuthScreen` açılması sağlandı.
+  3. **Test, Derleme ve Canlı Sunucu Dağıtımı:**
+     - `npm run lint`, `flutter analyze` ve `flutter test` (`13/13` test) **0 hata / 0 uyarı** ile geçti.
+     - Canlı sunucuya (`213.202.255.80`) `unified_deployer.py` ile Next.js SSR frontend dağıtımı başlatıldı.
+
+
+---
+
+### Oturum #82 — Vitrin Müşteri Oturum Doğrulaması ve Fiyat Aralığı Filtresi Koruması (`storeAuth.ts`, `Header.tsx`, `FilterSidebar.tsx`, `CatalogView.tsx`)
+- **Tarih / Saat:** 09.11.2026
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > *"giriş yapmadım ama fiyatlar görünüyor"*
+- **Yapılan İşlemler & Aksiyon Özeti:**
+  1. **Kök Neden Tespiti ve Oturum Doğrulaması ([`frontend/src/app/storeAuth.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/storeAuth.ts) & [`Header.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/Header.tsx)):**
+     - `storeAuth.ts` içindeki `merter_supplier_token` kontrolü kaldırıldı (tarayıcıda daha önce `/supplier` açılmış olduğunda vitrinde müşteri girişi yapılmasa bile fiyatların açık görünmesine yol açıyordu).
+     - `getValidStoreUser()` eklendi: hem `store_user_token` hem `store_user_info` varlığını, JWT `exp` süresinin geçmemiş olmasını ve `/api/v1/store/profile` üzerinden aktif oturum geçerliliğini denetler; süresi dolmuş veya geçersiz token'ları `localStorage`'dan otomatik temizler.
+     - `Header.tsx` ile tüm fiyat bileşenleri (`ProductCard`, `ProductDetailsModal`, `ProductSpecs`, `OrderCalculator`) aynı `getValidStoreUser()` fonksiyonuna bağlanarak %100 senkronize edildi.
+  2. **Sol Filtre Menüsü ve Sıralama Koruması ([`FilterSidebar.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/FilterSidebar.tsx) & [`CatalogView.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/CatalogView.tsx)):**
+     - Giriş yapmamış ziyaretçilerde sol menüdeki **Fiyat Aralığı (Min - Max)** giriş kutuları gizlenerek **"🔒 Üyelere Özel Fiyat (Giriş Yap)"** butonuna dönüştürüldü.
+     - Ürün sıralama menüsündeki **Fiyata Göre Artan / Azalan** seçenekleri üye olmayan ziyaretçiler için gizlendi.
+  3. **Test ve Dağıtım:**
+     - `npm run lint` 0 hata / 0 uyarı ile geçti ve `unified_deployer.py` ile canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+---
+
+### [2026-11-09 03:08] — Oturum #83 (SupplierDashboardClient.tsx SonarLint S3776 & S3358 Refactoring)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > `frontend/src/app/supplier/SupplierDashboardClient.tsx` dosyasındaki 4 SonarLint uyarısının (`typescript:S3776` Cognitive Complexity 38 -> <=15 ve 3 adet `typescript:S3358` iç içe ternary operatörü) giderilmesi.
+- **Alınan Aksiyonlar & Mimari Kararlar:**
+  1. **İç İçe Ternary (`typescript:S3358`) Giderimi:**
+     - [SupplierDashboardClient.tsx](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/supplier/SupplierDashboardClient.tsx) içerisindeki `activeSection` (`orders` / `profile` / `billing` / `chat` / `catalog`) iç içe ternary zinciri bağımsız `if (activeSection === ...)` erken dönüşlerine sahip [`SupplierSectionContent`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/supplier/SupplierDashboardClient.tsx) bileşenine ayrıştırıldı.
+  2. **Cognitive Complexity (`typescript:S3776`) Düşürümü (38 -> <=10):**
+     - Hızlı WhatsApp banner'ı [`SupplierQuickWhatsappBanner`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/supplier/SupplierDashboardClient.tsx), sekme navigasyonu [`SupplierDashboardNavTabs`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/supplier/SupplierDashboardClient.tsx) ve katalog filtre araç çubuğu [`SupplierCatalogToolbar`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/supplier/SupplierDashboardClient.tsx) alt bileşenlerine ayrıldı.
+     - Oturum/profil yükleme ve katalog senkronizasyon mantığı [`useSupplierAuthAndProfile`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/supplier/SupplierDashboardClient.tsx) ve [`useSupplierProductCatalog`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/supplier/SupplierDashboardClient.tsx) özel hook'larına ve saf yardımcı fonksiyonlara (`normalizeEditableProductDetail`, `performImageUpload`, `performProductSave`, `performProductDelete`) taşındı.
+
+
+---
+
+### [2026-11-09 03:15] — Oturum #84 (Canlı B2B Sohbet İçin Zorunlu Üye Girişi — Backend, Web & Mobil)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > "canlı sohbet içinde üye girişi yapması lazım"
+- **Alınan Aksiyonlar & Mimari Kararlar:**
+  1. **Go Backend ([chat.go](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/chat.go)):**
+     - `resolveCustomerIdentity` içerisindeki anonim/misafir (`guest_...` / `X-Chat-Customer-Id`) yedekleme (fallback) mekanizması kaldırıldı; yalnızca geçerli `Authorization: Bearer <token>` JWT kimlik doğrulaması kabul edilecek şekilde sıkılaştırıldı.
+     - `InitOrGetRoom`, `ListCustomerMessages`, `SendCustomerMessage` ve `AcceptCustomOffer` uç noktaları üye girişi yapmamış isteklerde `401 Unauthorized` döndürecek şekilde koruma altına alındı.
+  2. **Web Mağaza ([ProductDetailClient.tsx](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/ProductDetailClient.tsx), [OrderCalculator.tsx](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/components/OrderCalculator.tsx), [SupplierDirectCard.tsx](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/components/SupplierDirectCard.tsx), [StoreChatDrawer.tsx](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/StoreChatDrawer.tsx)):**
+     - Ürün detay sayfasındaki *"Tedarikçiye Sor / Özel Fiyat İste (Canlı)"* ve *"Canlı B2B Sohbet"* butonları üye girişi yapılmadığında kilit ikonu ile *"Canlı Sohbet & Özel Fiyat İçin Giriş Yap"* / *"Canlı Sohbet (Üyelere Özel)"* gösterir ve tıklandığında doğrudan giriş/kayıt modalını (`openStoreAuthModal("login")`) açar.
+     - `StoreChatDrawer` bileşeninde oturum kontrolü (`useIsStoreAuthenticated`) eklendi; giriş yapılmamışsa Centrifuge WebSocket bağlantısı veya oda oluşturma çağrısı başlatılmaz ve üye giriş ekranı gösterilir.
+  3. **Flutter Mobil Uygulama ([product_detail_screen.dart](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/product_detail_screen.dart), [chat_rooms_screen.dart](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/chat/chat_rooms_screen.dart), [chat_provider.dart](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/providers/chat_provider.dart)):**
+     - Ürün detayındaki `_openSupplierChatSelector()` aksiyonu üye girişi yoksa doğrudan `AuthScreen()` ekranına yönlendirir.
+     - Alt menüdeki Mesajlar (`ChatRoomsScreen`) sekmesi, müşteri girişi yapılmadığında *"CANLI SOHBET ÜYELERE ÖZELDİR"* bilgi ekranı ve *"ÜYE GİRİŞİ YAP / KAYIT OL"* butonu gösterir; `ChatProvider` anonim WebSocket bağlantısı açmaz.
+  4. **Doğrulama & Canlı Sunucu Dağıtımı:**
+     - `go vet ./...`, `npm run lint` ve `flutter analyze` **0 hata / 0 uyarı** ile geçti.
+
+
+---
+
+## Oturum #85 — Admin Panelinden Ön Yüz Fiyat Görünürlüğü (Flag / Toggle) Yönetimi
+- **Tarih / Saat:** 2026-11-09 03:28:35 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"mesela sitede ön yüzde fiyat gösterip göstermeyi ben bir flage bağlamak istiyorum admin panelden"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Veritabanı & Go Backend (`database/0020_add_show_prices_to_guests_setting.sql`, `backend/db/db.go`, `backend/models/models.go`, `backend/handlers/admin_catalog.go`, `backend/handlers/store_catalog.go`, `backend/handlers/mobile.go`):**
+     - `catalog.settings` tablosuna `show_prices_to_guests BOOLEAN NOT NULL DEFAULT false` kolonu eklendi (hem `ConnectDB` başlangıç otomatik şema kurulumuna hem de `0020_add_show_prices_to_guests_setting.sql` migration dosyasına).
+     - `models.Settings` yapısına `ShowPricesToGuests bool` (`json:"show_prices_to_guests"`) alanı eklendi.
+     - `GET /api/v1/settings`, `PUT /api/v1/settings`, `GET /api/v1/store/settings` ve `GET /api/v1/mobile/bootstrap` uçlarında `show_prices_to_guests` bayrağı okunup güncellenir hale getirildi.
+  2. **Admin Paneli Site Ayarları (`frontend/src/app/admin/settings/site/page.tsx`, `frontend/src/services/admin-api.service.ts`, `frontend/src/context/AdminContext.tsx`):**
+     - Admin Paneli -> **Mağaza & Showroom İletişim Ayarları (`/admin/settings/site`)** ekranına **"Ziyaretçilere (Üye Olmayanlara) Fiyatları Göster"** anahtarı (toggle switch) eklendi.
+     - Admin bu bayrağı **AÇIK** yaptığında üye girişi yapmamış ziyaretçiler de fiyatları görebilir; **KAPALI** yaptığında yalnızca üye girişi yapmış kullanıcılar fiyatları görebilir (ziyaretçilere `"Üyelere Özel Fiyat (Giriş Yap)"` gösterilir).
+  3. **Web Vitrini ve Mobil Uygulama Entegrasyonu (`frontend/src/app/storeAuth.ts`, `StorefrontLayout.tsx`, `OrderCalculator.tsx`, `SupplierDirectCard.tsx`, `ProductDetailClient.tsx`, `StoreChatDrawer.tsx`, `mobile/lib/providers/session_provider.dart`, `mobile/lib/features/customer/product_detail_screen.dart`):**
+     - `storeAuth.ts` içinde `/api/v1/store/settings` üzerinden `show_prices_to_guests` bayrağı senkronize edildi; `useIsStoreAuthenticated()` kancası üye girişi VEYA `show_prices_to_guests == true` durumuna bağlandı.
+     - Canlı B2B Sohbet (`useIsStoreMemberLoggedIn()` ve mobilde `session.isMemberLoggedIn`) her durumda gerçek üye girişi gerektirmeye devam edecek şekilde ayrıştırıldı.
+     - Mobil `SessionProvider.canViewPrices` özelliği `isMemberLoggedIn || showPricesToGuests` olarak güncellendi.
+  4. **Doğrulama & Canlı Dağıtım:** `go vet ./...`, `npm run lint` ve `flutter analyze` sıfır uyarıyla doğrulandı; Go Linux binary derlenip backend ve frontend canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+---
+
+## Oturum #86 — Bağımsız Merter Üretici Firma Rehberi (`/ureticiler`) ve Firma Özel Vitrin Sayfası (`/ureticiler/[slug]`)
+- **Tarih / Saat:** 2026-11-09 03:51:15 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"1. Vizyon & Konumlandırma ... Bağımsız Firma Rehber Sayfası (/ureticiler ve /ureticiler/[slug]) eklenerek firma dizini tamamlanmalı. eksiğimiz varsa yapalım mı?"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Go Backend (`backend/models/models.go`, `backend/handlers/store_catalog.go`, `backend/router.go`):**
+     - `models.Brand` yapısına `ActiveProductCount int` (`json:"active_product_count"`) alanı eklendi.
+     - `GET /api/v1/store/brands` ucunda her üreticinin aktif ürün sayısı (`active_product_count`) sorguya dahil edildi.
+     - Tekil üretici vitrini için `GET /api/v1/store/brands/{slug}` (`GetBrandBySlug`) ucu eklendi.
+  2. **Bağımsız Firma Rehberi (`/ureticiler`) ve Firma Özel Vitrini (`/ureticiler/[slug]`):**
+     - `frontend/src/app/ureticiler/page.tsx` ve `SuppliersDirectoryClient.tsx` oluşturuldu: Faaliyet türüne (`Üretici & Toptan Satış`, `Private Label`, `Fason Üretim Atölyesi`, `Kumaş Toptancısı`, `Tekstil Aksesuar`), `Private Label` / `Fason` yetkinliklerine ve anahtar kelimeye göre filtrelenebilen açık Merter Üretici Rehberi hazırlandı.
+     - `frontend/src/app/ureticiler/[slug]/page.tsx` ve `SupplierShowcaseClient.tsx` oluşturuldu: Her üreticinin doğrulanmış firma profili, Merter adresi, telefon/WhatsApp/e-posta/web sitesi, doğrudan banka IBAN bilgisi, canlı B2B sohbet butonu ve firmaya ait tüm aktif toptan ürün koleksiyonu tek sayfada sunuldu.
+  3. **Vitrin Navigasyon & Rapor Güncellemesi (`Header.tsx`, `SupplierDirectCard.tsx`, `docs/is_modeli_karsilastirma_ve_eksik_analizi.md`):**
+     - Üst bara **"ÜRETİCİ FİRMALAR"** (`/ureticiler`) bağlantısı, ürün detayındaki `SupplierDirectCard` bileşenine ise **"Firma Vitrini →"** (`/ureticiler/[slug]`) bağlantısı eklendi.
+     - `docs/is_modeli_karsilastirma_ve_eksik_analizi.md` içindeki **1. Vizyon & Konumlandırma** maddesi **🟢 %100 Tamamlandı** olarak güncellendi.
+
+
+---
+
+## Oturum #87 — Tedarikçi ROI, Ülke Dağılımı ve Ziyaretçi Analitiği Modülü (Bölüm 3)
+- **Tarih / Saat:** 2026-11-09 04:02:15 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"3. Firma ROI & Ziyaretçi Raporları ... Tedarikçi paneline Firma Performans & Ziyaretçi Analitiği (Ülke, Görüntülenme, WhatsApp/İletişim tıklama sayacı) eklenmeli. bunu yapalım"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Veritabanı (`database/0022_add_brand_analytics_events.sql`, `backend/db/db.go`):**
+     - `analytics.brand_events` tablosu ve performans indeksleri (`idx_brand_events_brand_created`, `idx_brand_events_brand_type`, `idx_brand_events_product`) oluşturuldu; `ConnectDB` başlangıç otomatik kurulumuna eklendi.
+  2. **Go Backend (`backend/handlers/brand_analytics.go`, `store_catalog.go`, `chat.go`, `marketplace.go`, `router.go`):**
+     - `POST /api/v1/store/brand-events` (`TrackBrandEvent`) ucu ve sunucu içi `RecordBrandAnalyticsEvent` yardımcısı eklendi (`profile_view`, `product_view`, `whatsapp_click`, `phone_click`, `email_click`, `website_click`, `inquiry_submit`, `chat_start`).
+     - Ziyaretçi ülke kodu (`CF-IPCountry`, `X-Country-Code`, `Accept-Language`) otomatik çözümlenerek kaydedilir hale getirildi.
+     - Tedarikçi Portalı için `GET /api/v1/supplier/analytics?period=7d|30d|90d` (`GetSupplierBrandAnalytics`) ucu eklendi; profil/ürün görüntülenme, tekil ziyaretçi, WhatsApp/telefon tıklamaları, doğrudan sipariş/sohbet talepleri, ülke dağılımı ve en çok ilgi gören 10 koleksiyon ürünü raporlandı.
+  3. **Frontend Telemetri & Tedarikçi Analitik Sekmesi (`utils.ts`, `SupplierDirectCard.tsx`, `SuppliersDirectoryClient.tsx`, `SupplierShowcaseClient.tsx`, `SupplierAnalyticsPanel.tsx`, `SupplierDashboardClient.tsx`):**
+     - Vitrin ve firma rehberindeki WhatsApp/Telefon/E-posta/Web sitesi bağlantıları `trackBrandEvent` ile bağlandı.
+     - `/supplier` paneline **"Ziyaretçi & ROI Analitiği"** sekmesi (`SupplierAnalyticsPanel.tsx`) eklendi.
+     - `docs/is_modeli_karsilastirma_ve_eksik_analizi.md` içindeki 3. madde **🟢 %100 Tamamlandı** olarak güncellendi.
+
+
+---
+
+## Oturum #88 — Alıcı Talep Panosu (B2B Alım İlanları / Buying Leads / RFQ — Bölüm 5.A)
+- **Tarih / Saat:** 2026-11-09 04:13:15 +03:00
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"5.A. Alıcı Talep Panosu (RFQ) ... Alıcı Talep Panosu (Buying Leads / RFQ) (İlan açma, admin onayı, üreticilerin teklif vermesi) kurulmalı. bunuda yapalım"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Veritabanı (`database/0023_add_buyer_rfq_tables.sql`, `backend/db/db.go`):**
+     - `catalog.buyer_rfqs` (alım ilanları) ve `catalog.buyer_rfq_offers` (üreticilerin verdiği teklifler) tabloları ve `catalog.buyer_rfq_seq` (`MV-RFQ-YYYY-XXXX`) dizisi oluşturuldu; `ConnectDB` başlangıç otomatik kurulumuna eklendi.
+  2. **Go Backend (`backend/handlers/rfq.go`, `backend/router.go`):**
+     - **Vitrin Uçları:** `GET /api/v1/store/rfqs` (`ListPublicRfqs`) ve `POST /api/v1/store/rfqs` (`CreatePublicRfq`).
+     - **Tedarikçi Portalı Uçları:** `GET /api/v1/supplier/rfqs` (`ListSupplierRfqs` — alıcının açık telefon/WhatsApp/e-posta/ülke bilgileriyle) ve `POST /api/v1/supplier/rfqs/{id}/offers` (`SubmitSupplierRfqOffer` — teklif kaydetme + 1-tıkla alıcıya WhatsApp teklif mesajı URL'i üretimi).
+     - **Admin Moderasyon Uçları:** `GET /api/v1/admin/rfqs`, `PUT /api/v1/admin/rfqs/{id}/status` (`APPROVED`, `PENDING`, `CLOSED`, `REJECTED`), `DELETE /api/v1/admin/rfqs/{id}`.
+  3. **Frontend (`/alim-talepleri`, `/supplier`, `/admin/rfq`, `Header.tsx`):**
+     - **Açık Alıcı Talep Panosu (`/alim-talepleri`):** `frontend/src/app/alim-talepleri/page.tsx` ve `BuyerRfqBoardClient.tsx` ile alıcıların yeni toptan/Private Label/fason alım ilanı açabildiği ve mevcut ilanların filtrelenebildiği pano kuruldu; `Header.tsx` üst barına **"ALIM TALEPLERİ (RFQ)"** butonu eklendi.
+     - **Tedarikçi Portalı (`SupplierRfqPanel.tsx` & `SupplierDashboardClient.tsx`):** `/supplier` paneline **"Alıcı Talepleri (RFQ)"** sekmesi eklendi; üreticiler alıcıların iletişim bilgilerini görüp doğrudan fiyat teklifi verebilir ve WhatsApp'tan yazabilir.
+     - **Admin Paneli (`/admin/rfq`):** `frontend/src/app/admin/rfq/page.tsx` moderasyon ekranı eklendi.
+     - `docs/is_modeli_karsilastirma_ve_eksik_analizi.md` içindeki 5.A maddesi **🟢 %100 Tamamlandı** olarak güncellendi.
+
+
+---
+
+## Oturum #89 — Çok Dilli Tedarikçi Ürün & Profil Çeviri Düzenleme Sistemi (Bölüm 5.C)
+- **Tarih / Saat:** 09.11.2026
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"5.C. Çok Dilli Platform (TR/EN/AR/RU) | 4 dil + otomatik çeviri + firmaların çeviriyi düzenleyebilmesi | TR, EN, AR (RTL), RU ve LibreTranslate otomatik çeviri motoru tam çalışıyor | 🟢 %85 Hazır | Tedarikçi panelinde (/supplier & Mobil) firmanın otomatik çevrilen ürün/profil metinlerini elle düzenleyebileceği ekran eklenmeli. bunuda yapalım"`
+- **Yapılan İşlemler & Mimari Özeti:**
+  1. **Veritabanı & Go Backend (`database/0024_add_supplier_translations_support.sql`, `backend/db/db.go`, `backend/models/models.go`, `backend/handlers/supplier_portal.go`, `backend/handlers/store_catalog.go`, `backend/router.go`):**
+     - `catalog.brands` tablosuna `description_translations JSONB NOT NULL DEFAULT '{}'::jsonb` kolonu eklendi ve `GetProfile`, `UpdateProfile`, `ListBrands` ve `GetBrandBySlug` uçlarına bağlandı.
+     - `SupplierProductInput` modeline `Translations map[string]SupplierTranslationInput` (`title`, `short_description`, `description`) eklendi.
+     - `GetProduct`, `CreateProduct`, `UpdateProduct` uçları `catalog.product_translations` tablosunda `tr`, `en`, `ru`, `ar` çevirilerini okuyup güncelleyecek şekilde genişletildi.
+     - `GET /api/v1/supplier/products/{id}/translations`, `PUT /api/v1/supplier/products/{id}/translations` ve LibreTranslate üzerinden tek tıkla 3 dile (`en`, `ru`, `ar`) otomatik çeviri yapan `POST /api/v1/supplier/translate` uçları eklendi.
+  2. **Web Tedarikçi Portalı (`frontend/src/app/supplier/SupplierProductModal.tsx`, `SupplierDashboardClient.tsx`, `SupplierProfilePanel.tsx`):**
+     - Ürün oluşturma/düzenleme modalına **5. Adım: Çok Dilli Çeviri (EN / RU / AR)** sekmesi (`SupplierProductTranslationsTab`) ve ürün tablosuna hızlı **Çeviri (`Globe`)** butonu eklendi (Arapça için RTL desteği ve Türkçe metinden tek tıkla otomatik çeviri dahil).
+     - `SupplierProfilePanel.tsx` içerisine firma tanıtım yazısı için 4 dilli (`🇹🇷 TR`, `🇬🇧 EN`, `🇷🇺 RU`, `🇸🇦 AR`) düzenleme sekmeleri ve **EN/RU/AR Otomatik Çevir** butonu eklendi.
+  3. **Mobil Tedarikçi Stüdyosu (`mobile/lib/features/supplier/wizard/wizard_translations_card.dart`, `supplier_product_wizard_screen.dart`):**
+     - Mobil ürün sihirbazına `WizardTranslationsCard` (`EN / RU / AR` dil seçici, RTL desteği ve tek dokunuşla otomatik çeviri) eklendi.
+  4. **Doğrulama & Canlı Sunucu Dağıtımı:**
+     - `go vet ./...`, Linux cross-compile (`backend/bin/backend`), `npm run lint` ve `flutter analyze` sıfır uyarıyla tamamlandı.
+     - `docs/is_modeli_karsilastirma_ve_eksik_analizi.md` dosyasında Bölüm `5.C` ve `5.D` `🟢 %100 Tamamlandı` olarak güncellendi ve canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+---
+
+## Oturum #90 — Gelişmiş B2B Arama & Filtreleme: Private Label, Fason Üretim, Faaliyet Türü, Maksimum MOQ ve İhracat Ülkesi (Bölüm 5.E & 2.A)
+- **Tarih / Saat:** 09.11.2026 04:45
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** *"5.E. Gelişmiş B2B Arama & Filtreleme | Kategori, Üretici/Toptancı, MOQ, Fason, Private Label, Üretim Kapasitesi, İhracat Ülkeleri, Konum | Kategori (ltree), renk/beden, fiyat, stok ve açık firma adı (brand.name) filtreleri çalışıyor; veritabanında supports_fason, supports_private_label, export_countries, min_order_quantity hazır | 🟡 %75 Hazır | Sol filtre paneline (FilterSidebar.tsx & Mobil) Fason Üretim, Private Label, MOQ ve İhracat Ülkesi filtre kutucukları bağlanmalı. bunuda yapalım"*
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Backend Katalog B2B Filtre Motoru (`backend/handlers/store_catalog.go`):**
+     - `buildCatalogFilterSQL` içerisine `appendCatalogB2BFilters` yardımcı fonksiyonu eklendi.
+     - `GET /api/v1/store/products` ucu artık aşağıdaki B2B üretim ve tedarik filtrelerini (`catalog.brands` üzerinden `EXISTS` alt sorgularıyla) destekler:
+       - `fason=true` (`b.supports_fason = true`)
+       - `private_label=true` (`b.supports_private_label = true`)
+       - `company_type` (`COALESCE(b.company_type, 'uretici_toptanci') = $X`)
+       - `max_moq` (`p.minimum_order_quantity <= $X` veya `COALESCE(b.min_order_quantity, 1) <= $X`)
+       - `export_country` (`b.export_countries ILIKE '%...%'`)
+  2. **Web Mağaza Sol Filtre Paneli (`frontend/src/components/store/FilterSidebar.tsx` & `StorefrontLayout.tsx`):**
+     - `FilterSidebar.tsx` içerisine 4 dil destekli (TR/EN/RU/AR) **`B2B ÜRETİM, MOQ & İHRACAT` (`B2bProductionSourcingSection`)** akordiyon bölümü eklendi:
+       - **Üretim Yetkinlikleri:** `Private Label (Özel Etiket)` ve `Fason Üretim Atölyesi` onay kutucukları.
+       - **Tedarikçi Faaliyet Türü:** Hazır Giyim Üretici & Toptancı, Private Label Üretici, Fason Dikim Atölyesi, Kumaş Tedarikçisi, Aksesuar & Yan Sanayi.
+       - **Maksimum Min. Sipariş (MOQ):** Tümü, `≤ 6 Adet (1 Seri)`, `≤ 30 Adet (5 Seri)`, `≤ 60 Adet (10 Seri)`.
+       - **İhracat Pazarı / Ülke:** Almanya, Rusya, İngiltere, Polonya, BAE, Suudi Arabistan, Fransa, Hollanda, İtalya, Kazakistan, Ukrayna, Romanya, Bulgaristan.
+     - `StorefrontLayout.tsx` üzerinde `b2bFilters` state yönetimi, URL sorgu oluşturucu (`appendB2bQueryParams`), aktif filtre sayacı (`countActiveB2bFilters`) ve tümünü temizle (`handleClearAllFilters`) akışlarına tam entegre edildi.
+  3. **Mobil Uygulama Katalog Filtreleri (`mobile/lib/contracts/catalog_repository.dart`, `http_catalog_repository.dart`, `mobile_api_service.dart`, `catalog_screen.dart`):**
+     - `ICatalogRepository.searchProducts` kontratına ve tüm implementasyonlarına `fason`, `privateLabel`, `companyType`, `maxMoq` ve `exportCountry` parametreleri eklendi.
+     - `CustomerCatalogScreen` (`catalog_screen.dart`) filtre çekmecesine (`_openFilterSheet`) `Private Label` ve `Fason Üretim` seçim çipleri ile `Tedarikçi Faaliyet Türü`, `Maks. MOQ` ve `İhracat Pazarı` açılır kutuları bağlandı.
+  4. **Doğrulama ve Canlı Sunucu Dağıtımı:**
+     - `go vet ./...`, Linux cross-compile (`backend/bin/backend`), `npm run lint` ve `flutter analyze` kontrolleri **0 hata / 0 uyarı** ile geçti.
+     - `docs/is_modeli_karsilastirma_ve_eksik_analizi.md` içindeki **Bölüm 2.A** ve **Bölüm 5.E** satırları `🟢 %100 Tamamlandı` olarak güncellendi ve canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+---
+
+## Oturum #91 — Sponsorlu Vitrin & Reklam Alanları (`Sponsored Slots`) ve İzinli B2B E-Bülten (`Newsletter`) Modülü (Bölüm 6)
+- **Tarih / Saat:** 09.11.2026 04:58
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** *"6. Reklam & Ek Gelir Alanları | Ana sayfa reklamı, Kategori sponsorluğu, Öne çıkan üreticiler, Yeni koleksiyon, Sektörel reklam, E-bülten | Sabit hero banner var; dinamik reklam/sponsorluk yönetimi yok | ❌ Eksik | Sponsorlu Vitrin & Reklam Yönetimi (Sponsored Slots) ve izinli E-Bülten (Newsletter) modülü eklenmeli. bunuda yapalım"*
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Veritabanı Şeması (`database/0025_add_sponsored_slots_and_newsletter.sql`):**
+     - `catalog.sponsored_slots` tablosu oluşturuldu (`placement`: `home_featured_suppliers`, `home_new_collection`, `category_sponsor`, `sector_service_ad`; `impression_count`, `click_count`, `fee_amount`, `translations` JSONB).
+     - `catalog.newsletter_subscribers` (`kvkk_consent`, `commercial_consent`, `consent_ip`, `preferred_lang`) ve `catalog.newsletter_campaigns` tabloları oluşturuldu.
+     - Mevcut doğrulanmış Merter üreticileri için varsayılan Ana Sayfa Öne Çıkan Üretici ve Kategori Sponsorluğu kayıtları eklendi.
+  2. **Backend REST API (`backend/handlers/sponsored_and_newsletter.go` & `backend/router.go`):**
+     - Açık vitrin uçları: `GET /api/v1/store/sponsored-slots`, `POST /api/v1/store/sponsored-slots/{id}/click` (tıklama sayacı + üretici ROI analitik kaydı) ve `POST /api/v1/store/newsletter/subscribe` (zorunlu KVKK & ETK ticari ileti doğrulaması).
+     - Admin yönetim uçları: `GET/POST /api/v1/admin/sponsored-slots`, `PUT/DELETE /api/v1/admin/sponsored-slots/{id}`, `GET /api/v1/admin/newsletter/overview`, `DELETE /api/v1/admin/newsletter/subscribers/{id}` ve `POST /api/v1/admin/newsletter/campaigns`.
+  3. **Web Mağaza & Admin Arayüzü (`frontend/`):**
+     - `SponsoredShowcaseSection.tsx`: Ana sayfada (`PortalView.tsx`) **Öne Çıkan Doğrulanmış Merter Üreticileri** vitrini (`PortalSponsoredSuppliersSection`) ve kategori sayfalarında (`CatalogView.tsx`) **Kategori Sponsoru** bandı (`CategorySponsorBanner`) devreye alındı.
+     - `NewsletterSubscriptionBox.tsx`: `Footer.tsx` üst kısmına 4 dil destekli (TR/EN/RU/AR) ve zorunlu KVKK/ETK onay kutucuklu **B2B E-Bülten Abonelik Kutusu** eklendi.
+     - `/admin/marketing` (`frontend/src/app/admin/marketing/page.tsx`) ve `adminNavigation.ts`: Admin paneline yeni reklam/sponsorluk yayınlama, görüntülenme/tıklama (CTR %) izleme ve izinli abonelere e-bülten gönderme modülü eklendi.
+  4. **Doğrulama ve Canlı Sunucu Dağıtımı:**
+     - `go vet ./...`, Linux cross-compile (`backend/bin/backend`) ve `npm run lint` kontrolleri **0 hata / 0 uyarı** ile geçti ve canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+---
+
+## Oturum #92 — Sektörel Hizmet Sağlayıcılar Rehberi (`/hizmet-saglayicilar` & `/admin/service-providers`) (Bölüm 2.C)
+- **Tarih / Saat:** 09.11.2026 05:10
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** *"2.C. Sektörel Hizmet Sağlayıcılar | Kargo/Lojistik, Fotoğraf Stüdyosu, Ambalaj/Etiket, Modelist, İhracat Danışmanı | Sistemde şu an yalnızca üretim/toptan firmaları listeleniyor | ❌ Eksik | Sektörel Hizmet Sağlayıcılar Rehberi (/hizmet-saglayicilar) modülü ve hizmet kategorileri eklenmeli. bunuda yapalım"*
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Veritabanı Şeması (`database/0026_add_service_providers_directory.sql`):**
+     - `catalog.service_providers` tablosu oluşturuldu (`service_category`: `kargo_lojistik`, `fotograf_studyo`, `ambalaj_etiket`, `modelist_kalip`, `ihracat_danismanlik`; `services_offered`, `target_countries`, `is_verified`, `is_sponsored`, `whatsapp_click_count`, `translations` JSONB).
+     - Merter ekosistemini temsil eden 5 ana hizmet kategorisinde başlangıç kayıtları eklendi.
+  2. **Backend REST API (`backend/handlers/service_providers.go` & `backend/router.go`):**
+     - Vitrin uçları: `GET /api/v1/store/service-providers?category=...&q=...`, `POST /api/v1/store/service-providers` (yeni hizmet sağlayıcı başvurusu/kaydı) ve `POST /api/v1/store/service-providers/{id}/click` (WhatsApp teklif tıklama sayacı).
+     - Admin yönetim uçları: `GET /api/v1/admin/service-providers`, `PUT /api/v1/admin/service-providers/{id}` (doğrulama, sponsorluk, aktif/pasif durumu) ve `DELETE /api/v1/admin/service-providers/{id}`.
+  3. **Web Mağaza & Admin Arayüzü (`frontend/`):**
+     - `/hizmet-saglayicilar` (`frontend/src/app/hizmet-saglayicilar/page.tsx` & `ServiceProvidersClient.tsx`): 5 hizmet kategorisi sekmesi, arama kutusu, doğrulanmış/sponsorlu rozetleri, 1-tıkla WhatsApp teklif alma ve yeni hizmet sağlayıcı kayıt modalı ile yayına alındı.
+     - `Header.tsx` üst barına **`LOJİSTİK & HİZMETLER`** ve `Footer.tsx` menüsüne **`Sektörel Hizmet Sağlayıcılar`** bağlantıları eklendi.
+     - `/admin/service-providers` (`frontend/src/app/admin/service-providers/page.tsx`) ve `adminNavigation.ts`: Admin panelinde hizmet sağlayıcılarını doğrulama, sponsorlu yapma, gizleme/yayınlama ve WhatsApp tıklama istatistiklerini izleme ekranı eklendi.
+  4. **Doğrulama ve Canlı Sunucu Dağıtımı:**
+     - `go vet ./...`, Linux cross-compile (`backend/bin/backend`) ve `npm run lint` kontrolleri **0 hata / 0 uyarı** ile geçti ve canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+### [2026-11-09 10:19:00] - Oturum #93 (Alıcı Talep Panosu Üyelik Zorunluluğu ve Hizmet Sağlayıcılar Rehberinin Temizlenmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"iye olmadan https://mertervitrini.com.tr/alim-talepleri bunu açamaz https://mertervitrini.com.tr/hizmet-saglayicilar burada şuan kimse olmasın"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Alıcı Talep Panosu (`/alim-talepleri`) Üyelik Koruması (`BuyerRfqBoardClient.tsx` & `backend/handlers/rfq.go`):**
+     - `frontend/src/app/alim-talepleri/BuyerRfqBoardClient.tsx` üzerinde `useIsStoreMemberLoggedIn()`, `getValidStoreUser()` ve `openStoreAuthModal` entegre edildi.
+     - Üye veya üretici girişi yapmamış ziyaretçiler için panonun tamamı ve `+ Yeni Alım İlanı (RFQ) Oluştur` aksiyonu üyelere özel kilit ekranına (`MemberOnlyRfqGate` — **Üye Girişi Yap**, **Ücretsiz B2B Üye Ol**, **Üretici / Tedarikçi Girişi**) bağlandı.
+     - `backend/handlers/rfq.go` içinde `ListPublicRfqs` (`GET /api/v1/store/rfqs`) ve `CreatePublicRfq` (`POST /api/v1/store/rfqs`) uç noktalarına `isStoreOrSupplierAuthenticated(r)` doğrulaması eklendi (`401 Unauthorized`).
+  2. **Sektörel Hizmet Sağlayıcılar Rehberi (`/hizmet-saglayicilar`) Temizliği (`backend/handlers/service_providers.go`, `database/0026_add_service_providers_directory.sql`, `ServiceProvidersClient.tsx`):**
+     - `backend/handlers/service_providers.go` ve `database/0026_add_service_providers_directory.sql` içindeki 5 demo hizmet sağlayıcı kaydı kaldırıldı ve sunucu başlangıcında mevcut demo kayıtları temizleyen SQL (`DELETE FROM catalog.service_providers WHERE slug IN (...)`) eklendi.
+     - `CreatePublicServiceProviderApplication` (`POST /api/v1/store/service-providers`) başvurularının doğrudan yayınlanmak yerine `is_active = false` (admin onayı bekleyen) olarak kaydedilmesi sağlandı.
+     - `ServiceProvidersClient.tsx` içerisine boş durum (`Henüz Kayıtlı Hizmet Sağlayıcı Bulunmuyor`) bileşeni eklendi.
+  3. **Doğrulama & Canlı Dağıtım:**
+     - `go vet ./...`, Linux cross-compile ve `npm run lint` kontrolleri sıfır uyarıyla tamamlanarak `unified_deployer.py` ile canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+### [2026-11-09 10:41:30] - Oturum #94 (Bölüm 5.F: Excel/CSV ile Toplu Ürün Yükleme ve Eski Koleksiyon Arşivleme)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"5.F. Kolay Ürün Yükleme & AI ... Excel/CSV ile Toplu Ürün Yükleme, Yapay Zekâ (AI) ile Ürün Başlığı/Açıklaması Üretme ve Eski Koleksiyon Arşivleme eksik. AI yapay zeka kısmı hariç yapalım"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Veritabanı & Backend (`0027_add_product_archiving.sql`, `supplier_bulk_catalog.go`, `supplier_portal.go`, `router.go`):**
+     - `catalog.products` tablosuna `is_archived` (`BOOLEAN NOT NULL DEFAULT false`) ve `archived_at` (`TIMESTAMPTZ NULL`) kolonları eklendi.
+     - `GET /api/v1/supplier/products/excel-template` (`DownloadExcelTemplate`): Tedarikçiler için 2 sayfalı (`Urun_Yukleme_Sablonu` + aktif kategorileri içeren `Kategoriler_Rehberi`) hazır `.xlsx` şablonu üretimi eklendi.
+     - `POST /api/v1/supplier/products/import-excel` (`ImportProductsFromExcel`): `.xlsx` ve `.csv` dosyalarından toplu ürün, varyant/beden (`S:10,M:20,L:20,XL:10`), renk/kumaş eşleştirme ve görsel URL içe aktarma motoru kuruldu; işlem sonunda `catalog.mv_products` Materialized View otomatik yenilenir.
+     - `POST /api/v1/supplier/products/{id}/archive` (`ToggleArchiveProduct`) ve `POST /api/v1/supplier/products/bulk-archive` (`BulkArchiveProducts`): Tekil ürün arşivleme/geri yükleme ve sezon/tarih (90-180-365 gün)/sıfır stok kriterlerine göre eski koleksiyonları toplu arşivleme uç noktaları eklendi.
+  2. **Tedarikçi Portalı Frontend (`SupplierBulkAndArchiveModals.tsx` & `SupplierDashboardClient.tsx`):**
+     - `/supplier` paneline **Excel / CSV ile Toplu Yükle** modalı (`SupplierExcelImportModal`), **Eski Koleksiyonu Arşivle** modalı (`SupplierCollectionArchiveModal`), katalog durum sekmesine **Arşiv (Eski Koleksiyon)** filtresi ve tablo satırlarına **Arşivle / Arşivden Çıkar** aksiyonları eklendi.
+  3. **Doğrulama & Canlı Dağıtım:**
+     - `go vet ./...`, Linux cross-compile ve `npm run lint` kontrolleri sıfır uyarıyla tamamlanarak `unified_deployer.py` ile canlı sunucuya (`213.202.255.80`) dağıtıldı.
+
+
+### [2026-11-09 10:57:15] - Oturum #95 (Yerel Git Commit İşlemi - Push Yapılmadan)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle pusghlama"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Yerel Git Commit (Conventional Commits):**
+     - Kullanıcının açık talimatı doğrultusunda tüm yeni modüller ve güncellemeler (Üretici Rehberi, Ziyaretçi/ROI Analitiği, Üyelere Özel Alıcı Talep Panosu RFQ, 4 Dilde Manuel/Otomatik Çeviri Yönetimi, Gelişmiş B2B Katalog Filtreleri, Sponsorlu Vitrin & E-Bülten, Sektörel Hizmet Sağlayıcılar Rehberi, Excel/CSV Toplu Ürün Yükleme ve Eski Koleksiyon Arşivleme) `git add -A` ile sahnelenip Conventional Commits standardında (`feat: ...`) yerel depoya commit'lendi; `git push` çalıştırılmadı.

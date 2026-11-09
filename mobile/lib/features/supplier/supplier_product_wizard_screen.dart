@@ -12,6 +12,7 @@ import 'wizard/wizard_model_details_card.dart';
 import 'wizard/wizard_models.dart';
 import 'wizard/wizard_photo_studio_card.dart';
 import 'wizard/wizard_pricing_series_card.dart';
+import 'wizard/wizard_translations_card.dart';
 import 'wizard/wizard_variants_matrix_card.dart';
 
 class SupplierProductWizardScreen extends StatefulWidget {
@@ -44,6 +45,11 @@ class _SupplierProductWizardScreenState
 
   final List<WizardPhotoItem> _photos = <WizardPhotoItem>[];
   final List<EditableVariantRow> _variants = <EditableVariantRow>[];
+  final Map<String, EditableTranslationLanguageSet> _translations = {
+    'en': EditableTranslationLanguageSet(),
+    'ru': EditableTranslationLanguageSet(),
+    'ar': EditableTranslationLanguageSet(),
+  };
 
   String _selectedCategoryId = '';
   String _selectedCategoryLabel = '';
@@ -58,6 +64,7 @@ class _SupplierProductWizardScreenState
 
   bool _loadingDetail = false;
   bool _saving = false;
+  bool _autoTranslating = false;
   String _saveStageLabel = '';
 
   @override
@@ -96,6 +103,9 @@ class _SupplierProductWizardScreenState
     _packStockMultiplierCtrl.dispose();
     for (final v in _variants) {
       v.dispose();
+    }
+    for (final t in _translations.values) {
+      t.dispose();
     }
     super.dispose();
   }
@@ -147,6 +157,60 @@ class _SupplierProductWizardScreenState
       }
     } else {
       _variants.add(EditableVariantRow(size: 'STD', stock: p.stock));
+    }
+
+    for (final lang in ['en', 'ru', 'ar']) {
+      final t = p.translations[lang];
+      final set = _translations[lang];
+      if (set != null && t != null) {
+        set.titleCtrl.text = t.title;
+        set.shortDescCtrl.text = t.shortDescription;
+        set.descCtrl.text = t.description;
+      }
+    }
+  }
+
+  Future<void> _autoTranslateFromTurkish() async {
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      _showSnack('Lütfen önce Türkçe ürün başlığını giriniz.', isError: true);
+      return;
+    }
+    setState(() => _autoTranslating = true);
+    try {
+      final result = await context
+          .read<SupplierProvider>()
+          .catalogRepo
+          .autoTranslateSupplierFields({
+        'title': title,
+        'short_description': _shortDescCtrl.text.trim(),
+        'description': _descCtrl.text.trim(),
+      });
+      if (!mounted) return;
+      setState(() {
+        for (final lang in ['en', 'ru', 'ar']) {
+          final map = result[lang];
+          final set = _translations[lang];
+          if (map != null && set != null) {
+            if ((map['title'] ?? '').isNotEmpty) {
+              set.titleCtrl.text = map['title']!;
+            }
+            if ((map['short_description'] ?? '').isNotEmpty) {
+              set.shortDescCtrl.text = map['short_description']!;
+            }
+            if ((map['description'] ?? '').isNotEmpty) {
+              set.descCtrl.text = map['description']!;
+            }
+          }
+        }
+      });
+      _showSnack('EN, RU ve AR çeviriler otomatik oluşturuldu.');
+    } catch (e) {
+      _showSnack('Otomatik çeviri başarısız: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _autoTranslating = false);
+      }
     }
   }
 
@@ -432,6 +496,14 @@ class _SupplierProductWizardScreenState
         'is_active': _isActive,
         'images': finalImageUrls,
         'variants': variantsJson,
+        'translations': {
+          for (final entry in _translations.entries)
+            entry.key: {
+              'title': entry.value.titleCtrl.text.trim(),
+              'short_description': entry.value.shortDescCtrl.text.trim(),
+              'description': entry.value.descCtrl.text.trim(),
+            },
+        },
       };
 
       if (widget.existingProduct != null) {
@@ -578,6 +650,12 @@ class _SupplierProductWizardScreenState
                     },
                     onApplySizePreset: _applySizePreset,
                     onDistributeStock: _distributeStockBySeriesPackages,
+                  ),
+                  const SizedBox(height: 14),
+                  WizardTranslationsCard(
+                    translations: _translations,
+                    autoTranslating: _autoTranslating,
+                    onAutoTranslate: _autoTranslateFromTurkish,
                   ),
                   const SizedBox(height: 20),
                   if (_saving && _saveStageLabel.isNotEmpty)

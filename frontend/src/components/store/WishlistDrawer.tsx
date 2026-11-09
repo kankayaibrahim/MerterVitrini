@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
-import { X, Heart, Eye } from "lucide-react";
+import { X, Heart, Eye, Lock } from "lucide-react";
 import { Product } from "@/types/store";
 import { getProductTitle } from "@/app/i18n";
 import { convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/utils";
+import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { useRouter } from "next/navigation";
 
 interface WishlistDrawerProps {
@@ -31,7 +32,9 @@ function WishlistItemCard({
   exchangeRates,
   onProductClick,
   onRemoveFavorite,
-}: Readonly<WishlistItemCardProps>) {
+  onClose,
+}: Readonly<WishlistItemCardProps & { readonly onClose: () => void }>) {
+  const isAuthenticated = useIsStoreAuthenticated();
   const title = getProductTitle(product, lang);
   let coverImg = "/placeholder.png";
   if (product.images && product.images.length > 0) {
@@ -88,19 +91,33 @@ function WishlistItemCard({
       </div>
 
       <div className="shrink-0 self-center text-right pl-1 flex flex-col gap-0.5 justify-center">
-        {hasDiscount ? (
-          <>
-            <span className="text-[10px] text-sonic-silver line-through font-medium">
+        {isAuthenticated ? (
+          hasDiscount ? (
+            <>
+              <span className="text-[10px] text-sonic-silver line-through font-medium">
+                {origPrice.toFixed(2)} {currency}
+              </span>
+              <span className="text-xs font-extrabold text-salmon-pink">
+                {discPrice.toFixed(2)} {currency}
+              </span>
+            </>
+          ) : (
+            <span className="text-xs font-extrabold text-eerie-black">
               {origPrice.toFixed(2)} {currency}
             </span>
-            <span className="text-xs font-extrabold text-salmon-pink">
-              {discPrice.toFixed(2)} {currency}
-            </span>
-          </>
+          )
         ) : (
-          <span className="text-xs font-extrabold text-eerie-black">
-            {origPrice.toFixed(2)} {currency}
-          </span>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              openStoreAuthModal("login");
+            }}
+            className="inline-flex items-center justify-end gap-1 text-[10px] font-extrabold text-salmon-pink hover:underline bg-transparent border-none p-0 cursor-pointer"
+          >
+            <Lock className="w-2.5 h-2.5 shrink-0" />
+            <span>{getShortMemberPriceLabel(lang)}</span>
+          </button>
         )}
         <button
           type="button"
@@ -302,6 +319,7 @@ export default function WishlistDrawer({
                   exchangeRates={exchangeRates}
                   onProductClick={handleProductClick}
                   onRemoveFavorite={handleRemoveFavorite}
+                  onClose={onClose}
                 />
               ))}
             </div>

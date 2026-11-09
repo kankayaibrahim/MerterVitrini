@@ -18,7 +18,7 @@ function SuppliersPageContent() {
 
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const initialTab = (tabParam === "applications" || tabParam === "users" || tabParam === "suppliers")
+  const initialTab = (tabParam === "applications" || tabParam === "users" || tabParam === "suppliers" || tabParam === "billing")
     ? tabParam
     : undefined;
 

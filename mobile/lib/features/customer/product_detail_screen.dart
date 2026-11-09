@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_theme.dart';
 import '../../models/chat.dart';
@@ -11,6 +12,7 @@ import '../../providers/chat_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../widgets/luxury_icons.dart';
 import '../../widgets/smart_network_image.dart';
+import '../auth/auth_screen.dart';
 import '../chat/chat_conversation_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -89,6 +91,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Future<void> _addToCart() async {
+    final session = context.read<SessionProvider>();
+    if (!session.canViewPrices) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
+      );
+      return;
+    }
     final p = _product;
     if (p == null) return;
     setState(() => _addingCart = true);
@@ -117,10 +126,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Future<void> _openSupplierChatSelector() async {
+    final session = context.read<SessionProvider>();
+    if (!session.isMemberLoggedIn) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
+      );
+      return;
+    }
+
     final p = _product;
     if (p == null) return;
 
-    final session = context.read<SessionProvider>();
     final chat = context.read<ChatProvider>();
     var agents = <SupplierAgent>[];
     try {
@@ -668,62 +684,117 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                const Text(
-                                                  'BİRİM TOPTAN FİYATI',
-                                                  style: TextStyle(
-                                                    fontSize: 9.5,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 1.1,
-                                                    color:
-                                                        AppColors.sonicSilver,
+                                      if (session.canViewPrices)
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    'BİRİM TOPTAN FİYATI',
+                                                    style: TextStyle(
+                                                      fontSize: 9.5,
+                                                      fontWeight: FontWeight.w800,
+                                                      letterSpacing: 1.1,
+                                                      color:
+                                                          AppColors.sonicSilver,
+                                                    ),
                                                   ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                if (hasDiscount)
+                                                  const SizedBox(height: 4),
+                                                  if (hasDiscount)
+                                                    Text(
+                                                      session.formatPrice(
+                                                        p.price,
+                                                        sourceCurrency:
+                                                            p.currency,
+                                                      ),
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color: AppColors
+                                                            .spanishGray,
+                                                        decoration: TextDecoration
+                                                            .lineThrough,
+                                                      ),
+                                                    ),
                                                   Text(
                                                     session.formatPrice(
-                                                      p.price,
-                                                      sourceCurrency:
-                                                          p.currency,
+                                                      p.effectiveUnitPrice,
+                                                      sourceCurrency: p.currency,
+                                                    ),
+                                                    style: TextStyle(
+                                                      fontSize: 23,
+                                                      fontWeight: FontWeight.w900,
+                                                      color: hasDiscount
+                                                          ? AppColors.discountRed
+                                                          : AppColors.obsidian,
+                                                      letterSpacing: -0.3,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 13,
+                                                vertical: 10,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.obsidian,
+                                                border: Border.all(
+                                                  color: AppColors.champagneGold
+                                                      .withValues(alpha: 0.65),
+                                                ),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.end,
+                                                children: [
+                                                  Text(
+                                                    '1 SERİ (${p.unitsPerPackage} ADET)',
+                                                    style: const TextStyle(
+                                                      fontSize: 9,
+                                                      fontWeight: FontWeight.w800,
+                                                      letterSpacing: 1.0,
+                                                      color:
+                                                          AppColors.champagneGold,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    session.formatPrice(
+                                                      p.packageTotalPrice,
+                                                      sourceCurrency: p.currency,
                                                     ),
                                                     style: const TextStyle(
-                                                      fontSize: 12,
-                                                      color: AppColors
-                                                          .spanishGray,
-                                                      decoration: TextDecoration
-                                                          .lineThrough,
+                                                      fontSize: 16.5,
+                                                      fontWeight: FontWeight.w900,
+                                                      color: Colors.white,
                                                     ),
                                                   ),
-                                                Text(
-                                                  session.formatPrice(
-                                                    p.effectiveUnitPrice,
-                                                    sourceCurrency: p.currency,
-                                                  ),
-                                                  style: TextStyle(
-                                                    fontSize: 23,
-                                                    fontWeight: FontWeight.w900,
-                                                    color: hasDiscount
-                                                        ? AppColors.discountRed
-                                                        : AppColors.obsidian,
-                                                    letterSpacing: -0.3,
-                                                  ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                          Container(
+                                          ],
+                                        )
+                                      else
+                                        InkWell(
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute<void>(
+                                                builder: (_) =>
+                                                    const AuthScreen(),
+                                              ),
+                                            );
+                                          },
+                                          child: Container(
+                                            width: double.infinity,
                                             padding: const EdgeInsets.symmetric(
-                                              horizontal: 13,
-                                              vertical: 10,
+                                              horizontal: 14,
+                                              vertical: 12,
                                             ),
                                             decoration: BoxDecoration(
                                               color: AppColors.obsidian,
@@ -732,37 +803,33 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                     .withValues(alpha: 0.65),
                                               ),
                                             ),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.end,
+                                            child: const Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
                                               children: [
-                                                Text(
-                                                  '1 SERİ (${p.unitsPerPackage} ADET)',
-                                                  style: const TextStyle(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 1.0,
-                                                    color:
-                                                        AppColors.champagneGold,
-                                                  ),
+                                                Icon(
+                                                  Icons.lock_outline_rounded,
+                                                  size: 16,
+                                                  color:
+                                                      AppColors.champagneGold,
                                                 ),
-                                                const SizedBox(height: 3),
-                                                Text(
-                                                  session.formatPrice(
-                                                    p.packageTotalPrice,
-                                                    sourceCurrency: p.currency,
-                                                  ),
-                                                  style: const TextStyle(
-                                                    fontSize: 16.5,
-                                                    fontWeight: FontWeight.w900,
-                                                    color: Colors.white,
+                                                SizedBox(width: 8),
+                                                Flexible(
+                                                  child: Text(
+                                                    'FİYATLARI GÖRMEK İÇİN GİRİŞ YAPIN / ÜYE OLUN',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                      color: Colors.white,
+                                                      letterSpacing: 0.8,
+                                                    ),
                                                   ),
                                                 ),
                                               ],
                                             ),
                                           ),
-                                        ],
-                                      ),
+                                        ),
                                       const SizedBox(height: 14),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -1093,6 +1160,189 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ),
                                 ),
 
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.editorialOffWhite,
+                                    border: Border.all(color: AppColors.cultured),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.verified_rounded,
+                                            size: 15,
+                                            color: AppColors.emerald,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              'ÜRETİCİ FİRMA: ${p.maskedBrandName.toUpperCase()}',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 0.8,
+                                                color: AppColors.obsidian,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'Doğrudan Üretici / Toptancı • %0 Komisyon Fabrika Çıkış Fiyatı',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.sonicSilver,
+                                        ),
+                                      ),
+                                      if (p.brandPhone.isNotEmpty ||
+                                          p.brandWhatsapp.isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Doğrudan Tel / WhatsApp: ${p.brandWhatsapp.isNotEmpty ? p.brandWhatsapp : p.brandPhone}',
+                                          style: const TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.obsidian,
+                                          ),
+                                        ),
+                                      ],
+                                      if (p.brandEmail.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'E-posta: ${p.brandEmail}',
+                                          style: const TextStyle(
+                                            fontSize: 11.5,
+                                            color: AppColors.sonicSilver,
+                                          ),
+                                        ),
+                                      ],
+                                      if (p.brandAddress.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Merter Adres: ${p.brandAddress}',
+                                          style: const TextStyle(
+                                            fontSize: 11.5,
+                                            color: AppColors.sonicSilver,
+                                          ),
+                                        ),
+                                      ],
+                                      if (p.brandIban.isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          'Doğrudan Havale IBAN (${p.brandBankName.isNotEmpty ? p.brandBankName : "Banka"}): ${p.brandIban}',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.obsidian,
+                                          ),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    AppColors.emerald,
+                                                foregroundColor: Colors.white,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  vertical: 10,
+                                                  horizontal: 10,
+                                                ),
+                                              ),
+                                              onPressed: () {
+                                                final rawWa =
+                                                    p.brandWhatsapp.isNotEmpty
+                                                        ? p.brandWhatsapp
+                                                        : p.brandPhone;
+                                                var digits = rawWa.replaceAll(
+                                                  RegExp(r'\D'),
+                                                  '',
+                                                );
+                                                if (digits.startsWith('0') &&
+                                                    digits.length == 11) {
+                                                  digits =
+                                                      '90${digits.substring(1)}';
+                                                } else if (digits.length ==
+                                                        10 &&
+                                                    digits.startsWith('5')) {
+                                                  digits = '90$digits';
+                                                }
+                                                final msg =
+                                                    'Merhaba ${p.maskedBrandName},\nMerter Vitrini üzerindeki ${p.localizedTitle(lang)} (SKU: ${p.customSku}) ürününüz hakkında doğrudan iletişime geçmek ve $_packagesQty Seri sipariş vermek istiyorum.';
+                                                final url = digits.isNotEmpty
+                                                    ? 'https://wa.me/$digits?text=${Uri.encodeComponent(msg)}'
+                                                    : 'https://wa.me/?text=${Uri.encodeComponent(msg)}';
+                                                launchUrl(
+                                                  Uri.parse(url),
+                                                  mode: LaunchMode
+                                                      .externalApplication,
+                                                );
+                                              },
+                                              icon: const Icon(
+                                                Icons.chat_rounded,
+                                                size: 15,
+                                              ),
+                                              label: const Text(
+                                                'WHATSAPP İLE TEDARİKÇİYE YAZ',
+                                                style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          if (p.brandPhone.isNotEmpty ||
+                                              p.brandWhatsapp.isNotEmpty) ...[
+                                            const SizedBox(width: 8),
+                                            OutlinedButton.icon(
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor:
+                                                    AppColors.obsidian,
+                                                side: const BorderSide(
+                                                  color: AppColors.obsidian,
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  vertical: 10,
+                                                  horizontal: 10,
+                                                ),
+                                              ),
+                                              onPressed: () {
+                                                final callNo =
+                                                    p.brandPhone.isNotEmpty
+                                                        ? p.brandPhone
+                                                        : p.brandWhatsapp;
+                                                launchUrl(
+                                                  Uri.parse('tel:$callNo'),
+                                                );
+                                              },
+                                              icon: const Icon(
+                                                Icons.phone_in_talk_rounded,
+                                                size: 15,
+                                              ),
+                                              label: const Text(
+                                                'ARA',
+                                                style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
                                 // 7. Architectural Specification Table & Description
                                 if (specs.isNotEmpty ||
                                     p
@@ -1253,9 +1503,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               ),
                               const SizedBox(width: 9),
                               Text(
-                                _addingCart
-                                    ? 'EKLENİYOR...'
-                                    : 'SERİYİ SEPETE EKLE',
+                                !session.canViewPrices
+                                    ? 'FİYAT İÇİN GİRİŞ YAP'
+                                    : (_addingCart
+                                        ? 'EKLENİYOR...'
+                                        : 'SERİYİ SEPETE EKLE'),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,

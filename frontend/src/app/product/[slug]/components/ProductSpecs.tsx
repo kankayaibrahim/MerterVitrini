@@ -1,5 +1,9 @@
+"use client";
+
 import React from "react";
+import { Lock } from "lucide-react";
 import { Product } from "@/types/store";
+import { useIsStoreAuthenticated, openStoreAuthModal, getMemberPriceLabel } from "@/app/storeAuth";
 
 interface DynamicAttr {
   readonly name: string;
@@ -29,6 +33,7 @@ export default function ProductSpecs({
   currency,
   dynamicAttrs,
 }: ProductSpecsProps) {
+  const isAuthenticated = useIsStoreAuthenticated();
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -44,26 +49,37 @@ export default function ProductSpecs({
       </div>
 
       {/* Pricing breakdown */}
-      <div className="flex items-center gap-3 bg-[#fafafa] border border-cultured rounded-[8px] px-5 py-4 shadow-inner select-none">
+      <div className="flex items-center justify-between gap-3 bg-[#fafafa] border border-cultured rounded-[8px] px-5 py-4 shadow-inner select-none">
         <span className="text-[10px] font-extrabold text-onyx uppercase tracking-[0.5px] shrink-0">
           {t("unit_price_label", lang)}
         </span>
-        <div className="flex items-baseline gap-2.5">
-          {hasDiscount ? (
-            <>
-              <span className="text-xs text-sonic-silver line-through">
+        {isAuthenticated ? (
+          <div className="flex items-baseline gap-2.5">
+            {hasDiscount ? (
+              <>
+                <span className="text-xs text-sonic-silver line-through">
+                  {unitPrice.toFixed(2)} {currency}
+                </span>
+                <span className="text-xl font-extrabold text-salmon-pink">
+                  {discountedPrice.toFixed(2)} {currency}
+                </span>
+              </>
+            ) : (
+              <span className="text-xl font-extrabold text-eerie-black">
                 {unitPrice.toFixed(2)} {currency}
               </span>
-              <span className="text-xl font-extrabold text-salmon-pink">
-                {discountedPrice.toFixed(2)} {currency}
-              </span>
-            </>
-          ) : (
-            <span className="text-xl font-extrabold text-eerie-black">
-              {unitPrice.toFixed(2)} {currency}
-            </span>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openStoreAuthModal("login")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-900 hover:bg-salmon-pink text-white text-xs font-extrabold transition-colors cursor-pointer border-none"
+          >
+            <Lock className="w-3.5 h-3.5 shrink-0" />
+            <span>{getMemberPriceLabel(lang)}</span>
+          </button>
+        )}
       </div>
 
       {/* Specifications Grid */}

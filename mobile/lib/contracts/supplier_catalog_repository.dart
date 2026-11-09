@@ -37,5 +37,9 @@ abstract interface class ISupplierCatalogRepository {
 
   Future<(List<SimpleOptionItem>, List<SimpleOptionItem>)>
       fetchSupplierAttributes();
+
+  Future<Map<String, Map<String, String>>> autoTranslateSupplierFields(
+    Map<String, String> fields,
+  );
 }
 

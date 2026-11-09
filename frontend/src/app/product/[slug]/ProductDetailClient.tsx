@@ -6,6 +6,7 @@ import { Home, ChevronRight } from "lucide-react";
 import { Product, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getProductDescription, getProductAttributes, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, apiFetch, convertPrice, ExchangeRate, showToast as triggerToast } from "@/app/utils";
+import { useIsStoreMemberLoggedIn, openStoreAuthModal } from "@/app/storeAuth";
 
 // Reuse the premium Tailwind storefront components
 import Header from "@/components/store/Header";
@@ -17,6 +18,7 @@ import ProductImageGallery from "./components/ProductImageGallery";
 import ProductSpecs from "./components/ProductSpecs";
 import ColorVariants from "./components/ColorVariants";
 import OrderCalculator from "./components/OrderCalculator";
+import SupplierDirectCard from "./components/SupplierDirectCard";
 import SocialShare from "./components/SocialShare";
 import ProductInquiryCart from "./components/ProductInquiryCart";
 import { InquiryFormData } from "@/components/store/CartDrawer";
@@ -47,6 +49,7 @@ const EXCLUDED_ATTR_NAMES = new Set([
 ]);
 
 export default function ProductDetailClient({ product }: Readonly<ProductDetailClientProps>) {
+  const isAuthenticated = useIsStoreMemberLoggedIn();
   const [lang, setLang] = useState<string>(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
@@ -143,9 +146,9 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
   // Handle case where product is null (Product Not Found)
   if (!product) {
     const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
-    
+
     return (
-      <div 
+      <div
         className="min-h-screen flex flex-col font-sans antialiased bg-[#fcfcfc] text-[#1c191f]"
         style={{ direction: lang === "ar" ? "rtl" : "ltr" }}
       >
@@ -156,8 +159,8 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
           setIsLangOpen={setIsLangOpen}
           totalPkgs={totalPkgs}
           setIsCartOpen={setIsCartOpen}
-          setSearchQuery={() => {}}
-          setCurrentPage={() => {}}
+          setSearchQuery={() => { }}
+          setCurrentPage={() => { }}
           setActiveCategoryId={setActiveCategoryId}
           categories={categories}
           activeCategoryId={activeCategoryId}
@@ -172,8 +175,8 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
           <p className="text-sm font-semibold text-[#71717a] mb-8 max-w-md mx-auto leading-relaxed">
             {t("product_not_found_desc", lang)}
           </p>
-          <Link 
-            href="/" 
+          <Link
+            href="/"
             className="px-8 py-3 bg-[#a855f7] text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase hover:bg-[#1c191f] transition-all cursor-pointer shadow-md no-underline"
           >
             {t("back_to_homepage", lang)}
@@ -223,6 +226,10 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
 
   // Add configured item to cart
   const handleAddToCart = () => {
+    if (!isAuthenticated) {
+      openStoreAuthModal("login");
+      return;
+    }
     if (pkgQty < actualMinPkgs) {
       triggerToast(
         `${t("min_order_warning", lang) || "Minimum sipariş miktarı"}: ${product.minimum_order_quantity} ${t("piece", lang)} (${actualMinPkgs} ${t("package", lang)})`
@@ -389,6 +396,13 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         customer_message: formData.customerMessage,
         display_currency: displayCurrency,
         cart_items: cart,
+        items: cart.map((cItem) => ({
+          product_id: cItem.product_id,
+          title: cItem.title,
+          custom_sku: cItem.custom_sku || "-",
+          quantity: cItem.packages_qty,
+          price: Number((cItem.price_per_unit * cItem.units_per_package).toFixed(2)),
+        })),
         total_price: totalPriceCart,
         total_pieces: totalItemsCount,
         total_weight: totalWeightCart,
@@ -406,27 +420,33 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         throw new Error(data.error || "Talep gönderilemedi.");
       }
 
-      // Generate WhatsApp order message for buyer
-      let waMsg = `*MERTER VITRINI B2B SIPARIS TALEBI*\n`;
-      waMsg += `Talep No: #${data.inquiry_id || "NEW"}\n`;
-      waMsg += `Yetkili: ${formData.fullName}\n`;
-      waMsg += `Firma: ${formData.companyName || "-"}\n`;
-      waMsg += `Telefon: ${formData.phoneNumber}\n`;
-      waMsg += `Toplam Kalem: ${cart.length} çeşit\n`;
-      waMsg += `Toplam Adet: ${totalItemsCount} adet\n`;
-      waMsg += `Toplam Tutar: ${totalPriceCart.toFixed(2)} ${displayCurrency}\n`;
-      waMsg += `----------------------------\n`;
-      cart.forEach((cItem, i) => {
-        const itemPieces = cItem.packages_qty * cItem.units_per_package;
-        const itemTotal = itemPieces * cItem.price_per_unit;
-        waMsg += `${i + 1}. ${cItem.title} (${cItem.color}) - ${cItem.packages_qty} Paket (${itemPieces} Adet) -> ${itemTotal.toFixed(2)} ${displayCurrency}\n`;
-      });
-      if (formData.customerMessage) {
-        waMsg += `----------------------------\nNot: ${formData.customerMessage}`;
+      if (data.whatsapp_url) {
+        setWhatsappUrl(data.whatsapp_url);
+      } else {
+        // Fallback WhatsApp order message for buyer
+        let waMsg = `*MERTER VITRINI DOĞRUDAN SIPARIS TALEBI*\n`;
+        waMsg += `Sipariş No: #${data.order_number || data.id || "NEW"}\n`;
+        waMsg += `Yetkili: ${formData.fullName}\n`;
+        waMsg += `Firma: ${formData.companyName || "-"}\n`;
+        waMsg += `Telefon: ${formData.phoneNumber}\n`;
+        waMsg += `Toplam Kalem: ${cart.length} çeşit\n`;
+        waMsg += `Toplam Adet: ${totalItemsCount} adet\n`;
+        waMsg += `Toplam Tutar: ${totalPriceCart.toFixed(2)} ${displayCurrency}\n`;
+        waMsg += `----------------------------\n`;
+        cart.forEach((cItem, i) => {
+          const itemPieces = cItem.packages_qty * cItem.units_per_package;
+          const itemTotal = itemPieces * cItem.price_per_unit;
+          waMsg += `${i + 1}. ${cItem.title} (${cItem.color}) - ${cItem.packages_qty} Paket (${itemPieces} Adet) -> ${itemTotal.toFixed(2)} ${displayCurrency}\n`;
+        });
+        if (formData.customerMessage) {
+          waMsg += `----------------------------\nNot: ${formData.customerMessage}`;
+        }
+        const supplierWaDigits = (product?.brand_profile?.whatsapp_phone || product?.brand_profile?.phone || "").replace(/\D/g, "");
+        const encodedWa = supplierWaDigits
+          ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(waMsg)}`
+          : `https://wa.me/?text=${encodeURIComponent(waMsg)}`;
+        setWhatsappUrl(encodedWa);
       }
-
-      const encodedWa = `https://wa.me/905337030883?text=${encodeURIComponent(waMsg)}`;
-      setWhatsappUrl(encodedWa);
 
       // Clear local cart
       setCart([]);
@@ -517,7 +537,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
     .replace(/>/g, String.raw`\u003e`);
 
   return (
-    <div 
+    <div
       className="min-h-screen flex flex-col font-sans antialiased bg-bg-dark text-text-primary"
       style={{ direction: lang === "ar" ? "rtl" : "ltr" }}
     >
@@ -533,8 +553,8 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         setIsLangOpen={setIsLangOpen}
         totalPkgs={totalPkgs}
         setIsCartOpen={setIsCartOpen}
-        setSearchQuery={() => {}}
-        setCurrentPage={() => {}}
+        setSearchQuery={() => { }}
+        setCurrentPage={() => { }}
         setActiveCategoryId={setActiveCategoryId}
         categories={categories}
         activeCategoryId={activeCategoryId}
@@ -544,7 +564,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
 
       {/* Main Content Area */}
       <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        
+
         {/* Google SEO Breadcrumbs */}
         <nav className="flex items-center gap-1.5 text-[11px] font-semibold text-sonic-silver mb-6 uppercase tracking-wider select-none">
           <Link href="/" className="hover:text-salmon-pink flex items-center gap-1 transition-colors no-underline text-sonic-silver">
@@ -554,7 +574,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
           {product.category_id && getCategoryTrail(categories, product.category_id)?.map((cat) => (
             <React.Fragment key={cat.id}>
               <ChevronRight className="w-3 h-3 text-spanish-gray" />
-              <Link 
+              <Link
                 href={getCategoryUrl(categories, cat, lang)}
                 className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver font-bold"
               >
@@ -571,7 +591,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         {/* Product Details Display Grid */}
         <div className="bg-white border border-cultured rounded-[15px] p-6 md:p-8 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            
+
             {/* Left Column - Image Gallery */}
             <ProductImageGallery
               images={product.images}
@@ -614,7 +634,28 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
                 lang={lang}
                 t={t}
                 handleAddToCart={handleAddToCart}
-                onOpenSupplierChat={() => setIsChatOpen(true)}
+                onOpenSupplierChat={() => {
+                  if (!isAuthenticated) {
+                    openStoreAuthModal("login");
+                    return;
+                  }
+                  setIsChatOpen(true);
+                }}
+              />
+
+              <SupplierDirectCard
+                product={product}
+                pkgQty={pkgQty}
+                totalPieces={totalPieces}
+                totalPrice={totalPrice}
+                currency={currency}
+                onOpenChat={() => {
+                  if (!isAuthenticated) {
+                    openStoreAuthModal("login");
+                    return;
+                  }
+                  setIsChatOpen(true);
+                }}
               />
 
               <SocialShare

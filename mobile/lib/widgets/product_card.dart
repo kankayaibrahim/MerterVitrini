@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../core/app_theme.dart';
 import '../core/localization.dart';
+import '../features/auth/auth_screen.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/session_provider.dart';
@@ -58,6 +59,13 @@ class _B2BProductCardState extends State<B2BProductCard> {
   }
 
   Future<void> _quickAddToCart(BuildContext context, Product product) async {
+    final session = context.read<SessionProvider>();
+    if (!session.canViewPrices) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
+      );
+      return;
+    }
     final minPkgs = product.minOrderPackages;
     try {
       await context.read<CartProvider>().addProductPackages(product, minPkgs);
@@ -151,7 +159,7 @@ class _B2BProductCardState extends State<B2BProductCard> {
                       Positioned(
                         top: 8,
                         left: 8,
-                        child: hasDiscount
+                        child: (hasDiscount && session.canViewPrices)
                             ? Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 7,
@@ -390,71 +398,118 @@ class _B2BProductCardState extends State<B2BProductCard> {
                   ),
                   const SizedBox(height: 6),
 
-                  // Row 3: Unit Price + 1 Serie Total Price
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          if (hasDiscount) ...[
-                            Text(
-                              session.formatPrice(
-                                product.price,
-                                sourceCurrency: product.currency,
+                  // Row 3: Unit Price + 1 Serie Total Price (or Members-Only Lock CTA)
+                  if (session.canViewPrices)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            if (hasDiscount) ...[
+                              Text(
+                                session.formatPrice(
+                                  product.price,
+                                  sourceCurrency: product.currency,
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  color: AppColors.spanishGray,
+                                  decoration: TextDecoration.lineThrough,
+                                ),
                               ),
-                              style: const TextStyle(
-                                fontSize: 10.5,
-                                color: AppColors.spanishGray,
-                                decoration: TextDecoration.lineThrough,
+                              const SizedBox(width: 4),
+                              Text(
+                                session.formatPrice(
+                                  product.effectiveUnitPrice,
+                                  sourceCurrency: product.currency,
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.discountRed,
+                                ),
                               ),
+                            ] else
+                              Text(
+                                session.formatPrice(
+                                  product.effectiveUnitPrice,
+                                  sourceCurrency: product.currency,
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.obsidian,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '1 ${AppStrings.t(lang, 'package')}: ${session.formatPrice(product.packageTotalPrice, sourceCurrency: product.currency)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.editorialGold,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              session.formatPrice(
-                                product.effectiveUnitPrice,
-                                sourceCurrency: product.currency,
-                              ),
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.discountRed,
-                              ),
-                            ),
-                          ] else
-                            Text(
-                              session.formatPrice(
-                                product.effectiveUnitPrice,
-                                sourceCurrency: product.currency,
-                              ),
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w900,
-                                color: AppColors.obsidian,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          '1 ${AppStrings.t(lang, 'package')}: ${session.formatPrice(product.packageTotalPrice, sourceCurrency: product.currency)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.editorialGold,
                           ),
                         ),
+                      ],
+                    )
+                  else
+                    InkWell(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const AuthScreen(),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.obsidian,
+                          border: Border.all(
+                            color: AppColors.champagneGold.withValues(alpha: 0.55),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.lock_outline_rounded,
+                              size: 11,
+                              color: AppColors.champagneGold,
+                            ),
+                            SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                'ÜYELERE ÖZEL FİYAT (GİRİŞ YAP)',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
                 ],
               ),
             ),

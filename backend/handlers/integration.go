@@ -23,12 +23,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/httpclient"
 	"mertervitrini/backend/pkg/safe"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type DownloadTask struct {
@@ -38,21 +39,21 @@ type DownloadTask struct {
 }
 
 type SyncProgress struct {
-	mu                 sync.RWMutex
-	RunID              string
-	ItemsParsed        int
-	ItemsAdded         int
-	ItemsUpdated       int
-	VariantsAligned    int
-	ErrorsSkipped      int
-	ImagesTotal        int
-	ImagesDownloaded   int
-	ActiveWorkers      int
-	DownloadSpeedKbps  int
-	Percentage         int
-	BytesInLastSec     int64
-	ParsingDone        bool
-	IsCompleted        bool
+	mu                sync.RWMutex
+	RunID             string
+	ItemsParsed       int
+	ItemsAdded        int
+	ItemsUpdated      int
+	VariantsAligned   int
+	ErrorsSkipped     int
+	ImagesTotal       int
+	ImagesDownloaded  int
+	ActiveWorkers     int
+	DownloadSpeedKbps int
+	Percentage        int
+	BytesInLastSec    int64
+	ParsingDone       bool
+	IsCompleted       bool
 }
 
 var (
@@ -623,7 +624,7 @@ func (h *IntegrationHandler) CancelSync(w http.ResponseWriter, r *http.Request) 
 			// Clean up any orphan runs stuck as running
 			summaryBytes, _ := json.Marshal(map[string]any{"error": "İşlem durduruldu."})
 			_, _ = db.Pool.Exec(dbCtx, "UPDATE integration.sync_runs SET status = 'failed', completed_at = CURRENT_TIMESTAMP, summary = $1 WHERE feed_id = $2 AND status = 'running'", summaryBytes, feedID)
-			
+
 			w.Header().Set(contentTypeHeader, appJSON)
 			w.Write([]byte(`{"success":true,"message":"Aktif çalışan senkronizasyon bulunamadı, durdurulacak işlem yok."}`))
 			return
@@ -735,6 +736,7 @@ func (h *IntegrationHandler) ClearSyncHistory(w http.ResponseWriter, r *http.Req
 	w.Header().Set(contentTypeHeader, appJSON)
 	w.Write([]byte(`{"success":true,"message":"Senkronizasyon geçmişi başarıyla temizlendi."}`))
 }
+
 // fetchSyncFeedConfig retrieves the feed configuration and parsed mappings
 func fetchSyncFeedConfig(ctx context.Context, runID string) (feedID string, brandID *string, feedURL string, mappingConfig, categoryMapping map[string]any, err error) {
 	err = db.Pool.QueryRow(ctx, "SELECT feed_id FROM integration.sync_runs WHERE id = $1", runID).Scan(&feedID)
@@ -1114,7 +1116,7 @@ func upsertCatalogProduct(ctx context.Context, p SingleProductImportParams, sour
 			) 
 			VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $11, $12, $12, $13, $14, $15, $16, $17, $18) 
 			RETURNING id`
-		err = db.Pool.QueryRow(ctx, insertQuery, p.FeedID, sourceProductID, title, fields.CategoryID, fields.Gender, p.SyncRunID, p.BrandID, 
+		err = db.Pool.QueryRow(ctx, insertQuery, p.FeedID, sourceProductID, title, fields.CategoryID, fields.Gender, p.SyncRunID, p.BrandID,
 			fields.SeriesRatio, fields.PackingRatio, fields.Weight, fields.MinOrderQty,
 			vf.Price, vf.DiscountedPrice, vf.Currency, vf.TaxRate, totalStock, vf.SKU, vf.Barcode).Scan(&productUUID)
 		if err != nil {
@@ -1133,7 +1135,7 @@ func upsertCatalogProduct(ctx context.Context, p SingleProductImportParams, sour
 		    buying_price = $10, price = $10, discounted_price = $11, currency = $12, tax_rate = $13, stock = $14, sku = $15, barcode = $16,
 		    updated_at = CURRENT_TIMESTAMP 
 		WHERE id = $17`
-	_, err = db.Pool.Exec(ctx, updateQuery, title, fields.CategoryID, fields.Gender, p.SyncRunID, p.BrandID, 
+	_, err = db.Pool.Exec(ctx, updateQuery, title, fields.CategoryID, fields.Gender, p.SyncRunID, p.BrandID,
 		fields.SeriesRatio, fields.PackingRatio, fields.Weight, fields.MinOrderQty,
 		vf.Price, vf.DiscountedPrice, vf.Currency, vf.TaxRate, totalStock, vf.SKU, vf.Barcode, productUUID)
 	if err != nil {
@@ -1386,7 +1388,6 @@ func getUrlHash(url string) string {
 	h := md5.Sum([]byte(url))
 	return fmt.Sprintf("%x", h)[:8]
 }
-
 
 func getParentPath(path string) string {
 	parts := strings.Split(path, "/")
@@ -1785,7 +1786,7 @@ func upsertStandardizedProductRecord(ctx context.Context, params StandardizedUps
 			) 
 			VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11, $12, $13, $14, $14, $15, $16, $17, $18, $19, $20) 
 			RETURNING id`
-		err = db.Pool.QueryRow(ctx, insertQuery, params.FeedID, p.SourceProductID, p.SourceProductGroupID, p.Title, params.CategoryID, p.Gender, params.SyncRunID, params.BrandID, 
+		err = db.Pool.QueryRow(ctx, insertQuery, params.FeedID, p.SourceProductID, p.SourceProductGroupID, p.Title, params.CategoryID, p.Gender, params.SyncRunID, params.BrandID,
 			params.SeriesRatioPtr, params.PackingRatioPtr, p.ShippingWeightKg, p.MinimumOrderQuantity, p.Season,
 			params.VF.Price, params.VF.DiscountedPrice, params.VF.Currency, params.VF.TaxRate, params.TotalStock, params.VF.SKU, params.VF.Barcode).Scan(&productUUID)
 		if err != nil {
@@ -1804,7 +1805,7 @@ func upsertStandardizedProductRecord(ctx context.Context, params StandardizedUps
 		    source_product_group_id = $11, buying_price = $12, price = $12, discounted_price = $13, currency = $14, tax_rate = $15, stock = $16, sku = $17, barcode = $18,
 		    updated_at = CURRENT_TIMESTAMP 
 		WHERE id = $19`
-	_, err = db.Pool.Exec(ctx, updateQuery, p.Title, params.CategoryID, p.Gender, params.SyncRunID, params.BrandID, 
+	_, err = db.Pool.Exec(ctx, updateQuery, p.Title, params.CategoryID, p.Gender, params.SyncRunID, params.BrandID,
 		params.SeriesRatioPtr, params.PackingRatioPtr, p.ShippingWeightKg, p.MinimumOrderQuantity, p.Season,
 		p.SourceProductGroupID, params.VF.Price, params.VF.DiscountedPrice, params.VF.Currency, params.VF.TaxRate, params.TotalStock, params.VF.SKU, params.VF.Barcode, productUUID)
 	if err != nil {
@@ -2042,8 +2043,8 @@ func (h *IntegrationHandler) DeleteXMLHistory(w http.ResponseWriter, r *http.Req
 }
 
 var standardSizesMap = map[string]int{
-	"XS": 30, "S": 40, "M": 50, "L": 60, "XL": 70, 
-	"XXL": 80, "2XL": 80, "XXXL": 90, "3XL": 90, 
+	"XS": 30, "S": 40, "M": 50, "L": 60, "XL": 70,
+	"XXL": 80, "2XL": 80, "XXXL": 90, "3XL": 90,
 	"XXXXL": 100, "4XL": 100, "5XL": 110, "6XL": 120,
 	"7XL": 130, "8XL": 140, "STANDART": 500, "STANDARD": 500,
 	"3XS": 10, "XXXS": 10, "2XS": 20, "XXS": 20,
@@ -2059,7 +2060,7 @@ func parseSingleSizeWeightGo(s string) int {
 	if val, err := strconv.Atoi(s); err == nil {
 		return val
 	}
-	
+
 	re := regexp.MustCompile(`^([0-9]+)(XL|XXL|XXXL|XS|XXS|XXXS|L|M|S)$`)
 	m := re.FindStringSubmatch(s)
 	if len(m) == 3 {
@@ -2072,7 +2073,7 @@ func parseSingleSizeWeightGo(s string) int {
 			return 40 - val*10
 		}
 	}
-	
+
 	if strings.HasSuffix(s, "XL") {
 		xCount := strings.Count(s, "X")
 		return 70 + (xCount-1)*10
@@ -2119,7 +2120,7 @@ func sortPackingRatioGo(ratio string) string {
 	if ratio == "" {
 		return ratio
 	}
-	
+
 	parts := strings.Split(ratio, ",")
 	var items []SizeSortItem
 	for _, p := range parts {
@@ -2130,7 +2131,7 @@ func sortPackingRatioGo(ratio string) string {
 		upper := strings.ToUpper(token)
 		category := 1
 		weight := 999
-		
+
 		if _, err := strconv.Atoi(upper); err == nil {
 			category = 0
 			weight, _ = strconv.Atoi(upper)
@@ -2139,18 +2140,18 @@ func sortPackingRatioGo(ratio string) string {
 		} else {
 			weight = parseRangeWeightGo(upper)
 		}
-		
+
 		items = append(items, SizeSortItem{
 			Token:    token,
 			Category: category,
 			Weight:   weight,
 		})
 	}
-	
+
 	if len(items) == 0 {
 		return ratio
 	}
-	
+
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Category != items[j].Category {
 			return items[i].Category < items[j].Category
@@ -2160,7 +2161,7 @@ func sortPackingRatioGo(ratio string) string {
 		}
 		return items[i].Token < items[j].Token
 	})
-	
+
 	var sortedTokens []string
 	for _, item := range items {
 		sortedTokens = append(sortedTokens, item.Token)
@@ -2169,7 +2170,7 @@ func sortPackingRatioGo(ratio string) string {
 }
 
 var plusSizeIndicators = map[string]bool{
-	"XL": true, "XXL": true, "2XL": true, "XXXL": true, "3XL": true, 
+	"XL": true, "XXL": true, "2XL": true, "XXXL": true, "3XL": true,
 	"XXXXL": true, "4XL": true, "5XL": true, "6XL": true, "7XL": true, "8XL": true,
 	"2-3XL": true, "L-XL": true,
 }
@@ -2216,34 +2217,33 @@ func getPlusSizeCategoryEquivalent(ctx context.Context, stdCategoryID string) st
 	if stdCategoryID == "" {
 		return ""
 	}
-	
+
 	var slug string
 	err := db.Pool.QueryRow(ctx, "SELECT slug FROM catalog.categories WHERE id = $1", stdCategoryID).Scan(&slug)
 	if err != nil {
 		return stdCategoryID
 	}
-	
+
 	if strings.HasPrefix(slug, "buyuk-beden") {
 		return stdCategoryID
 	}
-	
+
 	targetSlug := "buyuk-beden-" + slug
 	var plusSizeID string
 	err = db.Pool.QueryRow(ctx, "SELECT id FROM catalog.categories WHERE slug = $1", targetSlug).Scan(&plusSizeID)
 	if err == nil && plusSizeID != "" {
 		return plusSizeID
 	}
-	
+
 	err = db.Pool.QueryRow(ctx, "SELECT id FROM catalog.categories WHERE slug = 'buyuk-beden-diger'").Scan(&plusSizeID)
 	if err == nil && plusSizeID != "" {
 		return plusSizeID
 	}
-	
+
 	err = db.Pool.QueryRow(ctx, "SELECT id FROM catalog.categories WHERE slug = 'buyuk-beden'").Scan(&plusSizeID)
 	if err == nil && plusSizeID != "" {
 		return plusSizeID
 	}
-	
+
 	return stdCategoryID
 }
-

@@ -212,6 +212,12 @@ class SupplierSubOrder {
   final String trackingCompany;
   final String trackingNumber;
   final String notes;
+  final String customerName;
+  final String customerCompany;
+  final String customerPhone;
+  final String customerEmail;
+  final String deliveryAddress;
+  final String billingAddress;
   final DateTime createdAt;
   final List<SupplierSubOrderItem> items;
 
@@ -228,6 +234,12 @@ class SupplierSubOrder {
     required this.trackingCompany,
     required this.trackingNumber,
     required this.notes,
+    this.customerName = '',
+    this.customerCompany = '',
+    this.customerPhone = '',
+    this.customerEmail = '',
+    this.deliveryAddress = '',
+    this.billingAddress = '',
     required this.createdAt,
     required this.items,
   });
@@ -246,7 +258,7 @@ class SupplierSubOrder {
       orderId: (json['order_id'] ?? '').toString(),
       subOrderNumber: (json['sub_order_number'] ?? '').toString(),
       grossAmount: (json['gross_amount'] as num?)?.toDouble() ?? 0.0,
-      commissionRate: (json['commission_rate'] as num?)?.toDouble() ?? 10.0,
+      commissionRate: (json['commission_rate'] as num?)?.toDouble() ?? 0.0,
       commissionAmount: (json['commission_amount'] as num?)?.toDouble() ?? 0.0,
       netPayoutAmount: (json['net_payout_amount'] as num?)?.toDouble() ?? 0.0,
       currency: (json['currency'] ?? 'TRY').toString(),
@@ -254,6 +266,12 @@ class SupplierSubOrder {
       trackingCompany: (json['tracking_company'] ?? '').toString(),
       trackingNumber: (json['tracking_number'] ?? '').toString(),
       notes: (json['notes'] ?? '').toString(),
+      customerName: (json['customer_name'] ?? '').toString(),
+      customerCompany: (json['customer_company'] ?? '').toString(),
+      customerPhone: (json['customer_phone'] ?? '').toString(),
+      customerEmail: (json['customer_email'] ?? '').toString(),
+      deliveryAddress: (json['delivery_address'] ?? '').toString(),
+      billingAddress: (json['billing_address'] ?? '').toString(),
       createdAt: DateTime.tryParse((json['created_at'] ?? '').toString()) ??
           DateTime.now(),
       items: parsedItems,
@@ -276,7 +294,7 @@ class SupplierWallet {
     this.pendingBalance = 0.0,
     this.availableBalance = 0.0,
     this.withdrawnBalance = 0.0,
-    this.commissionRate = 10.0,
+    this.commissionRate = 0.0,
     this.iban = '',
     this.bankName = '',
     this.bankAccountHolder = '',
@@ -288,7 +306,7 @@ class SupplierWallet {
       pendingBalance: (json['pending_balance'] as num?)?.toDouble() ?? 0.0,
       availableBalance: (json['available_balance'] as num?)?.toDouble() ?? 0.0,
       withdrawnBalance: (json['withdrawn_balance'] as num?)?.toDouble() ?? 0.0,
-      commissionRate: (json['commission_rate'] as num?)?.toDouble() ?? 10.0,
+      commissionRate: (json['commission_rate'] as num?)?.toDouble() ?? 0.0,
       iban: (json['iban'] ?? '').toString(),
       bankName: (json['bank_name'] ?? '').toString(),
       bankAccountHolder: (json['bank_account_holder'] ?? '').toString(),

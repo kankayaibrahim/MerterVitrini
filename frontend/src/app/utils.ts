@@ -108,5 +108,27 @@ export function showToast(message: string): void {
   }
 }
 
+export function trackBrandEvent(
+  brandId?: string,
+  eventType?: string,
+  productId?: string
+): void {
+  if (typeof window === "undefined" || !brandId || !eventType) return;
+  const lang = localStorage.getItem("preferred_lang") || "tr";
+  fetch("/api/v1/store/brand-events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      brand_id: brandId,
+      product_id: productId || "",
+      event_type: eventType,
+      language: lang,
+    }),
+    keepalive: true,
+  }).catch(() => {
+    // Non-blocking telemetry
+  });
+}
+
 
 

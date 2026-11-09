@@ -23,9 +23,31 @@ func NewSuppliersHandler() *SuppliersHandler {
 
 func fetchSuppliers(ctx context.Context) ([]*models.Brand, map[string]*models.Brand, error) {
 	brandQuery := `
-		SELECT id, brand_name AS name, slug, alias_code, website, phone, addresses, is_active, created_at, updated_at 
-		FROM catalog.brands 
-		ORDER BY brand_name`
+		SELECT 
+			b.id, b.brand_name AS name, b.slug, b.alias_code,
+			COALESCE(b.company_type, 'uretici_toptanci'),
+			COALESCE(b.description, ''),
+			b.website, b.phone,
+			COALESCE(
+				NULLIF(b.whatsapp_phone, ''),
+				NULLIF(b.phone, ''),
+				(SELECT COALESCE(NULLIF(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+				''
+			) AS whatsapp_phone,
+			COALESCE(b.public_email, ''),
+			COALESCE(b.instagram_handle, ''),
+			COALESCE(b.location_address, ''),
+			COALESCE(b.export_countries, ''),
+			COALESCE(b.min_order_quantity, 1),
+			COALESCE(b.supports_private_label, false),
+			COALESCE(b.supports_fason, false),
+			COALESCE(b.is_verified, true),
+			COALESCE(b.bank_name, ''),
+			COALESCE(b.bank_account_holder, ''),
+			COALESCE(b.iban, ''),
+			b.addresses, b.is_active, b.created_at, b.updated_at 
+		FROM catalog.brands b
+		ORDER BY b.brand_name`
 
 	bRows, err := db.Pool.Query(ctx, brandQuery)
 	if err != nil {
@@ -38,7 +60,16 @@ func fetchSuppliers(ctx context.Context) ([]*models.Brand, map[string]*models.Br
 
 	for bRows.Next() {
 		var s models.Brand
-		if err := bRows.Scan(&s.ID, &s.Name, &s.Slug, &s.AliasCode, &s.Website, &s.Phone, &s.Addresses, &s.IsActive, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		if err := bRows.Scan(
+			&s.ID, &s.Name, &s.Slug, &s.AliasCode,
+			&s.CompanyType, &s.Description,
+			&s.Website, &s.Phone,
+			&s.WhatsappPhone, &s.PublicEmail, &s.InstagramHandle,
+			&s.LocationAddress, &s.ExportCountries, &s.MinOrderQuantity,
+			&s.SupportsPrivateLabel, &s.SupportsFason, &s.IsVerified,
+			&s.BankName, &s.BankAccountHolder, &s.IBAN,
+			&s.Addresses, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
+		); err != nil {
 			return nil, nil, err
 		}
 		s.Feeds = make([]*models.XmlFeed, 0)
@@ -117,12 +148,18 @@ func (h *SuppliersHandler) CreateSupplier(w http.ResponseWriter, r *http.Request
 	}
 
 	var req struct {
-		Name      string  `json:"name"`
-		AliasCode *string `json:"alias_code"`
-		Website   *string `json:"website"`
-		Phone     *string `json:"phone"`
-		Addresses []any   `json:"addresses"`
-		IsActive  bool    `json:"is_active"`
+		Name              string  `json:"name"`
+		AliasCode         *string `json:"alias_code"`
+		Website           *string `json:"website"`
+		Phone             *string `json:"phone"`
+		WhatsappPhone     *string `json:"whatsapp_phone"`
+		PublicEmail       *string `json:"public_email"`
+		LocationAddress   *string `json:"location_address"`
+		BankName          *string `json:"bank_name"`
+		BankAccountHolder *string `json:"bank_account_holder"`
+		IBAN              *string `json:"iban"`
+		Addresses         []any   `json:"addresses"`
+		IsActive          bool    `json:"is_active"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -159,15 +196,44 @@ func (h *SuppliersHandler) CreateSupplier(w http.ResponseWriter, r *http.Request
 	}
 
 	addressesJSON, _ := json.Marshal(req.Addresses)
+	waStr := ""
+	if req.WhatsappPhone != nil {
+		waStr = strings.TrimSpace(*req.WhatsappPhone)
+	} else if req.Phone != nil {
+		waStr = strings.TrimSpace(*req.Phone)
+	}
+	emailStr := ""
+	if req.PublicEmail != nil {
+		emailStr = strings.TrimSpace(*req.PublicEmail)
+	}
+	locStr := ""
+	if req.LocationAddress != nil {
+		locStr = strings.TrimSpace(*req.LocationAddress)
+	}
+	bankNameStr := ""
+	if req.BankName != nil {
+		bankNameStr = strings.TrimSpace(*req.BankName)
+	}
+	bankHolderStr := ""
+	if req.BankAccountHolder != nil {
+		bankHolderStr = strings.TrimSpace(*req.BankAccountHolder)
+	}
+	ibanStr := ""
+	if req.IBAN != nil {
+		ibanStr = strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(*req.IBAN), " ", ""))
+	}
 
 	query := `
-		INSERT INTO catalog.brands (brand_name, slug, alias_code, website, phone, addresses, is_active) 
-		VALUES ($1, $2, UPPER($3), $4, $5, $6, $7) 
-		RETURNING id, brand_name AS name, slug, alias_code, website, phone, addresses, is_active, created_at, updated_at`
+		INSERT INTO catalog.brands (
+			brand_name, slug, alias_code, website, phone, whatsapp_phone, public_email,
+			location_address, bank_name, bank_account_holder, iban, addresses, is_active
+		) 
+		VALUES ($1, $2, UPPER($3), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
+		RETURNING id, brand_name AS name, slug, alias_code, website, phone, COALESCE(whatsapp_phone, ''), COALESCE(public_email, ''), COALESCE(location_address, ''), COALESCE(bank_name, ''), COALESCE(bank_account_holder, ''), COALESCE(iban, ''), addresses, is_active, created_at, updated_at`
 
 	var s models.Brand
-	err = db.Pool.QueryRow(ctx, query, req.Name, slug, *aliasCode, req.Website, req.Phone, addressesJSON, req.IsActive).Scan(
-		&s.ID, &s.Name, &s.Slug, &s.AliasCode, &s.Website, &s.Phone, &s.Addresses, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
+	err = db.Pool.QueryRow(ctx, query, req.Name, slug, *aliasCode, req.Website, req.Phone, waStr, emailStr, locStr, bankNameStr, bankHolderStr, ibanStr, addressesJSON, req.IsActive).Scan(
+		&s.ID, &s.Name, &s.Slug, &s.AliasCode, &s.Website, &s.Phone, &s.WhatsappPhone, &s.PublicEmail, &s.LocationAddress, &s.BankName, &s.BankAccountHolder, &s.IBAN, &s.Addresses, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
 	)
 
 	if err != nil {
@@ -195,12 +261,18 @@ func (h *SuppliersHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request
 	}
 
 	var req struct {
-		Name      string  `json:"name"`
-		AliasCode *string `json:"alias_code"`
-		Website   *string `json:"website"`
-		Phone     *string `json:"phone"`
-		Addresses []any   `json:"addresses"`
-		IsActive  bool    `json:"is_active"`
+		Name              string  `json:"name"`
+		AliasCode         *string `json:"alias_code"`
+		Website           *string `json:"website"`
+		Phone             *string `json:"phone"`
+		WhatsappPhone     *string `json:"whatsapp_phone"`
+		PublicEmail       *string `json:"public_email"`
+		LocationAddress   *string `json:"location_address"`
+		BankName          *string `json:"bank_name"`
+		BankAccountHolder *string `json:"bank_account_holder"`
+		IBAN              *string `json:"iban"`
+		Addresses         []any   `json:"addresses"`
+		IsActive          bool    `json:"is_active"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -229,13 +301,32 @@ func (h *SuppliersHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request
 
 	query := `
 		UPDATE catalog.brands 
-		SET brand_name = $1, slug = $2, alias_code = UPPER($3), website = $4, phone = $5, addresses = $6, is_active = $7, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $8
-		RETURNING id, brand_name AS name, slug, alias_code, website, phone, addresses, is_active, created_at, updated_at`
+		SET brand_name = $1,
+		    slug = $2,
+		    alias_code = UPPER($3),
+		    website = $4,
+		    phone = $5,
+		    whatsapp_phone = COALESCE($6, whatsapp_phone, ''),
+		    public_email = COALESCE($7, public_email, ''),
+		    location_address = COALESCE($8, location_address, ''),
+		    bank_name = COALESCE($9, bank_name, ''),
+		    bank_account_holder = COALESCE($10, bank_account_holder, ''),
+		    iban = COALESCE($11, iban, ''),
+		    addresses = $12,
+		    is_active = $13,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $14
+		RETURNING id, brand_name AS name, slug, alias_code, website, phone, COALESCE(whatsapp_phone, ''), COALESCE(public_email, ''), COALESCE(location_address, ''), COALESCE(bank_name, ''), COALESCE(bank_account_holder, ''), COALESCE(iban, ''), addresses, is_active, created_at, updated_at`
 
 	var s models.Brand
-	err = db.Pool.QueryRow(ctx, query, req.Name, slug, req.AliasCode, req.Website, req.Phone, addressesJSON, req.IsActive, id).Scan(
-		&s.ID, &s.Name, &s.Slug, &s.AliasCode, &s.Website, &s.Phone, &s.Addresses, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
+	err = db.Pool.QueryRow(ctx, query,
+		req.Name, slug, req.AliasCode, req.Website, req.Phone,
+		req.WhatsappPhone, req.PublicEmail, req.LocationAddress, req.BankName, req.BankAccountHolder, req.IBAN,
+		addressesJSON, req.IsActive, id,
+	).Scan(
+		&s.ID, &s.Name, &s.Slug, &s.AliasCode, &s.Website, &s.Phone,
+		&s.WhatsappPhone, &s.PublicEmail, &s.LocationAddress, &s.BankName, &s.BankAccountHolder, &s.IBAN,
+		&s.Addresses, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
 	)
 
 	if err != nil {

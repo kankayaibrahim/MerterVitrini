@@ -18,6 +18,7 @@ import {
   FileCode2,
   BarChart3,
   FileText,
+  Sparkles,
   LucideIcon
 } from "lucide-react";
 
@@ -155,6 +156,33 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
         href: "/admin/customers",
         icon: Users,
         description: "Kurumsal B2B müşteri hesapları ve onay talepleri"
+      },
+      {
+        id: "rfq",
+        title: "Alıcı Talep Panosu (RFQ)",
+        href: "/admin/rfq",
+        icon: FileText,
+        badge: "B2B",
+        badgeColor: "emerald",
+        description: "Alıcıların oluşturduğu toptan alım ve üretim ilanları"
+      },
+      {
+        id: "marketing",
+        title: "Sponsorlu Vitrin & E-Bülten",
+        href: "/admin/marketing",
+        icon: Sparkles,
+        badge: "Gelir",
+        badgeColor: "amber",
+        description: "Öne çıkan üreticiler, kategori sponsorlukları ve izinli e-bülten"
+      },
+      {
+        id: "service-providers",
+        title: "Sektörel Hizmet Sağlayıcılar",
+        href: "/admin/service-providers",
+        icon: Building2,
+        badge: "Rehber",
+        badgeColor: "blue",
+        description: "Kargo/Lojistik, Fotoğraf Stüdyosu, Etiket, Modelhane ve İhracat rehberi"
       }
     ]
   },

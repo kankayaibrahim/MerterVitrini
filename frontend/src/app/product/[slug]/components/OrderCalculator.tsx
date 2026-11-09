@@ -1,5 +1,14 @@
+"use client";
+
 import React from "react";
-import { Minus, Plus, ShoppingBag, MessageSquare } from "lucide-react";
+import { Minus, Plus, ShoppingBag, MessageSquare, Lock } from "lucide-react";
+import {
+  useIsStoreAuthenticated,
+  useIsStoreMemberLoggedIn,
+  openStoreAuthModal,
+  getMemberPriceLabel,
+  getShortMemberPriceLabel,
+} from "@/app/storeAuth";
 
 interface OrderCalculatorProps {
   readonly hasSeries: boolean;
@@ -34,6 +43,8 @@ export default function OrderCalculator({
   handleAddToCart,
   onOpenSupplierChat,
 }: OrderCalculatorProps) {
+  const isAuthenticated = useIsStoreAuthenticated();
+  const isMemberLoggedIn = useIsStoreMemberLoggedIn();
   return (
     <>
       {/* A. SERIES PACK SALES CALCULATOR */}
@@ -122,13 +133,24 @@ export default function OrderCalculator({
               {totalWeight.toFixed(2)} {t("kg_unit", lang)}
             </span>
           </div>
-          <div className="flex justify-between text-sm text-salmon-pink font-extrabold pt-2.5 border-t border-cultured mt-2">
+          <div className="flex justify-between items-center text-sm text-salmon-pink font-extrabold pt-2.5 border-t border-cultured mt-2">
             <span className="select-none">
               {t("total_price_calc", lang)} ({t("excluding_vat", lang)}):
             </span>
-            <span>
-              {totalPrice.toFixed(2)} {currency}
-            </span>
+            {isAuthenticated ? (
+              <span>
+                {totalPrice.toFixed(2)} {currency}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openStoreAuthModal("login")}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 hover:bg-salmon-pink text-white text-[11px] font-extrabold transition-colors cursor-pointer border-none"
+              >
+                <Lock className="w-3 h-3 shrink-0" />
+                <span>{getShortMemberPriceLabel(lang)}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -136,22 +158,40 @@ export default function OrderCalculator({
       {/* Add to Inquiry Cart Button */}
       <button
         type="button"
-        onClick={handleAddToCart}
+        onClick={isAuthenticated ? handleAddToCart : () => openStoreAuthModal("login")}
         className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase transition-all duration-300 border-none flex items-center justify-center gap-2.5 cursor-pointer select-none active:scale-[0.99]"
       >
-        <ShoppingBag className="w-4 h-4 text-white" />
-        {t("add_to_cart", lang)}
+        {isAuthenticated ? (
+          <>
+            <ShoppingBag className="w-4 h-4 text-white" />
+            {t("add_to_cart", lang)}
+          </>
+        ) : (
+          <>
+            <Lock className="w-4 h-4 text-white" />
+            {getMemberPriceLabel(lang)}
+          </>
+        )}
       </button>
 
       {/* Ask Supplier / Request Custom Price Button (Centrifuge Live B2B Chat) */}
       {onOpenSupplierChat && (
         <button
           type="button"
-          onClick={onOpenSupplierChat}
+          onClick={isMemberLoggedIn ? onOpenSupplierChat : () => openStoreAuthModal("login")}
           className="w-full py-3 bg-slate-900 hover:bg-purple-700 text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase transition-all duration-300 border-none flex items-center justify-center gap-2.5 cursor-pointer select-none shadow-sm active:scale-[0.99]"
         >
-          <MessageSquare className="w-4 h-4 text-purple-300" />
-          Tedarikçiye Sor / Özel Fiyat İste (Canlı)
+          {isMemberLoggedIn ? (
+            <>
+              <MessageSquare className="w-4 h-4 text-purple-300" />
+              <span>Tedarikçiye Sor / Özel Fiyat İste (Canlı)</span>
+            </>
+          ) : (
+            <>
+              <Lock className="w-4 h-4 text-purple-300" />
+              <span>Canlı Sohbet & Özel Fiyat İçin Giriş Yap</span>
+            </>
+          )}
         </button>
       )}
     </>

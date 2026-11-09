@@ -103,6 +103,10 @@ class SessionProvider extends ChangeNotifier {
       _supplierToken != null &&
       _supplierToken!.isNotEmpty &&
       _supplierUser != null;
+  bool get isMemberLoggedIn => isCustomerLoggedIn || isSupplierLoggedIn;
+  bool get showPricesToGuests =>
+      _storeSettings['show_prices_to_guests'] == true;
+  bool get canViewPrices => isMemberLoggedIn || showPricesToGuests;
 
   String get effectiveChatCustomerId =>
       isCustomerLoggedIn ? _customerUser!.id : _guestCustomerId;
@@ -122,6 +126,9 @@ class SessionProvider extends ChangeNotifier {
   int get unreadNotificationCount => _unreadNotificationCount;
 
   String formatPrice(double amount, {String sourceCurrency = 'TRY'}) {
+    if (!canViewPrices) {
+      return 'Üyelere Özel';
+    }
     return CurrencyFormatter.format(
       amount,
       currency: _currencyCode,

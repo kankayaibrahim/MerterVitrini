@@ -7,6 +7,7 @@ import '../../models/chat.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../widgets/luxury_icons.dart';
+import '../auth/auth_screen.dart';
 import 'chat_conversation_screen.dart';
 
 class ChatRoomsScreen extends StatefulWidget {
@@ -124,7 +125,86 @@ class _ChatRoomsScreenState extends State<ChatRoomsScreen> {
             ),
           ),
         Expanded(
-          child: RefreshIndicator(
+          child: !widget.asSupplier && !session.isCustomerLoggedIn
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            color: AppColors.editorialOffWhite,
+                            border: Border.all(color: AppColors.cultured),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 28,
+                            color: AppColors.obsidian,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'CANLI SOHBET ÜYELERE ÖZELDİR',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: AppColors.serifFontFamily,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.6,
+                            color: AppColors.obsidian,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Üretici temsilcileriyle canlı B2B pazarlık yapmak, stok sormak ve özel seri fiyat teklifi almak için üye girişi yapmanız gerekmektedir.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: AppColors.sonicSilver,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          height: 44,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.obsidian,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const AuthScreen(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.login_rounded,
+                              size: 16,
+                            ),
+                            label: const Text(
+                              'ÜYE GİRİŞİ YAP / KAYIT OL',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : RefreshIndicator(
             color: AppColors.obsidian,
             onRefresh: chat.loadRoomsForCurrentRole,
             child: chat.loadingRooms && rooms.isEmpty

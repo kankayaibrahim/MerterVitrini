@@ -15,13 +15,15 @@ import {
   ArrowRight, 
   ArrowLeft,
   Check,
-  Info
+  Info,
+  Globe
 } from "lucide-react";
 import type {
   CategoryOption,
   AttributeItem,
   VariantFormItem,
   SupplierProfile,
+  ProductTranslationsFormMap,
 } from "./SupplierDashboardClient";
 
 // Helper to strip any raw HTML tags from attribute names (e.g. "<p>Siyah - Beyaz</p>" -> "Siyah - Beyaz")
@@ -862,6 +864,182 @@ export function SupplierProductImagesTab(props: Readonly<SupplierProductImagesTa
   );
 }
 
+// TAB 5: MULTI-LANGUAGE TRANSLATIONS (EN / RU / AR)
+interface SupplierProductTranslationsTabProps {
+  formTitle: string;
+  formShortDesc: string;
+  formDescription: string;
+  formTranslations: ProductTranslationsFormMap;
+  onUpdateTranslationField: (
+    lang: "en" | "ru" | "ar",
+    field: "title" | "short_description" | "description",
+    val: string
+  ) => void;
+  autoTranslating: boolean;
+  onAutoTranslateFromTurkish: () => void;
+}
+
+export function SupplierProductTranslationsTab(
+  props: Readonly<SupplierProductTranslationsTabProps>
+) {
+  const {
+    formTitle,
+    formShortDesc,
+    formDescription,
+    formTranslations,
+    onUpdateTranslationField,
+    autoTranslating,
+    onAutoTranslateFromTurkish,
+  } = props;
+
+  const [activeLang, setActiveLang] = useState<"en" | "ru" | "ar">("en");
+
+  const langs = [
+    { code: "en" as const, label: "🇬🇧 English (İngilizce)", dir: "ltr" as const },
+    { code: "ru" as const, label: "🇷🇺 Русский (Rusça)", dir: "ltr" as const },
+    { code: "ar" as const, label: "🇸🇦 العربية (Arapça • RTL)", dir: "rtl" as const },
+  ];
+
+  const currentItem = formTranslations[activeLang];
+  const isRtl = activeLang === "ar";
+
+  return (
+    <div className="flex flex-col gap-5 animate-in fade-in duration-150">
+      {/* Header & Auto-Translate Banner */}
+      <div className="p-4 rounded-xl bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#1677ff] text-white flex items-center justify-center shrink-0 shadow-xs">
+            <Globe size={20} />
+          </div>
+          <div>
+            <h4 className="text-xs font-extrabold text-slate-900">
+              Çok Dilli Ürün Çevirileri (EN / RU / AR)
+            </h4>
+            <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+              Yurt dışı alıcılar vitrini İngilizce, Rusça veya Arapça görüntülediğinde burada düzenlediğiniz metinler gösterilir. Tek tıkla Türkçe metinden otomatik çevirebilir veya elle düzenleyebilirsiniz.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onAutoTranslateFromTurkish}
+          disabled={autoTranslating || !formTitle.trim()}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1677ff] hover:bg-[#4096ff] text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
+        >
+          <Sparkles size={14} />
+          <span>
+            {autoTranslating
+              ? "Otomatik Çevriliyor..."
+              : "Türkçe Metinden Otomatik Çevir"}
+          </span>
+        </button>
+      </div>
+
+      {/* Reference Turkish Box */}
+      <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+        <div className="font-bold text-slate-700 flex items-center gap-1.5">
+          <span>🇹🇷 Kaynak Türkçe Metin:</span>
+          <span className="font-extrabold text-slate-900">
+            {formTitle || "(Henüz Türkçe ürün adı girilmedi)"}
+          </span>
+        </div>
+        {(formShortDesc || formDescription) && (
+          <p className="text-[11px] text-slate-500 line-clamp-2">
+            {formShortDesc ? `${formShortDesc} — ` : ""}
+            {formDescription}
+          </p>
+        )}
+      </div>
+
+      {/* Language Switcher Tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+        {langs.map((l) => {
+          const isSelected = activeLang === l.code;
+          const hasText = Boolean(formTranslations[l.code].title.trim());
+          return (
+            <button
+              key={l.code}
+              type="button"
+              onClick={() => setActiveLang(l.code)}
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                isSelected
+                  ? "bg-[#1677ff] text-white border-[#1677ff] shadow-xs"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              <span>{l.label}</span>
+              {hasText && (
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                    isSelected
+                      ? "bg-white/20 text-white"
+                      : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  }`}
+                >
+                  Hazır
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Editable Fields for Active Language */}
+      <div className="space-y-4" dir={isRtl ? "rtl" : "ltr"}>
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">
+            Ürün Adı ({activeLang.toUpperCase()})
+          </label>
+          <input
+            type="text"
+            value={currentItem.title}
+            onChange={(e) =>
+              onUpdateTranslationField(activeLang, "title", e.target.value)
+            }
+            placeholder={`${activeLang.toUpperCase()} ürün başlığı...`}
+            className="w-full px-3.5 py-2.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-900 focus:outline-none focus:border-[#1677ff]"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">
+            Kısa Açıklama / Özet ({activeLang.toUpperCase()})
+          </label>
+          <input
+            type="text"
+            value={currentItem.short_description}
+            onChange={(e) =>
+              onUpdateTranslationField(
+                activeLang,
+                "short_description",
+                e.target.value
+              )
+            }
+            placeholder={`${activeLang.toUpperCase()} kısa açıklama...`}
+            className="w-full px-3.5 py-2.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">
+            Detaylı Ürün Açıklaması ({activeLang.toUpperCase()})
+          </label>
+          <textarea
+            rows={4}
+            value={currentItem.description}
+            onChange={(e) =>
+              onUpdateTranslationField(activeLang, "description", e.target.value)
+            }
+            placeholder={`${activeLang.toUpperCase()} detaylı ürün açıklaması...`}
+            className="w-full px-3.5 py-2.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // MAIN MODAL CONTAINER (ANT DESIGN PRO STYLE)
 export interface SupplierProductModalProps {
   activeModal: "create" | "edit";
@@ -869,8 +1047,10 @@ export interface SupplierProductModalProps {
   profile: SupplierProfile | null;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
-  modalTab: "basic" | "pricing" | "variants" | "images";
-  setModalTab: (tab: "basic" | "pricing" | "variants" | "images") => void;
+  modalTab: "basic" | "pricing" | "variants" | "images" | "translations";
+  setModalTab: (
+    tab: "basic" | "pricing" | "variants" | "images" | "translations"
+  ) => void;
   submitting: boolean;
   formError: string;
   // Basic Tab
@@ -917,6 +1097,15 @@ export interface SupplierProductModalProps {
   onUploadImageFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSetCoverImage: (index: number) => void;
   onRemoveImage: (index: number) => void;
+  // Translations Tab
+  formTranslations: ProductTranslationsFormMap;
+  onUpdateTranslationField: (
+    lang: "en" | "ru" | "ar",
+    field: "title" | "short_description" | "description",
+    val: string
+  ) => void;
+  autoTranslating: boolean;
+  onAutoTranslateFromTurkish: () => void;
 }
 
 export function SupplierProductModal(props: Readonly<SupplierProductModalProps>) {
@@ -935,10 +1124,12 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
     if (modalTab === "basic") setModalTab("pricing");
     else if (modalTab === "pricing") setModalTab("variants");
     else if (modalTab === "variants") setModalTab("images");
+    else if (modalTab === "images") setModalTab("translations");
   };
 
   const handlePrevTab = () => {
-    if (modalTab === "images") setModalTab("variants");
+    if (modalTab === "translations") setModalTab("images");
+    else if (modalTab === "images") setModalTab("variants");
     else if (modalTab === "variants") setModalTab("pricing");
     else if (modalTab === "pricing") setModalTab("basic");
   };
@@ -948,6 +1139,7 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
     { key: "pricing", step: 2, title: "Fiyat & Paket", sub: "Fiyatlandırma & Oran" },
     { key: "variants", step: 3, title: "Beden & Stok", sub: "Hazır Seriler & Stok" },
     { key: "images", step: 4, title: "Fotoğraflar", sub: "Görsel Yükleme" },
+    { key: "translations", step: 5, title: "Çok Dilli Çeviri", sub: "EN / RU / AR" },
   ] as const;
 
   return (
@@ -965,7 +1157,7 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
                 <span>{activeModal === "create" ? "Yeni Ürün Ekle ve Vitrinde Yayınla" : "Ürünü Düzenle"}</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Tedarikçi: <strong className="text-slate-800 font-semibold">{profile?.brand_name}</strong> • Maske Kodu:{" "}
+                Üretici / Tedarikçi: <strong className="text-slate-800 font-semibold">{profile?.brand_name}</strong> • SKU Ön Eki:{" "}
                 <span className="font-mono font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[10px]">
                   {profile?.alias_code}
                 </span>
@@ -1030,6 +1222,7 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
           {modalTab === "pricing" && <SupplierProductPricingTab {...props} />}
           {modalTab === "variants" && <SupplierProductVariantsTab {...props} />}
           {modalTab === "images" && <SupplierProductImagesTab {...props} />}
+          {modalTab === "translations" && <SupplierProductTranslationsTab {...props} />}
 
           {/* Ant Design Modal Footer */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-200 mt-auto">
@@ -1053,7 +1246,7 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
                 </button>
               )}
 
-              {modalTab !== "images" ? (
+              {modalTab !== "translations" ? (
                 <button
                   type="button"
                   onClick={handleNextTab}

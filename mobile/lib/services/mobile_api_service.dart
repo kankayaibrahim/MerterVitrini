@@ -77,6 +77,11 @@ class MobileApiService
     String brandId = '',
     String gender = '',
     String season = '',
+    bool fason = false,
+    bool privateLabel = false,
+    String companyType = '',
+    String maxMoq = '',
+    String exportCountry = '',
     String sortBy = 'newest',
     int limit = 24,
     int offset = 0,
@@ -87,6 +92,11 @@ class MobileApiService
         brandId: brandId,
         gender: gender,
         season: season,
+        fason: fason,
+        privateLabel: privateLabel,
+        companyType: companyType,
+        maxMoq: maxMoq,
+        exportCountry: exportCountry,
         sortBy: sortBy,
         limit: limit,
         offset: offset,
@@ -432,6 +442,12 @@ class MobileApiService
   @override
   Future<(List<SimpleOptionItem>, List<SimpleOptionItem>)>
       fetchSupplierAttributes() => supplierCatalog.fetchSupplierAttributes();
+
+  @override
+  Future<Map<String, Map<String, String>>> autoTranslateSupplierFields(
+    Map<String, String> fields,
+  ) =>
+      supplierCatalog.autoTranslateSupplierFields(fields);
 
   // --- ISupplierOperationsRepository ---
 

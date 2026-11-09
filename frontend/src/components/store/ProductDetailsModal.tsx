@@ -2,10 +2,11 @@
 
 import React from "react";
 import Image from "next/image";
-import { X, ShoppingBag, Plus, Minus, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ShoppingBag, Plus, Minus, ChevronLeft, ChevronRight, MessageCircle, Phone, Lock } from "lucide-react";
 import { Product } from "@/types/store";
 import { t, getProductTitle, getProductDescription, getProductAttributes, translateColor } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
+import { useIsStoreAuthenticated, openStoreAuthModal, getMemberPriceLabel, getShortMemberPriceLabel } from "@/app/storeAuth";
 
 interface ProductDetailsModalProps {
   readonly product: Product;
@@ -54,6 +55,7 @@ export default function ProductDetailsModal({
   displayCurrency,
   exchangeRates,
 }: Readonly<ProductDetailsModalProps>) {
+  const isAuthenticated = useIsStoreAuthenticated();
   const title = getProductTitle(product, lang);
   const desc = getProductDescription(product, lang);
   const dynamicAttrs = getProductAttributes(product, lang).filter(
@@ -69,7 +71,7 @@ export default function ProductDetailsModal({
   const rawUnitPrice = product.price || 0.0;
   const rawDiscountedPrice = product.discounted_price || 0.0;
   const hasDiscount = product.discounted_price < product.price && product.discounted_price > 0;
-  
+
   let unitPrice = rawUnitPrice;
   let discountedPrice = rawDiscountedPrice;
   let currency = displayCurrency || product.currency || "TRY";
@@ -123,12 +125,33 @@ export default function ProductDetailsModal({
   // Calculations
   const hasSeries = unitsPerPkg > 1;
   const totalSeriesPieces = hasSeries ? (pkgQty * unitsPerPkg) : 0;
-  
+
   const totalPieces = totalSeriesPieces;
   const totalWeight = hasSeries ? (pkgQty * totalPkgWeight) : 0;
   const totalPrice = hasSeries ? (pkgQty * finalPkgPrice) : 0;
 
+  const supplierName = product.brand_profile?.name || product.brand_name || "Merter Üreticisi";
+  const supplierWaRaw = product.brand_profile?.whatsapp_phone || product.brand_profile?.phone || "";
+  const supplierCallRaw = product.brand_profile?.phone || product.brand_profile?.whatsapp_phone || "";
+  const supplierWaDigits = (() => {
+    const digits = supplierWaRaw.replace(/\D/g, "");
+    if (digits.startsWith("0") && digits.length === 11) return "90" + digits.slice(1);
+    if (digits.length === 10 && digits.startsWith("5")) return "90" + digits;
+    return digits;
+  })();
+  const directWaMessage = isAuthenticated
+    ? `Merhaba *${supplierName}*,\nMerter Vitrini üzerindeki *${title}* (SKU: ${product.custom_sku || "-"}) ürününüz hakkında doğrudan iletişime geçmek ve sipariş vermek istiyorum.\n\n• Miktar: ${pkgQty} Seri (${totalPieces} Adet)\n• Toplam Tutar: ${totalPrice.toFixed(2)} ${currency}`
+    : `Merhaba *${supplierName}*,\nMerter Vitrini üzerindeki *${title}* (SKU: ${product.custom_sku || "-"}) ürününüz hakkında doğrudan iletişime geçmek ve fiyat bilgisi almak istiyorum.\n\n• Miktar: ${pkgQty} Seri (${totalPieces} Adet)`;
+  const directWaUrl = supplierWaDigits
+    ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(directWaMessage)}`
+    : `https://wa.me/?text=${encodeURIComponent(directWaMessage)}`;
+
   const handleAddClick = () => {
+    if (!isAuthenticated) {
+      onClose();
+      openStoreAuthModal("login");
+      return;
+    }
     if (totalPieces === 0) {
       showToast(lang === "tr" ? "Lütfen en az 1 ürün seçin." : "Please select at least 1 item.");
       return;
@@ -138,16 +161,16 @@ export default function ProductDetailsModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <button 
+      <button
         type="button"
         aria-label="Kapat"
         tabIndex={-1}
-        className="fixed inset-0 bg-transparent border-none cursor-default" 
+        className="fixed inset-0 bg-transparent border-none cursor-default"
         onClick={onClose}
       />
       <div className="bg-white border border-cultured rounded-[15px] max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-premium relative flex flex-col z-10 animate-in fade-in zoom-in-95 duration-200">
-        
-        <button 
+
+        <button
           type="button"
           onClick={onClose}
           className="absolute top-4 right-4 w-9 h-9 rounded-[5px] bg-[#fafafa] hover:bg-cultured border border-cultured flex items-center justify-center text-onyx cursor-pointer transition-colors z-10"
@@ -157,24 +180,24 @@ export default function ProductDetailsModal({
 
         <div className="p-6 md:p-8 flex flex-col gap-6 md:gap-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-            
+
             {/* Left side Image Gallery */}
             <div className="flex flex-col gap-3 md:max-w-[420px] w-full md:mx-auto">
-              <button 
+              <button
                 type="button"
                 onClick={handleOpenLightbox}
                 aria-label={lang === "tr" ? "Büyük görseli aç" : "Open lightbox"}
                 className="w-full aspect-[4/5] max-h-[400px] md:max-h-[520px] rounded-[10px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group flex items-center justify-center p-0"
               >
-                <Image 
-                  src={getResizedImageUrl(modalMainImg, 600, 800)} 
+                <Image
+                  src={getResizedImageUrl(modalMainImg, 600, 800)}
                   alt={title}
                   fill
                   sizes="(max-width: 768px) 100vw, 50vw"
                   className="object-contain transition-all duration-300 group-hover:scale-105"
                 />
               </button>
-              
+
               {product.images && product.images.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto py-1">
                   {product.images.map((img) => (
@@ -182,18 +205,17 @@ export default function ProductDetailsModal({
                       key={img.id}
                       type="button"
                       onClick={() => setModalMainImg(img.image_url)}
-                      className={`relative w-14 h-18 rounded-[5px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${
-                        modalMainImg === img.image_url 
-                          ? "border-salmon-pink scale-[1.02]" 
+                      className={`relative w-14 h-18 rounded-[5px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${modalMainImg === img.image_url
+                          ? "border-salmon-pink scale-[1.02]"
                           : "border-transparent opacity-60 hover:opacity-100"
-                      }`}
+                        }`}
                     >
                       <Image
-                        src={getResizedImageUrl(img.image_url, 80, 106)} 
-                        alt="thumb" 
+                        src={getResizedImageUrl(img.image_url, 80, 106)}
+                        alt="thumb"
                         fill
                         sizes="56px"
-                        className="object-cover" 
+                        className="object-cover"
                       />
                     </button>
                   ))}
@@ -216,26 +238,40 @@ export default function ProductDetailsModal({
               </div>
 
               {/* pricing details */}
-              <div className="flex items-center gap-3 bg-[#fafafa] border border-cultured rounded-[5px] px-4 py-3 shadow-inner">
+              <div className="flex items-center justify-between gap-3 bg-[#fafafa] border border-cultured rounded-[5px] px-4 py-3 shadow-inner">
                 <span className="text-[10px] font-bold text-onyx uppercase tracking-[0.5px] shrink-0">
                   {t("unit_price_label", lang)}
                 </span>
-                <div className="flex items-baseline gap-2">
-                  {hasDiscount ? (
-                    <>
-                      <span className="text-xs text-sonic-silver line-through">
+                {isAuthenticated ? (
+                  <div className="flex items-baseline gap-2">
+                    {hasDiscount ? (
+                      <>
+                        <span className="text-xs text-sonic-silver line-through">
+                          {unitPrice.toFixed(2)} {currency}
+                        </span>
+                        <span className="text-lg font-extrabold text-salmon-pink">
+                          {discountedPrice.toFixed(2)} {currency}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-lg font-extrabold text-eerie-black">
                         {unitPrice.toFixed(2)} {currency}
                       </span>
-                      <span className="text-lg font-extrabold text-salmon-pink">
-                        {discountedPrice.toFixed(2)} {currency}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-lg font-extrabold text-eerie-black">
-                      {unitPrice.toFixed(2)} {currency}
-                    </span>
-                  )}
-                </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      openStoreAuthModal("login");
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-900 hover:bg-salmon-pink text-white text-[11px] font-extrabold transition-colors cursor-pointer border-none"
+                  >
+                    <Lock className="w-3 h-3 shrink-0" />
+                    <span>{getMemberPriceLabel(lang)}</span>
+                  </button>
+                )}
               </div>
 
               {/* Specs Table */}
@@ -262,7 +298,7 @@ export default function ProductDetailsModal({
                     {product.minimum_order_quantity} {lang === "tr" ? "Adet" : t("piece", lang)}
                   </span>
                 </div>
-                
+
                 {/* Dynamic Attributes */}
                 {dynamicAttrs?.map((attr) => (
                   <div key={`attr-${attr.name}`} className="border border-cultured rounded-[5px] p-2.5 bg-white flex flex-col gap-0.5 shadow-sm">
@@ -284,9 +320,9 @@ export default function ProductDetailsModal({
                   >
                     <div className="w-12 h-14 rounded-[5px] overflow-hidden bg-[#f0f0f0] border border-cultured relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img 
-                        src={getResizedImageUrl(product.images?.find(img => img.is_cover)?.image_url || product.images?.[0]?.image_url || "/placeholder.png", 80, 106)} 
-                        alt={product.color || "Standart"} 
+                      <img
+                        src={getResizedImageUrl(product.images?.find(img => img.is_cover)?.image_url || product.images?.[0]?.image_url || "/placeholder.png", 80, 106)}
+                        alt={product.color || "Standart"}
                         className="w-full h-full object-cover"
                       />
                       <span className="absolute bottom-0 inset-x-0 bg-salmon-pink text-white text-[8px] font-extrabold py-0.5 text-center uppercase tracking-[0.3px]">
@@ -307,9 +343,9 @@ export default function ProductDetailsModal({
                     >
                       <div className="w-12 h-14 rounded-[5px] overflow-hidden bg-[#f0f0f0] border border-cultured">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img 
-                          src={getResizedImageUrl(sib.image_url || "/placeholder.png", 80, 106)} 
-                          alt={sib.color} 
+                        <img
+                          src={getResizedImageUrl(sib.image_url || "/placeholder.png", 80, 106)}
+                          alt={sib.color}
                           className="w-full h-full object-cover"
                         />
                       </div>
@@ -356,22 +392,22 @@ export default function ProductDetailsModal({
                     <span className="text-[10px] font-extrabold text-onyx uppercase tracking-[0.5px]">
                       {t("pkg_qty_label", lang)}
                     </span>
-                    
+
                     <div className="flex items-center bg-white border border-cultured rounded-[5px] p-0.5 shadow-sm">
-                      <button 
+                      <button
                         type="button"
                         onClick={() => handleAdjustPkgQty(-1)}
                         className="w-7 h-7 rounded-[5px] border-none bg-transparent hover:bg-[#fafafa] flex items-center justify-center font-bold text-sm cursor-pointer text-onyx select-none transition-colors"
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
-                      <input 
-                        type="text" 
-                        className="w-10 text-center font-extrabold text-xs focus:outline-none border-none bg-transparent text-eerie-black" 
-                        value={pkgQty} 
-                        readOnly 
+                      <input
+                        type="text"
+                        className="w-10 text-center font-extrabold text-xs focus:outline-none border-none bg-transparent text-eerie-black"
+                        value={pkgQty}
+                        readOnly
                       />
-                      <button 
+                      <button
                         type="button"
                         onClick={() => handleAdjustPkgQty(1)}
                         className="w-7 h-7 rounded-[5px] border-none bg-transparent hover:bg-[#fafafa] flex items-center justify-center font-bold text-sm cursor-pointer text-onyx select-none transition-colors"
@@ -398,9 +434,23 @@ export default function ProductDetailsModal({
                     <span>{t("total_weight_calc", lang)}:</span>
                     <span className="text-eerie-black">{totalWeight.toFixed(2)} {t("kg_unit", lang)}</span>
                   </div>
-                  <div className="flex justify-between text-sm text-salmon-pink font-extrabold pt-2 border-t border-cultured mt-1.5">
+                  <div className="flex justify-between items-center text-sm text-salmon-pink font-extrabold pt-2 border-t border-cultured mt-1.5">
                     <span>{t("total_price_calc", lang)} ({t("excluding_vat", lang)}):</span>
-                    <span>{totalPrice.toFixed(2)} {currency}</span>
+                    {isAuthenticated ? (
+                      <span>{totalPrice.toFixed(2)} {currency}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          openStoreAuthModal("login");
+                        }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 hover:bg-salmon-pink text-white text-[11px] font-extrabold transition-colors cursor-pointer border-none"
+                      >
+                        <Lock className="w-3 h-3 shrink-0" />
+                        <span>{getShortMemberPriceLabel(lang)}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -411,9 +461,42 @@ export default function ProductDetailsModal({
                 onClick={handleAddClick}
                 className="w-full py-3 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase transition-all duration-300 border-none flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.99]"
               >
-                <ShoppingBag className="w-4 h-4 text-white" />
-                {t("add_to_cart", lang)}
+                {isAuthenticated ? (
+                  <>
+                    <ShoppingBag className="w-4 h-4 text-white" />
+                    {t("add_to_cart", lang)}
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-4 h-4 text-white" />
+                    {getMemberPriceLabel(lang)}
+                  </>
+                )}
               </button>
+
+              {/* Direct Supplier WhatsApp & Call Actions */}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <a
+                  href={directWaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[5px] font-extrabold text-xs tracking-[0.3px] transition-colors flex items-center justify-center gap-2 no-underline"
+                >
+                  <MessageCircle className="w-4 h-4 shrink-0" />
+                  <span>
+                    WhatsApp ile Tedarikçiye Yaz {supplierWaRaw ? `(${supplierWaRaw})` : ""}
+                  </span>
+                </a>
+                {supplierCallRaw && (
+                  <a
+                    href={`tel:${supplierCallRaw}`}
+                    className="py-2.5 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-[5px] font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 no-underline shrink-0"
+                  >
+                    <Phone className="w-3.5 h-3.5 shrink-0" />
+                    <span>Ara</span>
+                  </a>
+                )}
+              </div>
 
             </div>
 
@@ -508,11 +591,10 @@ export default function ProductDetailsModal({
                   key={img.id}
                   type="button"
                   onClick={() => setLightboxIndex(idx)}
-                  className={`w-14 h-18 rounded-[4px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${
-                    lightboxIndex === idx
+                  className={`w-14 h-18 rounded-[4px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${lightboxIndex === idx
                       ? "border-salmon-pink scale-105 shadow-md opacity-100"
                       : "border-transparent opacity-40 hover:opacity-100"
-                  }`}
+                    }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.image_url} alt="thumb" className="w-full h-full object-cover" />

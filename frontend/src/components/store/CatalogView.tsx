@@ -6,9 +6,11 @@ import { ChevronLeft, ChevronRight, Home, ChevronsLeft, ChevronsRight } from "lu
 import { Product, Category } from "@/types/store";
 import { t, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
 import { ExchangeRate } from "@/app/utils";
+import { useIsStoreAuthenticated } from "@/app/storeAuth";
 import ProductCard from "@/components/store/ProductCard";
 import SeoDescription from "@/components/store/SeoDescription";
 import HeroBanner from "@/components/store/HeroBanner";
+import { CategorySponsorBanner } from "@/components/store/SponsoredShowcaseSection";
 
 interface CatalogViewProps {
   readonly lang: string;
@@ -211,6 +213,7 @@ export default function CatalogView({
   setIsMobileFiltersOpen,
   sidebar,
 }: Readonly<CatalogViewProps>) {
+  const isAuthenticated = useIsStoreAuthenticated();
   const activeCatObj = activeCategoryId ? findCategory(categories, activeCategoryId) : null;
   const categoryTitle = activeCatObj ? getCategoryTitle(activeCatObj, lang) : "";
   const rawSeoDesc = activeCatObj?.translations?.[lang]?.seo_description;
@@ -257,6 +260,10 @@ export default function CatalogView({
 
         {/* Right Product Listing Catalog */}
         <section className="lg:col-span-3 flex flex-col gap-6">
+          <CategorySponsorBanner
+            lang={lang}
+            categorySlug={activeCatObj?.slug || activeCategoryId || ""}
+          />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-cultured pb-4 w-full">
             <div className="flex flex-col gap-1 select-none">
               <h2 className="font-sans font-extrabold text-xl tracking-tight text-eerie-black">
@@ -299,8 +306,12 @@ export default function CatalogView({
                   className="w-full py-2.5 pl-3 pr-8 bg-white border border-cultured rounded-xl hover:bg-zinc-50 font-bold text-xs text-onyx shadow-sm transition-all appearance-none cursor-pointer focus:outline-none focus:border-salmon-pink"
                 >
                   <option value="newest">{t("sort_newest", lang)}</option>
-                  <option value="price_asc">{t("sort_price_asc", lang)}</option>
-                  <option value="price_desc">{t("sort_price_desc", lang)}</option>
+                  {isAuthenticated && (
+                    <>
+                      <option value="price_asc">{t("sort_price_asc", lang)}</option>
+                      <option value="price_desc">{t("sort_price_desc", lang)}</option>
+                    </>
+                  )}
                   <option value="name_asc">{t("sort_name_asc", lang)}</option>
                   <option value="name_desc">{t("sort_name_desc", lang)}</option>
                   <option value="sku_asc">{t("sort_sku_asc", lang)}</option>
@@ -327,8 +338,12 @@ export default function CatalogView({
                   className="py-1.5 pl-3 pr-8 bg-cultured border border-transparent rounded-[8px] hover:bg-cultured/80 font-bold text-[11px] text-onyx tracking-wide appearance-none cursor-pointer focus:outline-none focus:border-salmon-pink transition-all"
                 >
                   <option value="newest">{t("sort_newest", lang)}</option>
-                  <option value="price_asc">{t("sort_price_asc", lang)}</option>
-                  <option value="price_desc">{t("sort_price_desc", lang)}</option>
+                  {isAuthenticated && (
+                    <>
+                      <option value="price_asc">{t("sort_price_asc", lang)}</option>
+                      <option value="price_desc">{t("sort_price_desc", lang)}</option>
+                    </>
+                  )}
                   <option value="name_asc">{t("sort_name_asc", lang)}</option>
                   <option value="name_desc">{t("sort_name_desc", lang)}</option>
                   <option value="sku_asc">{t("sort_sku_asc", lang)}</option>

@@ -74,9 +74,13 @@ func buildProductFilterConditions(brandID, q, categoryID, status string) ([]stri
 
 	switch status {
 	case "active":
-		conditions = append(conditions, "p.is_active = true")
+		conditions = append(conditions, "p.is_active = true AND COALESCE(p.is_archived, false) = false")
 	case "passive":
-		conditions = append(conditions, "p.is_active = false")
+		conditions = append(conditions, "p.is_active = false AND COALESCE(p.is_archived, false) = false")
+	case "archived":
+		conditions = append(conditions, "COALESCE(p.is_archived, false) = true")
+	default:
+		conditions = append(conditions, "COALESCE(p.is_archived, false) = false")
 	}
 
 	return conditions, args, argIdx
@@ -329,7 +333,7 @@ func lookupSupplierUserByEmail(ctx context.Context, email string) (*models.Suppl
 	return &u, passwordHash, brandActive, nil
 }
 
-// GetProfile returns logged-in supplier info and dashboard statistics
+// GetProfile returns logged-in supplier info, open company profile, and dashboard statistics
 func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
@@ -340,7 +344,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	var totalProducts, activeProducts, totalStock, totalVariants int
+	var totalProducts, activeProducts, totalStock, totalVariants, totalOrders int
 	statsQuery := `
 		SELECT 
 			count(DISTINCT p.id),
@@ -352,16 +356,235 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 		WHERE p.brand_id = $1`
 
 	_ = db.Pool.QueryRow(ctx, statsQuery, claims.BrandID).Scan(&totalProducts, &activeProducts, &totalStock, &totalVariants)
+	_ = db.Pool.QueryRow(ctx, `SELECT count(*) FROM catalog.supplier_sub_orders WHERE brand_id = $1`, claims.BrandID).Scan(&totalOrders)
+
+	var brandProfile models.Brand
+	var descTransJSON []byte
+	brandQuery := `
+		SELECT 
+			b.id, b.brand_name, b.slug, b.alias_code,
+			coalesce(b.company_type, 'uretici_toptanci'),
+			coalesce(b.description, ''),
+			coalesce(b.description_translations, '{}'::jsonb),
+			b.website, b.phone,
+			coalesce(
+				nullif(b.whatsapp_phone, ''),
+				nullif(b.phone, ''),
+				(SELECT coalesce(nullif(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+				''
+			),
+			coalesce(b.public_email, ''),
+			coalesce(b.instagram_handle, ''),
+			coalesce(b.location_address, ''),
+			coalesce(b.export_countries, ''),
+			coalesce(b.min_order_quantity, 1),
+			coalesce(b.supports_private_label, false),
+			coalesce(b.supports_fason, false),
+			coalesce(b.is_verified, true),
+			coalesce(b.bank_name, ''),
+			coalesce(b.bank_account_holder, ''),
+			coalesce(b.iban, ''),
+			b.is_active, b.created_at, b.updated_at
+		FROM catalog.brands b
+		WHERE b.id = $1`
+	_ = db.Pool.QueryRow(ctx, brandQuery, claims.BrandID).Scan(
+		&brandProfile.ID, &brandProfile.Name, &brandProfile.Slug, &brandProfile.AliasCode,
+		&brandProfile.CompanyType, &brandProfile.Description, &descTransJSON,
+		&brandProfile.Website, &brandProfile.Phone,
+		&brandProfile.WhatsappPhone, &brandProfile.PublicEmail, &brandProfile.InstagramHandle,
+		&brandProfile.LocationAddress, &brandProfile.ExportCountries, &brandProfile.MinOrderQuantity,
+		&brandProfile.SupportsPrivateLabel, &brandProfile.SupportsFason, &brandProfile.IsVerified,
+		&brandProfile.BankName, &brandProfile.BankAccountHolder, &brandProfile.IBAN,
+		&brandProfile.IsActive, &brandProfile.CreatedAt, &brandProfile.UpdatedAt,
+	)
+	brandProfile.DescriptionTranslations = make(map[string]string)
+	if len(descTransJSON) > 0 {
+		_ = json.Unmarshal(descTransJSON, &brandProfile.DescriptionTranslations)
+	}
+	if brandProfile.DescriptionTranslations["tr"] == "" && brandProfile.Description != "" {
+		brandProfile.DescriptionTranslations["tr"] = brandProfile.Description
+	}
 
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
-		"user": claims,
+		"user":          claims,
+		"brand_profile": brandProfile,
 		"stats": map[string]int{
 			"total_products":  totalProducts,
 			"active_products": activeProducts,
 			"total_stock":     totalStock,
 			"total_variants":  totalVariants,
+			"total_orders":    totalOrders,
 		},
 	})
+}
+
+type UpdateSupplierBrandProfileRequest struct {
+	BrandName               string            `json:"brand_name"`
+	CompanyType             string            `json:"company_type"`
+	Description             string            `json:"description"`
+	DescriptionTranslations map[string]string `json:"description_translations,omitempty"`
+	Phone                   string            `json:"phone"`
+	WhatsappPhone           string            `json:"whatsapp_phone"`
+	PublicEmail             string            `json:"public_email"`
+	Website                 string            `json:"website"`
+	InstagramHandle         string            `json:"instagram_handle"`
+	LocationAddress         string            `json:"location_address"`
+	ExportCountries         string            `json:"export_countries"`
+	MinOrderQuantity        int               `json:"min_order_quantity"`
+	SupportsPrivateLabel    bool              `json:"supports_private_label"`
+	SupportsFason           bool              `json:"supports_fason"`
+	BankName                string            `json:"bank_name"`
+	BankAccountHolder       string            `json:"bank_account_holder"`
+	IBAN                    string            `json:"iban"`
+	QuickWhatsappOnly       bool              `json:"quick_whatsapp_only"`
+}
+
+// UpdateProfile allows a supplier to update their own open company profile, contact channels, capabilities, and direct payment IBAN
+func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.GetSupplierFromContext(r.Context())
+	if !ok {
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
+		return
+	}
+
+	var req UpdateSupplierBrandProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": "Geçersiz istek formatı."})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	if req.QuickWhatsappOnly {
+		waTrim := strings.TrimSpace(req.WhatsappPhone)
+		_, err := db.Pool.Exec(ctx, `
+			UPDATE catalog.brands
+			SET whatsapp_phone = $1,
+			    phone = CASE WHEN phone IS NULL OR phone = '' THEN $1 ELSE phone END,
+			    updated_at = CURRENT_TIMESTAMP
+			WHERE id = $2
+		`, waTrim, claims.BrandID)
+		if err != nil {
+			log.Printf("[SUPPLIER PORTAL] QuickWhatsappOnly error: %v", err)
+			writeSupplierJSON(w, http.StatusInternalServerError, map[string]string{"error": "WhatsApp numarası güncellenemedi."})
+			return
+		}
+		writeSupplierJSON(w, http.StatusOK, map[string]any{
+			"success":        true,
+			"whatsapp_phone": waTrim,
+			"message":        "Doğrudan sipariş WhatsApp hattınız başarıyla kaydedildi.",
+		})
+		return
+	}
+
+	brandName := strings.TrimSpace(req.BrandName)
+	if brandName == "" {
+		brandName = claims.BrandName
+	}
+	companyType := strings.TrimSpace(req.CompanyType)
+	if companyType == "" {
+		companyType = "uretici_toptanci"
+	}
+	minOrderQty := req.MinOrderQuantity
+	if minOrderQty < 1 {
+		minOrderQty = 1
+	}
+	ibanClean := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(req.IBAN), " ", ""))
+
+	var websitePtr, phonePtr *string
+	if wStr := strings.TrimSpace(req.Website); wStr != "" {
+		websitePtr = &wStr
+	}
+	pStr := strings.TrimSpace(req.Phone)
+	if pStr == "" {
+		pStr = strings.TrimSpace(req.WhatsappPhone)
+	}
+	if pStr != "" {
+		phonePtr = &pStr
+	}
+
+	descTrim := strings.TrimSpace(req.Description)
+	descMap := make(map[string]string)
+	for k, v := range req.DescriptionTranslations {
+		lang := strings.ToLower(strings.TrimSpace(k))
+		if lang == "tr" || lang == "en" || lang == "ru" || lang == "ar" {
+			descMap[lang] = strings.TrimSpace(v)
+		}
+	}
+	if descTrim == "" && descMap["tr"] != "" {
+		descTrim = descMap["tr"]
+	}
+	if descTrim != "" {
+		descMap["tr"] = descTrim
+	}
+	descTransBytes, _ := json.Marshal(descMap)
+
+	updateQuery := `
+		UPDATE catalog.brands
+		SET 
+			brand_name = $1,
+			company_type = $2,
+			description = $3,
+			description_translations = $4::jsonb,
+			phone = $5,
+			whatsapp_phone = $6,
+			public_email = $7,
+			website = $8,
+			instagram_handle = $9,
+			location_address = $10,
+			export_countries = $11,
+			min_order_quantity = $12,
+			supports_private_label = $13,
+			supports_fason = $14,
+			bank_name = $15,
+			bank_account_holder = $16,
+			iban = $17,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = $18`
+
+	_, err := db.Pool.Exec(ctx, updateQuery,
+		brandName,
+		companyType,
+		descTrim,
+		string(descTransBytes),
+		phonePtr,
+		strings.TrimSpace(req.WhatsappPhone),
+		strings.TrimSpace(req.PublicEmail),
+		websitePtr,
+		strings.TrimSpace(req.InstagramHandle),
+		strings.TrimSpace(req.LocationAddress),
+		strings.TrimSpace(req.ExportCountries),
+		minOrderQty,
+		req.SupportsPrivateLabel,
+		req.SupportsFason,
+		strings.TrimSpace(req.BankName),
+		strings.TrimSpace(req.BankAccountHolder),
+		ibanClean,
+		claims.BrandID,
+	)
+	if err != nil {
+		log.Printf("[SUPPLIER PORTAL] UpdateProfile error: %v", err)
+		writeSupplierJSON(w, http.StatusInternalServerError, map[string]string{"error": "Firma profili güncellenemedi."})
+		return
+	}
+
+	// Synchronize IBAN & bank info with supplier_wallets as well
+	if ibanClean != "" || strings.TrimSpace(req.BankName) != "" {
+		_, _ = db.Pool.Exec(ctx, `
+			INSERT INTO catalog.supplier_wallets (brand_id, iban, bank_name, bank_account_holder, commission_rate)
+			VALUES ($1, $2, $3, $4, 0.00)
+			ON CONFLICT (brand_id) DO UPDATE SET
+				iban = EXCLUDED.iban,
+				bank_name = EXCLUDED.bank_name,
+				bank_account_holder = EXCLUDED.bank_account_holder,
+				updated_at = CURRENT_TIMESTAMP`,
+			claims.BrandID, ibanClean, strings.TrimSpace(req.BankName), strings.TrimSpace(req.BankAccountHolder),
+		)
+	}
+
+	triggerProductMVRefresh()
+	h.GetProfile(w, r)
 }
 
 // ListProducts returns products belonging strictly to this supplier
@@ -379,6 +602,7 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
+	ensureProductArchiveSchema(ctx)
 
 	conditions, args, argIdx := buildProductFilterConditions(claims.BrandID, q, categoryID, status)
 	whereClause := "WHERE " + strings.Join(conditions, " AND ")
@@ -402,6 +626,8 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 			p.packing_ratio,
 			p.minimum_order_quantity,
 			p.is_active,
+			coalesce(p.is_archived, false) as is_archived,
+			coalesce(p.season, '') as season,
 			p.created_at,
 			p.updated_at,
 			coalesce(
@@ -437,6 +663,8 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 		PackingRatio         *string   `json:"packing_ratio,omitempty"`
 		MinimumOrderQuantity int       `json:"minimum_order_quantity"`
 		IsActive             bool      `json:"is_active"`
+		IsArchived           bool      `json:"is_archived"`
+		Season               string    `json:"season,omitempty"`
 		CreatedAt            time.Time `json:"created_at"`
 		UpdatedAt            time.Time `json:"updated_at"`
 		CoverImage           string    `json:"cover_image"`
@@ -458,6 +686,8 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 			&pr.PackingRatio,
 			&pr.MinimumOrderQuantity,
 			&pr.IsActive,
+			&pr.IsArchived,
+			&pr.Season,
 			&pr.CreatedAt,
 			&pr.UpdatedAt,
 			&pr.CoverImage,
@@ -568,6 +798,9 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 	}
 	p.Images = varImages
 
+	// Fetch multi-language translations (tr, en, ru, ar)
+	p.Translations = loadSupplierProductTranslations(ctx, p.ID, p.Title, p.ShortDescription, p.Description)
+
 	writeSupplierJSON(w, http.StatusOK, p)
 }
 
@@ -663,12 +896,8 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Insert Turkish translation
-	_, _ = tx.Exec(ctx, `
-		INSERT INTO catalog.product_translations (product_id, language_code, title, short_description, description)
-		VALUES ($1, 'tr', $2, $3, $4)
-		ON CONFLICT (product_id, language_code) DO NOTHING`,
-		newProductID, req.Title, req.ShortDescription, req.Description)
+	// Upsert Turkish and any provided multi-language translations (en, ru, ar)
+	upsertSupplierProductTranslations(ctx, tx, newProductID, req.Title, req.ShortDescription, req.Description, req.Translations)
 
 	insertProductVariants(ctx, tx, newProductID, sourceProductID, req.Variants, initialStock)
 	insertProductImages(ctx, tx, newProductID, req.Images)
@@ -769,12 +998,8 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Update translation
-	_, _ = tx.Exec(ctx, `
-		UPDATE catalog.product_translations 
-		SET title = $1, short_description = $2, description = $3
-		WHERE product_id = $4 AND language_code = 'tr'`,
-		req.Title, req.ShortDescription, req.Description, id)
+	// Upsert Turkish and any provided multi-language translations (en, ru, ar)
+	upsertSupplierProductTranslations(ctx, tx, id, req.Title, req.ShortDescription, req.Description, req.Translations)
 
 	updateProductVariants(ctx, tx, id, req.Variants)
 	updateProductImages(ctx, tx, id, req.Images)
@@ -1066,6 +1291,257 @@ func (h *SupplierPortalHandler) SetupPassword(w http.ResponseWriter, r *http.Req
 			"email":        u.Email,
 			"contact_name": u.ContactName,
 		},
+	})
+}
+
+func loadSupplierProductTranslations(ctx context.Context, productID string, defaultTitle string, defaultShort *string, defaultDesc *string) map[string]any {
+	out := make(map[string]any)
+	shortStr := ""
+	if defaultShort != nil {
+		shortStr = *defaultShort
+	}
+	descStr := ""
+	if defaultDesc != nil {
+		descStr = *defaultDesc
+	}
+	out["tr"] = map[string]string{
+		"title":             defaultTitle,
+		"short_description": shortStr,
+		"description":       descStr,
+	}
+
+	rows, err := db.Pool.Query(ctx, `
+		SELECT language_code, coalesce(title, ''), coalesce(short_description, ''), coalesce(description, '')
+		FROM catalog.product_translations
+		WHERE product_id = $1`, productID)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var lang, title, shortDesc, desc string
+		if err := rows.Scan(&lang, &title, &shortDesc, &desc); err == nil {
+			code := strings.ToLower(strings.TrimSpace(lang))
+			if len(code) > 2 {
+				code = code[:2]
+			}
+			out[code] = map[string]string{
+				"title":             title,
+				"short_description": shortDesc,
+				"description":       desc,
+			}
+		}
+	}
+	return out
+}
+
+func upsertSupplierProductTranslations(
+	ctx context.Context,
+	tx pgx.Tx,
+	productID string,
+	trTitle string,
+	trShort string,
+	trDesc string,
+	translations map[string]models.SupplierTranslationInput,
+) {
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO catalog.product_translations (product_id, language_code, title, short_description, description)
+		VALUES ($1, 'tr', $2, $3, $4)
+		ON CONFLICT (product_id, language_code) DO UPDATE SET
+			title = EXCLUDED.title,
+			short_description = EXCLUDED.short_description,
+			description = EXCLUDED.description`,
+		productID, strings.TrimSpace(trTitle), strings.TrimSpace(trShort), strings.TrimSpace(trDesc))
+
+	supportedLangs := []string{"en", "ru", "ar"}
+	for _, lang := range supportedLangs {
+		item, exists := translations[lang]
+		if !exists {
+			continue
+		}
+		tTitle := strings.TrimSpace(item.Title)
+		tShort := strings.TrimSpace(item.ShortDescription)
+		tDesc := strings.TrimSpace(item.Description)
+		if tTitle == "" && tShort == "" && tDesc == "" {
+			continue
+		}
+		if tTitle == "" {
+			tTitle = strings.TrimSpace(trTitle)
+		}
+		_, _ = tx.Exec(ctx, `
+			INSERT INTO catalog.product_translations (product_id, language_code, title, short_description, description)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (product_id, language_code) DO UPDATE SET
+				title = EXCLUDED.title,
+				short_description = EXCLUDED.short_description,
+				description = EXCLUDED.description`,
+			productID, lang, tTitle, tShort, tDesc)
+	}
+}
+
+// GetProductTranslations returns TR, EN, RU, AR translations for a supplier product
+func (h *SupplierPortalHandler) GetProductTranslations(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.GetSupplierFromContext(r.Context())
+	if !ok {
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, errJSONMissingID, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	var title string
+	var shortDesc, desc *string
+	err := db.Pool.QueryRow(ctx, `
+		SELECT title, short_description, description
+		FROM catalog.products
+		WHERE id = $1 AND brand_id = $2`, id, claims.BrandID).Scan(&title, &shortDesc, &desc)
+	if err != nil {
+		http.Error(w, `{"error":"Ürün bulunamadı veya yetkiniz yok"}`, http.StatusNotFound)
+		return
+	}
+
+	translations := loadSupplierProductTranslations(ctx, id, title, shortDesc, desc)
+	writeSupplierJSON(w, http.StatusOK, map[string]any{
+		"product_id":   id,
+		"translations": translations,
+	})
+}
+
+// UpdateProductTranslations saves manual TR, EN, RU, AR translations for a supplier product
+func (h *SupplierPortalHandler) UpdateProductTranslations(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.GetSupplierFromContext(r.Context())
+	if !ok {
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
+		return
+	}
+
+	id := r.PathValue("id")
+	if id == "" {
+		http.Error(w, errJSONMissingID, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Translations map[string]models.SupplierTranslationInput `json:"translations"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Geçersiz veri biçimi"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		http.Error(w, `{"error":"Veritabanı işlemi başlatılamadı"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var currentTitle, currentShort, currentDesc string
+	err = tx.QueryRow(ctx, `
+		SELECT title, coalesce(short_description, ''), coalesce(description, '')
+		FROM catalog.products
+		WHERE id = $1 AND brand_id = $2`, id, claims.BrandID).Scan(&currentTitle, &currentShort, &currentDesc)
+	if err != nil {
+		http.Error(w, `{"error":"Ürün bulunamadı veya yetkiniz yok"}`, http.StatusNotFound)
+		return
+	}
+
+	if trInput, ok := req.Translations["tr"]; ok {
+		if strings.TrimSpace(trInput.Title) != "" {
+			currentTitle = strings.TrimSpace(trInput.Title)
+		}
+		currentShort = strings.TrimSpace(trInput.ShortDescription)
+		currentDesc = strings.TrimSpace(trInput.Description)
+		_, _ = tx.Exec(ctx, `
+			UPDATE catalog.products
+			SET title = $1, short_description = $2, description = $3, updated_at = CURRENT_TIMESTAMP
+			WHERE id = $4 AND brand_id = $5`,
+			currentTitle, currentShort, currentDesc, id, claims.BrandID)
+	}
+
+	upsertSupplierProductTranslations(ctx, tx, id, currentTitle, currentShort, currentDesc, req.Translations)
+
+	if err := tx.Commit(ctx); err != nil {
+		http.Error(w, `{"error":"Çeviriler kaydedilemedi"}`, http.StatusInternalServerError)
+		return
+	}
+
+	triggerProductMVRefresh()
+	writeSupplierJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": "Çok dilli ürün çevirileri (TR / EN / RU / AR) başarıyla güncellendi.",
+	})
+}
+
+// AutoTranslateFields translates given text fields from source language (default 'tr') into target languages ('en', 'ru', 'ar') using LibreTranslate
+func (h *SupplierPortalHandler) AutoTranslateFields(w http.ResponseWriter, r *http.Request) {
+	_, ok := middleware.GetSupplierFromContext(r.Context())
+	if !ok {
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		SourceLang  string            `json:"source_lang"`
+		TargetLangs []string          `json:"target_langs"`
+		Fields      map[string]string `json:"fields"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Geçersiz istek formatı"}`, http.StatusBadRequest)
+		return
+	}
+
+	sourceLang := strings.ToLower(strings.TrimSpace(req.SourceLang))
+	if sourceLang == "" {
+		sourceLang = "tr"
+	}
+	targetLangs := req.TargetLangs
+	if len(targetLangs) == 0 {
+		targetLangs = []string{"en", "ru", "ar"}
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+
+	results := make(map[string]map[string]string)
+	for _, rawLang := range targetLangs {
+		lang := strings.ToLower(strings.TrimSpace(rawLang))
+		if lang != "en" && lang != "ru" && lang != "ar" && lang != "tr" {
+			continue
+		}
+		if lang == sourceLang {
+			continue
+		}
+		langMap := make(map[string]string)
+		for fieldKey, sourceText := range req.Fields {
+			trimmed := strings.TrimSpace(sourceText)
+			if trimmed == "" {
+				langMap[fieldKey] = ""
+				continue
+			}
+			translated, err := translateText(ctx, trimmed, sourceLang, lang)
+			if err != nil || strings.TrimSpace(translated) == "" {
+				langMap[fieldKey] = trimmed
+			} else {
+				langMap[fieldKey] = strings.TrimSpace(translated)
+			}
+		}
+		results[lang] = langMap
+	}
+
+	writeSupplierJSON(w, http.StatusOK, map[string]any{
+		"translations": results,
 	})
 }
 
