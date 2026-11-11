@@ -35,7 +35,8 @@ export default function LoginScreen() {
         `?client_id=${KEYCLOAK_CLIENT_ID}` +
         `&redirect_uri=${redirectUri}` +
         `&response_type=code` +
-        `&scope=openid+profile+email`;
+        `&scope=openid+profile+email` +
+        `&prompt=login`;
 
       // Redirect the browser window to Keycloak OIDC Login page
       window.location.href = authUrl;

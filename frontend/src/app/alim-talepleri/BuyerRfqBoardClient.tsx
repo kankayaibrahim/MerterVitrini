@@ -49,6 +49,7 @@ interface BuyerRfqItem {
   buyer_name: string;
   buyer_company: string;
   buyer_country: string;
+  buyer_email_verified?: boolean;
   status: string;
   offer_count: number;
   created_at: string;
@@ -117,9 +118,20 @@ function BuyerRfqCard({ item }: { readonly item: BuyerRfqItem }) {
 
       <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-wrap">
         <div className="text-[11px] text-slate-500 space-y-0.5">
-          <div className="font-bold text-slate-700">
-            Alıcı: {item.buyer_name}
-            {item.buyer_company ? ` (${item.buyer_company})` : ""}
+          <div className="font-bold text-slate-700 flex items-center gap-1.5 flex-wrap">
+            <span>
+              Alıcı: {item.buyer_name}
+              {item.buyer_company ? ` (${item.buyer_company})` : ""}
+            </span>
+            {item.buyer_email_verified ? (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                ✓ Doğrulanmış Müşteri
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                E-posta Onaysız
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1">

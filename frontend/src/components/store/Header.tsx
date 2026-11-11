@@ -7,7 +7,7 @@ import { languages, t, getCategoryPrefix as getCategoryPrefixFn, getCategoryTitl
 import { Category } from "@/types/store";
 import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/app/utils";
-import { getValidStoreUser } from "@/app/storeAuth";
+import { getValidStoreUser, StoreUser } from "@/app/storeAuth";
 import AuthModal from "./AuthModal";
 import WishlistDrawer from "./WishlistDrawer";
 import { useWishlistStore } from "@/store/useWishlistStore";
@@ -34,14 +34,6 @@ interface LanguageItem {
   categoryPrefix?: string;
   dir?: string;
   sort_order?: number;
-}
-
-interface StoreUser {
-  first_name?: string;
-  last_name?: string;
-  email?: string;
-  company_name?: string;
-  phone?: string;
 }
 
 interface CurrencyOption {
@@ -937,6 +929,9 @@ export default function Header({
                     aria-label={lang === "tr" ? "Kullanıcı menüsü" : "User menu"}
                   >
                     <User className="w-[19px] h-[19px] text-accent-gold" />
+                    {user.email_verified === false && (
+                      <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
+                    )}
                   </button>
                 ) : (
                   <button
@@ -965,6 +960,18 @@ export default function Header({
                       <div className="px-3 py-2 border-b border-cultured text-[10px] text-sonic-silver truncate">
                         {user.first_name} {user.last_name}
                       </div>
+                      {user.email_verified === false && (
+                        <div
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            router.push("/profile");
+                          }}
+                          className="px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-[10px] font-bold flex items-center justify-between cursor-pointer"
+                        >
+                          <span>⚠️ Mail Onaysız</span>
+                          <span className="underline text-[9px]">Doğrula</span>
+                        </div>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -1034,7 +1041,12 @@ export default function Header({
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     className="flex items-center gap-1.5 px-3 py-1 bg-transparent hover:text-accent-gold text-xs font-extrabold uppercase transition-all duration-200 cursor-pointer border-none"
                   >
-                    <User className="w-[17px] h-[17px] text-accent-gold" />
+                    <div className="relative">
+                      <User className="w-[17px] h-[17px] text-accent-gold" />
+                      {user.email_verified === false && (
+                        <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-1 ring-white" />
+                      )}
+                    </div>
                     <span>{user.first_name}</span>
                     <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${isUserMenuOpen ? "rotate-180" : ""}`} />
                   </button>
@@ -1051,6 +1063,18 @@ export default function Header({
                         <div className="px-4 py-2.5 border-b border-cultured text-[10px] text-sonic-silver">
                           {user.email}
                         </div>
+                        {user.email_verified === false && (
+                          <div
+                            onClick={() => {
+                              setIsUserMenuOpen(false);
+                              router.push("/profile");
+                            }}
+                            className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-[10px] font-bold flex items-center justify-between cursor-pointer hover:bg-amber-100 transition-colors"
+                          >
+                            <span>⚠️ E-Posta Onaysız</span>
+                            <span className="underline text-[9px]">Doğrula</span>
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={() => {

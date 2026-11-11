@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { User, Clipboard, Home, LogOut } from "lucide-react";
+import { User, Clipboard, Home, LogOut, Check, AlertCircle, AlertTriangle } from "lucide-react";
 import { t } from "@/app/i18n";
 import { Category, CartItem } from "@/types/store";
 import { apiFetch, showToast } from "@/app/utils";
@@ -66,51 +66,155 @@ function validateAddressPhone(
   return null;
 }
 
+function getInitialLang(): string {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("preferred_lang") || "tr";
+  }
+  return "tr";
+}
+
+function getInitialDisplayCurrency(): string {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("merter_preferred_currency") || "TRY";
+  }
+  return "TRY";
+}
+
+function getInitialSavedCart(): CartItem[] {
+  if (typeof window !== "undefined") {
+    const savedCart = localStorage.getItem("merter_b2b_cart");
+    if (savedCart) {
+      try {
+        return JSON.parse(savedCart);
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return [];
+}
+
+function getInitialAuthUser(): AuthUser | null {
+  if (typeof window !== "undefined") {
+    const savedUserInfo = localStorage.getItem("store_user_info");
+    if (savedUserInfo) {
+      try {
+        return JSON.parse(savedUserInfo);
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return null;
+}
+
+function getInitialEmailVerified(): boolean {
+  if (typeof window === "undefined") return false;
+  const urlParams = new URLSearchParams(window.location.search);
+  const verifiedParam = urlParams.get("verified");
+  if (verifiedParam === "success" || verifiedParam === "already_verified") {
+    return true;
+  }
+  const savedUserInfo = localStorage.getItem("store_user_info");
+  if (!savedUserInfo) return false;
+  try {
+    const parsed = JSON.parse(savedUserInfo) as Record<string, unknown>;
+    return Boolean(parsed.email_verified);
+  } catch {
+    return false;
+  }
+}
+
+type FeedbackType = "success" | "warning" | "error" | "info";
+
+interface VerificationFeedback {
+  type: FeedbackType;
+  message: string;
+}
+
+function getFeedbackClasses(type: FeedbackType): string {
+  switch (type) {
+    case "success":
+      return "bg-emerald-50 border-emerald-200 text-emerald-900";
+    case "warning":
+      return "bg-amber-50 border-amber-200 text-amber-900";
+    case "info":
+      return "bg-blue-50 border-blue-200 text-blue-900";
+    default:
+      return "bg-red-50 border-red-200 text-red-900";
+  }
+}
+
+function renderFeedbackIcon(type: FeedbackType) {
+  if (type === "success") {
+    return <Check className="w-5 h-5 text-emerald-600 shrink-0" />;
+  }
+  if (type === "warning") {
+    return <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />;
+  }
+  return <AlertCircle className="w-5 h-5 text-current shrink-0" />;
+}
+
+function syncStoredEmailVerification(verified: boolean): void {
+  if (typeof window === "undefined") return;
+  const savedUserInfo = localStorage.getItem("store_user_info");
+  if (!savedUserInfo) return;
+  try {
+    const parsed = JSON.parse(savedUserInfo) as Record<string, unknown>;
+    if (parsed.email_verified !== verified) {
+      parsed.email_verified = verified;
+      localStorage.setItem("store_user_info", JSON.stringify(parsed));
+      window.dispatchEvent(new Event("auth-change"));
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function getInitialVerificationFeedback(): VerificationFeedback | null {
+  if (typeof window === "undefined") return null;
+  const urlParams = new URLSearchParams(window.location.search);
+  const verifiedParam = urlParams.get("verified");
+  if (!verifiedParam) return null;
+
+  if (verifiedParam === "success") {
+    return {
+      type: "success",
+      message: "🎉 Tebrikler! E-posta adresiniz başarıyla doğrulandı. Artık Merter Vitrini üzerinde 'Doğrulanmış Müşteri' rozeti ile sipariş ve teklif verebilirsiniz.",
+    };
+  }
+  if (verifiedParam === "already_verified") {
+    return {
+      type: "info",
+      message: "E-posta adresiniz zaten daha önceden doğrulanmış durumdadır.",
+    };
+  }
+  if (verifiedParam === "expired") {
+    return {
+      type: "warning",
+      message: "Doğrulama bağlantısının 24 saatlik geçerlilik süresi dolmuş. Lütfen profilinizden yeni bir doğrulama bağlantısı talep ediniz.",
+    };
+  }
+  if (verifiedParam === "invalid" || verifiedParam === "not_found") {
+    return {
+      type: "error",
+      message: "Geçersiz veya bulunamayan doğrulama bağlantısı. Lütfen yeni bir doğrulama e-postası talep ediniz.",
+    };
+  }
+  return null;
+}
+
 export default function ProfilePage() {
   // --- Storefront states ---
-  const [lang, setLang] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("preferred_lang") || "tr";
-    }
-    return "tr";
-  });
+  const [lang, setLang] = useState<string>(getInitialLang);
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
-  const [displayCurrency, setDisplayCurrency] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("merter_preferred_currency") || "TRY";
-    }
-    return "TRY";
-  });
+  const [displayCurrency, setDisplayCurrency] = useState<string>(getInitialDisplayCurrency);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategoryId, setActiveCategoryId] = useState<string>("");
-  const [cart] = useState<CartItem[]>(() => {
-    if (typeof window !== "undefined") {
-      const savedCart = localStorage.getItem("merter_b2b_cart");
-      if (savedCart) {
-        try {
-          return JSON.parse(savedCart);
-        } catch {
-          // ignore
-        }
-      }
-    }
-    return [];
-  });
+  const [cart] = useState<CartItem[]>(getInitialSavedCart);
 
   // --- Auth states ---
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    if (typeof window !== "undefined") {
-      const savedUserInfo = localStorage.getItem("store_user_info");
-      if (savedUserInfo) {
-        try {
-          return JSON.parse(savedUserInfo);
-        } catch {
-          // ignore
-        }
-      }
-    }
-    return null;
-  });
+  const [user, setUser] = useState<AuthUser | null>(getInitialAuthUser);
   const [token] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("store_user_token");
@@ -139,6 +243,12 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // --- Email Verification states ---
+  const [emailVerified, setEmailVerified] = useState<boolean>(getInitialEmailVerified);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [verificationFeedback, setVerificationFeedback] = useState<VerificationFeedback | null>(getInitialVerificationFeedback);
 
   // --- Section state ---
   const [activeSection, setActiveSection] = useState<"profile" | "orders">(() => {
@@ -196,7 +306,7 @@ export default function ProfilePage() {
   // Modal / Form States
   const [isAddressModalOpen, setIsAddressModalOpen] = useState<boolean>(false);
   const [editingAddress, setEditingAddress] = useState<UserAddress | null>(null);
-  
+
   // Active Address form state
   const [formTitle, setFormTitle] = useState("");
   const [formType, setFormType] = useState<"billing" | "shipping">("shipping");
@@ -233,7 +343,7 @@ export default function ProfilePage() {
       localStorage.removeItem("store_user_token");
       localStorage.removeItem("store_user_info");
       window.dispatchEvent(new Event("auth-change"));
-      
+
       const origin = window.location.origin;
       window.location.href = origin + "/";
     }
@@ -290,6 +400,8 @@ export default function ProfilePage() {
       setDeliveryAddress(data.delivery_address || "");
       setTaxNoTCKN(data.tax_no_tckn || "");
       setInstagramUsername(data.instagram_username || "");
+      setEmailVerified(Boolean(data.email_verified));
+      syncStoredEmailVerification(Boolean(data.email_verified));
 
     } catch (err: unknown) {
       const currentLang = (typeof window !== "undefined" && localStorage.getItem("preferred_lang")) || "tr";
@@ -329,6 +441,65 @@ export default function ProfilePage() {
       console.error("Failed to fetch countries:", e);
     }
   }, []);
+
+  // Email verification countdown timer
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCountdown]);
+
+  // Handle URL cleanup and storage sync on email verification
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const verifiedParam = urlParams.get("verified");
+    if (!verifiedParam) return;
+
+    if (verifiedParam === "success") {
+      syncStoredEmailVerification(true);
+    }
+
+    const cleanUrl = window.location.pathname + (urlParams.get("tab") ? `?tab=${urlParams.get("tab")}` : "");
+    window.history.replaceState({}, document.title, cleanUrl);
+  }, []);
+
+  const handleResendVerification = useCallback(async () => {
+    if (resendingVerification || resendCountdown > 0) return;
+    setResendingVerification(true);
+    try {
+      const response = await fetch("/api/v1/store/auth/resend-verification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ email }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Doğrulama e-postası gönderilemedi");
+      }
+
+      if (data.already_verified) {
+        setEmailVerified(true);
+        showToast(lang === "tr" ? "E-posta zaten doğrulanmış durumdadır" : "Email already verified");
+      } else {
+        setResendCountdown(60);
+        showToast(
+          lang === "tr"
+            ? "Doğrulama e-postası gönderildi! Lütfen gelen kutunuzu (ve spam klasörünü) kontrol edin."
+            : "Verification email sent! Please check your inbox."
+        );
+      }
+    } catch (err: unknown) {
+      showToast((err as Error).message || "Hata oluştu");
+    } finally {
+      setResendingVerification(false);
+    }
+  }, [token, email, lang, resendingVerification, resendCountdown]);
 
   // Synchronize dynamic HTML lang attribute
   useEffect(() => {
@@ -457,7 +628,7 @@ export default function ProfilePage() {
     setRefundOrderItems(order.items ? [...order.items] : []);
     setRefundType("FULL");
     setRefundReason("");
-    
+
     const initialQty: Record<string, number> = {};
     const initialSel: Record<string, boolean> = {};
     (order.items || []).forEach((item) => {
@@ -466,7 +637,7 @@ export default function ProfilePage() {
     });
     setRefundQuantities(initialQty);
     setRefundSelectedItems(initialSel);
-    
+
     setIsRefundModalOpen(true);
   };
 
@@ -487,7 +658,7 @@ export default function ProfilePage() {
 
   const handleSubmitRefund = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     let itemsPayload: Array<{ order_item_id: string; quantity: number }> = [];
     if (refundType === "PARTIAL") {
       itemsPayload = refundOrderItems
@@ -496,13 +667,13 @@ export default function ProfilePage() {
           order_item_id: item.id,
           quantity: refundQuantities[item.id]
         }));
-      
+
       if (itemsPayload.length === 0) {
         showToast(getOrderT("refund_items_selection"));
         return;
       }
     }
-    
+
     setSubmittingRefund(true);
     try {
       const response = await fetch(`/api/v1/store/orders/${refundOrderID}/refund`, {
@@ -606,7 +777,7 @@ export default function ProfilePage() {
       const matchedCountry = countries.find((c) => c.id === address.country_id);
       const matchedPhoneCode = matchedCountry ? matchedCountry.phone_code : 90;
       setFormPhoneOnly(parsePhoneOnly(address.phone || "", matchedPhoneCode));
-      
+
       await fetchStates(address.country_id);
       setFormStateID(address.state_id || "");
       if (address.state_id) {
@@ -623,10 +794,10 @@ export default function ProfilePage() {
       setFormFirstName(firstName || "");
       setFormLastName(lastName || "");
       setFormCompany("");
-      
+
       const defaultCountryID = getDefaultCountryId(countries);
       setFormCountryID(defaultCountryID);
-      
+
       // Parse profile phone number prefix based on default country
       const matchedCountry = countries.find((c) => c.id === defaultCountryID);
       const matchedPhoneCode = matchedCountry ? matchedCountry.phone_code : 90;
@@ -692,10 +863,10 @@ export default function ProfilePage() {
     };
 
     try {
-      const url = editingAddress 
+      const url = editingAddress
         ? `/api/v1/store/profile/addresses/${editingAddress.id}`
         : "/api/v1/store/profile/addresses";
-      
+
       const method = editingAddress ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -715,7 +886,7 @@ export default function ProfilePage() {
 
       setAddressSuccess(editingAddress ? getAddressT("address_update_success") : getAddressT("address_create_success"));
       if (token) void fetchAddresses(token);
-      
+
       setTimeout(() => {
         setIsAddressModalOpen(false);
         setEditingAddress(null);
@@ -732,7 +903,7 @@ export default function ProfilePage() {
     if (!window.confirm(getAddressT("address_delete_confirm"))) {
       return;
     }
-    
+
     try {
       const response = await fetch(`/api/v1/store/profile/addresses/${id}`, {
         method: "DELETE",
@@ -879,7 +1050,7 @@ export default function ProfilePage() {
         localStorage.setItem("store_user_info", JSON.stringify(updatedUserInfo));
         localStorage.setItem("preferred_lang", preferredLang);
         localStorage.setItem("merter_preferred_currency", preferredCurrency);
-        
+
         // Sync outer page display state
         setLang(preferredLang);
         setDisplayCurrency(preferredCurrency);
@@ -911,14 +1082,14 @@ export default function ProfilePage() {
           isLangOpen={isLangOpen}
           setIsLangOpen={setIsLangOpen}
           totalPkgs={totalPkgs}
-          setIsCartOpen={() => {}}
-          setSearchQuery={() => {}}
-          setCurrentPage={() => {}}
+          setIsCartOpen={() => { }}
+          setSearchQuery={() => { }}
+          setCurrentPage={() => { }}
           setActiveCategoryId={setActiveCategoryId}
           categories={categories}
           activeCategoryId={activeCategoryId}
           displayCurrency={displayCurrency}
-          onCurrencyChange={() => {}}
+          onCurrencyChange={() => { }}
         />
         <main className="flex-grow flex flex-col items-center justify-center py-20 gap-3">
           <div className="spinner animate-spin w-8 h-8 border-4 border-salmon-pink border-t-transparent rounded-full" />
@@ -941,14 +1112,14 @@ export default function ProfilePage() {
           isLangOpen={isLangOpen}
           setIsLangOpen={setIsLangOpen}
           totalPkgs={totalPkgs}
-          setIsCartOpen={() => {}}
-          setSearchQuery={() => {}}
-          setCurrentPage={() => {}}
+          setIsCartOpen={() => { }}
+          setSearchQuery={() => { }}
+          setCurrentPage={() => { }}
           setActiveCategoryId={setActiveCategoryId}
           categories={categories}
           activeCategoryId={activeCategoryId}
           displayCurrency={displayCurrency}
-          onCurrencyChange={() => {}}
+          onCurrencyChange={() => { }}
         />
         <main className="flex-grow flex flex-col items-center justify-center p-8 text-center select-none py-24">
           <span className="text-5xl mb-4">🔒</span>
@@ -958,8 +1129,8 @@ export default function ProfilePage() {
           <p className="text-sm font-semibold text-sonic-silver mb-8 max-w-md mx-auto leading-relaxed">
             {t("auth_required_desc", lang)}
           </p>
-          <Link 
-            href="/" 
+          <Link
+            href="/"
             className="px-8 py-3 bg-salmon-pink text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase hover:bg-eerie-black transition-all cursor-pointer shadow-md no-underline"
           >
             {t("back_to_homepage", lang)}
@@ -978,18 +1149,18 @@ export default function ProfilePage() {
         isLangOpen={isLangOpen}
         setIsLangOpen={setIsLangOpen}
         totalPkgs={totalPkgs}
-        setIsCartOpen={() => {}}
-        setSearchQuery={() => {}}
-        setCurrentPage={() => {}}
+        setIsCartOpen={() => { }}
+        setSearchQuery={() => { }}
+        setCurrentPage={() => { }}
         setActiveCategoryId={setActiveCategoryId}
         categories={categories}
         activeCategoryId={activeCategoryId}
         displayCurrency={displayCurrency}
-        onCurrencyChange={() => {}}
+        onCurrencyChange={() => { }}
       />
 
       <main className="flex-grow max-w-[1280px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-in fade-in duration-300">
-        
+
         {/* Navigation Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-[11px] font-bold text-sonic-silver mb-6 uppercase tracking-wider select-none">
           <Link href="/" className="hover:text-salmon-pink flex items-center gap-1 transition-colors no-underline text-sonic-silver">
@@ -1000,9 +1171,30 @@ export default function ProfilePage() {
           <span className="text-salmon-pink font-extrabold">{t("my_account", lang)}</span>
         </nav>
 
+        {/* Verification Alert Banner */}
+        {verificationFeedback && (
+          <div
+            className={`mb-6 p-4 rounded-2xl border flex items-center justify-between gap-3 text-xs font-bold animate-in fade-in duration-200 ${getFeedbackClasses(
+              verificationFeedback.type
+            )}`}
+          >
+            <div className="flex items-center gap-2.5">
+              {renderFeedbackIcon(verificationFeedback.type)}
+              <span>{verificationFeedback.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setVerificationFeedback(null)}
+              className="text-current opacity-70 hover:opacity-100 font-extrabold px-2 py-1 cursor-pointer border-none bg-transparent text-sm"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Outer Layout Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          
+
           {/* Left Column: Premium User Status Widget */}
           <div className="lg:col-span-1 flex flex-col gap-6">
             <div className="bg-white rounded-2xl p-6 border border-cultured flex flex-col items-center text-center shadow-sm select-none">
@@ -1017,18 +1209,28 @@ export default function ProfilePage() {
               <span className="text-[11px] font-semibold text-sonic-silver tracking-wider uppercase bg-cultured px-2.5 py-1 rounded-full mt-2.5 border border-cultured">
                 B2B {user?.role === "admin" ? "Admin" : "Customer"}
               </span>
-              
+              {emailVerified ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full mt-2 border border-emerald-200">
+                  <Check className="w-3 h-3 text-emerald-600" />
+                  E-Posta Doğrulandı
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full mt-2 border border-amber-200">
+                  <AlertCircle className="w-3 h-3 text-amber-600" />
+                  E-Posta Doğrulanmadı
+                </span>
+              )}
+
               <div className="w-full border-t border-cultured my-6" />
 
               <div className="flex flex-col gap-2.5 w-full">
                 <button
                   type="button"
                   onClick={() => setActiveSection("profile")}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-bold text-left cursor-pointer w-full transition-all ${
-                    activeSection === "profile"
-                      ? "bg-salmon-pink/5 border-salmon-pink/20 text-salmon-pink"
-                      : "bg-transparent border-transparent text-sonic-silver hover:text-salmon-pink hover:bg-cultured"
-                  }`}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-bold text-left cursor-pointer w-full transition-all ${activeSection === "profile"
+                    ? "bg-salmon-pink/5 border-salmon-pink/20 text-salmon-pink"
+                    : "bg-transparent border-transparent text-sonic-silver hover:text-salmon-pink hover:bg-cultured"
+                    }`}
                 >
                   <User className="w-4 h-4" />
                   <span>{t("profile_details", lang)}</span>
@@ -1036,11 +1238,10 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setActiveSection("orders")}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-bold text-left cursor-pointer w-full transition-all ${
-                    activeSection === "orders"
-                      ? "bg-salmon-pink/5 border-salmon-pink/20 text-salmon-pink"
-                      : "bg-transparent border-transparent text-sonic-silver hover:text-salmon-pink hover:bg-cultured"
-                  }`}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-bold text-left cursor-pointer w-full transition-all ${activeSection === "orders"
+                    ? "bg-salmon-pink/5 border-salmon-pink/20 text-salmon-pink"
+                    : "bg-transparent border-transparent text-sonic-silver hover:text-salmon-pink hover:bg-cultured"
+                    }`}
                 >
                   <Clipboard className="w-4 h-4" />
                   <span>{getOrderT("orders_tab")}</span>
@@ -1088,8 +1289,12 @@ export default function ProfilePage() {
                   getAddressT={getAddressT}
                   error={error}
                   success={success}
+                  emailVerified={emailVerified}
+                  handleResendVerification={handleResendVerification}
+                  resendingVerification={resendingVerification}
+                  resendCountdown={resendCountdown}
                 />
-                
+
                 <AddressBook
                   addresses={addresses}
                   loadingAddresses={loadingAddresses}

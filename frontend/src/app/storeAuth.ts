@@ -2,6 +2,17 @@
 
 import { useSyncExternalStore } from "react";
 
+export interface StoreUser {
+  id?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  email_verified?: boolean;
+  [key: string]: unknown;
+}
+
 let verifiedTokenCache: string | null = null;
 let verifyingTokenInFlight: string | null = null;
 let showPricesToGuestsCache: boolean | null = null;
@@ -91,9 +102,25 @@ function verifyTokenWithBackendOnce(token: string): void {
       Authorization: `Bearer ${token}`,
     },
   })
-    .then((res) => {
+    .then(async (res) => {
       if (res.ok) {
         verifiedTokenCache = token;
+        try {
+          const profile = (await res.json()) as { email_verified?: boolean };
+          if (typeof profile.email_verified === "boolean") {
+            const current = localStorage.getItem("store_user_info");
+            if (current) {
+              const parsed = JSON.parse(current) as Record<string, unknown>;
+              if (parsed.email_verified !== profile.email_verified) {
+                parsed.email_verified = profile.email_verified;
+                localStorage.setItem("store_user_info", JSON.stringify(parsed));
+                window.dispatchEvent(new Event("auth-change"));
+              }
+            }
+          }
+        } catch {
+          // ignore json parse error
+        }
       } else if (res.status === 401 || res.status === 403) {
         verifiedTokenCache = null;
         clearStaleStoreSession();

@@ -291,10 +291,12 @@ func buildSupplierOrdersQuery(brandID, status string, limit, offset int) (string
 			COALESCE(NULLIF(so.customer_email, ''), COALESCE(o.customer_email, '')),
 			COALESCE(NULLIF(so.delivery_address, ''), COALESCE(o.delivery_address::text, '')),
 			COALESCE(NULLIF(so.billing_address, ''), COALESCE(o.billing_address::text, '')),
+			COALESCE(u.email_verified, false) AS customer_email_verified,
 			so.created_at, so.updated_at
 		FROM catalog.supplier_sub_orders so
 		JOIN catalog.brands b ON b.id = so.brand_id
 		LEFT JOIN catalog.orders o ON o.id = so.order_id
+		LEFT JOIN identity.users u ON (LOWER(u.email) = LOWER(COALESCE(NULLIF(so.customer_email, ''), o.customer_email)) OR (o.user_id IS NOT NULL AND u.id = o.user_id))
 		WHERE so.brand_id = $1
 	`
 	args := []any{brandID}
@@ -321,6 +323,7 @@ func scanSupplierSubOrders(rows pgx.Rows) []models.SupplierSubOrder {
 			&o.Currency, &o.Status, &o.TrackingCompany, &o.TrackingNumber, &o.Notes,
 			&o.CustomerName, &o.CustomerCompany, &o.CustomerPhone, &o.CustomerEmail,
 			&o.DeliveryAddress, &o.BillingAddress,
+			&o.CustomerEmailVerified,
 			&o.CreatedAt, &o.UpdatedAt,
 		); err == nil {
 			orders = append(orders, o)
@@ -408,10 +411,12 @@ func (h *MarketplaceHandler) GetSupplierOrder(w http.ResponseWriter, r *http.Req
 			COALESCE(NULLIF(so.customer_email, ''), COALESCE(ord.customer_email, '')),
 			COALESCE(NULLIF(so.delivery_address, ''), COALESCE(ord.delivery_address::text, '')),
 			COALESCE(NULLIF(so.billing_address, ''), COALESCE(ord.billing_address::text, '')),
+			COALESCE(u.email_verified, false) AS customer_email_verified,
 			so.created_at, so.updated_at
 		FROM catalog.supplier_sub_orders so
 		JOIN catalog.brands b ON b.id = so.brand_id
 		LEFT JOIN catalog.orders ord ON ord.id = so.order_id
+		LEFT JOIN identity.users u ON (LOWER(u.email) = LOWER(COALESCE(NULLIF(so.customer_email, ''), ord.customer_email)) OR (ord.user_id IS NOT NULL AND u.id = ord.user_id))
 		WHERE so.id = $1 AND so.brand_id = $2
 	`, subOrderID, claims.BrandID).Scan(
 		&o.ID, &o.OrderID, &o.BrandID, &o.BrandName, &o.SubOrderNumber,
@@ -419,6 +424,7 @@ func (h *MarketplaceHandler) GetSupplierOrder(w http.ResponseWriter, r *http.Req
 		&o.Currency, &o.Status, &o.TrackingCompany, &o.TrackingNumber, &o.Notes,
 		&o.CustomerName, &o.CustomerCompany, &o.CustomerPhone, &o.CustomerEmail,
 		&o.DeliveryAddress, &o.BillingAddress,
+		&o.CustomerEmailVerified,
 		&o.CreatedAt, &o.UpdatedAt,
 	)
 	if err != nil {

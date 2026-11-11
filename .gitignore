@@ -19,6 +19,7 @@ config.json
 # Database credentials text files
 database_bilgileri.txt
 docs/database_bilgileri.txt
+test_hesaplari.md
 *.conf
 temp_merter.conf
 

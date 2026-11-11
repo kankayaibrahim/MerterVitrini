@@ -172,7 +172,7 @@ func (h *AdminSupplierUsersHandler) CreateSupplierUser(w http.ResponseWriter, r 
 
 	// Trigger asynchronous email notifications
 	var brandName, brandCode string
-	_ = db.Pool.QueryRow(ctx, "SELECT name, code FROM catalog.brands WHERE id = $1", req.BrandID).Scan(&brandName, &brandCode)
+	_ = db.Pool.QueryRow(ctx, "SELECT brand_name, coalesce(alias_code, '') FROM catalog.brands WHERE id = $1", req.BrandID).Scan(&brandName, &brandCode)
 	if brandName == "" {
 		brandName = req.BrandID
 	}

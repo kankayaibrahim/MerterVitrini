@@ -52,6 +52,12 @@ interface ProfileDetailsProps {
   // Global alerts/notifs inside the panel
   readonly error: string | null;
   readonly success: string | null;
+
+  // Email verification props
+  readonly emailVerified?: boolean;
+  readonly handleResendVerification?: () => void;
+  readonly resendingVerification?: boolean;
+  readonly resendCountdown?: number;
 }
 
 export default function ProfileDetails({
@@ -81,6 +87,10 @@ export default function ProfileDetails({
   getAddressT,
   error,
   success,
+  emailVerified = false,
+  handleResendVerification,
+  resendingVerification = false,
+  resendCountdown = 0,
 }: Readonly<ProfileDetailsProps>) {
   return (
     <div className="bg-white rounded-2xl p-6 sm:p-8 border border-cultured shadow-sm">
@@ -138,15 +148,49 @@ export default function ProfileDetails({
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                {t("email_readonly", lang)}
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
+                  {t("email_readonly", lang)}
+                </label>
+                {emailVerified ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    {lang === "tr" ? "E-Posta Doğrulandı" : "Email Verified"}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    <AlertCircle className="w-3 h-3 text-amber-600" />
+                    {lang === "tr" ? "Doğrulanmadı" : "Unverified"}
+                  </span>
+                )}
+              </div>
               <input
                 type="email"
                 disabled
                 value={email}
                 className="w-full px-3.5 py-2.5 bg-[#f5f5f5] border border-cultured rounded-lg text-xs font-semibold text-sonic-silver cursor-not-allowed select-none"
               />
+              {!emailVerified && handleResendVerification && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1 text-[11px] text-amber-800 bg-amber-50/80 p-2.5 rounded-lg border border-amber-200">
+                  <span className="leading-snug">
+                    {lang === "tr"
+                      ? "Siparişleriniz ve tekliflerinizin üreticiler tarafından öncelikli yanıtlanması için e-postanızı doğrulayın."
+                      : "Verify your email to have suppliers prioritize your orders and inquiries."}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendingVerification || resendCountdown > 0}
+                    className="shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded font-bold text-[10px] transition-colors cursor-pointer border-none shadow-xs text-center"
+                  >
+                    {resendingVerification
+                      ? (lang === "tr" ? "Gönderiliyor..." : "Sending...")
+                      : resendCountdown > 0
+                      ? `${resendCountdown}s`
+                      : (lang === "tr" ? "Doğrulama E-postası Gönder" : "Send Verification Email")}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">

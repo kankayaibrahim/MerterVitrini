@@ -160,6 +160,8 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 	mux.HandleFunc("POST /api/v1/store/auth/register", h.StoreAuth.Register)
 	mux.HandleFunc("POST /api/v1/store/auth/login", h.StoreAuth.Login)
 	mux.HandleFunc("GET /api/v1/store/auth/google-callback", h.StoreAuth.GoogleCallback)
+	mux.HandleFunc("GET /api/v1/store/auth/verify-email", h.StoreAuth.VerifyEmail)
+	mux.HandleFunc("POST /api/v1/store/auth/resend-verification", h.StoreAuth.ResendVerificationEmail)
 	mux.HandleFunc("GET /api/v1/store/profile", h.StoreAuth.GetProfile)
 	mux.HandleFunc("PUT /api/v1/store/profile", h.StoreAuth.UpdateProfile)
 	mux.HandleFunc("GET /api/v1/store/auth/profile", h.StoreAuth.GetProfile)

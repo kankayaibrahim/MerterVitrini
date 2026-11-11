@@ -40,6 +40,7 @@ export interface ChatRoom {
   customer_name: string;
   customer_email?: string;
   customer_phone?: string;
+  customer_email_verified?: boolean;
   initial_product_id?: string;
   last_message_preview: string;
   last_message_at: string;

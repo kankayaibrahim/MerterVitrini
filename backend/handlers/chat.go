@@ -63,6 +63,7 @@ type ChatRoomDTO struct {
 	CustomerName          string    `json:"customer_name"`
 	CustomerEmail         string    `json:"customer_email,omitempty"`
 	CustomerPhone         string    `json:"customer_phone,omitempty"`
+	CustomerEmailVerified bool      `json:"customer_email_verified"`
 	InitialProductID      *string   `json:"initial_product_id,omitempty"`
 	LastMessagePreview    string    `json:"last_message_preview"`
 	LastMessageAt         time.Time `json:"last_message_at"`
@@ -618,7 +619,9 @@ func scanRoomRows(rows pgx.Rows) []ChatRoomDTO {
 			&rm.ID, &rm.BrandID, &rm.SupplierName,
 			&rm.SupplierUserID, &rm.SupplierUserName, &rm.SupplierUserTitle, &rm.SupplierUserLanguages,
 			&rm.CustomerID, &rm.CustomerName,
-			&rm.CustomerEmail, &rm.CustomerPhone, &rm.InitialProductID,
+			&rm.CustomerEmail, &rm.CustomerPhone,
+			&rm.CustomerEmailVerified,
+			&rm.InitialProductID,
 			&rm.LastMessagePreview, &rm.LastMessageAt,
 			&rm.UnreadCustomerCount, &rm.UnreadSupplierCount, &rm.CreatedAt,
 		); err == nil {
@@ -633,11 +636,13 @@ const baseSelectRoomsSQL = `
 	       r.supplier_user_id::text,
 	       COALESCE(su.contact_name, ''), COALESCE(su.job_title, ''), COALESCE(su.spoken_languages, ''),
 	       r.customer_id, r.customer_name, COALESCE(r.customer_email, ''), COALESCE(r.customer_phone, ''),
+	       COALESCE(u.email_verified, false) AS customer_email_verified,
 	       r.initial_product_id::text, r.last_message_preview, r.last_message_at,
 	       r.unread_customer_count, r.unread_supplier_count, r.created_at
 	FROM catalog.chat_rooms r
 	JOIN catalog.brands b ON r.brand_id = b.id
 	LEFT JOIN catalog.supplier_users su ON r.supplier_user_id = su.id
+	LEFT JOIN identity.users u ON (u.id = r.customer_id OR (r.customer_email IS NOT NULL AND r.customer_email <> '' AND LOWER(u.email) = LOWER(r.customer_email)))
 `
 
 func (h *ChatHandler) ListCustomerRooms(w http.ResponseWriter, r *http.Request) {

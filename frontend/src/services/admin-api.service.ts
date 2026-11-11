@@ -24,6 +24,7 @@ export interface AdminProductsPage {
 
 export interface KeycloakCallbackResult {
   token: string;
+  id_token?: string;
   user: UserInfo;
 }
 
@@ -31,9 +32,11 @@ export interface IAdminSessionService {
   resolveApiBaseUrl(): string;
   readSavedTheme(): "light" | "dark";
   saveTheme(theme: "light" | "dark"): void;
-  readSavedSession(): { token: string; user: UserInfo } | null;
-  saveSession(token: string, user: UserInfo): void;
+  readSavedSession(): { token: string; user: UserInfo; idToken?: string } | null;
+  readIdToken(): string | null;
+  saveSession(token: string, user: UserInfo, idToken?: string): void;
   clearSession(): void;
+  buildKeycloakLogoutUrl(postLogoutRedirectUri: string): string;
   exchangeKeycloakCode(code: string, redirectUri: string): Promise<KeycloakCallbackResult>;
   checkHealth(): Promise<boolean>;
 }
@@ -104,12 +107,13 @@ export class AdminApiService
     }
   }
 
-  readSavedSession(): { token: string; user: UserInfo } | null {
+  readSavedSession(): { token: string; user: UserInfo; idToken?: string } | null {
     if (typeof window === "undefined") {
       return null;
     }
     const savedToken = localStorage.getItem("admin_token");
     const savedUser = localStorage.getItem("admin_user");
+    const savedIdToken = localStorage.getItem("admin_id_token") || undefined;
     if (!savedToken || !savedUser) {
       return null;
     }
@@ -117,16 +121,27 @@ export class AdminApiService
       return {
         token: savedToken,
         user: JSON.parse(savedUser) as UserInfo,
+        idToken: savedIdToken,
       };
     } catch {
       return null;
     }
   }
 
-  saveSession(token: string, user: UserInfo): void {
+  readIdToken(): string | null {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    return localStorage.getItem("admin_id_token");
+  }
+
+  saveSession(token: string, user: UserInfo, idToken?: string): void {
     if (typeof window !== "undefined") {
       localStorage.setItem("admin_token", token);
       localStorage.setItem("admin_user", JSON.stringify(user));
+      if (idToken) {
+        localStorage.setItem("admin_id_token", idToken);
+      }
     }
   }
 
@@ -134,7 +149,27 @@ export class AdminApiService
     if (typeof window !== "undefined") {
       localStorage.removeItem("admin_token");
       localStorage.removeItem("admin_user");
+      localStorage.removeItem("admin_id_token");
     }
+  }
+
+  buildKeycloakLogoutUrl(postLogoutRedirectUri: string): string {
+    const kcUrl =
+      process.env.NEXT_PUBLIC_KEYCLOAK_URL || "https://auth.mertervitrini.com.tr";
+    const kcRealm = process.env.NEXT_PUBLIC_KEYCLOAK_REALM || "merter";
+    const kcClientId =
+      process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || "admin-client";
+    const idToken = this.readIdToken();
+
+    const params = new URLSearchParams({
+      client_id: kcClientId,
+      post_logout_redirect_uri: postLogoutRedirectUri,
+    });
+    if (idToken) {
+      params.set("id_token_hint", idToken);
+    }
+
+    return `${kcUrl}/realms/${kcRealm}/protocol/openid-connect/logout?${params.toString()}`;
   }
 
   async exchangeKeycloakCode(

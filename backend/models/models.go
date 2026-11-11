@@ -69,6 +69,7 @@ type AuthResponse struct {
 	RequireOtp bool      `json:"require_otp"`
 	UserID     string    `json:"user_id,omitempty"`
 	Token      string    `json:"token,omitempty"`
+	IDToken    string    `json:"id_token,omitempty"`
 	User       *UserInfo `json:"user,omitempty"`
 }
 
@@ -606,9 +607,10 @@ type SupplierSubOrder struct {
 	Notes            *string                `json:"notes,omitempty"`
 	CustomerName     string                 `json:"customer_name,omitempty"`
 	CustomerCompany  string                 `json:"customer_company,omitempty"`
-	CustomerPhone    string                 `json:"customer_phone,omitempty"`
-	CustomerEmail    string                 `json:"customer_email,omitempty"`
-	DeliveryAddress  string                 `json:"delivery_address,omitempty"`
+	CustomerPhone         string                 `json:"customer_phone,omitempty"`
+	CustomerEmail         string                 `json:"customer_email,omitempty"`
+	CustomerEmailVerified bool                   `json:"customer_email_verified"`
+	DeliveryAddress       string                 `json:"delivery_address,omitempty"`
 	BillingAddress   string                 `json:"billing_address,omitempty"`
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`

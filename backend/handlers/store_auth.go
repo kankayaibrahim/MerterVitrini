@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,19 +17,50 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/pkg/httpclient"
 	"mertervitrini/backend/pkg/mailer"
 	"mertervitrini/backend/pkg/safe"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type StoreAuthHandler struct {
 	Cfg *config.Config
 }
 
+func ensureIdentityUserVerificationSchema(ctx context.Context) {
+	if db.Pool == nil {
+		return
+	}
+	query := `
+		ALTER TABLE identity.users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
+		ALTER TABLE identity.users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(128);
+		ALTER TABLE identity.users ADD COLUMN IF NOT EXISTS email_verification_expires_at TIMESTAMP WITH TIME ZONE;
+		ALTER TABLE identity.users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP WITH TIME ZONE;
+		CREATE INDEX IF NOT EXISTS idx_identity_users_email_verified ON identity.users(email_verified);
+		CREATE INDEX IF NOT EXISTS idx_identity_users_verification_token ON identity.users(email_verification_token) WHERE email_verification_token IS NOT NULL;
+	`
+	if _, err := db.Pool.Exec(ctx, query); err != nil {
+		log.Printf("[SCHEMA WARNING] Failed to ensure identity.users verification columns: %v", err)
+	}
+}
+
+func generateVerificationToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
 func NewStoreAuthHandler(cfg *config.Config) *StoreAuthHandler {
+	safe.Go("Ensure Identity Verification Schema", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		ensureIdentityUserVerificationSchema(ctx)
+	})
 	return &StoreAuthHandler{Cfg: cfg}
 }
 
@@ -49,12 +82,13 @@ type LoginRequest struct {
 }
 
 type UserInfo struct {
-	ID        string `json:"id"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	Role      string `json:"role"`
+	ID            string `json:"id"`
+	FirstName     string `json:"first_name"`
+	LastName      string `json:"last_name"`
+	Email         string `json:"email"`
+	Phone         string `json:"phone"`
+	Role          string `json:"role"`
+	EmailVerified bool   `json:"email_verified"`
 }
 
 type AuthResponse struct {
@@ -87,7 +121,7 @@ func decodeJWTClaims(tokenStr string) (map[string]any, error) {
 
 func (h *StoreAuthHandler) getAdminAccessToken(ctx context.Context) (string, error) {
 	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", h.Cfg.KeycloakURL, h.Cfg.KeycloakRealm)
-	
+
 	form := url.Values{}
 	form.Set("grant_type", "client_credentials")
 	form.Set("client_id", h.Cfg.KeycloakClientID)
@@ -189,13 +223,14 @@ func syncOrFetchLocalUser(ctx context.Context, userID, firstName, lastName, emai
 	var isBlocked bool
 	var dbRole string
 	var phone string
-	dbErr := db.Pool.QueryRow(ctx, "SELECT is_blocked, user_role, phone, first_name, last_name FROM identity.users WHERE id = $1 OR email = $2", userID, email).
-		Scan(&isBlocked, &dbRole, &phone, &firstName, &lastName)
+	var emailVerified bool
+	dbErr := db.Pool.QueryRow(ctx, "SELECT is_blocked, user_role, phone, first_name, last_name, COALESCE(email_verified, false) FROM identity.users WHERE id = $1 OR email = $2", userID, email).
+		Scan(&isBlocked, &dbRole, &phone, &firstName, &lastName, &emailVerified)
 
 	if dbErr != nil {
 		_, syncErr := db.Pool.Exec(ctx, `
-			INSERT INTO identity.users (id, first_name, last_name, email, phone, user_role, is_active, is_blocked)
-			VALUES ($1, $2, $3, $4, '', 'customer', true, false)
+			INSERT INTO identity.users (id, first_name, last_name, email, phone, user_role, is_active, is_blocked, email_verified)
+			VALUES ($1, $2, $3, $4, '', 'customer', true, false, false)
 			ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id
 		`, userID, firstName, lastName, email)
 		if syncErr != nil {
@@ -215,12 +250,13 @@ func syncOrFetchLocalUser(ctx context.Context, userID, firstName, lastName, emai
 	}
 
 	return &UserInfo{
-		ID:        userID,
-		FirstName: firstName,
-		LastName:  lastName,
-		Email:     email,
-		Phone:     phone,
-		Role:      role,
+		ID:            userID,
+		FirstName:     firstName,
+		LastName:      lastName,
+		Email:         email,
+		Phone:         phone,
+		Role:          role,
+		EmailVerified: emailVerified,
 	}, nil
 }
 
@@ -319,12 +355,12 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	createUserURL := fmt.Sprintf("%s/admin/realms/%s/users", h.Cfg.KeycloakURL, h.Cfg.KeycloakRealm)
-	
+
 	keycloakUser := map[string]any{
 		"username":      req.Email,
 		"email":         req.Email,
 		"enabled":       true,
-		"emailVerified": true,
+		"emailVerified": false,
 		"firstName":     req.FirstName,
 		"lastName":      req.LastName,
 		"credentials": []map[string]any{
@@ -384,9 +420,15 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	keycloakUserID := parts[len(parts)-1]
 
 	ip := getClientIP(r)
+	verificationToken, _ := generateVerificationToken()
+	verificationExpires := time.Now().Add(24 * time.Hour)
+
 	_, dbErr := db.Pool.Exec(ctx, `
-		INSERT INTO identity.users (id, first_name, last_name, email, phone, user_role, is_active, is_blocked, registration_ip)
-		VALUES ($1, $2, $3, $4, $5, 'customer', true, false, $6)
+		INSERT INTO identity.users (
+			id, first_name, last_name, email, phone, user_role, is_active, is_blocked, registration_ip,
+			email_verified, email_verification_token, email_verification_expires_at
+		)
+		VALUES ($1, $2, $3, $4, $5, 'customer', true, false, $6, false, $7, $8)
 		ON CONFLICT (email) DO UPDATE SET
 			id = EXCLUDED.id,
 			first_name = EXCLUDED.first_name,
@@ -394,8 +436,11 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			phone = EXCLUDED.phone,
 			user_role = 'customer',
 			registration_ip = COALESCE(identity.users.registration_ip, EXCLUDED.registration_ip),
+			email_verified = COALESCE(identity.users.email_verified, false),
+			email_verification_token = EXCLUDED.email_verification_token,
+			email_verification_expires_at = EXCLUDED.email_verification_expires_at,
 			updated_at = CURRENT_TIMESTAMP
-	`, keycloakUserID, req.FirstName, req.LastName, req.Email, req.Phone, ip)
+	`, keycloakUserID, req.FirstName, req.LastName, req.Email, req.Phone, ip, verificationToken, verificationExpires)
 
 	if dbErr != nil {
 		log.Printf("[AUTH DB ERROR] Failed to save user to local postgres: %v", dbErr)
@@ -403,6 +448,12 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	meta := mailer.ExtractClientMeta(r)
 	mailer.SendCustomerRegisteredNotification(h.Cfg, req.FirstName, req.LastName, req.Email, req.Phone, meta)
+
+	if verificationToken != "" {
+		safe.Go("Send Customer Email Verification", func() {
+			mailer.SendCustomerEmailVerification(h.Cfg, req.FirstName, req.Email, verificationToken)
+		})
+	}
 
 	loginToken, loginUser, err := h.performKeycloakLogin(ctx, req.Email, req.Password)
 	if err != nil {
@@ -597,6 +648,7 @@ type UserProfile struct {
 	DeliveryAddress   string `json:"delivery_address"`
 	TaxNoTCKN         string `json:"tax_no_tckn"`
 	InstagramUsername string `json:"instagram_username"`
+	EmailVerified     bool   `json:"email_verified"`
 }
 
 func (h *StoreAuthHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
@@ -624,12 +676,13 @@ func (h *StoreAuthHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 
 	err = db.Pool.QueryRow(ctx, `
 		SELECT first_name, last_name, email, phone, preferred_lang, preferred_currency, 
-		       billing_address, delivery_address, tax_no_tckn, instagram_username
+		       billing_address, delivery_address, tax_no_tckn, instagram_username,
+		       COALESCE(email_verified, false)
 		FROM identity.users
 		WHERE id = $1
 	`, userID).Scan(
 		&p.FirstName, &p.LastName, &p.Email, &p.Phone, &p.PreferredLang, &p.PreferredCurrency,
-		&billingAddr, &deliveryAddr, &taxNo, &instaUser,
+		&billingAddr, &deliveryAddr, &taxNo, &instaUser, &p.EmailVerified,
 	)
 
 	if err != nil {
@@ -875,6 +928,11 @@ func (h *StoreAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if !userInfo.EmailVerified {
+		_, _ = db.Pool.Exec(ctx, "UPDATE identity.users SET email_verified = true, email_verified_at = CURRENT_TIMESTAMP WHERE id = $1", userInfo.ID)
+		userInfo.EmailVerified = true
+	}
+
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	ip := getClientIP(r)
 	safe.Go("Record Login History Token", func() {
@@ -889,29 +947,29 @@ func (h *StoreAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request
 
 // UserAddress maps the relational model in identity.user_addresses joined with country and state lookups
 type UserAddress struct {
-	ID           string    `json:"id"`
-	UserID       string    `json:"user_id"`
-	Title        string    `json:"title"`
-	AddressType  string    `json:"address_type"` // 'billing' or 'shipping'
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
-	CompanyName  *string   `json:"company_name"` // nullable
-	Phone        string    `json:"phone"`
-	CountryID    string    `json:"country_id"`
-	StateID      *string   `json:"state_id"`     // nullable
-	CityID       *string   `json:"city_id"`      // nullable
-	AddressLine  string    `json:"address_line"`
-	PostalCode   string    `json:"postal_code"`
-	TaxNoTCKN    *string   `json:"tax_no_tckn"`  // nullable
-	TaxOffice    *string   `json:"tax_office"`   // nullable
-	IsDefault    bool      `json:"is_default"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID          string    `json:"id"`
+	UserID      string    `json:"user_id"`
+	Title       string    `json:"title"`
+	AddressType string    `json:"address_type"` // 'billing' or 'shipping'
+	FirstName   string    `json:"first_name"`
+	LastName    string    `json:"last_name"`
+	CompanyName *string   `json:"company_name"` // nullable
+	Phone       string    `json:"phone"`
+	CountryID   string    `json:"country_id"`
+	StateID     *string   `json:"state_id"` // nullable
+	CityID      *string   `json:"city_id"`  // nullable
+	AddressLine string    `json:"address_line"`
+	PostalCode  string    `json:"postal_code"`
+	TaxNoTCKN   *string   `json:"tax_no_tckn"` // nullable
+	TaxOffice   *string   `json:"tax_office"`  // nullable
+	IsDefault   bool      `json:"is_default"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 
 	// Joined fields for display
-	CountryName  string    `json:"country_name,omitempty"`
-	StateName    string    `json:"state_name,omitempty"`
-	CityName     string    `json:"city_name,omitempty"`
+	CountryName string `json:"country_name,omitempty"`
+	StateName   string `json:"state_name,omitempty"`
+	CityName    string `json:"city_name,omitempty"`
 }
 
 type CountryLookup struct {
@@ -1518,6 +1576,175 @@ func recordLoginHistory(ctx context.Context, userID, ipAddress string) {
 	}
 }
 
+func (h *StoreAuthHandler) setKeycloakEmailVerified(ctx context.Context, keycloakUserID string) {
+	if keycloakUserID == "" {
+		return
+	}
+	adminToken, err := h.getAdminAccessToken(ctx)
+	if err != nil {
+		log.Printf("[KEYCLOAK SYNC WARNING] Failed to get admin token for email verify sync: %v", err)
+		return
+	}
 
+	urlStr := fmt.Sprintf("%s/admin/realms/%s/users/%s", h.Cfg.KeycloakURL, h.Cfg.KeycloakRealm, keycloakUserID)
+	payload := []byte(`{"emailVerified":true}`)
 
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, urlStr, strings.NewReader(string(payload)))
+	if err != nil {
+		return
+	}
+	req.Header.Set(headerContentType, mimeApplicationJSON)
+	req.Header.Set("Authorization", authBearerPrefix+adminToken)
 
+	resp, err := httpclient.FastClient.Do(req)
+	if err != nil {
+		log.Printf("[KEYCLOAK SYNC WARNING] Failed to PUT user emailVerified: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+}
+
+// VerifyEmail processes the verification link clicked by the customer
+func (h *StoreAuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	frontendURL := "https://mertervitrini.com.tr/profile"
+	if token == "" {
+		http.Redirect(w, r, frontendURL+"?verified=invalid", http.StatusSeeOther)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	var userID, email string
+	var expiresAt time.Time
+	var alreadyVerified bool
+
+	err := db.Pool.QueryRow(ctx, `
+		SELECT id, email, COALESCE(email_verification_expires_at, CURRENT_TIMESTAMP), COALESCE(email_verified, false)
+		FROM identity.users
+		WHERE email_verification_token = $1
+	`, token).Scan(&userID, &email, &expiresAt, &alreadyVerified)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Redirect(w, r, frontendURL+"?verified=not_found", http.StatusSeeOther)
+			return
+		}
+		log.Printf("[VERIFY EMAIL ERROR] DB query error: %v", err)
+		http.Redirect(w, r, frontendURL+"?verified=error", http.StatusSeeOther)
+		return
+	}
+
+	if alreadyVerified {
+		http.Redirect(w, r, frontendURL+"?verified=already_verified", http.StatusSeeOther)
+		return
+	}
+
+	if time.Now().After(expiresAt) {
+		http.Redirect(w, r, frontendURL+"?verified=expired", http.StatusSeeOther)
+		return
+	}
+
+	_, updateErr := db.Pool.Exec(ctx, `
+		UPDATE identity.users
+		SET email_verified = true,
+		    email_verified_at = CURRENT_TIMESTAMP,
+		    email_verification_token = NULL,
+		    email_verification_expires_at = NULL,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1
+	`, userID)
+	if updateErr != nil {
+		log.Printf("[VERIFY EMAIL ERROR] DB update failed for user %s: %v", userID, updateErr)
+		http.Redirect(w, r, frontendURL+"?verified=error", http.StatusSeeOther)
+		return
+	}
+
+	safe.Go("Sync Keycloak Email Verified", func() {
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer timeoutCancel()
+		h.setKeycloakEmailVerified(timeoutCtx, userID)
+	})
+
+	http.Redirect(w, r, frontendURL+"?verified=success", http.StatusSeeOther)
+}
+
+// ResendVerificationEmail sends a new verification link to the customer
+func (h *StoreAuthHandler) ResendVerificationEmail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	var email, firstName string
+	var emailVerified bool
+
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		userID, err := verifyTokenAndGetUserID(authHeader)
+		if err == nil && userID != "" {
+			_ = db.Pool.QueryRow(ctx, "SELECT email, first_name, COALESCE(email_verified, false) FROM identity.users WHERE id = $1", userID).
+				Scan(&email, &firstName, &emailVerified)
+		}
+	}
+
+	if email == "" {
+		var req struct {
+			Email string `json:"email"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			trimmedEmail := strings.TrimSpace(strings.ToLower(req.Email))
+			if trimmedEmail != "" {
+				_ = db.Pool.QueryRow(ctx, "SELECT email, first_name, COALESCE(email_verified, false) FROM identity.users WHERE LOWER(email) = LOWER($1)", trimmedEmail).
+					Scan(&email, &firstName, &emailVerified)
+			}
+		}
+	}
+
+	if email == "" {
+		http.Error(w, `{"error":"Geçerli bir kullanıcı veya e-posta bulunamadı"}`, http.StatusBadRequest)
+		return
+	}
+
+	if emailVerified {
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"message":          "Bu e-posta adresi zaten doğrulanmış durumdadır.",
+			"already_verified": true,
+		})
+		return
+	}
+
+	token, err := generateVerificationToken()
+	if err != nil {
+		http.Error(w, `{"error":"Doğrulama bağlantısı oluşturulamadı"}`, http.StatusInternalServerError)
+		return
+	}
+	expiresAt := time.Now().Add(24 * time.Hour)
+
+	_, updateErr := db.Pool.Exec(ctx, `
+		UPDATE identity.users
+		SET email_verification_token = $1,
+		    email_verification_expires_at = $2,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE LOWER(email) = LOWER($3)
+	`, token, expiresAt, email)
+	if updateErr != nil {
+		log.Printf("[RESEND VERIFY ERROR] DB update failed for %s: %v", email, updateErr)
+		http.Error(w, `{"error":"İç sunucu hatası oluştu"}`, http.StatusInternalServerError)
+		return
+	}
+
+	safe.Go("Resend Email Verification", func() {
+		mailer.SendCustomerEmailVerification(h.Cfg, firstName, email, token)
+	})
+
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"message": "Doğrulama e-postası başarıyla gönderildi. Lütfen gelen kutunuzu (ve spam klasörünü) kontrol ediniz.",
+		"sent":    true,
+	})
+}

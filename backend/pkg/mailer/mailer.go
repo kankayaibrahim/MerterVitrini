@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net"
 	"net/smtp"
+	"net/url"
 	"strings"
 	"time"
 
@@ -662,6 +663,97 @@ Merter Vitrini Bildirim Servisi`, fullName, email, phoneDisplay, nowStr, meta.IP
 		)
 
 		_ = SendRawMail(cfg, adminEmail, subject, htmlBody, textBody)
+	})
+}
+
+// SendCustomerEmailVerification sends an activation/verification link to a registered storefront customer
+func SendCustomerEmailVerification(cfg *config.Config, firstName, email, token string) {
+	if email == "" || !strings.Contains(email, "@") || token == "" {
+		return
+	}
+
+	safe.Go("SendCustomerEmailVerification", func() {
+		verifyURL := fmt.Sprintf("https://mertervitrini.com.tr/api/v1/store/auth/verify-email?token=%s", url.QueryEscape(token))
+		subject := "🔐 Merter Vitrini B2B Hesabınızı Doğrulayın"
+
+		displayName := strings.TrimSpace(firstName)
+		if displayName == "" {
+			displayName = "Değerli Müşterimiz"
+		}
+
+		textBody := fmt.Sprintf(`Merhaba %s,
+
+Merter Vitrini B2B Toptan Tekstil Platformu'na hoş geldiniz!
+
+Üyeliğinizi tamamlamak, Merter üreticilerinden doğrudan teklif almak ve doğrulanmış B2B müşteri statüsüne geçmek için lütfen e-posta adresinizi doğrulayın:
+
+%s
+
+Bu bağlantı 24 saat boyunca geçerlidir.
+
+Eğer bu kaydı siz yapmadıysanız bu e-postayı dikkate almayınız.
+
+Saygılarımızla,
+Merter Vitrini Ekibi
+https://mertervitrini.com.tr`, displayName, verifyURL)
+
+		htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; padding: 24px 12px; color: #1e293b; margin: 0;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; padding: 36px 30px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);">
+    <div style="text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 26px;">
+      <h2 style="color: #0f172a; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 0.5px;">MERTER VİTRİNİ</h2>
+      <p style="color: #d97706; font-size: 11px; font-weight: 800; letter-spacing: 2px; margin: 5px 0 0 0; text-transform: uppercase;">Doğrudan Üreticiden B2B Tedarik</p>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; background-color: #ecfdf5; border: 2px solid #a7f3d0; border-radius: 20px; font-size: 28px; margin-bottom: 16px;">
+        ✉️
+      </div>
+      <h3 style="color: #0f172a; margin: 0 0 8px 0; font-size: 20px; font-weight: 800;">E-Posta Adresinizi Doğrulayın</h3>
+      <p style="font-size: 14px; line-height: 1.6; color: #64748b; margin: 0;">
+        Merhaba <strong>%s</strong>, Merter Vitrini B2B platformuna üyeliğinizi onaylamak için son bir adım kaldı.
+      </p>
+    </div>
+
+    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; margin-bottom: 26px; font-size: 13px; line-height: 1.7; color: #334155;">
+      <div style="font-weight: 800; color: #0f172a; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+        🛡️ Doğrulanmış Müşteri Avantajları:
+      </div>
+      <ul style="margin: 0; padding-left: 18px;">
+        <li>Üreticilerin açtığınız alım ilanlarına (RFQ) ve mesajlarınıza öncelikli yanıt vermesi</li>
+        <li>Tedarikçilere açık profilinizde <strong>&ldquo;✓ E-Postası Doğrulanmış Müşteri&rdquo;</strong> güven rozeti</li>
+        <li>Sipariş, kargo takip ve fiyat teklif bildirimlerinin anında iletilmesi</li>
+      </ul>
+    </div>
+
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="%s" style="background-color: #059669; color: #ffffff; text-decoration: none; padding: 14px 34px; border-radius: 12px; font-weight: 800; font-size: 14px; display: inline-block; letter-spacing: 0.5px; box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);">
+        E-Posta Adresimi Doğrula →
+      </a>
+      <p style="font-size: 11px; color: #94a3b8; margin: 12px 0 0 0;">
+        ⏱️ Bu bağlantı <strong>24 saat</strong> boyunca geçerlidir.
+      </p>
+    </div>
+
+    <div style="border-top: 1px solid #f1f5f9; padding-top: 18px; margin-top: 28px; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+      <p style="margin: 0 0 6px 0;">Butona tıklayamıyorsanız aşağıdaki bağlantıyı tarayıcınıza yapıştırabilirsiniz:</p>
+      <p style="margin: 0; word-break: break-all; color: #0284c7; font-family: monospace; font-size: 11px;">%s</p>
+    </div>
+
+    <div style="border-top: 1px solid #f1f5f9; padding-top: 18px; margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8;">
+      © 2026 Merter Vitrini B2B E-Ticaret Platformu. Tüm hakları saklıdır.
+    </div>
+  </div>
+</body>
+</html>`,
+			html.EscapeString(displayName),
+			verifyURL,
+			verifyURL,
+		)
+
+		_ = SendRawMail(cfg, email, subject, htmlBody, textBody)
 	})
 }
 

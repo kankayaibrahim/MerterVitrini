@@ -48,6 +48,7 @@ export interface SupplierSubOrderRow {
   customer_company?: string;
   customer_phone?: string;
   customer_email?: string;
+  customer_email_verified?: boolean;
   delivery_address?: string;
   billing_address?: string;
   created_at: string;
@@ -91,6 +92,35 @@ function normalizeWaPhone(raw?: string): string {
     return "90" + digits;
   }
   return digits;
+}
+
+function getOrderStatusIcon(status: string) {
+  if (status === "DELIVERED") {
+    return <CheckCircle2 size={12} />;
+  }
+  if (status === "CANCELLED") {
+    return <XCircle size={12} />;
+  }
+  return <Clock size={12} />;
+}
+
+function renderEmptyOrdersState(loading: boolean) {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-xs text-slate-500">
+        Siparişler yükleniyor...
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+      <ShoppingBag size={36} className="mx-auto text-slate-300 mb-3" />
+      <p className="text-sm font-bold text-slate-700">Henüz Gelen Sipariş Yok</p>
+      <p className="text-xs text-slate-500 mt-1">
+        Müşteriler ürünleriniz için sipariş veya teklif oluşturduğunda anında burada listelenir.
+      </p>
+    </div>
+  );
 }
 
 export default function SupplierOrdersPanel({
@@ -245,18 +275,8 @@ export default function SupplierOrdersPanel({
       </div>
 
       {/* Orders List */}
-      {loading && orders.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-xs text-slate-500">
-          Siparişler yükleniyor...
-        </div>
-      ) : orders.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <ShoppingBag size={36} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-sm font-bold text-slate-700">Henüz Gelen Sipariş Yok</p>
-          <p className="text-xs text-slate-500 mt-1">
-            Müşteriler ürünleriniz için sipariş veya teklif oluşturduğunda anında burada listelenir.
-          </p>
-        </div>
+      {orders.length === 0 ? (
+        renderEmptyOrdersState(loading)
       ) : (
         <div className="space-y-4">
           {orders.map((order) => {
@@ -285,13 +305,7 @@ export default function SupplierOrdersPanel({
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${st.badgeClass}`}
                     >
-                      {order.status === "DELIVERED" ? (
-                        <CheckCircle2 size={12} />
-                      ) : order.status === "CANCELLED" ? (
-                        <XCircle size={12} />
-                      ) : (
-                        <Clock size={12} />
-                      )}
+                      {getOrderStatusIcon(order.status)}
                       {st.label}
                     </span>
                     <span className="text-[11px] text-slate-500">
@@ -345,7 +359,7 @@ export default function SupplierOrdersPanel({
                     )}
 
                     {order.customer_email && (
-                      <div className="flex items-center gap-2 text-xs text-slate-700">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-700 flex-wrap">
                         <Mail size={13} className="text-slate-400 shrink-0" />
                         <a
                           href={`mailto:${order.customer_email}`}
@@ -353,6 +367,15 @@ export default function SupplierOrdersPanel({
                         >
                           {order.customer_email}
                         </a>
+                        {order.customer_email_verified ? (
+                          <span className="inline-flex items-center px-1.5 py-0.2 text-[9px] font-extrabold bg-emerald-100 text-emerald-800 rounded border border-emerald-300">
+                            ✓ Doğrulanmış E-posta
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.2 text-[9px] font-semibold bg-amber-100 text-amber-800 rounded border border-amber-300">
+                            ⚠️ Doğrulanmadı
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -432,10 +455,11 @@ export default function SupplierOrdersPanel({
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label htmlFor={`order-status-${order.id}`} className="block text-[11px] font-semibold text-slate-600 mb-1">
                         Sipariş Statüsü
                       </label>
                       <select
+                        id={`order-status-${order.id}`}
                         value={inputState.status}
                         onChange={(e) =>
                           setTrackingInputs((prev) => ({
@@ -455,10 +479,11 @@ export default function SupplierOrdersPanel({
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label htmlFor={`order-tracking-company-${order.id}`} className="block text-[11px] font-semibold text-slate-600 mb-1">
                         Kargo / Ambar Firması
                       </label>
                       <input
+                        id={`order-tracking-company-${order.id}`}
                         type="text"
                         value={inputState.company}
                         onChange={(e) =>
@@ -473,10 +498,11 @@ export default function SupplierOrdersPanel({
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      <label htmlFor={`order-tracking-number-${order.id}`} className="block text-[11px] font-semibold text-slate-600 mb-1">
                         Kargo Takip No
                       </label>
                       <input
+                        id={`order-tracking-number-${order.id}`}
                         type="text"
                         value={inputState.number}
                         onChange={(e) =>

@@ -122,7 +122,7 @@ func extractUserMetadata(claims jwt.MapClaims) (userID, firstName, lastName, ema
 	return userID, firstName, lastName, email
 }
 
-func exchangeKeycloakCode(ctx context.Context, cfg *config.Config, code, redirectURI string) (string, int, error) {
+func exchangeKeycloakCode(ctx context.Context, cfg *config.Config, code, redirectURI string) (string, string, int, error) {
 	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", cfg.KeycloakURL, cfg.KeycloakRealm)
 
 	form := url.Values{}
@@ -134,19 +134,19 @@ func exchangeKeycloakCode(ctx context.Context, cfg *config.Config, code, redirec
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", http.StatusInternalServerError, fmt.Errorf("internal error generating authentication request: %w", err)
+		return "", "", http.StatusInternalServerError, fmt.Errorf("internal error generating authentication request: %w", err)
 	}
 	httpReq.Header.Set(headerContentType, mimeFormURLEncoded)
 
 	resp, err := httpclient.FastClient.Do(httpReq)
 	if err != nil {
-		return "", http.StatusBadGateway, fmt.Errorf("keycloak server is unreachable: %w", err)
+		return "", "", http.StatusBadGateway, fmt.Errorf("keycloak server is unreachable: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", http.StatusInternalServerError, fmt.Errorf("failed to read response from Keycloak: %w", err)
+		return "", "", http.StatusInternalServerError, fmt.Errorf("failed to read response from Keycloak: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -159,28 +159,29 @@ func exchangeKeycloakCode(ctx context.Context, cfg *config.Config, code, redirec
 		if jsonErr := json.Unmarshal(respBytes, &kcErr); jsonErr == nil && kcErr.Error != "" {
 			switch kcErr.Error {
 			case "invalid_grant":
-				return "", resp.StatusCode, errors.New("Giriş oturumunun süresi doldu veya bu güvenlik kodu daha önce kullanıldı. Lütfen tekrar giriş yapın.")
+				return "", "", resp.StatusCode, errors.New("Giriş oturumunun süresi doldu veya bu güvenlik kodu daha önce kullanıldı. Lütfen tekrar giriş yapın.")
 			case "invalid_client":
-				return "", resp.StatusCode, errors.New("Kimlik doğrulama istemcisi geçersiz veya yetkisiz.")
+				return "", "", resp.StatusCode, errors.New("Kimlik doğrulama istemcisi geçersiz veya yetkisiz.")
 			default:
 				if kcErr.ErrorDescription != "" {
-					return "", resp.StatusCode, fmt.Errorf("Kimlik doğrulama hatası: %s", kcErr.ErrorDescription)
+					return "", "", resp.StatusCode, fmt.Errorf("Kimlik doğrulama hatası: %s", kcErr.ErrorDescription)
 				}
 			}
 		}
-		return "", resp.StatusCode, fmt.Errorf("Kimlik doğrulama oturumu onaylanamadı (HTTP %d)", resp.StatusCode)
+		return "", "", resp.StatusCode, fmt.Errorf("Kimlik doğrulama oturumu onaylanamadı (HTTP %d)", resp.StatusCode)
 	}
 
 	var exchangeResp map[string]any
 	if err := json.Unmarshal(respBytes, &exchangeResp); err != nil {
-		return "", http.StatusInternalServerError, fmt.Errorf("failed to parse Keycloak OIDC payload: %w", err)
+		return "", "", http.StatusInternalServerError, fmt.Errorf("failed to parse Keycloak OIDC payload: %w", err)
 	}
 
 	accessToken, _ := exchangeResp["access_token"].(string)
 	if accessToken == "" {
-		return "", http.StatusInternalServerError, errors.New("no access token returned from identity provider")
+		return "", "", http.StatusInternalServerError, errors.New("no access token returned from identity provider")
 	}
-	return accessToken, http.StatusOK, nil
+	idToken, _ := exchangeResp["id_token"].(string)
+	return accessToken, idToken, http.StatusOK, nil
 }
 
 // KeycloakCallback securely exchanges Keycloak authorization code for Access & ID tokens
@@ -204,7 +205,7 @@ func (h *AdminAuthHandler) KeycloakCallback(w http.ResponseWriter, r *http.Reque
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	accessToken, status, err := exchangeKeycloakCode(ctx, h.Cfg, req.Code, req.RedirectURI)
+	accessToken, idToken, status, err := exchangeKeycloakCode(ctx, h.Cfg, req.Code, req.RedirectURI)
 	if err != nil {
 		log.Printf("[KEYCLOAK ERROR] Token exchange error: %v", err)
 		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), status)
@@ -232,6 +233,7 @@ func (h *AdminAuthHandler) KeycloakCallback(w http.ResponseWriter, r *http.Reque
 	json.NewEncoder(w).Encode(models.AuthResponse{
 		RequireOtp: false,
 		Token:      accessToken,
+		IDToken:    idToken,
 		User: &models.UserInfo{
 			ID:        userID,
 			FirstName: firstName,

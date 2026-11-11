@@ -38,7 +38,7 @@ export interface AdminAuthSlice {
   user: UserInfo | null;
   isInitialized: boolean;
   dbStatus: "connected" | "disconnected" | "checking";
-  login: (token: string, user: UserInfo) => void;
+  login: (token: string, user: UserInfo, idToken?: string) => void;
   handleLogout: () => void;
   fetchWithConfig: (path: string, options?: RequestInit) => Promise<Response>;
 }
@@ -130,32 +130,40 @@ export function AdminProvider({
     "connected" | "disconnected" | "checking"
   >("checking");
 
-  const handleLogout = useCallback(() => {
-    setToken(null);
-    setUser(null);
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("admin_token");
-      localStorage.removeItem("admin_user");
-      window.location.href = "/";
-    }
-  }, []);
-
   const sessionBootstrapService = useMemo(
     () => new AdminApiService(new FetchHttpClient({ baseUrl: apiUrl })),
     [apiUrl]
   );
 
+  const clearLocalSession = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    sessionBootstrapService.clearSession();
+  }, [sessionBootstrapService]);
+
+  const handleLogout = useCallback(() => {
+    if (typeof window !== "undefined") {
+      const logoutUrl = sessionBootstrapService.buildKeycloakLogoutUrl(
+        `${window.location.origin}/admin`
+      );
+      clearLocalSession();
+      window.location.href = logoutUrl;
+      return;
+    }
+    clearLocalSession();
+  }, [sessionBootstrapService, clearLocalSession]);
+
   const { httpClient, adminService } = useMemo(() => {
     const client = new FetchHttpClient({
       baseUrl: apiUrl,
       authStrategy: new BearerTokenHeaderStrategy(() => token),
-      onUnauthorized: handleLogout,
+      onUnauthorized: clearLocalSession,
     });
     return {
       httpClient: client,
       adminService: new AdminApiService(client),
     };
-  }, [apiUrl, token, handleLogout]);
+  }, [apiUrl, token, clearLocalSession]);
 
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     sessionBootstrapService.readSavedTheme()
@@ -174,10 +182,10 @@ export function AdminProvider({
   }, []);
 
   const login = useCallback(
-    (newToken: string, newUser: UserInfo) => {
+    (newToken: string, newUser: UserInfo, idToken?: string) => {
       setToken(newToken);
       setUser(newUser);
-      sessionBootstrapService.saveSession(newToken, newUser);
+      sessionBootstrapService.saveSession(newToken, newUser, idToken);
     },
     [sessionBootstrapService]
   );
@@ -231,10 +239,10 @@ export function AdminProvider({
             code,
             redirectUri
           );
-          login(data.token, data.user);
+          login(data.token, data.user, data.id_token);
         } catch (err: unknown) {
           console.error("Keycloak OIDC callback error:", err);
-          handleLogout();
+          clearLocalSession();
         } finally {
           params.delete("code");
           params.delete("session_state");
@@ -259,7 +267,7 @@ export function AdminProvider({
       void initSession();
     }, 0);
     return () => clearTimeout(timer);
-  }, [sessionBootstrapService, login, handleLogout]);
+  }, [sessionBootstrapService, login, clearLocalSession]);
 
   const loadFeedsAndHistory = useCallback(async () => {
     try {

@@ -53,8 +53,9 @@ type BuyerRfqDTO struct {
 	BuyerCountry   string             `json:"buyer_country"`
 	BuyerPhone     string             `json:"buyer_phone,omitempty"`
 	BuyerWhatsapp  string             `json:"buyer_whatsapp,omitempty"`
-	BuyerEmail     string             `json:"buyer_email,omitempty"`
-	Status         string             `json:"status"`
+	BuyerEmail         string             `json:"buyer_email,omitempty"`
+	BuyerEmailVerified bool               `json:"buyer_email_verified"`
+	Status             string             `json:"status"`
 	OfferCount     int                `json:"offer_count"`
 	MyOffer        *BuyerRfqOfferDTO  `json:"my_offer,omitempty"`
 	Offers         []BuyerRfqOfferDTO `json:"offers,omitempty"`
@@ -155,8 +156,10 @@ func (h *MarketplaceHandler) ListPublicRfqs(w http.ResponseWriter, r *http.Reque
 			r.id::text, r.rfq_number, r.title, r.category_name, r.target_quantity,
 			r.unit_type, r.target_price, r.currency, r.production_type, r.description,
 			r.buyer_name, r.buyer_company, r.buyer_country, r.status, r.created_at,
-			(SELECT COUNT(*)::int FROM catalog.buyer_rfq_offers o WHERE o.rfq_id = r.id) AS offer_count
+			(SELECT COUNT(*)::int FROM catalog.buyer_rfq_offers o WHERE o.rfq_id = r.id) AS offer_count,
+			COALESCE(u.email_verified, false) AS buyer_email_verified
 		FROM catalog.buyer_rfqs r
+		LEFT JOIN identity.users u ON LOWER(u.email) = LOWER(r.buyer_email)
 		WHERE r.status = 'APPROVED'
 		  AND ($1 = '' OR r.production_type = $1)
 		  AND ($2 = '' OR r.title ILIKE '%' || $2 || '%' OR r.category_name ILIKE '%' || $2 || '%' OR r.buyer_country ILIKE '%' || $2 || '%')
@@ -176,7 +179,7 @@ func (h *MarketplaceHandler) ListPublicRfqs(w http.ResponseWriter, r *http.Reque
 			&item.ID, &item.RfqNumber, &item.Title, &item.CategoryName, &item.TargetQuantity,
 			&item.UnitType, &item.TargetPrice, &item.Currency, &item.ProductionType, &item.Description,
 			&item.BuyerName, &item.BuyerCompany, &item.BuyerCountry, &item.Status, &item.CreatedAt,
-			&item.OfferCount,
+			&item.OfferCount, &item.BuyerEmailVerified,
 		); err == nil {
 			item.BuyerName = maskBuyerNameForPublic(item.BuyerName)
 			list = append(list, item)
@@ -289,8 +292,10 @@ func (h *MarketplaceHandler) ListSupplierRfqs(w http.ResponseWriter, r *http.Req
 			r.unit_type, r.target_price, r.currency, r.production_type, r.description,
 			r.buyer_name, r.buyer_company, r.buyer_country, r.buyer_phone, r.buyer_whatsapp, r.buyer_email,
 			r.status, r.created_at,
-			(SELECT COUNT(*)::int FROM catalog.buyer_rfq_offers o WHERE o.rfq_id = r.id) AS offer_count
+			(SELECT COUNT(*)::int FROM catalog.buyer_rfq_offers o WHERE o.rfq_id = r.id) AS offer_count,
+			COALESCE(u.email_verified, false) AS buyer_email_verified
 		FROM catalog.buyer_rfqs r
+		LEFT JOIN identity.users u ON LOWER(u.email) = LOWER(r.buyer_email)
 		WHERE r.status = 'APPROVED'
 		ORDER BY r.created_at DESC
 		LIMIT 100
@@ -308,7 +313,7 @@ func (h *MarketplaceHandler) ListSupplierRfqs(w http.ResponseWriter, r *http.Req
 			&item.ID, &item.RfqNumber, &item.Title, &item.CategoryName, &item.TargetQuantity,
 			&item.UnitType, &item.TargetPrice, &item.Currency, &item.ProductionType, &item.Description,
 			&item.BuyerName, &item.BuyerCompany, &item.BuyerCountry, &item.BuyerPhone, &item.BuyerWhatsapp, &item.BuyerEmail,
-			&item.Status, &item.CreatedAt, &item.OfferCount,
+			&item.Status, &item.CreatedAt, &item.OfferCount, &item.BuyerEmailVerified,
 		); err == nil {
 			item.MyOffer = fetchSupplierOwnRfqOffer(ctx, item.ID, claims.BrandID)
 			list = append(list, item)
@@ -444,8 +449,10 @@ func (h *MarketplaceHandler) ListAdminRfqs(w http.ResponseWriter, r *http.Reques
 			r.unit_type, r.target_price, r.currency, r.production_type, r.description,
 			r.buyer_name, r.buyer_company, r.buyer_country, r.buyer_phone, r.buyer_whatsapp, r.buyer_email,
 			r.status, r.created_at,
-			(SELECT COUNT(*)::int FROM catalog.buyer_rfq_offers o WHERE o.rfq_id = r.id) AS offer_count
+			(SELECT COUNT(*)::int FROM catalog.buyer_rfq_offers o WHERE o.rfq_id = r.id) AS offer_count,
+			COALESCE(u.email_verified, false) AS buyer_email_verified
 		FROM catalog.buyer_rfqs r
+		LEFT JOIN identity.users u ON LOWER(u.email) = LOWER(r.buyer_email)
 		WHERE ($1 = '' OR r.status = $1)
 		ORDER BY r.created_at DESC
 		LIMIT 150
@@ -463,7 +470,7 @@ func (h *MarketplaceHandler) ListAdminRfqs(w http.ResponseWriter, r *http.Reques
 			&item.ID, &item.RfqNumber, &item.Title, &item.CategoryName, &item.TargetQuantity,
 			&item.UnitType, &item.TargetPrice, &item.Currency, &item.ProductionType, &item.Description,
 			&item.BuyerName, &item.BuyerCompany, &item.BuyerCountry, &item.BuyerPhone, &item.BuyerWhatsapp, &item.BuyerEmail,
-			&item.Status, &item.CreatedAt, &item.OfferCount,
+			&item.Status, &item.CreatedAt, &item.OfferCount, &item.BuyerEmailVerified,
 		); err == nil {
 			list = append(list, item)
 		}

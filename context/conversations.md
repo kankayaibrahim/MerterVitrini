@@ -2004,3 +2004,109 @@
      - Üretici firmalar için özel dergi/blog formatında kurumsal tanıtım ve rehber sayfalarının (`/ureticiler/[slug]/tanitim`) eklenmesi ve kart butonlarının ayrıştırılması
   3. Conventional Commits standardında yerel depoya commit'lendi (`git push` çalıştırılmadı).
 
+### [2026-11-09 15:20:00] - Oturum #110 (Müşteri E-Posta Doğrulama Mekanizması & Tedarikçi Doğrulanmış Müşteri Rozeti Entegrasyonu)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"şimdi üye olanların profilinde mail dopğrulanmadı olsun kayıt oluyorlar ama mail doğrulamamışsa mailini doğrula falan gibi bir yer olsun tedarikçilerde görebilsin kişinin mail doğrulaması var falan gibi"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Veritabanı Şeması (`database/0028_add_customer_email_verification.sql` & Otomatik Bootstrap):**
+     - `identity.users` tablosuna `email_verified BOOLEAN DEFAULT FALSE`, `email_verification_token VARCHAR(128)`, `email_verification_expires_at TIMESTAMP WITH TIME ZONE` ve `email_verified_at TIMESTAMP WITH TIME ZONE` alanları eklendi.
+     - Backend başlangıcında otomatik kendini güncelleyen şema bootstrap'i (`ensureIdentityUserVerificationSchema`) entegre edildi.
+  2. **Go Backend Doğrulama Servisi & E-Posta Şablonu:**
+     - `backend/pkg/mailer/mailer.go`: `SendCustomerEmailVerification` fonksiyonu eklendi; kurumsal HTML şablonlu, 24 saat geçerli doğrulama butonu içeren e-posta gönderimi sağlandı.
+     - `backend/handlers/store_auth.go`:
+       - Kayıt (`Register`) sırasında Keycloak kullanıcısı `emailVerified: false` olarak oluşturulur, 32 baytlık kriptografik doğrulama token'ı üretilip 24 saat geçerlilikle kaydedilir ve müşteriye e-posta gönderilir.
+       - `GET /api/v1/store/auth/verify-email?token=...` uç noktası eklendi; token ve süre denetlenip `email_verified = true` güncellenir, Keycloak senkronize edilir ve kullanıcı `https://mertervitrini.com.tr/profile?verified=success` adresine yönlendirilir.
+       - `POST /api/v1/store/auth/resend-verification` uç noktası eklendi; oturum açmış kullanıcı veya e-posta adresi için yeni token üretilip tekrar e-posta gönderilir.
+       - Profil sorguları (`GetProfile`, `syncOrFetchLocalUser`, `GoogleCallback`) `email_verified` alanını dönecek şekilde güncellendi.
+     - `backend/handlers/rfq.go`, `marketplace.go`, `chat.go`:
+       - Alım taleplerinde (RFQ), tedarikçi alt siparişlerinde ve B2B sohbet odalarında `customer_email_verified` / `buyer_email_verified` bilgisi `identity.users` ile LEFT JOIN yapılarak DTO'lara eklendi.
+     - `backend/router.go`: `verify-email` ve `resend-verification` rotaları kaydedildi.
+  3. **Frontend Müşteri Deneyimi:**
+     - `frontend/src/app/storeAuth.ts`: `StoreUser` arayüzüne `email_verified?: boolean` eklendi; token doğrulandığında lokal depolama ile otomatik senkronizasyon sağlandı.
+     - `frontend/src/components/store/Header.tsx`: E-postası doğrulanmamış üyeler için profil butonunda ve açılır menüde dikkat çekici kehribar renkte `⚠️ E-Posta Onaysız (Doğrula)` rozeti ve profil kısayolu gösterildi.
+     - `frontend/src/app/profile/page.tsx` & `ProfileDetails.tsx`:
+       - E-posta alanının yanında `✓ E-Posta Doğrulandı` (yeşil) veya `⚠️ Doğrulanmadı` (kehribar) durum rozeti eklendi.
+       - Doğrulanmamış hesaplar için "Doğrulama E-postası Gönder" butonu, 60 saniyelik geri sayım (cooldown) ve bildirim sistemi yerleştirildi.
+       - E-posta doğrulama linkine tıklandığında gelen `?verified=success` parametresi yakalanıp kutlama banner'ı gösterildi.
+  4. **Tedarikçi & Üretici Görünürlüğü:**
+     - `frontend/src/app/alim-talepleri/BuyerRfqBoardClient.tsx`: Alım ilanlarında müşteri adı yanında `✓ Doğrulanmış Müşteri` rozeti eklendi.
+     - `frontend/src/app/supplier/SupplierOrdersPanel.tsx`: Tedarikçi sipariş detaylarında alıcının e-posta adresinin yanında `✓ Doğrulanmış E-posta` rozeti görüntülendi.
+     - `frontend/src/app/supplier/SupplierChatPanel.tsx`: Tedarikçi canlı müşteri sohbet başlığında `✓ Doğrulanmış Müşteri` rozeti konumlandırıldı.
+  5. **Kalite, SonarLint & Derleme Doğrulaması:**
+     - `backend`: `go vet ./...` ve Linux AMD64 cross-compile binary derlemesi sıfır hata ile tamamlandı.
+     - `frontend`: SonarLint S3358 (iç içe ternary operatörleri) ve S3776 (bilişsel karmaşıklık) kuralları için durum başlatıcıları ve banner CSS/ikon fonksiyonları üst seviyeye taşındı; S4323 için `FeedbackType` ve `VerificationFeedback` tip alias'ları tanımlandı; `showToast` parametre uyuşmazlığı ve `Header.tsx` StoreUser tipi düzeltildi.
+     - `SupplierOrdersPanel.tsx`: S3358 (sipariş listesi ve durum ikonu ternary'leri) `renderEmptyOrdersState` ve `getOrderStatusIcon` bağımsız fonksiyonlarına ayrıştırıldı; S6853 uyarıları form etiketlerine `htmlFor` ve giriş alanlarına `id` eklenerek WCAG uyumlu çözüldü.
+     - `npx tsc --noEmit` ve `npm run lint` denetimleri sıfır hata ve sıfır uyarı ile geçildi.
+
+
+
+### [2026-11-09 18:45:00] - Oturum #111 (Jane's Toptan Yeni Yalın XML Feed Analizi ve Karşılaştırması)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"janes için https://janestoptan.com/xml/yalinJanesToptanXml.php bu yeni link geldi ne farkı var?"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. Jane's Toptan'ın mevcut entegrasyon linki (`https://janestoptan.net/production/xml/janestoptanxmltr`) ile yeni gelen "Yalın" linki (`https://janestoptan.com/xml/yalinJanesToptanXml.php`) canlı ağ istekleri ve XML düğüm karşılaştırmasıyla incelendi.
+  2. **Temel Farklar Tespit Edildi:**
+     - **İş Modeli Farkı (Toptan Asorti Seri vs Tekil Adet/Dropshipping):** Mevcut XML'de `<Seri>2-2-2</Seri>` ve `<OzelAlan1>S-M,L-XL,2XL-3XL</OzelAlan1>` ile paket asorti mantığı korunurken; yeni yalın linkte `<SatisBirimi>ADET</SatisBirimi>` ve beden bazında ayrıştırılmış (`28006-SIYAH-2XL-3XL`) tekil adet satışı bulunmaktadır. Yeni XML'de `<Seri>` ve `<OzelAlan1>` etiketleri bulunmamaktadır.
+     - **Fiyatlandırma & Para Birimleri:** Yeni XML'de üst seviyede doğrudan `<SatisFiyati>647.78</SatisFiyati>` (TRY) ve `<SatisFiyatiUSD>13.22</SatisFiyatiUSD>` (USD) fiyatları eklenmiştir.
+     - **Kumaş ve Materyal Bilgisi:** Yeni XML'de `<MateryalBileseni>` (ör. `85% Pamuk, 10% Polyester, 5% Elastan`) ve `<YıkamaTalimatı>` gibi zengin kumaş bilgileri eklenmiştir.
+     - **Görseller:** Yeni XML'de doğrudan `<Resimler>` altında 7 adet resim URL'si liste halinde sunulmaktadır.
+     - **Çok Dillilik:** Mevcut XML'de TR, EN, Lehçe (Pl) ve Arapça (Ar) başlık/açıklama varken; yeni yalın XML'de yalnızca TR ve EN mevcuttur (Lehçe ve Arapça çıkarılmıştır).
+     - **Alan Adı Değişimi:** `janestoptan.net` altyapısından `janestoptan.com` altyapısına geçilmiştir.
+  3. Kullanıcıya ayrıntılı karşılaştırma tablosu, avantaj/dezavantaj analizi ve Merter Vitrini B2B entegrasyonu için izlenecek strateji detaylı raporlandı.
+
+### [2026-11-10 00:52:00] - Oturum #112 (Strateji Danışmanlık Raporu vs Canlı Sistem Karşılaştırması & Kurumsal PDF Üretimi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"@[Merter_Vitrini_Strateji_ve_Is_Modeli.pdf] bana bunu attılar bence bizim sistemle karşılaştıralım bizim sistemin güçlü yanlarını farklılıklarını şaundaki yapısı ile neler yapabilediğini neler yaapbileceğini belirtelim bizde bir pdf oluşturalım"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Danışmanlık Raporunun Analizi (`Merter_Vitrini_Strateji_ve_Is_Modeli.pdf`):**
+     - Dış danışman tarafından hazırlanan 4 sayfalık doküman analiz edildi; depolamasız model, alım talepleri (RFQ), üretici profilleri, abonelik gelir modeli, ilk 90 gün planı gibi öneriler incelendi.
+  2. **Derin Sistem Karşılaştırması:**
+     - Danışmanlık belgesinde "varsayım" veya "yapılmalı" olarak geçen stratejilerin %85'inin Merter Vitrini tarafından zaten kodlanıp canlıya alındığı belirlendi (RFQ panosu `/alim-talepleri`, aktif üretici filtresi, kurumsal dergi ve showroom sayfaları, e-posta doğrulama rozeti vb.).
+     - Raporda hiç öngörülmeyen Merter Vitrini süper yetenekleri listelendi: Otomatik çoklu XML feed senkronizasyonu (Mimoza, Flora, Jane's), Web Worker WASM PGLite 0ms filtreleme, yerleşik B2B canlı sohbet (chat & resim paylaşımı), çift rollü Flutter mobil uygulama (müşteri mağazası + üretici kamera stüdyosu), LibreTranslate 4 dilde anlık çeviri, Keycloak 26 OIDC IAM ve B2B Google Merchant multipack feed.
+  3. **Yüksek Çözünürlüklü Kurumsal A4 PDF Üretimi:**
+     - `scripts/generate_strategic_pdf.py` yazıldı; modern A4 tipografisi, kurumsal Merter Vitrini lacivert/altın tasarımı, karşılaştırma matrisleri ve yol haritası ile tam 5 sayfalık dergi kalitesinde PDF derlendi: [`Merter_Vitrini_Sistem_Karsilastirma_ve_Strateji_Raporu.pdf`](file:///c:/Projects/mertervitrini.com.tr/Merter_Vitrini_Sistem_Karsilastirma_ve_Strateji_Raporu.pdf).
+
+### [2026-11-11 14:27:30] - Oturum #113 (Admin, Tedarikçi ve Müşteri Test Hesaplarının Oluşturulması ve Doğrulanması)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"bana testlerim için tedarikçi kaydı aç kulalnıcı adı ve şifresini ver müşteri kaydı aç kulalnıcı adı ve şifresini ver bir tanede carnavaltedarik@gmail.com olarak admin aç kullanıcı adı ve şifresini ver buraya kaydet hepsini bir dosyaya"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Admin Hesabı (`carnavaltedarik@gmail.com`):**
+     - Keycloak `merter` realm üzerinde `carnavaltedarik@gmail.com` hesabı (`ID: 69fc8a2b-3928-481f-ba43-06cedfd4cd0f`, `enabled: true`, `emailVerified: true`) oluşturuldu ve `admin` realm rolü atandı.
+     - Canlı `/api/v1/admin/dashboard/stats` uç noktası üzerinden yeni admin JWT ile `HTTP 200` doğrulaması yapıldı.
+  2. **Tedarikçi Test Hesabı (`tedarikci.test@mertervitrini.com.tr`):**
+     - Canlı katalog verilerini etkilemeden güvenli test yapılabilmesi için izole `Merter Test Tekstil` (`Alias: TESTFIRM`, `ID: 01a1ca5c-919f-73b7-8d13-872fd4272c42`) tedarikçi markası açıldı.
+     - Hem Keycloak (`ID: ca8e2327-b180-4e63-ae6c-8fd42a9f8caa`) hem de PostgreSQL `catalog.supplier_users` (`ID: 01a1ca5c-9a49-7860-ae14-ec8dcf21b044`, `is_owner: true`) üzerinde `tedarikci.test@mertervitrini.com.tr` hesabı oluşturuldu.
+     - Canlı `/api/v1/supplier/auth/login` ve `/api/v1/supplier/profile` uç noktalarında `HTTP 200` ile giriş doğrulandı.
+  3. **Müşteri Test Hesabı (`musteri.test@mertervitrini.com.tr`):**
+     - Canlı `/api/v1/store/auth/register` üzerinden `identity.users` ve Keycloak (`ID: 60777a44-544b-4ef0-93f7-0efc74ff6167`, `emailVerified: true`) kaydı oluşturuldu.
+     - Canlı `/api/v1/store/auth/login` ve `/api/v1/store/profile` uç noktalarında `HTTP 200` ile giriş doğrulandı.
+  4. **Dosya Kaydı ve Güvenlik:**
+     - Tüm giriş bilgileri, URL'ler ve kimlikler proje kök dizininde [`test_hesaplari.md`](file:///c:/Projects/mertervitrini.com.tr/test_hesaplari.md) dosyasına kaydedildi ve hassas şifre güvenliği için [`.gitignore`](file:///c:/Projects/mertervitrini.com.tr/.gitignore) listesine eklendi.
+
+### [2026-11-11 14:55:00] - Oturum #114 (Tedarikçi Bildirim Mailindeki Firma Adı UUID Hatası & Admin Keycloak SSO Çıkış / Hesap Değiştirme Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"neden böyle mail geldi birde adminden logout oluyorum sonra başka hespla gireceğim yine aynı hesapla giriyor"` *(Ekran görüntüsü ile birlikte)*
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Tedarikçi Bildirim E-postasının Sebebi ve UUID Hatasının Düzeltilmesi:**
+     - Test için açılan `tedarikci.test@mertervitrini.com.tr` hesabı canlı Admin API (`POST /api/v1/admin/supplier-users`) üzerinden oluşturulduğu için sistem otomatik olarak yöneticiye (`kankayaibrahim@gmail.com`) *"Yeni Tedarikçi Kullanıcısı Tanımlandı"* güvenlik bildirimi gönderdi.
+     - Gelen e-postada `Firma Adı: 01a1ca5c-919f-73b7-8d13-872fd4272c42 ()` şeklinde UUID yazmasının kök nedeni tespit edildi: [`backend/handlers/admin_supplier_users.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_supplier_users.go#L175) içindeki sorguda `SELECT name, code FROM catalog.brands` şeklinde var olmayan sütunlar sorgulandığı için sorgu sessizce başarısız olup `req.BrandID` değerine düşüyordu. Sorgu `SELECT brand_name, coalesce(alias_code, '') FROM catalog.brands WHERE id = $1` olarak düzeltildi.
+  2. **Admin Paneli Keycloak SSO Çıkış (`Logout`) ve Farklı Hesapla Giriş Düzeltmesi:**
+     - **Kök Neden:** `AdminContext.tsx` içindeki `handleLogout()` yalnızca `localStorage` temizliği yapıyor, Keycloak (`auth.mertervitrini.com.tr`) üzerindeki aktif SSO oturum çerezini kapatmıyordu; `LoginScreen.tsx` ise `prompt=login` parametresi göndermediği için Keycloak eski hesapla otomatik giriş yapıyordu.
+     - **Canlı Keycloak İstemci Konfigürasyonu:** `merter` realm içindeki `admin-client` istemcisine `webOrigins` için `https://mertervitrini.com.tr` ve `attributes['post.logout.redirect.uris'] = '+'` tanımlanarak OIDC çıkış yönlendirmesi (`HTTP 302 -> /admin`) canlıda aktif edildi.
+     - **Backend & Frontend OIDC RP-Initiated Logout + `prompt=login`:**
+       - [`backend/models/models.go`](file:///c:/Projects/mertervitrini.com.tr/backend/models/models.go) ve [`backend/handlers/admin_auth.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_auth.go): `KeycloakCallback` yanıtına `id_token` eklendi.
+       - [`frontend/src/services/admin-api.service.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/services/admin-api.service.ts) ve [`frontend/src/context/AdminContext.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/context/AdminContext.tsx): 401 oturum düşmesi için sessiz `clearLocalSession`, kullanıcı çıkış butonu için ise Keycloak `/protocol/openid-connect/logout` (`id_token_hint` + `post_logout_redirect_uri`) yönlendirmesi ayrıştırıldı.
+       - [`frontend/src/components/admin/auth/LoginScreen.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/auth/LoginScreen.tsx): OIDC yetkilendirme URL'sine `&prompt=login` eklendi; böylece **"Keycloak ile Giriş Yap"** tıklandığında her zaman kullanıcı adı/şifre ekranı açılması garanti altına alındı.
+  3. **Kalite ve Derleme Kontrolleri:**
+     - `go vet ./...`, Linux AMD64 `go build`, `npx tsc --noEmit` ve `npm run lint` kontrolleri sıfır hata/uyarı ile doğrulandı.
+
+### [2026-11-11 15:10:00] - Oturum #115 (Yerel Git Commit ve Canlı AlmaLinux Sunucu Dağıtımı - Backend & Frontend)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"sunucuda güncelledin mi commitle sunucuda güncelle"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Yerel Git Commit (`Conventional Commits`):**
+     - Müşteri e-posta doğrulama akışı, tedarikçi doğrulanmış müşteri rozetleri, Admin Keycloak OIDC RP-Initiated Logout (`end_session_endpoint` + `id_token_hint` + `prompt=login`), tedarikçi bildirim e-postasındaki marka adı SQL sorgu düzeltmesi ve stratejik karşılaştırma raporu yerel depoya commit edildi (`git push` çalıştırılmadı, `test_hesaplari.md` `.gitignore` ile korundu).
+  2. **Canlı Sunucu Dağıtımı (`unified_deployer.py`):**
+     - `python scripts\unified_deployer.py -p unified -c all -a deploy` komutuyla Go Backend (`linux/amd64` cross-compile) ve Next.js SSR Frontend (`remote-build`) canlı AlmaLinux (`213.202.255.80`) sunucusuna aktarıldı, derlendi ve `merter-backend` ile `merter-frontend` servisleri yeniden başlatıldı.
+  3. **Dağıtım Sonrası Doğrulama:**
+     - Canlı API sağlık uç noktası (`/api/v1/health`), vitrin (`/`) ve yönetim paneli (`/admin`) kontrol edildi; ayrıca `identity.users` şema bootstrap sonrası test müşteri hesabının (`musteri.test@mertervitrini.com.tr`) `email_verified = true` durumu veritabanında doğrulandı.

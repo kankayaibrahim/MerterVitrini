@@ -707,10 +707,19 @@ export default function SupplierChatPanel({
               {/* Conversation Top Bar */}
               <div className="p-4 bg-white border-b border-zinc-200 flex items-center justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-extrabold text-sm text-zinc-900">
                       {activeRoom.customer_name}
                     </h4>
+                    {activeRoom.customer_email_verified ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold border border-emerald-300">
+                        ✓ Doğrulanmış Müşteri
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-semibold border border-amber-300">
+                        ⚠️ Mail Onaysız
+                      </span>
+                    )}
                     {activeRoom.supplier_user_name && (
                       <span className="px-2 py-0.5 rounded-full bg-zinc-900 text-amber-400 text-[10px] font-bold">
                         Muhatap Temsilci: {activeRoom.supplier_user_name}
