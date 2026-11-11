@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Home, ChevronRight } from "lucide-react";
 import { Product, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getProductDescription, getProductAttributes, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, apiFetch, convertPrice, ExchangeRate, showToast as triggerToast } from "@/app/utils";
+import { getUnitsFromSeriesRatio, parseProductSeriesBreakdown, apiFetch, convertPrice, ExchangeRate, showToast as triggerToast } from "@/app/utils";
 import { useIsStoreMemberLoggedIn, openStoreAuthModal } from "@/app/storeAuth";
 
 // Reuse the premium Tailwind storefront components
@@ -197,9 +197,11 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
   const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
   const hasSeries = !!(product.series_ratio && unitsPerPkg > 1);
 
-  const seriesParts = product.series_ratio?.split("-") || [];
-  const sizes = seriesParts.map((p) => p.split("=")[0] || p);
-  const ratios = seriesParts.map((p) => p.split("=")[1] || "1");
+  const { sizes, ratios } = parseProductSeriesBreakdown(
+    product.packing_ratio,
+    product.series_ratio,
+    product.variants?.map((v) => v.size)
+  );
 
   const minPkgs = Math.ceil(product.minimum_order_quantity / unitsPerPkg);
   const actualMinPkgs = Math.max(minPkgs, 1);

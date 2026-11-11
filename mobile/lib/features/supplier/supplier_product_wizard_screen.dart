@@ -3,7 +3,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_theme.dart';
-import '../../core/currency_formatter.dart';
 import '../../models/product.dart';
 import '../../providers/session_provider.dart';
 import '../../providers/supplier_provider.dart';
@@ -39,12 +38,15 @@ class _SupplierProductWizardScreenState
   final _descCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _buyingPriceCtrl = TextEditingController();
-  final _seriesRatioCtrl = TextEditingController(text: '1-2-2-1');
   final _minOrderCtrl = TextEditingController(text: '1');
-  final _packStockMultiplierCtrl = TextEditingController(text: '10');
+  final _seriesStockCtrl = TextEditingController(
+    text: '${SeriesStockDistributor.defaultSeriesStock}',
+  );
 
   final List<WizardPhotoItem> _photos = <WizardPhotoItem>[];
-  final List<EditableVariantRow> _variants = <EditableVariantRow>[];
+  List<String> _selectedSizes = <String>['S', 'M', 'L', 'XL'];
+  String _seriesRatio = '1-1-1-1';
+
   final Map<String, EditableTranslationLanguageSet> _translations = {
     'en': EditableTranslationLanguageSet(),
     'ru': EditableTranslationLanguageSet(),
@@ -72,8 +74,6 @@ class _SupplierProductWizardScreenState
     super.initState();
     if (widget.existingProduct != null) {
       _applyProductToForm(widget.existingProduct!);
-    } else {
-      _applySizePreset(['S', 'M', 'L', 'XL'], '1-2-2-1');
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -81,6 +81,15 @@ class _SupplierProductWizardScreenState
       final supProv = context.read<SupplierProvider>();
       await supProv.ensureCatalogFormMetadataLoaded();
       if (!mounted) return;
+
+      if (widget.existingProduct == null &&
+          _selectedCategoryId.isEmpty &&
+          supProv.categories.isNotEmpty) {
+        setState(() {
+          _selectedCategoryId = supProv.categories.first.id;
+          _selectedCategoryLabel = supProv.categories.first.name;
+        });
+      }
 
       if (widget.existingProduct != null) {
         await _loadFullExistingProduct(widget.existingProduct!.id);
@@ -98,16 +107,29 @@ class _SupplierProductWizardScreenState
     _descCtrl.dispose();
     _priceCtrl.dispose();
     _buyingPriceCtrl.dispose();
-    _seriesRatioCtrl.dispose();
     _minOrderCtrl.dispose();
-    _packStockMultiplierCtrl.dispose();
-    for (final v in _variants) {
-      v.dispose();
-    }
+    _seriesStockCtrl.dispose();
     for (final t in _translations.values) {
       t.dispose();
     }
     super.dispose();
+  }
+
+  String _normalizeKnownSize(String raw, Set<String> knownCodes) {
+    final trimmed = raw.trim().toUpperCase();
+    if (trimmed == 'STANDART' ||
+        trimmed == 'STANDART (STD)' ||
+        trimmed == 'TEK BEDEN') {
+      return 'STD';
+    }
+    if (trimmed == 'XXL') return '2XL';
+    if (trimmed == 'XXXL') return '3XL';
+    for (final code in knownCodes) {
+      if (code.toUpperCase() == trimmed) {
+        return code;
+      }
+    }
+    return '';
   }
 
   void _applyProductToForm(Product p) {
@@ -117,9 +139,8 @@ class _SupplierProductWizardScreenState
     _priceCtrl.text = p.price > 0 ? p.price.toStringAsFixed(2) : '';
     _buyingPriceCtrl.text =
         p.buyingPrice > 0 ? p.buyingPrice.toStringAsFixed(2) : '';
-    final ratio = p.seriesRatio.isNotEmpty ? p.seriesRatio : p.packingRatio;
-    _seriesRatioCtrl.text = ratio.isNotEmpty ? ratio : '1-2-2-1';
     _minOrderCtrl.text = '${p.minOrderPackages}';
+    _seriesStockCtrl.text = '${p.seriesStock}';
     _selectedCategoryId = p.categoryId;
     _selectedCategoryLabel = p.categoryTitle;
     _selectedColorId =
@@ -140,23 +161,43 @@ class _SupplierProductWizardScreenState
       }
     }
 
-    for (final v in _variants) {
-      v.dispose();
-    }
-    _variants.clear();
-    if (p.variants.isNotEmpty) {
-      for (final v in p.variants) {
-        _variants.add(
-          EditableVariantRow(
-            size: v.size,
-            stock: v.stock,
-            barcode: v.barcode,
-            isSingle: v.isSingle,
-          ),
-        );
+    final supDefs = mounted
+        ? context.read<SupplierProvider>().sizeDefinitions
+        : const <SizeDefinitionOption>[];
+    final defs = supDefs.isNotEmpty
+        ? supDefs
+        : SeriesStockDistributor.fallbackSizeDefinitions;
+    final knownCodes = defs.map((d) => d.code).toSet();
+    final extracted = <String>[];
+
+    for (final v in p.variants) {
+      final code = _normalizeKnownSize(v.size, knownCodes);
+      if (code.isNotEmpty && !extracted.contains(code)) {
+        extracted.add(code);
       }
+    }
+    if (extracted.isEmpty && p.packingRatio.isNotEmpty) {
+      for (final token in p.packingRatio.split(',')) {
+        final code = _normalizeKnownSize(token, knownCodes);
+        if (code.isNotEmpty && !extracted.contains(code)) {
+          extracted.add(code);
+        }
+      }
+    }
+
+    _selectedSizes = extracted.isNotEmpty
+        ? SeriesStockDistributor.sortSelectedSizes(extracted, defs)
+        : <String>['S', 'M', 'L', 'XL'];
+
+    final parsedWeights =
+        SeriesStockDistributor.parseRatioWeights(p.seriesRatio);
+    if (parsedWeights.length == _selectedSizes.length) {
+      _seriesRatio = parsedWeights.join('-');
     } else {
-      _variants.add(EditableVariantRow(size: 'STD', stock: p.stock));
+      _seriesRatio = SeriesStockDistributor.buildRatioForAssortment(
+        _selectedSizes.length,
+        'single',
+      );
     }
 
     for (final lang in ['en', 'ru', 'ar']) {
@@ -326,44 +367,44 @@ class _SupplierProductWizardScreenState
     });
   }
 
-  void _applySizePreset(List<String> sizes, String suggestedRatio) {
-    final packCount = int.tryParse(_packStockMultiplierCtrl.text.trim()) ?? 10;
-    final stocks = SeriesStockDistributor.computeVariantStocks(
-      variantCount: sizes.length,
-      rawRatio: suggestedRatio,
-      packageCount: packCount,
-    );
-
+  void _toggleSelectedSize(String code, List<SizeDefinitionOption> defs) {
     setState(() {
-      _seriesRatioCtrl.text = suggestedRatio;
-      for (final v in _variants) {
-        v.dispose();
+      final exists = _selectedSizes.contains(code);
+      if (exists && _selectedSizes.length <= 1) {
+        return;
       }
-      _variants.clear();
-      for (var i = 0; i < sizes.length; i++) {
-        _variants.add(EditableVariantRow(size: sizes[i], stock: stocks[i]));
+      final currentMode = SeriesStockDistributor.detectAssortmentMode(
+        _seriesRatio,
+        _selectedSizes.length,
+      );
+      final updated = List<String>.of(_selectedSizes);
+      if (exists) {
+        updated.remove(code);
+      } else {
+        updated.add(code);
       }
+      _selectedSizes = SeriesStockDistributor.sortSelectedSizes(updated, defs);
+      _seriesRatio = SeriesStockDistributor.buildRatioForAssortment(
+        _selectedSizes.length,
+        currentMode,
+      );
     });
   }
 
-  void _distributeStockBySeriesPackages() {
-    final packCount = int.tryParse(_packStockMultiplierCtrl.text.trim()) ?? 0;
-    if (packCount <= 0) {
-      _showSnack('Lütfen geçerli bir paket/seri adedi giriniz.', isError: true);
-      return;
-    }
-    final stocks = SeriesStockDistributor.computeVariantStocks(
-      variantCount: _variants.length,
-      rawRatio: _seriesRatioCtrl.text,
-      packageCount: packCount,
-    );
-
+  void _applySeriesTemplate(SeriesTemplateOption tpl) {
     setState(() {
-      for (var i = 0; i < _variants.length; i++) {
-        _variants[i].stockCtrl.text = '${stocks[i]}';
-      }
+      _selectedSizes = List<String>.of(tpl.sizes);
+      _seriesRatio = tpl.seriesRatio;
     });
-    _showSnack('Toplam $packCount seri pakete göre beden stokları dağıtıldı.');
+  }
+
+  void _changeAssortmentMode(String mode) {
+    setState(() {
+      _seriesRatio = SeriesStockDistributor.buildRatioForAssortment(
+        _selectedSizes.length,
+        mode,
+      );
+    });
   }
 
   List<SimpleOptionItem> _effectiveCategoryOptions(
@@ -395,10 +436,12 @@ class _SupplierProductWizardScreenState
     final buyingPrice =
         double.tryParse(_buyingPriceCtrl.text.replaceAll(',', '.').trim()) ??
             0.0;
-    final minOrder = int.tryParse(_minOrderCtrl.text.trim()) ?? 1;
-    final seriesRatio = _seriesRatioCtrl.text.trim().isEmpty
-        ? '1'
-        : _seriesRatioCtrl.text.trim();
+    final minOrderSeries = int.tryParse(_minOrderCtrl.text.trim()) ?? 1;
+    final rawSeriesStock = int.tryParse(_seriesStockCtrl.text.trim()) ??
+        SeriesStockDistributor.defaultSeriesStock;
+    final safeSeriesStock = rawSeriesStock <= 0
+        ? SeriesStockDistributor.defaultSeriesStock
+        : rawSeriesStock;
 
     if (_photos.isEmpty) {
       _showSnack(
@@ -422,8 +465,11 @@ class _SupplierProductWizardScreenState
       );
       return;
     }
-    if (_variants.isEmpty) {
-      _showSnack('Lütfen en az 1 beden varyantı ekleyiniz.', isError: true);
+    if (_selectedSizes.isEmpty) {
+      _showSnack(
+        'Lütfen beden tanım tablosundan en az 1 beden seçiniz.',
+        isError: true,
+      );
       return;
     }
 
@@ -461,20 +507,32 @@ class _SupplierProductWizardScreenState
 
       if (!mounted) return;
       setState(() {
-        _saveStageLabel = 'Ürün ve beden stokları vitrine kaydediliyor...';
+        _saveStageLabel = 'Ürün ve seri stokları vitrine kaydediliyor...';
       });
 
-      final variantsJson = _variants
-          .where((v) => v.sizeCtrl.text.trim().isNotEmpty)
-          .map((v) => v.toPayloadJson())
-          .toList();
-      final packingSizes = _variants
-          .map((v) => v.sizeCtrl.text.trim())
-          .where((s) => s.isNotEmpty)
-          .join(',');
+      final variantStocks = SeriesStockDistributor.computeVariantStocks(
+        variantCount: _selectedSizes.length,
+        rawRatio: _seriesRatio,
+        packageCount: safeSeriesStock,
+      );
+      final weights = SeriesStockDistributor.parseRatioWeights(_seriesRatio);
+      final normalizedWeights = List<int>.generate(
+        _selectedSizes.length,
+        (idx) => idx < weights.length ? weights[idx] : 1,
+      );
       final unitsPerSeries =
-          CurrencyFormatter.parseUnitsPerPackage(seriesRatio);
-      final minOrderPackages = minOrder <= 0 ? 1 : minOrder;
+          normalizedWeights.fold<int>(0, (sum, val) => sum + val);
+      final safeMinOrderSeries = minOrderSeries <= 0 ? 1 : minOrderSeries;
+
+      final variantsJson = <Map<String, dynamic>>[
+        for (var i = 0; i < _selectedSizes.length; i++)
+          {
+            'size': _selectedSizes[i],
+            'barcode': '',
+            'stock': variantStocks[i],
+            'is_single': false,
+          },
+      ];
 
       final payload = <String, dynamic>{
         'title': title,
@@ -490,9 +548,12 @@ class _SupplierProductWizardScreenState
         'buying_price': buyingPrice,
         'price': unitPrice,
         'currency': _currency,
-        'packing_ratio': packingSizes.isNotEmpty ? packingSizes : seriesRatio,
-        'series_ratio': seriesRatio,
-        'minimum_order_quantity': minOrderPackages * unitsPerSeries,
+        'selected_sizes': _selectedSizes,
+        'packing_ratio': _selectedSizes.join(','),
+        'series_ratio': normalizedWeights.join('-'),
+        'series_stock': safeSeriesStock,
+        'min_order_series': safeMinOrderSeries,
+        'minimum_order_quantity': safeMinOrderSeries * unitsPerSeries,
         'is_active': _isActive,
         'images': finalImageUrls,
         'variants': variantsJson,
@@ -558,6 +619,8 @@ class _SupplierProductWizardScreenState
     final session = context.watch<SessionProvider>();
     final supProv = context.watch<SupplierProvider>();
     final categoryOptions = _effectiveCategoryOptions(supProv, session);
+    final unitPricePreview =
+        double.tryParse(_priceCtrl.text.replaceAll(',', '.').trim()) ?? 0.0;
 
     return Theme(
       data: AppTheme.light(isSupplierMode: true),
@@ -565,8 +628,8 @@ class _SupplierProductWizardScreenState
         appBar: AppBar(
           title: Text(
             widget.existingProduct != null
-                ? 'Ürünü Düzenle'
-                : 'Yeni Toptan Ürün Stüdyosu',
+                ? 'Toptan Ürünü Düzenle'
+                : 'Hızlı Toptan Ürün Ekle',
           ),
         ),
         body: _loadingDetail
@@ -583,25 +646,55 @@ class _SupplierProductWizardScreenState
                     onRemovePhoto: (idx) =>
                         setState(() => _photos.removeAt(idx)),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   WizardModelDetailsCard(
                     titleCtrl: _titleCtrl,
-                    shortDescCtrl: _shortDescCtrl,
-                    descCtrl: _descCtrl,
+                    priceCtrl: _priceCtrl,
                     categoryOptions: categoryOptions,
-                    colorOptions: supProv.colors,
-                    fabricOptions: supProv.fabrics,
                     selectedCategoryLabel: _selectedCategoryLabel,
-                    selectedColorLabel: _selectedColorLabel,
-                    selectedFabricLabel: _selectedFabricLabel,
-                    gender: _gender,
-                    season: _season,
+                    currency: _currency,
                     onCategoryPicked: (picked) {
                       setState(() {
                         _selectedCategoryId = picked.id;
                         _selectedCategoryLabel = picked.name;
                       });
                     },
+                    onCurrencyChanged: (v) => setState(() => _currency = v),
+                    onPriceEdited: () => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  WizardVariantsMatrixCard(
+                    sizeDefinitions: supProv.sizeDefinitions,
+                    seriesTemplates: supProv.seriesTemplates,
+                    selectedSizes: _selectedSizes,
+                    seriesRatio: _seriesRatio,
+                    seriesStockCtrl: _seriesStockCtrl,
+                    unitPrice: unitPricePreview,
+                    currency: _currency,
+                    onToggleSize: (code) =>
+                        _toggleSelectedSize(code, supProv.sizeDefinitions),
+                    onApplyTemplate: _applySeriesTemplate,
+                    onAssortmentModeChanged: _changeAssortmentMode,
+                    onSeriesStockPresetPicked: (cnt) {
+                      setState(() => _seriesStockCtrl.text = '$cnt');
+                    },
+                    onSeriesStockEdited: () => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  WizardPricingSeriesCard(
+                    colorOptions: supProv.colors,
+                    fabricOptions: supProv.fabrics,
+                    selectedColorLabel: _selectedColorLabel,
+                    selectedFabricLabel: _selectedFabricLabel,
+                    gender: _gender,
+                    season: _season,
+                    buyingPriceCtrl: _buyingPriceCtrl,
+                    minOrderCtrl: _minOrderCtrl,
+                    shortDescCtrl: _shortDescCtrl,
+                    descCtrl: _descCtrl,
+                    isActive: _isActive,
+                    translations: _translations,
+                    autoTranslating: _autoTranslating,
                     onColorPicked: (picked) {
                       setState(() {
                         _selectedColorId =
@@ -618,46 +711,10 @@ class _SupplierProductWizardScreenState
                     },
                     onGenderChanged: (v) => setState(() => _gender = v),
                     onSeasonChanged: (v) => setState(() => _season = v),
-                  ),
-                  const SizedBox(height: 14),
-                  WizardPricingSeriesCard(
-                    priceCtrl: _priceCtrl,
-                    buyingPriceCtrl: _buyingPriceCtrl,
-                    seriesRatioCtrl: _seriesRatioCtrl,
-                    minOrderCtrl: _minOrderCtrl,
-                    currency: _currency,
-                    isActive: _isActive,
-                    onPreviewChanged: () => setState(() {}),
-                    onCurrencyChanged: (v) => setState(() => _currency = v),
-                    onSeriesPresetSelected: (ratio) =>
-                        setState(() => _seriesRatioCtrl.text = ratio),
                     onActiveChanged: (v) => setState(() => _isActive = v),
-                  ),
-                  const SizedBox(height: 14),
-                  WizardVariantsMatrixCard(
-                    variants: _variants,
-                    packStockMultiplierCtrl: _packStockMultiplierCtrl,
-                    onAddVariant: () {
-                      setState(() {
-                        _variants.add(EditableVariantRow(size: '', stock: 10));
-                      });
-                    },
-                    onRemoveVariant: (idx) {
-                      setState(() {
-                        final removed = _variants.removeAt(idx);
-                        removed.dispose();
-                      });
-                    },
-                    onApplySizePreset: _applySizePreset,
-                    onDistributeStock: _distributeStockBySeriesPackages,
-                  ),
-                  const SizedBox(height: 14),
-                  WizardTranslationsCard(
-                    translations: _translations,
-                    autoTranslating: _autoTranslating,
                     onAutoTranslate: _autoTranslateFromTurkish,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
                   if (_saving && _saveStageLabel.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),

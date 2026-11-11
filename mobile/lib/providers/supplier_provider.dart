@@ -29,6 +29,8 @@ class SupplierProvider extends ChangeNotifier {
   List<SimpleOptionItem> _categories = const <SimpleOptionItem>[];
   List<SimpleOptionItem> _colors = const <SimpleOptionItem>[];
   List<SimpleOptionItem> _fabrics = const <SimpleOptionItem>[];
+  List<SizeDefinitionOption> _sizeDefinitions = const <SizeDefinitionOption>[];
+  List<SeriesTemplateOption> _seriesTemplates = const <SeriesTemplateOption>[];
 
   List<SupplierSubOrder> _subOrders = <SupplierSubOrder>[];
   List<SupplierAgent> _teamMembers = <SupplierAgent>[];
@@ -54,6 +56,8 @@ class SupplierProvider extends ChangeNotifier {
   List<SimpleOptionItem> get categories => _categories;
   List<SimpleOptionItem> get colors => _colors;
   List<SimpleOptionItem> get fabrics => _fabrics;
+  List<SizeDefinitionOption> get sizeDefinitions => _sizeDefinitions;
+  List<SeriesTemplateOption> get seriesTemplates => _seriesTemplates;
   List<SupplierSubOrder> get subOrders => _subOrders;
   List<SupplierAgent> get teamMembers => _teamMembers;
 
@@ -118,15 +122,17 @@ class SupplierProvider extends ChangeNotifier {
   }
 
   Future<void> ensureCatalogFormMetadataLoaded() async {
-    if (_categories.isNotEmpty && _colors.isNotEmpty) {
+    if (_categories.isNotEmpty && _sizeDefinitions.isNotEmpty) {
       return;
     }
     try {
       final cats = await catalogRepo.fetchSupplierCategories();
-      final (cols, fabs) = await catalogRepo.fetchSupplierAttributes();
+      final bundle = await catalogRepo.fetchSupplierAttributeBundle();
       _categories = cats;
-      _colors = cols;
-      _fabrics = fabs;
+      _colors = bundle.colors;
+      _fabrics = bundle.fabrics;
+      _sizeDefinitions = bundle.sizes;
+      _seriesTemplates = bundle.seriesTemplates;
       notifyListeners();
     } catch (_) {}
   }
@@ -137,6 +143,7 @@ class SupplierProvider extends ChangeNotifier {
     double? buyingPrice,
     bool? isActive,
     int? stock,
+    int? seriesStock,
   }) async {
     await catalogRepo.quickUpdateSupplierProduct(
       productId: productId,
@@ -144,6 +151,7 @@ class SupplierProvider extends ChangeNotifier {
       buyingPrice: buyingPrice,
       isActive: isActive,
       stock: stock,
+      seriesStock: seriesStock,
     );
     await loadProducts();
     await loadDashboard();

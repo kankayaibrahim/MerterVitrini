@@ -1,12 +1,46 @@
 export function getUnitsFromSeriesRatio(seriesRatio?: string): number {
   if (!seriesRatio) return 1;
-  const parts = seriesRatio.split(/[- ,]/);
+  const parts = seriesRatio.split(/[- ,]/).filter(Boolean);
   let total = 0;
   for (const p of parts) {
-    const val = Number.parseInt(p, 10);
-    if (!Number.isNaN(val)) total += val;
+    const rawNum = p.includes("=") ? p.split("=")[1] : p;
+    const val = Number.parseInt(rawNum, 10);
+    if (!Number.isNaN(val) && val > 0) total += val;
   }
   return total > 0 ? total : 1;
+}
+
+export function parseProductSeriesBreakdown(
+  packingRatio?: string,
+  seriesRatio?: string,
+  variantSizes?: Array<string | undefined>
+): { sizes: string[]; ratios: string[] } {
+  const seriesParts = (seriesRatio || "").split("-").map((s) => s.trim()).filter(Boolean);
+  if (seriesParts.some((p) => p.includes("="))) {
+    return {
+      sizes: seriesParts.map((p) => p.split("=")[0] || p),
+      ratios: seriesParts.map((p) => p.split("=")[1] || "1"),
+    };
+  }
+
+  const packedSizes = (packingRatio || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const cleanVariantSizes = (variantSizes || [])
+    .map((s) => (s || "").trim())
+    .filter(Boolean);
+  const resolvedSizes = packedSizes.length > 0 ? packedSizes : cleanVariantSizes;
+
+  if (resolvedSizes.length > 0) {
+    const ratios = resolvedSizes.map((_, idx) => seriesParts[idx] || "1");
+    return { sizes: resolvedSizes, ratios };
+  }
+
+  return {
+    sizes: seriesParts,
+    ratios: seriesParts.map(() => "1"),
+  };
 }
 
 export interface ApiFetchOptions extends RequestInit {

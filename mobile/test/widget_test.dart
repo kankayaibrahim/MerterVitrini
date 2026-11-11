@@ -249,6 +249,35 @@ void main() {
       expect(fallbackStocks, [10, 10, 5]);
     });
 
+    test('Selectable B2B size definitions & default 100 series stock work cleanly', () {
+      expect(SeriesStockDistributor.defaultSeriesStock, 100);
+      expect(
+        SeriesStockDistributor.buildRatioForAssortment(4, 'single'),
+        '1-1-1-1',
+      );
+      expect(
+        SeriesStockDistributor.buildRatioForAssortment(4, 'middle_double'),
+        '1-2-2-1',
+      );
+      expect(
+        SeriesStockDistributor.buildRatioForAssortment(3, 'double'),
+        '2-2-2',
+      );
+      final sorted = SeriesStockDistributor.sortSelectedSizes(
+        ['XL', 'S', 'L', 'M'],
+        SeriesStockDistributor.fallbackSizeDefinitions,
+      );
+      expect(sorted, ['S', 'M', 'L', 'XL']);
+
+      final p = Product.fromJson({
+        'id': 'prod-series-default',
+        'title': 'Keten Takım',
+        'price': 350.0,
+        'currency': 'TRY',
+      });
+      expect(p.seriesStock, 100);
+    });
+
     test('CurrencyFormatter converts TRY <-> USD/EUR via TCMB rates', () {
       const rates = {'TRY': 1.0, 'USD': 40.0, 'EUR': 44.0};
       expect(

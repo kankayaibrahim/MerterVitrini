@@ -25,11 +25,22 @@ import {
   Archive,
   ArchiveRestore
 } from "lucide-react";
-import { SupplierProductRow } from "@/types/integration";
+import {
+  SupplierProductRow,
+  SizeDefinitionDTO,
+  SeriesTemplateDTO,
+} from "@/types/integration";
 import {
   SupplierProductModal,
+  FALLBACK_SIZE_DEFINITIONS,
+  buildSeriesRatioForMode,
+  detectAssortmentMode,
+  parseSeriesRatioWeights,
+  sortSelectedSizesByDefinitions,
   type SupportedTranslationLang,
   type TranslationFieldKey,
+  type SupplierModalMode,
+  type AssortmentMode,
 } from "./SupplierProductModal";
 import {
   SupplierExcelImportModal,
@@ -99,12 +110,9 @@ interface DashboardStats {
   total_orders?: number;
 }
 
-const DEFAULT_INITIAL_VARIANTS: VariantFormItem[] = [
-  { id: "var-s", size: "S", stock: 10, barcode: "" },
-  { id: "var-m", size: "M", stock: 15, barcode: "" },
-  { id: "var-l", size: "L", stock: 15, barcode: "" },
-  { id: "var-xl", size: "XL", stock: 10, barcode: "" },
-];
+const DEFAULT_SELECTED_SIZES = ["S", "M", "L", "XL"];
+const DEFAULT_SERIES_RATIO = "1-1-1-1";
+const DEFAULT_SERIES_STOCK = 100;
 
 function isAuthStatusError(status: number): boolean {
   return status === 401 || status === 403;
@@ -113,33 +121,22 @@ function isAuthStatusError(status: number): boolean {
 function validateProductForm(
   title: string,
   categoryId: string,
-  price: number
-): { error?: string; tab?: "basic" | "pricing" } {
+  price: number,
+  selectedSizes: string[]
+): string {
   if (!title.trim()) {
-    return { error: "Ürün adı zorunludur.", tab: "basic" };
+    return "Ürün adı zorunludur.";
   }
   if (!categoryId) {
-    return { error: "Lütfen bir kategori seçin.", tab: "basic" };
+    return "Lütfen bir kategori seçin.";
   }
   if (price <= 0) {
-    return { error: "Geçerli bir toptan satış fiyatı giriniz.", tab: "pricing" };
+    return "Geçerli bir toptan satış fiyatı giriniz.";
   }
-  return {};
-}
-
-function parseDetailVariants(
-  variants?: Array<{ id?: string; variant_size?: string; size?: string; stock?: number; barcode?: string }>,
-  fallbackStock = 0
-): VariantFormItem[] {
-  if (!variants || variants.length === 0) {
-    return [{ id: "var-default", size: "STANDART", stock: fallbackStock, barcode: "" }];
+  if (selectedSizes.length === 0) {
+    return "Lütfen beden tanım tablosundan en az bir beden seçiniz.";
   }
-  return variants.map((v, idx) => ({
-    id: v.id || `var-${idx}-${Date.now()}`,
-    size: v.variant_size || v.size || "STD",
-    stock: v.stock || 0,
-    barcode: v.barcode || "",
-  }));
+  return "";
 }
 
 function parseDetailImages(
@@ -164,16 +161,24 @@ interface ProductPayloadParams {
   buyingPrice: number;
   price: number;
   currency: string;
-  packingRatio: string;
+  selectedSizes: string[];
   seriesRatio: string;
-  moq: number;
+  seriesStock: number;
+  minOrderSeries: number;
   isActive: boolean;
   images: string[];
-  variants: VariantFormItem[];
   translations: ProductTranslationsFormMap;
 }
 
 function buildProductPayload(params: ProductPayloadParams) {
+  const safeSeriesStock = Math.max(1, Number(params.seriesStock) || DEFAULT_SERIES_STOCK);
+  const safeMinSeries = Math.max(1, Number(params.minOrderSeries) || 1);
+  const weights = parseSeriesRatioWeights(params.seriesRatio, params.selectedSizes.length);
+  const unitsPerSeries = Math.max(
+    1,
+    weights.reduce((acc, w) => acc + w, 0)
+  );
+
   return {
     title: params.title.trim(),
     short_description: params.shortDesc.trim() || undefined,
@@ -186,19 +191,20 @@ function buildProductPayload(params: ProductPayloadParams) {
     buying_price: Number(params.buyingPrice) || 0,
     price: Number(params.price),
     currency: params.currency,
-    packing_ratio: params.packingRatio.trim() || undefined,
-    series_ratio: params.seriesRatio.trim() || undefined,
-    minimum_order_quantity: Number(params.moq) || 1,
+    selected_sizes: params.selectedSizes,
+    packing_ratio: params.selectedSizes.join(","),
+    series_ratio: weights.join("-"),
+    series_stock: safeSeriesStock,
+    min_order_series: safeMinSeries,
+    minimum_order_quantity: unitsPerSeries * safeMinSeries,
     is_active: params.isActive,
     images: params.images.filter((img) => img.trim() !== ""),
-    variants: params.variants
-      .filter((v) => v.size.trim() !== "")
-      .map((v) => ({
-        size: v.size.trim(),
-        barcode: v.barcode.trim(),
-        stock: Number(v.stock) || 0,
-        is_single: false,
-      })),
+    variants: params.selectedSizes.map((sz, idx) => ({
+      size: sz,
+      barcode: "",
+      stock: (weights[idx] ?? 1) * safeSeriesStock,
+      is_single: false,
+    })),
     translations: {
       en: {
         title: params.translations.en.title.trim(),
@@ -267,6 +273,8 @@ async function fetchInitialSupplierData(token: string): Promise<{
   categories?: CategoryOption[];
   colors?: AttributeItem[];
   fabrics?: AttributeItem[];
+  sizes?: SizeDefinitionDTO[];
+  seriesTemplates?: SeriesTemplateDTO[];
   isAuthError?: boolean;
 }> {
   try {
@@ -285,6 +293,8 @@ async function fetchInitialSupplierData(token: string): Promise<{
       categories?: CategoryOption[];
       colors?: AttributeItem[];
       fabrics?: AttributeItem[];
+      sizes?: SizeDefinitionDTO[];
+      seriesTemplates?: SeriesTemplateDTO[];
     } = {};
 
     if (profileRes.ok) {
@@ -300,6 +310,8 @@ async function fetchInitialSupplierData(token: string): Promise<{
       const attrs = await attrRes.json();
       result.colors = attrs.colors || [];
       result.fabrics = attrs.fabrics || [];
+      result.sizes = attrs.sizes || [];
+      result.seriesTemplates = attrs.series_templates || [];
     }
     return result;
   } catch (err) {
@@ -455,15 +467,6 @@ function clearStoredSupplierSession(): void {
   }
 }
 
-function updateVariantListItem(
-  list: VariantFormItem[],
-  index: number,
-  field: keyof VariantFormItem,
-  val: string | number
-): VariantFormItem[] {
-  return list.map((item, i) => (i === index ? { ...item, [field]: val } : item));
-}
-
 function promoteCoverImageAtIndex(list: string[], index: number): string[] {
   if (index === 0) return list;
   const copy = [...list];
@@ -497,7 +500,70 @@ function parseDetailTranslations(raw?: Record<string, unknown>): ProductTranslat
   };
 }
 
-function normalizeEditableProductDetail(data: Record<string, unknown>, prod: SupplierProductRow) {
+function normalizeKnownSizeCode(raw: string, knownCodes: Set<string>): string {
+  const trimmed = raw.trim().toUpperCase();
+  if (trimmed === "STANDART" || trimmed === "STANDART (STD)" || trimmed === "TEK BEDEN") {
+    return "STD";
+  }
+  if (trimmed === "XXL") return "2XL";
+  if (trimmed === "XXXL") return "3XL";
+  for (const code of knownCodes) {
+    if (code.toUpperCase() === trimmed) {
+      return code;
+    }
+  }
+  return "";
+}
+
+function extractSelectedSizesFromDetail(
+  data: Record<string, unknown>,
+  sizeDefinitions: SizeDefinitionDTO[]
+): string[] {
+  const defs = sizeDefinitions.length > 0 ? sizeDefinitions : FALLBACK_SIZE_DEFINITIONS;
+  const knownCodes = new Set(defs.map((d) => d.code));
+  const rawVariants = (data.variants as Array<{ variant_size?: string; size?: string }> | undefined) || [];
+  const collected: string[] = [];
+
+  for (const v of rawVariants) {
+    const candidate = normalizeKnownSizeCode(v.variant_size || v.size || "", knownCodes);
+    if (candidate && !collected.includes(candidate)) {
+      collected.push(candidate);
+    }
+  }
+
+  if (collected.length === 0) {
+    const packingParts = strVal(data.packing_ratio).split(",");
+    for (const part of packingParts) {
+      const candidate = normalizeKnownSizeCode(part, knownCodes);
+      if (candidate && !collected.includes(candidate)) {
+        collected.push(candidate);
+      }
+    }
+  }
+
+  if (collected.length === 0) {
+    return [...DEFAULT_SELECTED_SIZES];
+  }
+  return sortSelectedSizesByDefinitions(collected, defs);
+}
+
+function normalizeEditableProductDetail(
+  data: Record<string, unknown>,
+  prod: SupplierProductRow,
+  sizeDefinitions: SizeDefinitionDTO[]
+) {
+  const selectedSizes = extractSelectedSizesFromDetail(data, sizeDefinitions);
+  const rawSeriesRatio = strVal(data.series_ratio);
+  const weights = parseSeriesRatioWeights(rawSeriesRatio, selectedSizes.length);
+  const seriesRatio = weights.join("-");
+  const unitsPerSeries = Math.max(
+    1,
+    weights.reduce((acc, w) => acc + w, 0)
+  );
+  const seriesStock = numVal(data.series_stock, prod.series_stock || DEFAULT_SERIES_STOCK);
+  const moqUnits = numVal(data.minimum_order_quantity, unitsPerSeries);
+  const minOrderSeries = Math.max(1, Math.round(moqUnits / unitsPerSeries));
+
   return {
     title: strVal(data.title),
     shortDesc: strVal(data.short_description),
@@ -505,19 +571,16 @@ function normalizeEditableProductDetail(data: Record<string, unknown>, prod: Sup
     categoryId: strVal(data.category_id),
     colorId: strVal(data.color_id),
     fabricId: strVal(data.fabric_id),
-    gender: strVal(data.gender),
-    season: strVal(data.season),
+    gender: strVal(data.gender, "Kadın"),
+    season: strVal(data.season, "İlkbahar/Yaz"),
     buyingPrice: numVal(data.buying_price, 0),
     price: numVal(data.price, 0),
     currency: strVal(data.currency, "TRY"),
-    packingRatio: strVal(data.packing_ratio),
-    seriesRatio: strVal(data.series_ratio),
-    moq: numVal(data.minimum_order_quantity, 1),
+    selectedSizes,
+    seriesRatio,
+    seriesStock,
+    minOrderSeries,
     isActive: typeof data.is_active === "boolean" ? data.is_active : true,
-    variants: parseDetailVariants(
-      data.variants as Array<{ id?: string; variant_size?: string; size?: string; stock?: number; barcode?: string }> | undefined,
-      prod.total_stock
-    ),
     images: parseDetailImages(
       data.images as Array<{ image_url?: string; ImageUrl?: string }> | undefined,
       prod.cover_image
@@ -735,8 +798,15 @@ function SupplierProductTable({
                     </div>
                   </td>
 
-                  <td className="py-2.5 px-4 text-center font-bold text-slate-800">
-                    {p.total_stock} adet
+                  <td className="py-2.5 px-4 text-center">
+                    <div className="flex flex-col items-center">
+                      <span className="font-extrabold text-emerald-700">
+                        ~{p.series_stock || DEFAULT_SERIES_STOCK} Seri
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold">
+                        ({p.total_stock} adet)
+                      </span>
+                    </div>
                   </td>
 
                   <td className="py-2.5 px-4 text-center">
@@ -1285,6 +1355,25 @@ interface ProfileDataSetters {
   setCategories?: (c: CategoryOption[]) => void;
   setColors?: (c: AttributeItem[]) => void;
   setFabrics?: (f: AttributeItem[]) => void;
+  setSizeDefinitions?: (s: SizeDefinitionDTO[]) => void;
+  setSeriesTemplates?: (t: SeriesTemplateDTO[]) => void;
+}
+
+function applyAttributeDataToSetters(
+  res: {
+    categories?: CategoryOption[];
+    colors?: AttributeItem[];
+    fabrics?: AttributeItem[];
+    sizes?: SizeDefinitionDTO[];
+    seriesTemplates?: SeriesTemplateDTO[];
+  },
+  setters: ProfileDataSetters
+) {
+  if (setters.setCategories && res.categories) setters.setCategories(res.categories);
+  if (setters.setColors && res.colors) setters.setColors(res.colors);
+  if (setters.setFabrics && res.fabrics) setters.setFabrics(res.fabrics);
+  if (setters.setSizeDefinitions && res.sizes) setters.setSizeDefinitions(res.sizes);
+  if (setters.setSeriesTemplates && res.seriesTemplates) setters.setSeriesTemplates(res.seriesTemplates);
 }
 
 function applyProfileDataToSetters(
@@ -1295,6 +1384,8 @@ function applyProfileDataToSetters(
     categories?: CategoryOption[];
     colors?: AttributeItem[];
     fabrics?: AttributeItem[];
+    sizes?: SizeDefinitionDTO[];
+    seriesTemplates?: SeriesTemplateDTO[];
     isAuthError?: boolean;
   },
   onLogout: () => void,
@@ -1307,9 +1398,7 @@ function applyProfileDataToSetters(
   if (res.user) setters.setProfile(res.user);
   if (res.stats) setters.setStats(res.stats);
   if (res.whatsappPhone !== undefined) setters.setQuickWhatsapp(res.whatsappPhone);
-  if (setters.setCategories && res.categories) setters.setCategories(res.categories);
-  if (setters.setColors && res.colors) setters.setColors(res.colors);
-  if (setters.setFabrics && res.fabrics) setters.setFabrics(res.fabrics);
+  applyAttributeDataToSetters(res, setters);
 }
 
 function useSupplierAuthAndProfile(router: ReturnType<typeof useRouter>) {
@@ -1326,6 +1415,8 @@ function useSupplierAuthAndProfile(router: ReturnType<typeof useRouter>) {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [colors, setColors] = useState<AttributeItem[]>([]);
   const [fabrics, setFabrics] = useState<AttributeItem[]>([]);
+  const [sizeDefinitions, setSizeDefinitions] = useState<SizeDefinitionDTO[]>([]);
+  const [seriesTemplates, setSeriesTemplates] = useState<SeriesTemplateDTO[]>([]);
 
   const getToken = useCallback(() => getStoredSupplierToken(), []);
 
@@ -1375,6 +1466,8 @@ function useSupplierAuthAndProfile(router: ReturnType<typeof useRouter>) {
           setCategories,
           setColors,
           setFabrics,
+          setSizeDefinitions,
+          setSeriesTemplates,
         });
       }
     });
@@ -1394,6 +1487,8 @@ function useSupplierAuthAndProfile(router: ReturnType<typeof useRouter>) {
     categories,
     colors,
     fabrics,
+    sizeDefinitions,
+    seriesTemplates,
     getToken,
     handleLogout,
     loadProfile,
@@ -1439,17 +1534,21 @@ function useSupplierProductCatalog(
   return { products, loading, loadProducts };
 }
 
-async function performImageUpload(
-  file: File | undefined,
+async function performMultiImageUpload(
+  files: File[],
   token: string | null,
   setLoading: (v: boolean) => void,
-  onUploaded: (url: string) => void
+  onUploaded: (urls: string[]) => void
 ) {
-  if (!file || !token) return;
+  if (files.length === 0 || !token) return;
   setLoading(true);
   try {
-    const imageUrl = await uploadSupplierImageFile(token, file);
-    if (imageUrl) onUploaded(imageUrl);
+    const uploadedUrls: string[] = [];
+    for (const file of files) {
+      const imageUrl = await uploadSupplierImageFile(token, file);
+      if (imageUrl) uploadedUrls.push(imageUrl);
+    }
+    if (uploadedUrls.length > 0) onUploaded(uploadedUrls);
   } catch (err: unknown) {
     alert((err as Error).message);
   } finally {
@@ -1509,6 +1608,8 @@ export default function SupplierDashboardClient() {
     categories,
     colors,
     fabrics,
+    sizeDefinitions,
+    seriesTemplates,
     getToken,
     handleLogout,
     loadProfile,
@@ -1543,58 +1644,64 @@ export default function SupplierDashboardClient() {
   };
 
   // Modal state
-  const [activeModal, setActiveModal] = useState<"create" | "edit" | "delete" | null>(null);
+  const [activeModal, setActiveModal] = useState<SupplierModalMode>(null);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<SupplierProductRow | null>(null);
+  const [expandOptionalSection, setExpandOptionalSection] = useState(false);
 
-  // Product Form State
-  const [modalTab, setModalTab] = useState<"basic" | "pricing" | "variants" | "images" | "translations">("basic");
+  // Product Form State (Express Single-Screen)
   const [formTitle, setFormTitle] = useState("");
   const [formShortDesc, setFormShortDesc] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formColorId, setFormColorId] = useState("");
   const [formFabricId, setFormFabricId] = useState("");
-  const [formGender, setFormGender] = useState("");
-  const [formSeason, setFormSeason] = useState("");
+  const [formGender, setFormGender] = useState("Kadın");
+  const [formSeason, setFormSeason] = useState("İlkbahar/Yaz");
   const [formBuyingPrice, setFormBuyingPrice] = useState<number>(0);
   const [formPrice, setFormPrice] = useState<number>(0);
   const [formCurrency, setFormCurrency] = useState("TRY");
-  const [formPackingRatio, setFormPackingRatio] = useState("S-M-L-XL 4'lü paket");
-  const [formSeriesRatio, setFormSeriesRatio] = useState("");
-  const [formMoq, setFormMoq] = useState<number>(1);
+  const [formSelectedSizes, setFormSelectedSizes] = useState<string[]>(DEFAULT_SELECTED_SIZES);
+  const [formSeriesRatio, setFormSeriesRatio] = useState(DEFAULT_SERIES_RATIO);
+  const [formSeriesStock, setFormSeriesStock] = useState<number>(DEFAULT_SERIES_STOCK);
+  const [formMinOrderSeries, setFormMinOrderSeries] = useState<number>(1);
   const [formIsActive, setFormIsActive] = useState(true);
   const [formImages, setFormImages] = useState<string[]>([]);
-  const [formVariants, setFormVariants] = useState<VariantFormItem[]>(DEFAULT_INITIAL_VARIANTS);
   const [formTranslations, setFormTranslations] = useState<ProductTranslationsFormMap>(DEFAULT_EMPTY_TRANSLATIONS);
   const [autoTranslating, setAutoTranslating] = useState(false);
   const [imageUploadLoading, setImageUploadLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
-  // Add Variant Row
-  const handleAddVariantRow = () => {
-    setFormVariants((prev) => [
-      ...prev,
-      { id: `var-${Date.now()}-${prev.length + 1}`, size: "", stock: 10, barcode: "" },
-    ]);
+  const handleToggleSize = (code: string) => {
+    const defs = sizeDefinitions.length > 0 ? sizeDefinitions : FALLBACK_SIZE_DEFINITIONS;
+    setFormSelectedSizes((prev) => {
+      const exists = prev.includes(code);
+      if (exists && prev.length <= 1) {
+        return prev;
+      }
+      const next = exists ? prev.filter((s) => s !== code) : [...prev, code];
+      const sorted = sortSelectedSizesByDefinitions(next, defs);
+      const currentMode = detectAssortmentMode(formSeriesRatio, prev.length);
+      setFormSeriesRatio(buildSeriesRatioForMode(sorted.length, currentMode));
+      return sorted;
+    });
   };
 
-  // Remove Variant Row
-  const handleRemoveVariantRow = (index: number) => {
-    setFormVariants((prev) => prev.filter((_, i) => i !== index));
+  const handleApplySeriesTemplate = (tpl: SeriesTemplateDTO) => {
+    setFormSelectedSizes([...tpl.sizes]);
+    setFormSeriesRatio(tpl.series_ratio);
   };
 
-  // Update Variant Row
-  const handleUpdateVariantRow = (index: number, field: keyof VariantFormItem, val: string | number) => {
-    setFormVariants((prev) => updateVariantListItem(prev, index, field, val));
+  const handleSelectAssortmentMode = (mode: AssortmentMode) => {
+    setFormSeriesRatio(buildSeriesRatioForMode(formSelectedSizes.length, mode));
   };
 
-  // Image upload
+  // Multi-image upload
   const handleUploadImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    await performImageUpload(file, getToken(), setImageUploadLoading, (imageUrl) => {
-      setFormImages((prev) => [...prev, imageUrl]);
+    const files = Array.from(e.target.files || []);
+    await performMultiImageUpload(files, getToken(), setImageUploadLoading, (urls) => {
+      setFormImages((prev) => [...prev, ...urls]);
     });
     e.target.value = "";
   };
@@ -1607,7 +1714,7 @@ export default function SupplierDashboardClient() {
     setFormImages((prev) => promoteCoverImageAtIndex(prev, index));
   };
 
-  // Open Create Modal
+  // Open Create Modal (Express Defaults: S-M-L-XL + 100 Series)
   const handleOpenCreate = () => {
     setEditingProductId(null);
     setFormTitle("");
@@ -1621,14 +1728,14 @@ export default function SupplierDashboardClient() {
     setFormBuyingPrice(0);
     setFormPrice(0);
     setFormCurrency("TRY");
-    setFormPackingRatio("S-M-L-XL 4'lü paket");
-    setFormSeriesRatio("");
-    setFormMoq(1);
+    setFormSelectedSizes([...DEFAULT_SELECTED_SIZES]);
+    setFormSeriesRatio(DEFAULT_SERIES_RATIO);
+    setFormSeriesStock(DEFAULT_SERIES_STOCK);
+    setFormMinOrderSeries(1);
     setFormIsActive(true);
     setFormImages([]);
-    setFormVariants(DEFAULT_INITIAL_VARIANTS);
     setFormTranslations(DEFAULT_EMPTY_TRANSLATIONS);
-    setModalTab("basic");
+    setExpandOptionalSection(false);
     setFormError("");
     setActiveModal("create");
   };
@@ -1659,38 +1766,24 @@ export default function SupplierDashboardClient() {
     setAutoTranslating(false);
   };
 
-  // Ant Design Fast Series & Bulk Stock Wizards
-  const handleApplyPresetSeries = (sizes: string[], packingText: string) => {
-    const newVars: VariantFormItem[] = sizes.map((s, i) => ({
-      id: `var-${i}-${Date.now()}`,
-      size: s,
-      stock: 10,
-      barcode: "",
-    }));
-    setFormVariants(newVars);
-    if (packingText) {
-      setFormPackingRatio(packingText);
-    }
-  };
-
-  const handleApplyBulkStock = (stockCount: number) => {
-    setFormVariants((prev) => prev.map((v) => ({ ...v, stock: Math.max(0, stockCount) })));
-  };
-
   // Open Edit Modal
-  const openProductEditWithTab = async (
+  const openProductEditModal = async (
     prod: SupplierProductRow,
-    initialTab: "basic" | "translations"
+    expandTranslations: boolean
   ) => {
     setEditingProductId(prod.id);
-    setModalTab(initialTab);
+    setExpandOptionalSection(expandTranslations);
     setFormError("");
     setActiveModal("edit");
 
     const data = await fetchProductDetailApi(getToken() ?? "", prod.id);
     if (!data) return;
 
-    const normalized = normalizeEditableProductDetail(data as Record<string, unknown>, prod);
+    const normalized = normalizeEditableProductDetail(
+      data as Record<string, unknown>,
+      prod,
+      sizeDefinitions
+    );
     setFormTitle(normalized.title);
     setFormShortDesc(normalized.shortDesc);
     setFormDescription(normalized.description);
@@ -1702,30 +1795,29 @@ export default function SupplierDashboardClient() {
     setFormBuyingPrice(normalized.buyingPrice);
     setFormPrice(normalized.price);
     setFormCurrency(normalized.currency);
-    setFormPackingRatio(normalized.packingRatio);
+    setFormSelectedSizes(normalized.selectedSizes);
     setFormSeriesRatio(normalized.seriesRatio);
-    setFormMoq(normalized.moq);
+    setFormSeriesStock(normalized.seriesStock);
+    setFormMinOrderSeries(normalized.minOrderSeries);
     setFormIsActive(normalized.isActive);
-    setFormVariants(normalized.variants);
     setFormImages(normalized.images);
     setFormTranslations(normalized.translations);
   };
 
   const handleOpenEdit = async (prod: SupplierProductRow) => {
-    await openProductEditWithTab(prod, "basic");
+    await openProductEditModal(prod, false);
   };
 
   const handleOpenTranslations = async (prod: SupplierProductRow) => {
-    await openProductEditWithTab(prod, "translations");
+    await openProductEditModal(prod, true);
   };
 
   // Save Product (Create or Edit)
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    const validation = validateProductForm(formTitle, formCategoryId, formPrice);
-    if (validation.error) {
-      setFormError(validation.error);
-      setModalTab(validation.tab ?? "basic");
+    const errMsg = validateProductForm(formTitle, formCategoryId, formPrice, formSelectedSizes);
+    if (errMsg) {
+      setFormError(errMsg);
       return;
     }
 
@@ -1741,12 +1833,12 @@ export default function SupplierDashboardClient() {
       buyingPrice: formBuyingPrice,
       price: formPrice,
       currency: formCurrency,
-      packingRatio: formPackingRatio,
+      selectedSizes: formSelectedSizes,
       seriesRatio: formSeriesRatio,
-      moq: formMoq,
+      seriesStock: formSeriesStock,
+      minOrderSeries: formMinOrderSeries,
       isActive: formIsActive,
       images: formImages,
-      variants: formVariants,
       translations: formTranslations,
     });
 
@@ -1843,7 +1935,7 @@ export default function SupplierDashboardClient() {
         }}
       />
 
-      {/* CREATE & EDIT PRODUCT MODAL (ANT DESIGN PRO STYLE) */}
+      {/* CREATE & EDIT PRODUCT MODAL (SINGLE-SCREEN EXPRESS FORM) */}
       {isProductModalOpen && (
         <SupplierProductModal
           activeModal={activeModal}
@@ -1851,10 +1943,10 @@ export default function SupplierDashboardClient() {
           profile={profile}
           onClose={() => setActiveModal(null)}
           onSubmit={handleSubmitProduct}
-          modalTab={modalTab}
-          setModalTab={setModalTab}
           submitting={submitting}
           formError={formError}
+          expandOptionalByDefault={expandOptionalSection}
+          setExpandOptionalByDefault={setExpandOptionalSection}
           formTitle={formTitle}
           setFormTitle={setFormTitle}
           formCategoryId={formCategoryId}
@@ -1878,18 +1970,19 @@ export default function SupplierDashboardClient() {
           setFormBuyingPrice={setFormBuyingPrice}
           formCurrency={formCurrency}
           setFormCurrency={setFormCurrency}
-          formPackingRatio={formPackingRatio}
-          setFormPackingRatio={setFormPackingRatio}
-          formMoq={formMoq}
-          setFormMoq={setFormMoq}
+          formMinOrderSeries={formMinOrderSeries}
+          setFormMinOrderSeries={setFormMinOrderSeries}
           formIsActive={formIsActive}
           setFormIsActive={setFormIsActive}
-          formVariants={formVariants}
-          onAddVariantRow={handleAddVariantRow}
-          onUpdateVariantRow={handleUpdateVariantRow}
-          onRemoveVariantRow={handleRemoveVariantRow}
-          onApplyPresetSeries={handleApplyPresetSeries}
-          onApplyBulkStock={handleApplyBulkStock}
+          sizeDefinitions={sizeDefinitions}
+          seriesTemplates={seriesTemplates}
+          selectedSizes={formSelectedSizes}
+          onToggleSize={handleToggleSize}
+          onApplySeriesTemplate={handleApplySeriesTemplate}
+          seriesRatio={formSeriesRatio}
+          onSelectAssortmentMode={handleSelectAssortmentMode}
+          seriesStock={formSeriesStock}
+          setSeriesStock={setFormSeriesStock}
           formImages={formImages}
           imageUploadLoading={imageUploadLoading}
           onUploadImageFile={handleUploadImageFile}

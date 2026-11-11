@@ -131,6 +131,7 @@ class Product {
   final String color;
   final String packingRatio;
   final String seriesRatio;
+  final int seriesStock;
   final int minimumOrderQuantity;
   final double price;
   final double? discountedPrice;
@@ -172,6 +173,7 @@ class Product {
     required this.color,
     required this.packingRatio,
     required this.seriesRatio,
+    this.seriesStock = 100,
     required this.minimumOrderQuantity,
     required this.price,
     this.discountedPrice,
@@ -349,6 +351,9 @@ class Product {
       color: (json['color'] ?? 'Standart').toString(),
       packingRatio: (json['packing_ratio'] ?? '').toString(),
       seriesRatio: (json['series_ratio'] ?? '').toString(),
+      seriesStock: ((json['series_stock'] as num?)?.toInt() ?? 0) > 0
+          ? (json['series_stock'] as num).toInt()
+          : 100,
       minimumOrderQuantity:
           (json['minimum_order_quantity'] as num?)?.toInt() ?? 1,
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
@@ -472,5 +477,90 @@ class SimpleOptionItem {
       code: (json['code'] ?? '').toString(),
     );
   }
+}
+
+class SizeDefinitionOption {
+  final String id;
+  final String code;
+  final String label;
+  final String sizeGroup;
+  final int sortOrder;
+
+  const SizeDefinitionOption({
+    required this.id,
+    required this.code,
+    required this.label,
+    required this.sizeGroup,
+    required this.sortOrder,
+  });
+
+  factory SizeDefinitionOption.fromJson(Map<String, dynamic> json) {
+    final codeVal = (json['code'] ?? '').toString();
+    final labelVal = (json['label'] ?? codeVal).toString();
+    return SizeDefinitionOption(
+      id: (json['id'] ?? codeVal).toString(),
+      code: codeVal,
+      label: labelVal.isNotEmpty ? labelVal : codeVal,
+      sizeGroup: (json['size_group'] ?? 'letter').toString(),
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 100,
+    );
+  }
+}
+
+class SeriesTemplateOption {
+  final String id;
+  final String templateKey;
+  final String name;
+  final String categoryHint;
+  final List<String> sizes;
+  final String seriesRatio;
+  final int unitsPerSeries;
+  final int sortOrder;
+
+  const SeriesTemplateOption({
+    required this.id,
+    required this.templateKey,
+    required this.name,
+    this.categoryHint = '',
+    required this.sizes,
+    required this.seriesRatio,
+    required this.unitsPerSeries,
+    this.sortOrder = 100,
+  });
+
+  factory SeriesTemplateOption.fromJson(Map<String, dynamic> json) {
+    final parsedSizes = <String>[];
+    if (json['sizes'] is List) {
+      for (final s in json['sizes'] as List) {
+        final str = (s ?? '').toString().trim();
+        if (str.isNotEmpty) parsedSizes.add(str);
+      }
+    }
+    return SeriesTemplateOption(
+      id: (json['id'] ?? '').toString(),
+      templateKey: (json['template_key'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      categoryHint: (json['category_hint'] ?? '').toString(),
+      sizes: parsedSizes,
+      seriesRatio: (json['series_ratio'] ?? '1').toString(),
+      unitsPerSeries:
+          (json['units_per_series'] as num?)?.toInt() ?? parsedSizes.length,
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 100,
+    );
+  }
+}
+
+class SupplierAttributesBundle {
+  final List<SimpleOptionItem> colors;
+  final List<SimpleOptionItem> fabrics;
+  final List<SizeDefinitionOption> sizes;
+  final List<SeriesTemplateOption> seriesTemplates;
+
+  const SupplierAttributesBundle({
+    this.colors = const <SimpleOptionItem>[],
+    this.fabrics = const <SimpleOptionItem>[],
+    this.sizes = const <SizeDefinitionOption>[],
+    this.seriesTemplates = const <SeriesTemplateOption>[],
+  });
 }
 

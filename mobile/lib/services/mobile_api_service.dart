@@ -418,6 +418,7 @@ class MobileApiService
     double? buyingPrice,
     bool? isActive,
     int? stock,
+    int? seriesStock,
   }) =>
       supplierCatalog.quickUpdateSupplierProduct(
         productId: productId,
@@ -425,6 +426,7 @@ class MobileApiService
         buyingPrice: buyingPrice,
         isActive: isActive,
         stock: stock,
+        seriesStock: seriesStock,
       );
 
   @override
@@ -442,6 +444,10 @@ class MobileApiService
   @override
   Future<(List<SimpleOptionItem>, List<SimpleOptionItem>)>
       fetchSupplierAttributes() => supplierCatalog.fetchSupplierAttributes();
+
+  @override
+  Future<SupplierAttributesBundle> fetchSupplierAttributeBundle() =>
+      supplierCatalog.fetchSupplierAttributeBundle();
 
   @override
   Future<Map<String, Map<String, String>>> autoTranslateSupplierFields(

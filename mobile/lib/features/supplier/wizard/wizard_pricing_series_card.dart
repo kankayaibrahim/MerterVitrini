@@ -1,196 +1,248 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/app_theme.dart';
-import '../../../core/currency_formatter.dart';
-import 'wizard_models.dart';
+import '../../../models/product.dart';
+import 'searchable_option_sheet.dart';
+import 'wizard_translations_card.dart';
 
 class WizardPricingSeriesCard extends StatelessWidget {
-  final TextEditingController priceCtrl;
+  final List<SimpleOptionItem> colorOptions;
+  final List<SimpleOptionItem> fabricOptions;
+  final String selectedColorLabel;
+  final String selectedFabricLabel;
+  final String gender;
+  final String season;
   final TextEditingController buyingPriceCtrl;
-  final TextEditingController seriesRatioCtrl;
   final TextEditingController minOrderCtrl;
-  final String currency;
+  final TextEditingController shortDescCtrl;
+  final TextEditingController descCtrl;
   final bool isActive;
-  final VoidCallback onPreviewChanged;
-  final ValueChanged<String> onCurrencyChanged;
-  final ValueChanged<String> onSeriesPresetSelected;
+  final Map<String, EditableTranslationLanguageSet> translations;
+  final bool autoTranslating;
+  final ValueChanged<SimpleOptionItem> onColorPicked;
+  final ValueChanged<SimpleOptionItem> onFabricPicked;
+  final ValueChanged<String> onGenderChanged;
+  final ValueChanged<String> onSeasonChanged;
   final ValueChanged<bool> onActiveChanged;
+  final VoidCallback onAutoTranslate;
 
   const WizardPricingSeriesCard({
     super.key,
-    required this.priceCtrl,
+    required this.colorOptions,
+    required this.fabricOptions,
+    required this.selectedColorLabel,
+    required this.selectedFabricLabel,
+    required this.gender,
+    required this.season,
     required this.buyingPriceCtrl,
-    required this.seriesRatioCtrl,
     required this.minOrderCtrl,
-    required this.currency,
+    required this.shortDescCtrl,
+    required this.descCtrl,
     required this.isActive,
-    required this.onPreviewChanged,
-    required this.onCurrencyChanged,
-    required this.onSeriesPresetSelected,
+    required this.translations,
+    required this.autoTranslating,
+    required this.onColorPicked,
+    required this.onFabricPicked,
+    required this.onGenderChanged,
+    required this.onSeasonChanged,
     required this.onActiveChanged,
+    required this.onAutoTranslate,
   });
 
   @override
   Widget build(BuildContext context) {
-    final unitPricePreview =
-        double.tryParse(priceCtrl.text.replaceAll(',', '.').trim()) ?? 0.0;
-    final unitsPerPkgPreview =
-        CurrencyFormatter.parseUnitsPerPackage(seriesRatioCtrl.text);
-    final packTotalPreview = unitPricePreview * unitsPerPkgPreview;
-    final sym = CurrencyFormatter.symbols[currency] ?? currency;
-
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '3. Toptan Fiyat & Seri Paket Dağılımı',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 14.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: priceCtrl,
-                    onChanged: (_) => onPreviewChanged(),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Toptan Birim Fiyat *',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: buyingPriceCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Maliyet (Opsiyonel)',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 2,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: ['TRY', 'USD', 'EUR'].contains(currency)
-                        ? currency
-                        : 'TRY',
-                    decoration: const InputDecoration(labelText: 'Döviz'),
-                    items: const [
-                      DropdownMenuItem(value: 'TRY', child: Text('TRY')),
-                      DropdownMenuItem(value: 'USD', child: Text('USD')),
-                      DropdownMenuItem(value: 'EUR', child: Text('EUR')),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) onCurrencyChanged(v);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: seriesRatioCtrl,
-                    onChanged: (_) => onPreviewChanged(),
-                    decoration: const InputDecoration(
-                      labelText: 'Seri Oranı (Asorti) *',
-                      hintText: '1-2-2-1',
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: minOrderCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Min. Paket'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: SeriesStockDistributor.seriesPresets.map((ratio) {
-                final active = seriesRatioCtrl.text.trim() == ratio;
-                return ActionChip(
-                  backgroundColor: active
-                      ? AppColors.accentGoldLight
-                      : AppColors.background,
-                  label: Text(
-                    ratio,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: active ? FontWeight.w800 : FontWeight.w500,
-                    ),
-                  ),
-                  onPressed: () => onSeriesPresetSelected(ratio),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.navy,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '1 Seri Paket ($unitsPerPkgPreview Adet) Toplamı:',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    '$sym${packTotalPreview.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      color: AppColors.accentGoldLight,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: isActive,
-              onChanged: onActiveChanged,
-              title: const Text(
-                'Kaydedildiğinde Vitrinde Aktif Yayınla',
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        title: const Text(
+          '4. Ek Detaylar, Renk/Kumaş & Çeviri (Opsiyonel)',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 13.5,
+          ),
         ),
+        subtitle: const Text(
+          'Renk, kumaş, açıklama ve yabancı dil ayarları',
+          style: TextStyle(fontSize: 11.5),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () async {
+                    final picked = await showSearchableOptionSheet(
+                      context,
+                      title: 'Renk Seçiniz',
+                      options: colorOptions,
+                      allowClear: true,
+                    );
+                    if (picked != null) {
+                      onColorPicked(picked);
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Renk',
+                      suffixIcon: Icon(Icons.palette_outlined, size: 18),
+                    ),
+                    child: Text(
+                      selectedColorLabel.isNotEmpty
+                          ? selectedColorLabel
+                          : 'Seçiniz',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () async {
+                    final picked = await showSearchableOptionSheet(
+                      context,
+                      title: 'Kumaş Tipi Seçiniz',
+                      options: fabricOptions,
+                      allowClear: true,
+                    );
+                    if (picked != null) {
+                      onFabricPicked(picked);
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Kumaş',
+                      suffixIcon: Icon(Icons.texture_rounded, size: 18),
+                    ),
+                    child: Text(
+                      selectedFabricLabel.isNotEmpty
+                          ? selectedFabricLabel
+                          : 'Seçiniz',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue:
+                      ['Kadın', 'Erkek', 'Unisex', 'Çocuk'].contains(gender)
+                          ? gender
+                          : 'Kadın',
+                  decoration: const InputDecoration(labelText: 'Cinsiyet'),
+                  items: const [
+                    DropdownMenuItem(value: 'Kadın', child: Text('Kadın')),
+                    DropdownMenuItem(value: 'Erkek', child: Text('Erkek')),
+                    DropdownMenuItem(value: 'Unisex', child: Text('Unisex')),
+                    DropdownMenuItem(value: 'Çocuk', child: Text('Çocuk')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) onGenderChanged(v);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: [
+                    '2026 İlkbahar/Yaz',
+                    '2026 Sonbahar/Kış',
+                    '4 Mevsim',
+                  ].contains(season)
+                      ? season
+                      : '2026 İlkbahar/Yaz',
+                  decoration: const InputDecoration(labelText: 'Sezon'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: '2026 İlkbahar/Yaz',
+                      child: Text('İlkbahar/Yaz'),
+                    ),
+                    DropdownMenuItem(
+                      value: '2026 Sonbahar/Kış',
+                      child: Text('Sonbahar/Kış'),
+                    ),
+                    DropdownMenuItem(
+                      value: '4 Mevsim',
+                      child: Text('4 Mevsim'),
+                    ),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) onSeasonChanged(v);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: minOrderCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Min. Sipariş (Seri)',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: buyingPriceCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Maliyet (Gizli)',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: shortDescCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Kısa Özet (Kalıp / Kumaş Oranı)',
+              hintText: 'Örn: %100 Pamuk, Tam Kalıp',
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: descCtrl,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Detaylı Ürün Açıklaması',
+            ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: isActive,
+            onChanged: onActiveChanged,
+            title: const Text(
+              'Kaydedildiğinde Vitrinde Aktif Yayınla',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          WizardTranslationsCard(
+            translations: translations,
+            autoTranslating: autoTranslating,
+            onAutoTranslate: onAutoTranslate,
+          ),
+        ],
       ),
     );
   }
 }
-

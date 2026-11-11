@@ -165,6 +165,27 @@ export interface SupplierUser {
   updated_at: string;
 }
 
+export interface SizeDefinitionDTO {
+  id: string;
+  code: string;
+  label: string;
+  size_group: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface SeriesTemplateDTO {
+  id: string;
+  template_key: string;
+  name: string;
+  category_hint: string;
+  sizes: string[];
+  series_ratio: string;
+  units_per_series: number;
+  sort_order: number;
+  is_active: boolean;
+}
+
 export interface SupplierProductRow {
   id: string;
   title: string;
@@ -174,6 +195,8 @@ export interface SupplierProductRow {
   price: number;
   currency: string;
   packing_ratio?: string | null;
+  series_ratio?: string;
+  series_stock?: number;
   minimum_order_quantity: number;
   is_active: boolean;
   is_archived?: boolean;

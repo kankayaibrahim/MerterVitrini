@@ -27,6 +27,7 @@ abstract interface class ISupplierCatalogRepository {
     double? buyingPrice,
     bool? isActive,
     int? stock,
+    int? seriesStock,
   });
 
   Future<void> deleteSupplierProduct(String productId);
@@ -37,6 +38,8 @@ abstract interface class ISupplierCatalogRepository {
 
   Future<(List<SimpleOptionItem>, List<SimpleOptionItem>)>
       fetchSupplierAttributes();
+
+  Future<SupplierAttributesBundle> fetchSupplierAttributeBundle();
 
   Future<Map<String, Map<String, String>>> autoTranslateSupplierFields(
     Map<String, String> fields,

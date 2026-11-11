@@ -20,6 +20,7 @@ type QuickProductUpdateRequest struct {
 	BuyingPrice *float64 `json:"buying_price,omitempty"`
 	IsActive    *bool    `json:"is_active,omitempty"`
 	Stock       *int     `json:"stock,omitempty"`
+	SeriesStock *int     `json:"series_stock,omitempty"`
 }
 
 func (h *MobileHandler) GetSupplierDashboard(w http.ResponseWriter, r *http.Request) {
@@ -222,6 +223,18 @@ func (h *MobileHandler) QuickUpdateSupplierProduct(w http.ResponseWriter, r *htt
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	ensureSizeDefinitionsSchema(ctx)
+
+	if req.SeriesStock != nil && *req.SeriesStock >= 0 && req.Stock == nil {
+		var ratioStr string
+		_ = db.Pool.QueryRow(ctx, "SELECT coalesce(series_ratio, '1') FROM catalog.products WHERE id = $1 AND brand_id = $2", productID, claims.BrandID).Scan(&ratioStr)
+		unitsPerSeries := getUnitsFromSeriesRatio(ratioStr)
+		if unitsPerSeries < 1 {
+			unitsPerSeries = 1
+		}
+		computedTotal := (*req.SeriesStock) * unitsPerSeries
+		req.Stock = &computedTotal
+	}
 
 	res, err := db.Pool.Exec(ctx, `
 		UPDATE catalog.products
@@ -229,9 +242,10 @@ func (h *MobileHandler) QuickUpdateSupplierProduct(w http.ResponseWriter, r *htt
 		    buying_price = COALESCE($2, buying_price),
 		    is_active    = COALESCE($3, is_active),
 		    stock        = COALESCE($4, stock),
+		    series_stock = COALESCE($5, series_stock),
 		    updated_at   = CURRENT_TIMESTAMP
-		WHERE id = $5 AND brand_id = $6
-	`, req.Price, req.BuyingPrice, req.IsActive, req.Stock, productID, claims.BrandID)
+		WHERE id = $6 AND brand_id = $7
+	`, req.Price, req.BuyingPrice, req.IsActive, req.Stock, req.SeriesStock, productID, claims.BrandID)
 	if err != nil || res.RowsAffected() == 0 {
 		httpx.Error(w, http.StatusNotFound, "Ürün bulunamadı veya yetkiniz yok.")
 		return

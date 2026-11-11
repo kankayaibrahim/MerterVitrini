@@ -118,6 +118,7 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
     double? buyingPrice,
     bool? isActive,
     int? stock,
+    int? seriesStock,
   }) async {
     try {
       final body = <String, dynamic>{};
@@ -125,6 +126,7 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
       if (buyingPrice != null) body['buying_price'] = buyingPrice;
       if (isActive != null) body['is_active'] = isActive;
       if (stock != null) body['stock'] = stock;
+      if (seriesStock != null) body['series_stock'] = seriesStock;
 
       await _client.dio.patch<dynamic>(
         '/api/v1/mobile/supplier/products/$productId/quick-update',
@@ -171,14 +173,23 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
   @override
   Future<(List<SimpleOptionItem>, List<SimpleOptionItem>)>
       fetchSupplierAttributes() async {
+    final bundle = await fetchSupplierAttributeBundle();
+    return (bundle.colors, bundle.fabrics);
+  }
+
+  @override
+  Future<SupplierAttributesBundle> fetchSupplierAttributeBundle() async {
     try {
       final resp = await _client.dio.get<Map<String, dynamic>>(
         '/api/v1/supplier/attributes',
       );
       final data = resp.data ?? <String, dynamic>{};
-      return (
-        _parseList(data['colors'], SimpleOptionItem.fromJson),
-        _parseList(data['fabrics'], SimpleOptionItem.fromJson),
+      return SupplierAttributesBundle(
+        colors: _parseList(data['colors'], SimpleOptionItem.fromJson),
+        fabrics: _parseList(data['fabrics'], SimpleOptionItem.fromJson),
+        sizes: _parseList(data['sizes'], SizeDefinitionOption.fromJson),
+        seriesTemplates:
+            _parseList(data['series_templates'], SeriesTemplateOption.fromJson),
       );
     } catch (e) {
       throw ApiClient.mapError(e);

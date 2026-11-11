@@ -622,6 +622,7 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	ensureProductArchiveSchema(ctx)
+	ensureSizeDefinitionsSchema(ctx)
 
 	conditions, args, argIdx := buildProductFilterConditions(claims.BrandID, q, categoryID, status)
 	whereClause := "WHERE " + strings.Join(conditions, " AND ")
@@ -643,6 +644,8 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 			p.price,
 			p.currency,
 			p.packing_ratio,
+			coalesce(p.series_ratio, '') as series_ratio,
+			coalesce(p.series_stock, 100) as series_stock,
 			p.minimum_order_quantity,
 			p.is_active,
 			coalesce(p.is_archived, false) as is_archived,
@@ -680,6 +683,8 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 		Price                float64   `json:"price"`
 		Currency             string    `json:"currency"`
 		PackingRatio         *string   `json:"packing_ratio,omitempty"`
+		SeriesRatio          string    `json:"series_ratio,omitempty"`
+		SeriesStock          int       `json:"series_stock"`
 		MinimumOrderQuantity int       `json:"minimum_order_quantity"`
 		IsActive             bool      `json:"is_active"`
 		IsArchived           bool      `json:"is_archived"`
@@ -703,6 +708,8 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 			&pr.Price,
 			&pr.Currency,
 			&pr.PackingRatio,
+			&pr.SeriesRatio,
+			&pr.SeriesStock,
 			&pr.MinimumOrderQuantity,
 			&pr.IsActive,
 			&pr.IsArchived,
@@ -743,6 +750,7 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	ensureSizeDefinitionsSchema(ctx)
 
 	var p models.Product
 	query := `
@@ -750,7 +758,7 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 			id, title, slug, custom_sku, short_description, description, 
 			category_id, color_id, fabric_id, gender, season, 
 			buying_price, price, currency, packing_ratio, series_ratio, 
-			minimum_order_quantity, is_active, created_at, updated_at
+			coalesce(series_stock, 100), minimum_order_quantity, is_active, created_at, updated_at
 		FROM catalog.products 
 		WHERE id = $1 AND brand_id = $2`
 
@@ -774,6 +782,7 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 		&p.Currency,
 		&p.PackingRatio,
 		&p.SeriesRatio,
+		&p.SeriesStock,
 		&minOrderQty,
 		&p.IsActive,
 		&p.CreatedAt,
@@ -789,9 +798,9 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Fetch variants
+	// Fetch variants in natural insertion order (UUIDv7 ordered)
 	varVariants := make([]*models.ProductVariant, 0)
-	vRows, vErr := db.Pool.Query(ctx, "SELECT id, product_id, variant_size, barcode, stock, is_single, custom_sku, is_active FROM catalog.product_variants WHERE product_id = $1 ORDER BY variant_size ASC", p.ID)
+	vRows, vErr := db.Pool.Query(ctx, "SELECT id, product_id, variant_size, barcode, stock, is_single, custom_sku, is_active FROM catalog.product_variants WHERE product_id = $1 ORDER BY id ASC", p.ID)
 	if vErr == nil {
 		defer vRows.Close()
 		for vRows.Next() {
@@ -853,6 +862,12 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 
+	initialStock, normErr := resolveSupplierSeriesAndVariants(ctx, &req, "")
+	if normErr != nil {
+		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": normErr.Error()})
+		return
+	}
+
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		http.Error(w, `{"error":"Veritabanı işlemi başlatılamadı"}`, http.StatusInternalServerError)
@@ -863,12 +878,6 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 	// Generate source_product_id
 	sourceProductID := fmt.Sprintf("SUP-%d", time.Now().UnixNano())
 
-	// Calculate initial total stock
-	initialStock := 0
-	for _, v := range req.Variants {
-		initialStock += v.Stock
-	}
-
 	var newProductID string
 	var customSKU string
 	var slug string
@@ -878,12 +887,12 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 			brand_id, feed_id, source_product_id, title, short_description, description,
 			category_id, color_id, fabric_id, gender, season,
 			buying_price, price, currency, packing_ratio, series_ratio,
-			minimum_order_quantity, stock, is_active
+			minimum_order_quantity, series_stock, stock, is_active
 		) VALUES (
 			$1, NULL, $2, $3, $4, $5,
 			$6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15,
-			$16, $17, $18
+			$16, $17, $18, $19
 		) RETURNING id, custom_sku, slug`
 
 	err = tx.QueryRow(
@@ -905,6 +914,7 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 		req.PackingRatio,
 		req.SeriesRatio,
 		req.MinimumOrderQuantity,
+		req.SeriesStock,
 		initialStock,
 		req.IsActive,
 	).Scan(&newProductID, &customSKU, &slug)
@@ -959,6 +969,12 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 
+	initialStock, normErr := resolveSupplierSeriesAndVariants(ctx, &req, id)
+	if normErr != nil {
+		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": normErr.Error()})
+		return
+	}
+
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		http.Error(w, `{"error":"Veritabanı işlemi başlatılamadı"}`, http.StatusInternalServerError)
@@ -974,20 +990,15 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	initialStock := 0
-	for _, v := range req.Variants {
-		initialStock += v.Stock
-	}
-
 	updateSQL := `
 		UPDATE catalog.products SET
 			title = $1, short_description = $2, description = $3,
 			category_id = $4, color_id = $5, fabric_id = $6,
 			gender = $7, season = $8, buying_price = $9, price = $10,
 			currency = $11, packing_ratio = $12, series_ratio = $13,
-			minimum_order_quantity = $14, stock = $15, is_active = $16,
+			minimum_order_quantity = $14, series_stock = $15, stock = $16, is_active = $17,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $17 AND brand_id = $18`
+		WHERE id = $18 AND brand_id = $19`
 
 	_, err = tx.Exec(
 		ctx,
@@ -1006,6 +1017,7 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		req.PackingRatio,
 		req.SeriesRatio,
 		req.MinimumOrderQuantity,
+		req.SeriesStock,
 		initialStock,
 		req.IsActive,
 		id,
@@ -1168,8 +1180,10 @@ func (h *SupplierPortalHandler) ListAttributes(w http.ResponseWriter, r *http.Re
 	}
 
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
-		"colors":  colors,
-		"fabrics": fabrics,
+		"colors":           colors,
+		"fabrics":          fabrics,
+		"sizes":            fetchActiveSizeDefinitions(ctx),
+		"series_templates": fetchActiveSeriesTemplates(ctx),
 	})
 }
 

@@ -98,7 +98,7 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
     final buyingCtrl = TextEditingController(
       text: p.buyingPrice > 0 ? p.buyingPrice.toStringAsFixed(2) : '',
     );
-    final stockCtrl = TextEditingController(text: '${p.stock}');
+    final seriesStockCtrl = TextEditingController(text: '${p.seriesStock}');
     var active = p.isActive;
 
     await showModalBottomSheet<void>(
@@ -112,6 +112,8 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
         var saving = false;
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
+            final currentSeriesVal =
+                int.tryParse(seriesStockCtrl.text.trim()) ?? p.seriesStock;
             return Padding(
               padding: EdgeInsets.only(
                 left: 18,
@@ -124,7 +126,7 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Hızlı Fiyat & Stok Güncelle (${p.customSku})',
+                    'Hızlı Fiyat & Seri Stoğu Güncelle (${p.customSku})',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
@@ -159,11 +161,26 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    children: [25, 50, 100, 250, 500].map((cnt) {
+                      return ChoiceChip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text('$cnt Seri'),
+                        selected: currentSeriesVal == cnt,
+                        onSelected: (_) =>
+                            setSheetState(() => seriesStockCtrl.text = '$cnt'),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 8),
                   TextField(
-                    controller: stockCtrl,
+                    controller: seriesStockCtrl,
                     keyboardType: TextInputType.number,
+                    onChanged: (_) => setSheetState(() {}),
                     decoration: const InputDecoration(
-                      labelText: 'Toplam Adet Stok (Varyantlara eşit dağıtılır)',
+                      labelText: 'Eldeki Tahmini Seri Adedi',
+                      suffixText: 'Seri',
                     ),
                   ),
                   SwitchListTile(
@@ -185,8 +202,8 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
                               final newBuy = double.tryParse(
                                 buyingCtrl.text.replaceAll(',', '.').trim(),
                               );
-                              final newStock =
-                                  int.tryParse(stockCtrl.text.trim());
+                              final newSeriesStock =
+                                  int.tryParse(seriesStockCtrl.text.trim());
                               await context
                                   .read<SupplierProvider>()
                                   .quickUpdateProduct(
@@ -194,7 +211,7 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
                                     price: newPrice,
                                     buyingPrice: newBuy,
                                     isActive: active,
-                                    stock: newStock,
+                                    seriesStock: newSeriesStock,
                                   );
                               if (sheetCtx.mounted) {
                                 Navigator.of(sheetCtx).pop();
@@ -220,7 +237,7 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
 
     priceCtrl.dispose();
     buyingCtrl.dispose();
-    stockCtrl.dispose();
+    seriesStockCtrl.dispose();
   }
 
   Future<void> _confirmDelete(Product p) async {
@@ -448,7 +465,7 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            'Birim: ${CurrencyFormatter.format(p.effectiveUnitPrice, currency: p.currency)} • Seri: ${ratio.isEmpty ? "1" : ratio} • Stok: ${p.stock}',
+                                            'Birim: ${CurrencyFormatter.format(p.effectiveUnitPrice, currency: p.currency)} • ~${p.seriesStock} Seri (${p.stock} ad.) • Beden: ${p.packingRatio.isEmpty ? ratio : p.packingRatio}',
                                             style: const TextStyle(
                                               fontSize: 12,
                                               color: AppColors.textSecondary,

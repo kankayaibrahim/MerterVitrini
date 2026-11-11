@@ -168,6 +168,7 @@ type Product struct {
 	TaxRate              float64              `json:"tax_rate,omitempty"`
 	Color                *string              `json:"color,omitempty"`
 	Stock                int                  `json:"stock,omitempty"`
+	SeriesStock          int                  `json:"series_stock,omitempty"`
 	Sku                  *string              `json:"sku,omitempty"`
 	Barcode              *string              `json:"barcode,omitempty"`
 	IsActive             bool                 `json:"is_active"`
@@ -487,6 +488,29 @@ type SupplierTranslationInput struct {
 	Description      string `json:"description,omitempty"`
 }
 
+type SizeDefinition struct {
+	ID        string    `json:"id"`
+	Code      string    `json:"code"`
+	Label     string    `json:"label"`
+	SizeGroup string    `json:"size_group"`
+	SortOrder int       `json:"sort_order"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+}
+
+type SeriesTemplate struct {
+	ID             string    `json:"id"`
+	TemplateKey    string    `json:"template_key"`
+	Name           string    `json:"name"`
+	CategoryHint   string    `json:"category_hint"`
+	Sizes          []string  `json:"sizes"`
+	SeriesRatio    string    `json:"series_ratio"`
+	UnitsPerSeries int       `json:"units_per_series"`
+	SortOrder      int       `json:"sort_order"`
+	IsActive       bool      `json:"is_active"`
+	CreatedAt      time.Time `json:"created_at,omitempty"`
+}
+
 type SupplierProductInput struct {
 	Title                string                              `json:"title"`
 	ShortDescription     string                              `json:"short_description,omitempty"`
@@ -502,6 +526,9 @@ type SupplierProductInput struct {
 	PackingRatio         string                              `json:"packing_ratio,omitempty"`
 	SeriesRatio          string                              `json:"series_ratio,omitempty"`
 	MinimumOrderQuantity int                                 `json:"minimum_order_quantity"`
+	MinOrderSeries       int                                 `json:"min_order_series,omitempty"`
+	SeriesStock          int                                 `json:"series_stock,omitempty"`
+	SelectedSizes        []string                            `json:"selected_sizes,omitempty"`
 	IsActive             bool                                `json:"is_active"`
 	Images               []string                            `json:"images,omitempty"`
 	Variants             []SupplierProductVariantInput       `json:"variants,omitempty"`
