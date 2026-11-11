@@ -2100,13 +2100,14 @@
   3. **Kalite ve Derleme Kontrolleri:**
      - `go vet ./...`, Linux AMD64 `go build`, `npx tsc --noEmit` ve `npm run lint` kontrolleri sıfır hata/uyarı ile doğrulandı.
 
-### [2026-11-11 15:10:00] - Oturum #115 (Yerel Git Commit ve Canlı AlmaLinux Sunucu Dağıtımı - Backend & Frontend)
+### [2026-11-11 15:19:00] - Oturum #115 (Yerel Git Commit ve Canlı AlmaLinux Sunucu Dağıtımı - Backend & Frontend)
 - **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
 - **Kullanıcı İstemi:** `"sunucuda güncelledin mi commitle sunucuda güncelle"`
 - **Yapılan İşlemler ve Cevap Özeti:**
   1. **Yerel Git Commit (`Conventional Commits`):**
-     - Müşteri e-posta doğrulama akışı, tedarikçi doğrulanmış müşteri rozetleri, Admin Keycloak OIDC RP-Initiated Logout (`end_session_endpoint` + `id_token_hint` + `prompt=login`), tedarikçi bildirim e-postasındaki marka adı SQL sorgu düzeltmesi ve stratejik karşılaştırma raporu yerel depoya commit edildi (`git push` çalıştırılmadı, `test_hesaplari.md` `.gitignore` ile korundu).
+     - Müşteri e-posta doğrulama akışı, tedarikçi doğrulanmış müşteri rozetleri, Admin Keycloak OIDC RP-Initiated Logout (`end_session_endpoint` + `id_token_hint` + `prompt=login`), tedarikçi bildirim e-postasındaki marka adı SQL sorgu düzeltmesi ve stratejik karşılaştırma raporu yerel depoya commit edildi (`60f3809`); ayrıca [`scripts/unified_deployer.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/unified_deployer.py) SSH bağlantı dayanıklılığı (retry + keepalive) iyileştirildi (`git push` çalıştırılmadı, `test_hesaplari.md` `.gitignore` ile korundu).
   2. **Canlı Sunucu Dağıtımı (`unified_deployer.py`):**
-     - `python scripts\unified_deployer.py -p unified -c all -a deploy` komutuyla Go Backend (`linux/amd64` cross-compile) ve Next.js SSR Frontend (`remote-build`) canlı AlmaLinux (`213.202.255.80`) sunucusuna aktarıldı, derlendi ve `merter-backend` ile `merter-frontend` servisleri yeniden başlatıldı.
-  3. **Dağıtım Sonrası Doğrulama:**
-     - Canlı API sağlık uç noktası (`/api/v1/health`), vitrin (`/`) ve yönetim paneli (`/admin`) kontrol edildi; ayrıca `identity.users` şema bootstrap sonrası test müşteri hesabının (`musteri.test@mertervitrini.com.tr`) `email_verified = true` durumu veritabanında doğrulandı.
+     - `python scripts\unified_deployer.py -p unified -c all -a all --remote-build` komutuyla Go Backend (`linux/amd64` cross-compile, `41.68 MB`) ve Next.js SSR Frontend (`remote-build`, sunucuda `npm run build`) canlı AlmaLinux (`213.202.255.80`) sunucusuna aktarıldı; `merter-backend`, `merter-frontend` ve `nginx` servisleri başarıyla yeniden başlatıldı (toplam süre: `182.58 sn`).
+  3. **Dağıtım Sonrası Canlı Doğrulama:**
+     - Canlı API sağlık uç noktası (`https://mertervitrini.com.tr/api/v1/health` -> `HTTP 200 healthy`), vitrin (`https://mertervitrini.com.tr/` -> `HTTP 200`) ve yönetim paneli (`https://mertervitrini.com.tr/admin` -> `HTTP 200`) doğrulandı.
+     - Canlı `/api/v1/store/auth/login` çağrısı ile `identity.users` otomatik şema yükseltmesinin (`email_verified` alanı) canlıda devreye girdiği teyit edildi.

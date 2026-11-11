@@ -798,19 +798,34 @@ server {{
         else:
             self._deploy_frontend_local_build(proj_key, cfg)
 
-    def _connect_ssh(self):
-        self.log(f"[SSH] Connecting to {SERVER_CONFIG['hostname']}:{SERVER_CONFIG['port']}...")
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(
-            SERVER_CONFIG["hostname"],
-            port=SERVER_CONFIG["port"],
-            username=SERVER_CONFIG["username"],
-            password=SERVER_CONFIG["password"],
-            timeout=15
-        )
-        self.log("[SSH] Connection established successfully!")
-        return ssh
+    def _connect_ssh(self, max_attempts=5):
+        last_err = None
+        for attempt in range(1, max_attempts + 1):
+            self.log(f"[SSH] Connecting to {SERVER_CONFIG['hostname']}:{SERVER_CONFIG['port']} (attempt {attempt}/{max_attempts})...")
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            try:
+                ssh.connect(
+                    SERVER_CONFIG["hostname"],
+                    port=SERVER_CONFIG["port"],
+                    username=SERVER_CONFIG["username"],
+                    password=SERVER_CONFIG["password"],
+                    timeout=30,
+                    banner_timeout=30,
+                    auth_timeout=30,
+                )
+                transport = ssh.get_transport()
+                if transport is not None:
+                    transport.set_keepalive(20)
+                self.log("[SSH] Connection established successfully!")
+                return ssh
+            except Exception as err:
+                last_err = err
+                ssh.close()
+                self.log(f"[SSH][WARN] Attempt {attempt}/{max_attempts} failed: {err}")
+                if attempt < max_attempts:
+                    time.sleep(3 * attempt)
+        raise RuntimeError(f"SSH connection failed after {max_attempts} attempts: {last_err}")
 
     def _ssh_cmd(self, ssh, cmd):
         self.log(f"[REMOTE CMD] Executing: {cmd}")
