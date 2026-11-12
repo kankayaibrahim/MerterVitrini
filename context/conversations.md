@@ -2317,3 +2317,101 @@
      - `GET https://auth.mertervitrini.com.tr/realms/merter/.well-known/openid-configuration` -> `HTTP 200`.
   4. **GitHub Uzak Depo (`git push origin main`) Durumu:**
      - `origin` URL'sindeki gömülü `ghp_hZkZ...` GitHub PAT süresi dolmuş olduğu için otomatik terminal gönderimi kimlik doğrulama engeline takıldı; yerel `main` dalı tamamen temiz ve VS Code Source Control / yeni PAT ile tek tıkla gönderime hazır.
+
+
+### [2026-11-12 20:51:00] - Oturum #127 (SonarLint / gopls Bilişsel Karmaşıklık, Kullanılmayan Fonksiyon ve Optional Chain Uyarılarının Giderilmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `store_auth.go` (`go:S3776` Cognitive Complexity `16 > 15` ve `unusedfunc: verifyReCaptchaV3`), `analytics.go` (`unusedfunc: parseUTM`) ve `SupplierProductModal.tsx` (`typescript:S6582` optional chain) tanı listesi.
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. [`store_auth.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_auth.go): `Register` metodundan `normalizeAndValidateRegisterInput` ve `createKeycloakCustomer` yardımcı fonksiyonları ayrıştırılarak bilişsel karmaşıklık `16`'dan `9`'a düşürüldü (`go:S3776`); kullanılmayan `verifyReCaptchaV3` metodu kaldırıldı (`unusedfunc`).
+  2. [`analytics.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/analytics.go): Kullanılmayan `parseUTM` sarmalayıcı fonksiyonu kaldırıldı (`unusedfunc`).
+  3. [`SupplierProductModal.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/supplier/SupplierProductModal.tsx): `if (!nodePath || !nodePath.includes("."))` ifadesi `if (!nodePath?.includes("."))` olarak sadeleştirildi (`typescript:S6582`).
+  4. **Doğrulama:** `gopls check`, `go vet ./...`, `go test -count=1 ./...`, Windows/Linux binary derlemeleri, `npx tsc --noEmit` ve `npx eslint` sıfır hata ve sıfır uyarı ile tamamlandı; tüm değişiklikler **Demir Kural #1** gereği çalışma dizininde (`working tree`) bırakıldı.
+
+
+### [2026-11-12 20:56:00] - Oturum #128 (Keycloak Giriş Ekranı FreeMarker `Internal Server Error` Onarımı ve Canlı Doğrulama)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"adminde bu çıktı"` *(Ekran görüntüsü: `https://auth.mertervitrini.com.tr/realms/merter/protocol/openid-connect/auth?...` -> `Internal Server Error`)*
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Kök Neden Tespiti (`journalctl -u keycloak`):**
+     - [`template.ftl`](file:///c:/Projects/mertervitrini.com.tr/keycloak-theme/merter/login/template.ftl) içindeki `<#assign rawHeader><#nested "header"></#assign>` ifadesinin Keycloak 26 otomatik HTML escape modunda `String` yerine `TemplateHTMLOutputModel` üretmesi nedeniyle `rawHeader?replace(...)` çağrısının `freemarker.core.NonStringException` fırlattığı tespit edildi.
+  2. **Onarım ve Canlı Sunucu Güncellemesi:**
+     - [`template.ftl`](file:///c:/Projects/mertervitrini.com.tr/keycloak-theme/merter/login/template.ftl) içinde `rawHeader?replace(...)` kaldırılarak doğrudan `<#nested "header">` kullanımına geçildi.
+     - Düzeltilmiş `template.ftl` canlı sunucudaki `/opt/keycloak/themes/merter/login/template.ftl` dizinine aktarıldı ve `keycloak.service` yeniden başlatıldı.
+  3. **Canlı Doğrulama:**
+     - Ekran görüntüsündeki birebir Admin giriş adresi (`https://auth.mertervitrini.com.tr/realms/merter/protocol/openid-connect/auth?client_id=admin-client&redirect_uri=https%3A%2F%2Fmertervitrini.com.tr%2Fadmin...`) test edildi -> **`HTTP 200`** (`kc-form-login: True`).
+     - Hata şablonu (`error.ftl`) da test edilerek `mv-login-card` ve düzeltilmiş `"Geçersiz parametre"` mesajıyla sorunsuz render edildiği doğrulandı.
+
+
+### [2026-11-12 22:09:00] - Oturum #129 (Admin Paneli Keycloak Giriş Döngüsü Kök Neden Onarımı, Rol Yetkilendirmesi ve Canlı E2E Doğrulaması)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"sürekli giriş yap çıkıyor bir türlü admine login olamıyorum"` *(Ekran görüntüsü: Keycloak `Tedarikçi & Kurumsal Giriş` ekranında `"Devam etmek için lütfen yeniden kimlik doğrulama yapınız"` uyarısı ve `TRTürkçe` dil seçici boşluk hatası)*
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Üç Katmanlı Kök Neden Tespiti:**
+     - **Kök Neden #1 (`?code=` Parametresinin Silinmesi):** [`frontend/src/app/admin/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/admin/page.tsx) sunucu bileşeninin Keycloak dönüş adresindeki (`/admin?session_state=...&iss=...&code=...`) sorgu parametrelerini aktarmadan doğrudan `redirect("/admin/dashboard")` çalıştırması nedeniyle `AdminContext.tsx` bileşeninin OIDC yetkilendirme kodunu (`code`) hiçbir zaman alamadığı tespit edildi (`merter-backend` loglarında sıfır callback isteği).
+     - **Kök Neden #2 (Eksik `admin` / `super_admin` Rol Ataması ve İstemci RBAC Kontrolü):** Canlı sunucuda `admin` kullanıcısının (`47001f61-bc31-46da-ab8d-4d82f9e1d386`) Keycloak `merter` realm üzerinde yalnızca `{default-roles-merter}` rolüne, `merterdevdb.identity.users` tablosunda ise `user_role = 'customer'` rolüne sahip olduğu tespit edildi. Ayrıca [`AdminShell.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/layout/AdminShell.tsx) içindeki `isTokenAuthorizedAdmin` kontrolü genişletilerek tüm kurumsal yönetim rolleri (`super_admin`, `admin`, `editor`, `sales_manager`, `warehouse`) ve backend tarafından doğrulanmış oturum rolü (`user.role`) kapsama alındı.
+     - **Kök Neden #3 (`&prompt=login` Zorlaması ve Görsel Önbellek):** [`LoginScreen.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/auth/LoginScreen.tsx) içindeki `&prompt=login` parametresi kaldırılarak aktif SSO oturumlarında her seferinde yeniden şifre sorulması engellendi; olası OIDC callback hatalarının kullanıcıya açıkça gösterilmesi için [`AdminContext.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/context/AdminContext.tsx) içine `authError` state'i eklendi. Keycloak giriş temasındaki [`template.ftl`](file:///c:/Projects/mertervitrini.com.tr/keycloak-theme/merter/login/template.ftl) ve [`theme.properties`](file:///c:/Projects/mertervitrini.com.tr/keycloak-theme/merter/login/theme.properties) güncellenerek `TR Türkçe` dil rozetleri arasındaki boşluk ve CSS önbellek sürümü (`?v=20261112`) düzeltildi; [`middleware.go`](file:///c:/Projects/mertervitrini.com.tr/backend/middleware/middleware.go) içinde `ResolveUserRoleFromDB` sorgusu ve `X-Total-Count` CORS başlığı güçlendirildi.
+  2. **Canlı Sunucu Güncellemesi ve Uçtan Uca (`E2E`) Doğrulama (`213.202.255.80`):**
+     - Keycloak Admin REST API üzerinden `admin` (`47001f61-bc31-46da-ab8d-4d82f9e1d386`) hesabına `admin` ve `super_admin` realm rolleri atandı; `merterdevdb.identity.users` kaydı `super_admin` olarak güncellendi.
+     - Birleşik Go Backend (`merter-backend`), Birleşik Next.js SSR Frontend (`merter-frontend`, `--remote-build`) ve Keycloak giriş teması (`/opt/keycloak/themes/merter/login`) canlı sunucuya aktarıldı.
+     - Canlı HTTPS üzerinden tam OIDC giriş akışı simüle edilerek doğrulandı: `GET /realms/merter/.../auth` (`HTTP 200`) -> `POST authenticate` (`302` `?code=...`) -> `/admin?code=...` (`NEXT_REDIRECT` ile `/admin/dashboard?code=...` korundu) -> `POST /api/v1/auth/keycloak-callback` (`HTTP 200`, `role: "super_admin"`, JWT `realm_access.roles: ["admin", "super_admin", ...]`) -> `GET /api/v1/analytics/bi-mining?days=30` (`HTTP 200`).
+
+
+### [2026-11-12 23:14:00] - Oturum #130 (Tüm Üyelik ve Başvuru Kanallarında Zorunlu & Gerçekçi Telefon Numarası Doğrulaması)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"telefon numarasını yazmadan üye olamamalılar gerçekçi telefon numarası girmeliler"` *(Ekran görüntüsü: `/admin/customers` listesinde Google/OAuth ile telefonsuz açılmış hesaplar ve test/sahte telefon numaraları)*
+- **Kök Nedenler & Yapılan İşlemler:**
+  1. **Backend Gerçekçi Telefon Paketi ([`backend/pkg/phoneutil/phone.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/phoneutil/phone.go), [`phone_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/phoneutil/phone_test.go)):**
+     - `NormalizeAndValidatePhone` ve `IsRealisticPhone` fonksiyonları geliştirildi: izin verilen karakter denetimi (harf reddi), `00` -> `+` dönüşümü, Türkiye numaralandırma planı (`+905xx`, `500`/`550`/`59x` engeli, coğrafi/850/800 kontrolleri), uluslararası E.164 (`10–15` hane) ve yerel B2B biçimleri doğrulandı.
+     - Sahte/uydurma numara filtresi eklendi: 5+ ardışık aynı rakam (`00000`, `55555`), 3'ten az farklı rakam veya son 7 hanede yetersiz çeşitlilik, 6+ ardışık artan/azalan seri (`123456`, `987654`) ve test son ekleri (`112233`, `1112233` vb.) reddedilirken, canlı sistemdeki 25 gerçek müşteri numarasının tamamı testlerle doğrulandı.
+  2. **Google OAuth ve Backend Üyelik/Profil Kapısı ([`store_auth.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_auth.go), [`mobile_auth_handler.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_auth_handler.go), [`supplier_applications.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_applications.go), [`audit_fixes_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/audit_fixes_test.go)):**
+     - `syncOrFetchLocalUser` fonksiyonunun telefonsuz (`phone = ''`) müşteriyi doğrudan `identity.users` tablosuna ekleyen davranışı kaldırıldı; yerinesalt okuma yapan `lookupLocalUserForAuth` ve `requiresCustomerPhoneCompletion` eklendi.
+     - `GoogleCallback` ve `Login`: Müşterinin veritabanında kaydı yoksa veya gerçekçi telefonu eksikse yerel üyelik kaydı oluşturulmaz ve `AuthResponse.RequiresPhone = true` döndürülür.
+     - `UpdateProfile`: Boş veya sahte telefon kabul eden `validateOptionalPhone` kaldırıldı; bekleyen OAuth kullanıcısı gerçekçi telefonunu girdiğinde `persistProfileWithPhone` / `insertOAuthCustomerProfile` üzerinden üyelik (`INSERT ... ON CONFLICT`) tamamlanır ve admin bildirimi + üye aktivitesi kaydedilir.
+     - `normalizeAndValidateRegisterInput`, `validateAddressRequestPayload`, `MobileHandler.loginAsCustomer` ve `SupplierApplicationsHandler.SubmitApplication` uç noktaları da aynı gerçekçi telefon doğrulamasına bağlandı.
+  3. **Frontend Oturum Kilidi, Ülke Kodu Seçici ve Çok Dilli Çeviriler ([`phoneValidation.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/phoneValidation.ts), [`storeAuth.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/storeAuth.ts), [`google-callback/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/google-callback/page.tsx), [`AuthModal.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/AuthModal.tsx), [`profile/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/profile/page.tsx), [`SupplierApplicationSection.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/SupplierApplicationSection.tsx), [`i18n.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/i18n.ts), [`tedarikci-basvuru/translations.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/[categoryPrefix]/tedarikci-basvuru/translations.ts), [`profile/components/translations.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/profile/components/translations.ts)):**
+     - `google-callback` artık telefon tamamlanmadan `localStorage`'a `store_user_token` / `store_user_info` yazmıyor ve `auth-change` tetiklemiyor.
+     - `storeAuth.ts` müşteri oturumlarında gerçekçi telefon numarası yoksa (`isRealisticPhoneNumber`) oturumu geçersiz sayıyor (toptan üye fiyatları gizli kalıyor) ve backend `404`/eksik telefon dönüşünde eski oturumu temizliyor.
+     - `AuthModal` (kayıt + telefonsuz giriş tamamlama görünümü), `google-callback` ve `SupplierApplicationSection` alanlarına ülke kodu seçici (`TR (+90)`, `RU (+7)`, `DE (+49)` vb.) ve gerçekçi telefon doğrulaması eklendi; 8 dildeki yanıltıcı `000 00 00` / `"en az 7 haneli"` metinleri düzeltildi.
+  4. **Mobil Flutter Doğrulaması ([`phone_validator.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/core/phone_validator.dart), [`auth_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/auth/auth_screen.dart), [`supplier_application_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/auth/supplier_application_screen.dart), [`session_provider.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/providers/session_provider.dart), [`widget_test.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/test/widget_test.dart)):**
+     - Müşteri kayıt ve tedarikçi başvuru ekranlarında gerçekçi telefon zorunluluğu ve `SessionProvider.isCustomerLoggedIn` telefon kontrolü eklendi.
+  5. **Doğrulama:** `go vet ./...`, `go test -count=1 ./pkg/phoneutil/... ./handlers/... ./services/...`, `npx tsc --noEmit`, `npm run lint`, `flutter analyze` ve `flutter test` (`14/14` test) sıfır hata/uyarıyla geçti. Değişiklikler **Demir Kural #1** gereği çalışma dizininde (`working tree`) bırakıldı.
+
+---
+
+### [2026-11-12 23:22:45] - Oturum #131 (SonarLint Temizliği: `go:S1192` ve `typescript:S6606`)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `store_auth.go` (`go:S1192` - `"/profile"` 4 kez tekrarı) ve `storeAuth.ts` (`typescript:S6606` - `??=` operatörü tercihi) için bildirilen 2 SonarLint uyarısının giderilmesi.
+- **Yapılan İşlemler:**
+  1. [`backend/handlers/store_auth.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_auth.go): `recaptchaSiteVerifyURL` ile birlikte `profileURLPath = "/profile"` sabiti tanımlandı ve `URLPath` alanındaki 4 yinelenen `"/profile"` dizesi `profileURLPath` ile değiştirildi.
+  2. [`frontend/src/app/storeAuth.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/storeAuth.ts): `triggerStorePriceVisibilityFetchOnce` içindeki `if (showPricesToGuestsCache === null)` ataması `showPricesToGuestsCache ??= localStorage.getItem("merter_show_prices_to_guests") === "1";` olacak şekilde sadeleştirildi.
+- **Doğrulama:**
+  - `cd backend && go vet ./... && go test -count=1 ./handlers/...` -> exit 0 (`ok mertervitrini/backend/handlers 0.571s`).
+  - `cd frontend && npx tsc --noEmit && npm run lint` -> exit 0.
+  - Değişiklikler **Demir Kural #1** gereği commit/push yapılmadan çalışma dizininde (`working tree`) bırakıldı.
+
+---
+
+### [2026-11-13 02:55:30] - Oturum #132 (Atomik Conventional Commit'ler, Canlı AlmaLinux Dağıtımı ve Üretim E2E Doğrulaması)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle yayınla"`
+- **Yapılan İşlemler:**
+  1. **Commit Öncesi Kalite Kapısı:**
+     - `cd backend && go vet ./... && go test -count=1 ./pkg/phoneutil/... ./handlers/... ./services/...` -> tüm paketler `ok` (`0.059s`, `0.379s`, `0.312s`).
+     - `cd frontend && npx tsc --noEmit && npm run lint` -> exit `0`.
+  2. **Yerel `main` Dalında 3 Atomik Conventional Commit:**
+     - `23b3083` — `fix: resolve admin OIDC callback redirect loop and Keycloak login theme rendering` (`7` dosya: `middleware.go`, `admin/page.tsx`, `LoginScreen.tsx`, `AdminShell.tsx`, `AdminContext.tsx`, `keycloak-theme/merter/login/{template.ftl,theme.properties}`).
+     - `e8ed905` — `feat: enforce mandatory realistic phone validation across storefront, API, and mobile` (`20` dosya: `backend/pkg/phoneutil`, backend auth/supplier handlers & tests, frontend `phoneValidation.ts`, `storeAuth.ts`, `google-callback`, `AuthModal`, `profile`, `SupplierApplicationSection`, 8 dil çevirileri ve Flutter `phone_validator.dart` + ekranlar + test).
+     - `9189d69` — `refactor: remove unused analytics UTM helper and simplify category path check` (`2` dosya: `analytics.go`, `SupplierProductModal.tsx`).
+     *(Not: **Demir Kural #1** gereği kullanıcı açıkça `push` istemediği ve `origin` içindeki gömülü PAT süresi dolmuş olduğu için değişiklikler yerel `main` üzerinde commit'lenip sunucuya SFTP/SSH ile doğrudan yayınlandı; `git push` çalıştırılmadı.)*
+  3. **Canlı AlmaLinux Üretim Sunucusu Dağıtımı (`213.202.255.80`):**
+     - `python scripts/unified_deployer.py -p unified -c all -a all --remote-build` (`168.54 sn` toplam süre, exit `0`):
+       - **Unified Go Backend (`merter-backend.service`, `:8080`):** Linux AMD64 cross-compile (`42.27 MB`, `4.56 sn`), SFTP yükleme & `config.json` doğrulaması (`40.43 sn`), `merter-backend` ve `nginx` yeniden başlatıldı (`49.31 sn` alt toplam).
+       - **Unified Next.js 16 SSR Frontend (`merter-frontend.service`, `:3000`):** Kaynak arşivleme ve SFTP yükleme (`7.00 sn`), AlmaLinux sunucusunda `NEXT_BUILD_SSR=true npm run build` (`110.09 sn`), `/var/www/media` sembolik link koruması, `merter-frontend` ve `nginx` yeniden başlatıldı (`119.23 sn` alt toplam).
+     - **Keycloak Giriş Teması MD5 Paritesi:** `/opt/keycloak/themes/merter/login/{template.ftl,theme.properties}` ile yerel dosyaların MD5 özetleri birebir eşleşti (`3f87d82860b58b494af16978967e15c1`, `592a72dfafc76f460996d5d45e20ca05`).
+  4. **Canlı Üretim Ortamı (`E2E`) Doğrulaması:**
+     - `GET https://mertervitrini.com.tr/api/v1/health` -> `HTTP 200` (`{"status":"healthy","database":"connected","service":"unified-backend"}`).
+     - `HEAD https://mertervitrini.com.tr/tr` -> `HTTP 200`.
+     - `GET https://mertervitrini.com.tr/admin?code=healthcheck` -> `HTTP 200` (`NEXT_REDIRECT` ile `code=healthcheck` parametresini koruyarak `/admin/dashboard?code=healthcheck` hedefine yönlendiriyor) & `GET /admin/dashboard` -> `HTTP 200`.
+     - `GET https://auth.mertervitrini.com.tr/realms/merter/protocol/openid-connect/auth?client_id=admin-client&...` -> `HTTP 200` (`13750` bayt, `kc-form-login: True`, `mv-login-card: True`).
+     - `POST https://mertervitrini.com.tr/api/v1/store/auth/register`: boş `phone: ""` -> `HTTP 400` (`"Cep telefonu numarası zorunludur."`); sahte `phone: "+905551112233"` -> `HTTP 400` (`"Lütfen ülke kodu ile birlikte geçerli ve gerçek bir cep telefonu numarası giriniz..."`).
