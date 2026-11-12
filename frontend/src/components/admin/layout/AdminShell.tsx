@@ -14,6 +14,16 @@ const ADMIN_TOKEN_STORAGE_KEYS = [
   "token",
 ] as const;
 
+const ADMIN_STAFF_ROLES = new Set([
+  "super_admin",
+  "superadmin",
+  "admin",
+  "merter-admin",
+  "editor",
+  "sales_manager",
+  "warehouse",
+]);
+
 function decodeBase64UrlUtf8(segment: string): string | null {
   try {
     const normalized = segment.replaceAll("-", "+").replaceAll("_", "/");
@@ -80,7 +90,35 @@ function extractNormalizedRoles(claims: Record<string, unknown>): Set<string> {
   return roles;
 }
 
-function isTokenAuthorizedAdmin(rawToken: string | null): boolean {
+function readStoredAdminUserRole(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const rawUser = localStorage.getItem("admin_user");
+    if (!rawUser) return "";
+    const parsed: unknown = JSON.parse(rawUser);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const roleVal = (parsed as Record<string, unknown>).role;
+      return typeof roleVal === "string" ? roleVal.trim().toLowerCase() : "";
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function hasAnyAdminStaffRole(roles: Set<string>): boolean {
+  for (const role of roles) {
+    if (ADMIN_STAFF_ROLES.has(role)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isTokenAuthorizedAdmin(
+  rawToken: string | null,
+  verifiedSessionRole?: string | null
+): boolean {
   if (!rawToken || typeof window === "undefined") {
     return false;
   }
@@ -100,7 +138,14 @@ function isTokenAuthorizedAdmin(rawToken: string | null): boolean {
   }
 
   const roles = extractNormalizedRoles(claims);
-  return roles.has("admin") || roles.has("super_admin");
+  if (hasAnyAdminStaffRole(roles)) {
+    return true;
+  }
+
+  const fallbackRole = (verifiedSessionRole || readStoredAdminUserRole())
+    .trim()
+    .toLowerCase();
+  return ADMIN_STAFF_ROLES.has(fallbackRole);
 }
 
 function readStoredCandidateToken(): string | null {
@@ -132,7 +177,7 @@ function clearUnauthorizedAdminStorage(): void {
 }
 
 export default function AdminShell({ children }: { readonly children: React.ReactNode }) {
-  const { isInitialized, token } = useAdminAuth();
+  const { isInitialized, token, user } = useAdminAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -154,19 +199,19 @@ export default function AdminShell({ children }: { readonly children: React.Reac
 
   const isAuthorizedAdmin = useMemo(() => {
     if (!isInitialized || !effectiveToken) return false;
-    return isTokenAuthorizedAdmin(effectiveToken);
-  }, [isInitialized, effectiveToken]);
+    return isTokenAuthorizedAdmin(effectiveToken, user?.role);
+  }, [isInitialized, effectiveToken, user?.role]);
 
   useEffect(() => {
     if (!isInitialized) return;
     const storedCandidate = token || readStoredCandidateToken();
-    if (storedCandidate && !isTokenAuthorizedAdmin(storedCandidate)) {
+    if (storedCandidate && !isTokenAuthorizedAdmin(storedCandidate, user?.role)) {
       clearUnauthorizedAdminStorage();
       if (pathname !== "/admin") {
         router.replace("/admin");
       }
     }
-  }, [isInitialized, token, pathname, router]);
+  }, [isInitialized, token, user?.role, pathname, router]);
 
   // 1. Initializing state (checking stored JWT / Keycloak callback)
   if (!isInitialized) {

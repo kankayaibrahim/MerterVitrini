@@ -215,7 +215,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Chat-Customer-Id, X-Chat-Customer-Name")
-		w.Header().Set("Access-Control-Expose-Headers", "Content-Length")
+		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, X-Total-Count")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -511,7 +511,8 @@ func ResolveUserRoleFromDB(ctx context.Context, userID, email string, fallback m
 	err := db.Pool.QueryRow(ctx, `
 		SELECT COALESCE(user_role, 'customer'), COALESCE(is_blocked, false), COALESCE(is_active, true)
 		FROM identity.users
-		WHERE (id = $1 OR ($2 <> '' AND lower(email) = lower($2)))
+		WHERE (($1 <> '' AND id::text = $1) OR ($2 <> '' AND lower(email) = lower($2)))
+		ORDER BY ($1 <> '' AND id::text = $1) DESC
 		LIMIT 1
 	`, userID, email).Scan(&dbRole, &isBlocked, &isActive)
 	if err != nil {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ShieldCheck, AlertCircle, RefreshCw, LogIn, Building2 } from "lucide-react";
 import { normalizeCanonicalAdminUrl } from "@/services/admin-api.service";
+import { useAdminAuth } from "@/context/AdminContext";
 
 const LABELS = {
   eyebrow: "KURUMSAL YÖNETİM PANELİ",
@@ -19,6 +20,7 @@ const LABELS = {
 };
 
 export default function LoginScreen() {
+  const { authError, clearAuthError } = useAdminAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,6 +33,7 @@ export default function LoginScreen() {
   const handleKeycloakRedirect = () => {
     try {
       setError(null);
+      clearAuthError();
       setLoading(true);
 
       const canonicalAdminTarget = normalizeCanonicalAdminUrl(
@@ -42,8 +45,7 @@ export default function LoginScreen() {
         `?client_id=${KEYCLOAK_CLIENT_ID}` +
         `&redirect_uri=${redirectUri}` +
         `&response_type=code` +
-        `&scope=openid+profile+email` +
-        `&prompt=login`;
+        `&scope=openid+profile+email`;
 
       window.location.href = authUrl;
     } catch (err: unknown) {
@@ -55,6 +57,8 @@ export default function LoginScreen() {
       );
     }
   };
+
+  const displayError = error || authError;
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#F8FAFC] p-4 font-sans text-[#0F172A] antialiased overflow-hidden relative">
@@ -89,10 +93,10 @@ export default function LoginScreen() {
         </div>
 
         {/* Error Alert Box */}
-        {error && (
+        {displayError && (
           <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-start gap-3 animate-in slide-in-from-top-2 duration-200">
             <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
-            <span>{error}</span>
+            <span>{displayError}</span>
           </div>
         )}
 

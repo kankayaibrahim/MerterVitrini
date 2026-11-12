@@ -37,6 +37,8 @@ export interface AdminAuthSlice {
   apiUrl: string;
   token: string | null;
   user: UserInfo | null;
+  authError: string | null;
+  clearAuthError: () => void;
   isInitialized: boolean;
   dbStatus: "connected" | "disconnected" | "checking";
   login: (token: string, user: UserInfo, idToken?: string) => void;
@@ -126,7 +128,12 @@ export function AdminProvider({
 
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
+  }, []);
   const [dbStatus, setDbStatus] = useState<
     "connected" | "disconnected" | "checking"
   >("checking");
@@ -192,6 +199,7 @@ export function AdminProvider({
 
   const login = useCallback(
     (newToken: string, newUser: UserInfo, idToken?: string) => {
+      setAuthError(null);
       setToken(newToken);
       setUser(newUser);
       sessionBootstrapService.saveSession(newToken, newUser, idToken);
@@ -253,6 +261,11 @@ export function AdminProvider({
           login(data.token, data.user, data.id_token);
         } catch (err: unknown) {
           console.error("Keycloak OIDC callback error:", err);
+          const message =
+            err instanceof Error && err.message
+              ? err.message
+              : "Kurumsal kimlik doğrulama tamamlanamadı. Lütfen tekrar deneyin.";
+          setAuthError(message);
           clearLocalSession();
         } finally {
           params.delete("code");
@@ -445,6 +458,8 @@ export function AdminProvider({
       apiUrl,
       token,
       user,
+      authError,
+      clearAuthError,
       isInitialized,
       dbStatus,
       login,
@@ -494,6 +509,8 @@ export function AdminProvider({
       apiUrl,
       token,
       user,
+      authError,
+      clearAuthError,
       isInitialized,
       dbStatus,
       login,
@@ -554,6 +571,8 @@ export function useAdminAuth(): AdminAuthSlice {
     apiUrl: ctx.apiUrl,
     token: ctx.token,
     user: ctx.user,
+    authError: ctx.authError,
+    clearAuthError: ctx.clearAuthError,
     isInitialized: ctx.isInitialized,
     dbStatus: ctx.dbStatus,
     login: ctx.login,
