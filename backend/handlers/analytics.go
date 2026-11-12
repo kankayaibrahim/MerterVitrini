@@ -1026,7 +1026,3 @@ func parseAttributionParams(rawURL string, req *TrackPageViewRequest) attributio
 	return out
 }
 
-func parseUTM(rawURL string) (source, medium, campaign string) {
-	attr := parseAttributionParams(rawURL, nil)
-	return attr.source, attr.medium, attr.campaign
-}

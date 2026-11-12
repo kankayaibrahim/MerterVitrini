@@ -99,7 +99,7 @@ function resolveAncestorsFromNodePath(
   nodePath: string,
   byNodePath: Map<string, CategoryOption>
 ): string[] {
-  if (!nodePath || !nodePath.includes(".")) return [];
+  if (!nodePath?.includes(".")) return [];
   const parts = nodePath.split(".").filter(Boolean);
   const titles: string[] = [];
 
