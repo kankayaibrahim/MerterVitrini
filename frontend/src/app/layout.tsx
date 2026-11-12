@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { headers } from "next/headers";
-import { Playfair_Display, Outfit, Noto_Sans_Arabic } from "next/font/google";
+import { Playfair_Display, Outfit } from "next/font/google";
 import Script from "next/script";
 import { AnalyticsTracker } from "@/components/analytics/AnalyticsTracker";
 import {
@@ -22,14 +22,6 @@ const outfit = Outfit({
   variable: "--font-outfit",
   subsets: ["latin", "latin-ext"],
   display: "swap",
-});
-
-const notoSansArabic = Noto_Sans_Arabic({
-  variable: "--font-arabic",
-  subsets: ["arabic"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-  preload: false,
 });
 
 function sanitizeVerificationToken(
@@ -127,7 +119,7 @@ export default async function RootLayout({
     <html
       lang={htmlLang}
       dir={htmlDir}
-      className={`${playfair.variable} ${outfit.variable} ${notoSansArabic.variable} h-full antialiased`}
+      className={`${playfair.variable} ${outfit.variable} h-full antialiased`}
     >
       <head>
         {googleVerification && (

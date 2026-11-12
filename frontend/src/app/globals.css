@@ -27,6 +27,7 @@
   
   --accent-gold: hsl(25, 22%, 39%); /* Darkened from 58% to pass 4.5:1 contrast audits */
   --shadow-premium: 0 4px 12px rgba(0, 0, 0, 0.03);
+  --font-arabic: "Segoe UI", "Geeza Pro", "Noto Sans Arabic", Tahoma, sans-serif;
 }
 
 @theme {

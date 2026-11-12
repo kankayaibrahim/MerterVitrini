@@ -407,10 +407,24 @@ WantedBy=multi-user.target
         self._ssh_cmd(ssh, f"systemctl restart {cfg['service_name']}")
 
     def _generate_nginx_conf(self, cfg):
+        csp_policy = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+            "style-src 'self' 'unsafe-inline' https:; "
+            "img-src 'self' https: http: data: blob:; "
+            "font-src 'self' https: data:; "
+            "connect-src 'self' https: wss:; "
+            "frame-src 'self' https://www.google.com https://maps.google.com https://www.recaptcha.net https://auth.mertervitrini.com.tr; "
+            "frame-ancestors 'self';"
+        )
         return f"""# 1. Main Unified Storefront & Admin Server Block (HTTPS)
 server {{
     listen 443 ssl;
     server_name {SERVER_HOST_ADDR} mertervitrini.com.tr www.mertervitrini.com.tr;
+
+    if ($host = 'www.mertervitrini.com.tr') {{
+        return 301 https://mertervitrini.com.tr$request_uri;
+    }}
 
     root {cfg['remote_dir']}/public;
     index index.html index.htm;
@@ -422,7 +436,7 @@ server {{
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    add_header Content-Security-Policy "{csp_policy}" always;
 
     # Dynamic SSR / ISR Reverse Proxy to Next.js App Router (Port 3000)
     location / {{
@@ -448,7 +462,7 @@ server {{
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+        add_header Content-Security-Policy "{csp_policy}" always;
     }}
 
     # Cache and serve dynamically resized images
@@ -462,7 +476,7 @@ server {{
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+        add_header Content-Security-Policy "{csp_policy}" always;
         try_files $uri @resize;
     }}
 
@@ -483,7 +497,7 @@ server {{
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+        add_header Content-Security-Policy "{csp_policy}" always;
     }}
 
     # Cache other static file extensions with security headers
@@ -496,7 +510,7 @@ server {{
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+        add_header Content-Security-Policy "{csp_policy}" always;
     }}
 
     # Unified Go Backend REST API Proxy (Port 8080)
@@ -645,11 +659,11 @@ server {{
             self.log("[REMOTE-BUILD] package.json and package-lock.json are unchanged and node_modules exists. Skipping npm install!")
         else:
             self.log("[REMOTE-BUILD] Running: npm install (dependencies changed or missing)...")
-            self._ssh_cmd(ssh, f"cd {build_root}/frontend && npm install --no-audit --no-fund")
+            self._ssh_cmd(ssh, f"cd {build_root}/frontend && npm install --no-audit --no-fund", check=True)
             self._ssh_cmd(ssh, f"echo \"{combined_hash}\" > {build_root}/frontend/package_hash.txt")
         
         self.log("[REMOTE-BUILD] Running: npm run build (Next.js SSR)")
-        self._ssh_cmd(ssh, f"cd {build_root}/frontend && NEXT_BUILD_SSR=true npm run build")
+        self._ssh_cmd(ssh, f"cd {build_root}/frontend && NEXT_BUILD_SSR=true npm run build", check=True)
         t_rembuild_end = time.time()
         self.record_time(proj_key, "frontend", "Sunucuda Next.js SSR Derleme (npm install + build)", t_rembuild_end - t_rembuild_start)
 
@@ -827,12 +841,13 @@ server {{
                     time.sleep(3 * attempt)
         raise RuntimeError(f"SSH connection failed after {max_attempts} attempts: {last_err}")
 
-    def _ssh_cmd(self, ssh, cmd):
+    def _ssh_cmd(self, ssh, cmd, check=False):
         self.log(f"[REMOTE CMD] Executing: {cmd}")
         _, stdout, stderr = ssh.exec_command(cmd)
         
         raw_out = stdout.read().decode('utf-8', errors='ignore').strip()
         raw_err = stderr.read().decode('utf-8', errors='ignore').strip()
+        exit_status = stdout.channel.recv_exit_status()
         
         out = raw_out.encode('ascii', errors='replace').decode('ascii')
         err = raw_err.encode('ascii', errors='replace').decode('ascii')
@@ -841,6 +856,8 @@ server {{
             self.log(f"STDOUT:\n{out}")
         if err:
             self.log(f"STDERR:\n{err}")
+        if check and exit_status != 0:
+            raise RuntimeError(f"Remote command failed (exit {exit_status}): {cmd}")
         return out, err
 
 
