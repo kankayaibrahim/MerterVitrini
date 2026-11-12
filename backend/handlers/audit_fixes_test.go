@@ -121,3 +121,52 @@ func TestMemberJourneyConsistencyHelpers(t *testing.T) {
 		t.Fatalf("expected login auth event not to count as visited page")
 	}
 }
+
+func TestRegisterAndAuthRequireRealisticPhone(t *testing.T) {
+	badPhones := []string{
+		"",
+		"1234567",
+		"+90 532 000 00 00",
+		"+905551112233",
+		"05994819264",
+	}
+	for _, ph := range badPhones {
+		req := RegisterRequest{
+			FirstName: "Ali",
+			LastName:  "Veli",
+			Email:     "ali.veli@example.com",
+			Password:  "StrongPass99!",
+			Phone:     ph,
+		}
+		if errJSON := normalizeAndValidateRegisterInput(&req); errJSON == "" {
+			t.Fatalf("expected register validation to reject phone %q", ph)
+		}
+	}
+
+	validReq := RegisterRequest{
+		FirstName: "Ali",
+		LastName:  "Veli",
+		Email:     "ALI.VELI@EXAMPLE.COM",
+		Password:  "StrongPass99!",
+		Phone:     "0532 481 92 64",
+	}
+	if errJSON := normalizeAndValidateRegisterInput(&validReq); errJSON != "" {
+		t.Fatalf("expected valid register input to pass, got %s", errJSON)
+	}
+	if validReq.Phone != "+905324819264" {
+		t.Fatalf("expected normalized phone +905324819264, got %q", validReq.Phone)
+	}
+
+	if !requiresCustomerPhoneCompletion(&UserInfo{Role: "customer", Phone: ""}, false) {
+		t.Fatalf("expected non-DB OAuth user without phone to require phone completion")
+	}
+	if !requiresCustomerPhoneCompletion(&UserInfo{Role: "customer", Phone: "+905551112233"}, true) {
+		t.Fatalf("expected customer with fake phone to require phone completion")
+	}
+	if requiresCustomerPhoneCompletion(&UserInfo{Role: "customer", Phone: "+905324819264"}, true) {
+		t.Fatalf("expected customer with realistic phone not to require phone completion")
+	}
+	if requiresCustomerPhoneCompletion(&UserInfo{Role: "admin", Phone: ""}, true) {
+		t.Fatalf("expected admin role not to be blocked by customer phone gate")
+	}
+}

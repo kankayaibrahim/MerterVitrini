@@ -402,7 +402,7 @@ void main() {
           email: 'buyer@merter.com',
           firstName: 'Ahmet',
           lastName: 'Kaya',
-          phone: '5550000000',
+          phone: '+905324819264',
           role: 'customer',
         );
       final commerce = _FakeCommerceRepository();

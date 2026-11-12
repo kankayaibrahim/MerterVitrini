@@ -17,6 +17,7 @@ import (
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/mailer"
+	"mertervitrini/backend/pkg/phoneutil"
 )
 
 var supplierEmailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
@@ -117,6 +118,13 @@ func (h *SupplierApplicationsHandler) SubmitApplication(w http.ResponseWriter, r
 		http.Error(w, `{"error":"Lütfen geçerli bir e-posta adresi giriniz."}`, http.StatusBadRequest)
 		return
 	}
+
+	normalizedPhone, phoneErr := phoneutil.NormalizeAndValidatePhone(req.Phone)
+	if phoneErr != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, phoneErr.Error()), http.StatusBadRequest)
+		return
+	}
+	req.Phone = normalizedPhone
 
 	// Validate reCAPTCHA when pair is configured (or when client supplied a token)
 	if valid, err := h.verifyReCaptcha(req.ReCaptchaToken, "supplier_apply"); err != nil || !valid {

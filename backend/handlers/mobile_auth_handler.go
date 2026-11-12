@@ -199,13 +199,17 @@ func (h *MobileHandler) loginAsCustomer(ctx context.Context, w http.ResponseWrit
 	}
 
 	userID, firstName, lastName, emailClaim := extractClaimsUserInfo(claims, email)
-	userInfo, err := syncOrFetchLocalUser(ctx, userID, firstName, lastName, emailClaim)
+	userInfo, existsInDB, err := lookupLocalUserForAuth(ctx, userID, firstName, lastName, emailClaim)
 	if err != nil {
 		if err.Error() == "blocked_user" {
 			httpx.Error(w, http.StatusForbidden, "Hesabınız yönetici tarafından engellenmiştir.")
 			return
 		}
 		httpx.Error(w, http.StatusUnauthorized, "Kullanıcı bilgileri alınamadı.")
+		return
+	}
+	if requiresCustomerPhoneCompletion(userInfo, existsInDB) {
+		httpx.Error(w, http.StatusForbidden, "Üyeliğinizi kullanabilmek için geçerli bir cep telefonu numarası tanımlamanız zorunludur.")
 		return
 	}
 

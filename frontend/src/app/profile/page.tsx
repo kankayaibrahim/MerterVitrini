@@ -12,6 +12,10 @@ import {
   isSupportedSeoLang,
   normalizeSeoLang,
 } from "@/utils/seoHelpers";
+import {
+  isRealisticPhoneNumber,
+  validateAndNormalizeRealisticPhone,
+} from "@/utils/phoneValidation";
 
 // Centralized types & translations
 import { addressTranslations, orderTranslations } from "./components/translations";
@@ -293,15 +297,21 @@ function getDefaultCountryId(countries: readonly CountryLookup[]): string {
 
 function validateAddressPhone(
   countryCode: string,
+  phoneCode: number,
   cleanPhone: string,
   getAddressT: (k: string) => string
 ): string | null {
+  const normalizedLocal = cleanPhone.replace(/^0+/, "");
   if (countryCode === "TR") {
-    if (cleanPhone.length !== 10) {
+    if (normalizedLocal.length !== 10) {
       return getAddressT("phone_tr_length_error");
     }
-  } else if (cleanPhone.length < 6 || cleanPhone.length > 15) {
+  } else if (normalizedLocal.length < 6 || normalizedLocal.length > 15) {
     return getAddressT("phone_intl_length_error");
+  }
+  const fullPhone = `+${phoneCode}${normalizedLocal}`;
+  if (!isRealisticPhoneNumber(fullPhone)) {
+    return getAddressT("phone_invalid_error");
   }
   return null;
 }
@@ -1115,8 +1125,13 @@ export default function ProfilePage() {
       return;
     }
 
-    const cleanPhone = formPhoneOnly.trim().replace(/\D/g, "");
-    const phoneError = validateAddressPhone(selectedCountry.code, cleanPhone, getAddressT);
+    const cleanPhone = formPhoneOnly.trim().replace(/\D/g, "").replace(/^0+/, "");
+    const phoneError = validateAddressPhone(
+      selectedCountry.code,
+      selectedCountry.phone_code,
+      cleanPhone,
+      getAddressT
+    );
     if (phoneError) {
       setAddressError(phoneError);
       return;
@@ -1212,6 +1227,12 @@ export default function ProfilePage() {
       const trCountry = countries.find((c) => c.code === "TR");
       if (!trCountry) throw new Error(pageCopy.migrationFailed);
 
+      const phoneCheck = validateAndNormalizeRealisticPhone(phone);
+      if (!phoneCheck.valid) {
+        throw new Error(t("phone_invalid_error", lang));
+      }
+      const migratedPhone = phoneCheck.normalized;
+
       if (billingAddress && billingAddress.trim() !== "") {
         const response = await fetch("/api/v1/store/profile/addresses", {
           method: "POST",
@@ -1224,7 +1245,7 @@ export default function ProfilePage() {
             address_type: "billing",
             first_name: firstName,
             last_name: lastName,
-            phone: phone || "905000000000",
+            phone: migratedPhone,
             country_id: trCountry.id,
             address_line: billingAddress.substring(0, 500),
             postal_code: "34000",
@@ -1250,7 +1271,7 @@ export default function ProfilePage() {
             address_type: "shipping",
             first_name: firstName,
             last_name: lastName,
-            phone: phone || "905000000000",
+            phone: migratedPhone,
             country_id: trCountry.id,
             address_line: deliveryAddress.substring(0, 500),
             postal_code: "34000",
@@ -1283,9 +1304,9 @@ export default function ProfilePage() {
       setError(t("phone_required_error", lang) || "Cep telefonu numarası zorunludur.");
       return;
     }
-    const cleanDigits = trimmedPhone.replace(/\D/g, "");
-    if (cleanDigits.length < 7 || cleanDigits.length > 15) {
-      setError(t("phone_invalid_error", lang) || "Lütfen geçerli bir cep telefonu numarası giriniz (en az 7 haneli).");
+    const phoneCheck = validateAndNormalizeRealisticPhone(trimmedPhone);
+    if (!phoneCheck.valid) {
+      setError(t("phone_invalid_error", lang));
       return;
     }
 
@@ -1301,7 +1322,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           first_name: firstName,
           last_name: lastName,
-          phone,
+          phone: phoneCheck.normalized,
           preferred_lang: preferredLang,
           preferred_currency: preferredCurrency,
           billing_address: billingAddress,
@@ -1317,6 +1338,8 @@ export default function ProfilePage() {
         throw new Error(data.error || t("profile_update_failed", lang));
       }
 
+      const savedPhone = (data.phone as string | undefined) || phoneCheck.normalized;
+      setPhone(savedPhone);
       setSuccess(t("profile_saved_success", lang));
 
       // 1. Sync updated details locally immediately
@@ -1325,7 +1348,7 @@ export default function ProfilePage() {
           ...user,
           first_name: firstName,
           last_name: lastName,
-          phone: phone
+          phone: savedPhone
         };
         setUser(updatedUserInfo);
         localStorage.setItem("store_user_info", JSON.stringify(updatedUserInfo));

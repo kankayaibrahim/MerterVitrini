@@ -17,6 +17,14 @@ import {
 } from "lucide-react";
 import { SUPPLIER_TRANSLATIONS, SupplierPageTranslations } from "@/app/[categoryPrefix]/tedarikci-basvuru/translations";
 import turkeyLocationsData from "@/data/turkeyLocations.json";
+import {
+  COUNTRY_DIAL_CODES,
+  combineDialCodeAndLocalPhone,
+  getDefaultCountryIsoForLang,
+  getDialCodeByIso,
+  getLocalPhonePlaceholder,
+  validateAndNormalizeRealisticPhone,
+} from "@/utils/phoneValidation";
 
 interface ProvinceData {
   name: string;
@@ -124,7 +132,9 @@ export default function SupplierApplicationSection({
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [countryIso, setCountryIso] = useState<string>(() => getDefaultCountryIsoForLang(lang));
   const [city, setCity] = useState("");
+  const dialCode = getDialCodeByIso(countryIso);
   const [district, setDistrict] = useState("");
   const [category, setCategory] = useState("");
   const [instagram, setInstagram] = useState("");
@@ -200,6 +210,13 @@ export default function SupplierApplicationSection({
       return;
     }
 
+    const candidatePhone = combineDialCodeAndLocalPhone(dialCode, phone);
+    const phoneCheck = validateAndNormalizeRealisticPhone(candidatePhone);
+    if (!phoneCheck.valid) {
+      setError(t.error_invalid_phone);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -214,7 +231,7 @@ export default function SupplierApplicationSection({
           company_name: companyName.trim(),
           contact_name: contactName.trim(),
           email: email.trim(),
-          phone: phone.trim(),
+          phone: phoneCheck.normalized,
           city: city.trim(),
           district: district.trim(),
           category: category.trim(),
@@ -330,15 +347,29 @@ export default function SupplierApplicationSection({
                     <span>{t.phone_label}</span>
                     <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    id="supp_phone"
-                    type="tel"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder={t.phone_placeholder}
-                    className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      aria-label={t.phone_label}
+                      value={countryIso}
+                      onChange={(e) => setCountryIso(e.target.value)}
+                      className="w-28 shrink-0 bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-2.5 py-3 text-xs font-bold text-zinc-900 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all cursor-pointer"
+                    >
+                      {COUNTRY_DIAL_CODES.map((opt) => (
+                        <option key={opt.iso} value={opt.iso}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      id="supp_phone"
+                      type="tel"
+                      required
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder={getLocalPhonePlaceholder(dialCode)}
+                      className="w-full flex-1 bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all"
+                    />
+                  </div>
                 </div>
 
                 {/* City (İl) */}

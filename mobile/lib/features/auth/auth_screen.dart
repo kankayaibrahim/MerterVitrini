@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/app_config.dart';
 import '../../core/app_theme.dart';
+import '../../core/phone_validator.dart';
 import '../../models/user.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/session_provider.dart';
@@ -73,11 +74,20 @@ class _AuthScreenState extends State<AuthScreen> {
           setState(() => _submitting = false);
           return;
         }
+        final phoneCheck = PhoneValidator.normalizeAndValidate(_phoneCtrl.text);
+        if (!phoneCheck.valid) {
+          _showSnack(
+            phoneCheck.errorMessage ?? 'Geçerli bir cep telefonu numarası giriniz.',
+            isError: true,
+          );
+          setState(() => _submitting = false);
+          return;
+        }
         await session.registerCustomerAccount(
           firstName: _firstNameCtrl.text,
           lastName: _lastNameCtrl.text,
           email: email,
-          phone: _phoneCtrl.text,
+          phone: phoneCheck.normalized,
           password: password,
         );
         await cart.loadCart();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_theme.dart';
+import '../../core/phone_validator.dart';
 import '../../providers/session_provider.dart';
 
 class SupplierApplicationScreen extends StatefulWidget {
@@ -54,13 +55,26 @@ class _SupplierApplicationScreenState extends State<SupplierApplicationScreen> {
       return;
     }
 
+    final phoneCheck = PhoneValidator.normalizeAndValidate(_phoneCtrl.text);
+    if (!phoneCheck.valid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            phoneCheck.errorMessage ?? 'Geçerli bir cep telefonu numarası giriniz.',
+          ),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       await context.read<SessionProvider>().api.submitSupplierApplication(
             companyName: _companyCtrl.text,
             contactName: _contactCtrl.text,
             email: _emailCtrl.text,
-            phone: _phoneCtrl.text,
+            phone: phoneCheck.normalized,
             city: _cityCtrl.text,
             district: _districtCtrl.text,
             category: _categoryCtrl.text,

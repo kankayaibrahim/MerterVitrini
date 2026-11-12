@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { pickLangText } from "@/app/i18n";
+import { isRealisticPhoneNumber } from "@/utils/phoneValidation";
 
 export interface StoreUser {
   id?: string;
@@ -46,10 +47,8 @@ function triggerStorePriceVisibilityFetchOnce(): void {
   if (typeof window === "undefined") {
     return;
   }
-  if (showPricesToGuestsCache === null) {
-    showPricesToGuestsCache =
-      localStorage.getItem("merter_show_prices_to_guests") === "1";
-  }
+  showPricesToGuestsCache ??=
+    localStorage.getItem("merter_show_prices_to_guests") === "1";
   if (storeSettingsFetchedOnce || storeSettingsFetchInFlight) {
     return;
   }
@@ -101,13 +100,21 @@ function isJwtTokenUnexpired(token: string): boolean {
   }
 }
 
-function syncVerifiedProfileFlag(emailVerified: boolean): void {
+function syncVerifiedProfileFields(emailVerified?: boolean, phone?: string): void {
   const current = localStorage.getItem("store_user_info");
   if (!current) return;
   try {
     const parsed = JSON.parse(current) as Record<string, unknown>;
-    if (parsed.email_verified !== emailVerified) {
+    let changed = false;
+    if (typeof emailVerified === "boolean" && parsed.email_verified !== emailVerified) {
       parsed.email_verified = emailVerified;
+      changed = true;
+    }
+    if (typeof phone === "string" && phone.trim() !== "" && parsed.phone !== phone) {
+      parsed.phone = phone;
+      changed = true;
+    }
+    if (changed) {
       localStorage.setItem("store_user_info", JSON.stringify(parsed));
       window.dispatchEvent(new Event("auth-change"));
     }
@@ -131,11 +138,18 @@ function verifyTokenWithBackendOnce(token: string): void {
     .then(async (res) => {
       if (res.ok) {
         verifiedTokenCache = token;
-        const profile = (await res.json().catch(() => ({}))) as { email_verified?: boolean };
-        if (typeof profile.email_verified === "boolean") {
-          syncVerifiedProfileFlag(profile.email_verified);
+        const profile = (await res.json().catch(() => ({}))) as {
+          email_verified?: boolean;
+          phone?: string;
+        };
+        if (!isRealisticPhoneNumber(profile.phone)) {
+          verifiedTokenCache = null;
+          clearStaleStoreSession();
+          window.dispatchEvent(new Event("auth-change"));
+          return;
         }
-      } else if (res.status === 401 || res.status === 403) {
+        syncVerifiedProfileFields(profile.email_verified, profile.phone);
+      } else if (res.status === 401 || res.status === 403 || res.status === 404) {
         verifiedTokenCache = null;
         clearStaleStoreSession();
         window.dispatchEvent(new Event("auth-change"));
@@ -158,6 +172,10 @@ function parseValidStoreUserRecord(customerInfo: string): Record<string, unknown
       return null;
     }
     if (!parsed.email && !parsed.id && !parsed.first_name) {
+      return null;
+    }
+    const role = typeof parsed.role === "string" ? parsed.role.trim().toLowerCase() : "";
+    if ((role === "" || role === "customer") && !isRealisticPhoneNumber(parsed.phone)) {
       return null;
     }
     return parsed;

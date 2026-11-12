@@ -6,6 +6,25 @@ import { X, Lock, Mail, User, Phone, Check, AlertCircle, Building2, Info } from 
 import { getCategoryPrefix, t } from "@/app/i18n";
 import { fetchStoreSettingsCached } from "@/app/utils";
 import { getOrSetVisitorId } from "@/components/analytics/AnalyticsTracker";
+import {
+  COUNTRY_DIAL_CODES,
+  combineDialCodeAndLocalPhone,
+  getDefaultCountryIsoForLang,
+  getDialCodeByIso,
+  getLocalPhonePlaceholder,
+  isRealisticPhoneNumber,
+  validateAndNormalizeRealisticPhone,
+} from "@/utils/phoneValidation";
+
+interface AuthModalUser {
+  id?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  role?: string;
+  email_verified?: boolean;
+}
 
 const REMEMBERED_EMAIL_KEY = "merter_remembered_email";
 
@@ -24,16 +43,21 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose, lang, initialMode = "login" }: Readonly<AuthModalProps>) {
-  const [mode, setMode] = useState<"login" | "register">(initialMode);
+  const [mode, setMode] = useState<"login" | "register" | "complete_phone">(initialMode);
   const [email, setEmail] = useState(() => readRememberedEmail());
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  const [countryIso, setCountryIso] = useState<string>(() => getDefaultCountryIsoForLang(lang));
+  const [pendingAuthToken, setPendingAuthToken] = useState("");
+  const [pendingAuthUser, setPendingAuthUser] = useState<AuthModalUser | null>(null);
   const [websiteHp, setWebsiteHp] = useState("");
   const [rememberMe, setRememberMe] = useState<boolean>(() => Boolean(readRememberedEmail()));
   const [showForgotHelp, setShowForgotHelp] = useState<boolean>(false);
+
+  const dialCode = getDialCodeByIso(countryIso);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -127,6 +151,9 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
       setFirstName("");
       setLastName("");
       setPhone("");
+      setCountryIso(getDefaultCountryIsoForLang(lang));
+      setPendingAuthToken("");
+      setPendingAuthUser(null);
       setWebsiteHp("");
     }
   }
@@ -175,14 +202,32 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as {
+        error?: string;
+        token?: string;
+        user?: AuthModalUser;
+        requires_phone?: boolean;
+      };
 
       if (!response.ok) {
         throw new Error(data.error || t("login_failed_credentials", lang));
       }
 
+      const role = String(data.user?.role || "customer").toLowerCase();
+      const needsPhoneCompletion =
+        Boolean(data.requires_phone) ||
+        ((role === "" || role === "customer") && !isRealisticPhoneNumber(data.user?.phone));
+
+      if (needsPhoneCompletion) {
+        setPendingAuthToken(data.token || "");
+        setPendingAuthUser(data.user || null);
+        setPhone("");
+        setMode("complete_phone");
+        return;
+      }
+
       // Save to localStorage
-      localStorage.setItem("store_user_token", data.token);
+      localStorage.setItem("store_user_token", data.token || "");
       localStorage.setItem("store_user_info", JSON.stringify(data.user));
       if (rememberMe && email.trim()) {
         localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim());
@@ -193,6 +238,77 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
       setSuccess(t("login_success_redirecting", lang));
 
       // Dispatch custom event to let other components know
+      window.dispatchEvent(new Event("auth-change"));
+
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompletePhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!phone.trim()) {
+      setError(t("phone_required_error", lang));
+      return;
+    }
+
+    const candidate = combineDialCodeAndLocalPhone(dialCode, phone);
+    const phoneCheck = validateAndNormalizeRealisticPhone(candidate);
+    if (!phoneCheck.valid) {
+      setError(t("phone_invalid_error", lang));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const preferredCurrency =
+        typeof window !== "undefined"
+          ? localStorage.getItem("merter_preferred_currency") || "TRY"
+          : "TRY";
+
+      const response = await fetch("/api/v1/store/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${pendingAuthToken}`,
+        },
+        body: JSON.stringify({
+          first_name: pendingAuthUser?.first_name || "Müşteri",
+          last_name: pendingAuthUser?.last_name || "",
+          phone: phoneCheck.normalized,
+          preferred_lang: lang,
+          preferred_currency: preferredCurrency,
+        }),
+      });
+
+      const resData = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        phone?: string;
+      };
+      if (!response.ok) {
+        throw new Error(resData.error || t("profile_update_failed", lang));
+      }
+
+      const savedPhone = resData.phone || phoneCheck.normalized;
+      const completedUser = pendingAuthUser
+        ? { ...pendingAuthUser, phone: savedPhone }
+        : { phone: savedPhone };
+      localStorage.setItem("store_user_token", pendingAuthToken);
+      localStorage.setItem("store_user_info", JSON.stringify(completedUser));
+      if (rememberMe && email.trim()) {
+        localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim());
+      } else {
+        localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+      }
+
+      setSuccess(t("login_success_redirecting", lang));
       window.dispatchEvent(new Event("auth-change"));
 
       setTimeout(() => {
@@ -219,8 +335,9 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
       return;
     }
 
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length < 7 || cleanPhone.length > 15) {
+    const candidate = combineDialCodeAndLocalPhone(dialCode, phone);
+    const phoneCheck = validateAndNormalizeRealisticPhone(candidate);
+    if (!phoneCheck.valid) {
       setError(t("phone_invalid_error", lang));
       return;
     }
@@ -237,7 +354,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
           first_name: firstName,
           last_name: lastName,
           email,
-          phone,
+          phone: phoneCheck.normalized,
           password,
           visitor_id: getOrSetVisitorId(),
           captcha_token: captchaToken,
@@ -348,7 +465,64 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
             </div>
           )}
 
-          {mode === "login" ? (
+          {mode === "complete_phone" && (
+            <form onSubmit={handleCompletePhone} className="space-y-4">
+              <div className="flex flex-col items-center text-center gap-2 pb-1">
+                <div className="w-11 h-11 rounded-full bg-salmon-pink/10 text-salmon-pink flex items-center justify-center">
+                  <Phone className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-extrabold text-eerie-black">
+                  {t("phone_complete_title", lang)}
+                </h3>
+                <p className="text-xs font-semibold text-sonic-silver leading-relaxed">
+                  {t("phone_complete_desc", lang)}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-eerie-black uppercase tracking-wider mb-2">
+                  {t("phone_label", lang)} <span className="text-red-500 font-bold">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    aria-label={t("phone_label", lang)}
+                    value={countryIso}
+                    onChange={(e) => setCountryIso(e.target.value)}
+                    className="w-28 shrink-0 px-2.5 py-2.5 bg-cultured border border-cultured rounded-xl text-xs font-bold text-onyx focus:outline-none focus:border-salmon-pink focus:bg-white transition-all duration-200 cursor-pointer"
+                  >
+                    {COUNTRY_DIAL_CODES.map((opt) => (
+                      <option key={opt.iso} value={opt.iso}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="relative flex-1">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-spanish-gray">
+                      <Phone className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="tel"
+                      required
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 bg-cultured border border-cultured rounded-xl text-xs sm:text-sm font-semibold text-onyx placeholder-spanish-gray focus:outline-none focus:border-salmon-pink focus:bg-white transition-all duration-200"
+                      placeholder={getLocalPhonePlaceholder(dialCode)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-eerie-black hover:bg-salmon-pink text-white rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all duration-200 cursor-pointer shadow-md disabled:bg-spanish-gray select-none active:scale-[0.98]"
+              >
+                {loading ? t("logging_in", lang) : t("save_and_continue", lang)}
+              </button>
+            </form>
+          )}
+
+          {mode === "login" && (
             <form onSubmit={handleLogin} className="space-y-4">
               {/* Honeypot field to catch spam bots */}
               <div className="hidden" aria-hidden="true" style={{ display: "none" }}>
@@ -499,7 +673,9 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
                 </Link>
               </div>
             </form>
-          ) : (
+          )}
+
+          {mode === "register" && (
             <form onSubmit={handleRegister} className="space-y-4">
               {/* Honeypot field to catch spam bots */}
               <div className="hidden" aria-hidden="true" style={{ display: "none" }}>
@@ -576,18 +752,32 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
                 <label className="block text-xs font-bold text-eerie-black uppercase tracking-wider mb-2">
                   {t("phone_label", lang)} <span className="text-red-500 font-bold">*</span>
                 </label>
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-spanish-gray">
-                    <Phone className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="tel"
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-cultured border border-cultured rounded-xl text-xs sm:text-sm font-semibold text-onyx placeholder-spanish-gray focus:outline-none focus:border-salmon-pink focus:bg-white transition-all duration-200"
-                    placeholder={t("phone_placeholder", lang) || "+90 532 000 00 00"}
-                  />
+                <div className="flex gap-2">
+                  <select
+                    aria-label={t("phone_label", lang)}
+                    value={countryIso}
+                    onChange={(e) => setCountryIso(e.target.value)}
+                    className="w-28 shrink-0 px-2.5 py-2.5 bg-cultured border border-cultured rounded-xl text-xs font-bold text-onyx focus:outline-none focus:border-salmon-pink focus:bg-white transition-all duration-200 cursor-pointer"
+                  >
+                    {COUNTRY_DIAL_CODES.map((opt) => (
+                      <option key={opt.iso} value={opt.iso}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="relative flex-1">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-spanish-gray">
+                      <Phone className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="tel"
+                      required
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 bg-cultured border border-cultured rounded-xl text-xs sm:text-sm font-semibold text-onyx placeholder-spanish-gray focus:outline-none focus:border-salmon-pink focus:bg-white transition-all duration-200"
+                      placeholder={getLocalPhonePlaceholder(dialCode)}
+                    />
+                  </div>
                 </div>
               </div>
 

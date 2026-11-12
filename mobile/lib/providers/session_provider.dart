@@ -98,7 +98,8 @@ class SessionProvider extends ChangeNotifier {
   bool get isCustomerLoggedIn =>
       _customerToken != null &&
       _customerToken!.isNotEmpty &&
-      _customerUser != null;
+      _customerUser != null &&
+      _customerUser!.phone.trim().isNotEmpty;
   bool get isSupplierLoggedIn =>
       _supplierToken != null &&
       _supplierToken!.isNotEmpty &&

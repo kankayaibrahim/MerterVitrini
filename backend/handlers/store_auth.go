@@ -21,6 +21,7 @@ import (
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/pkg/httpclient"
 	"mertervitrini/backend/pkg/mailer"
+	"mertervitrini/backend/pkg/phoneutil"
 	"mertervitrini/backend/pkg/safe"
 	"mertervitrini/backend/services"
 
@@ -117,8 +118,9 @@ type UserInfo struct {
 }
 
 type AuthResponse struct {
-	Token string    `json:"token"`
-	User  *UserInfo `json:"user"`
+	Token         string    `json:"token"`
+	User          *UserInfo `json:"user"`
+	RequiresPhone bool      `json:"requires_phone,omitempty"`
 }
 
 func decodeJWTClaims(tokenStr string) (map[string]any, error) {
@@ -225,32 +227,50 @@ func extractClaimsUserInfo(claims map[string]any, defaultEmail string) (userID, 
 	return userID, firstName, lastName, email
 }
 
-func syncOrFetchLocalUser(ctx context.Context, userID, firstName, lastName, email string) (*UserInfo, error) {
-	role := "customer"
-	var isBlocked bool
-	var dbRole string
-	var phone string
-	var emailVerified bool
-	dbErr := db.Pool.QueryRow(ctx, "SELECT is_blocked, user_role, phone, first_name, last_name, COALESCE(email_verified, false) FROM identity.users WHERE id = $1 OR email = $2", userID, email).
-		Scan(&isBlocked, &dbRole, &phone, &firstName, &lastName, &emailVerified)
+func lookupLocalUserForAuth(ctx context.Context, userID, firstName, lastName, email string) (*UserInfo, bool, error) {
+	var existingID, dbRole, phone, dbFirst, dbLast string
+	var isBlocked, emailVerified bool
+
+	dbErr := db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(id, ''), is_blocked, COALESCE(user_role, ''), COALESCE(phone, ''),
+		       COALESCE(first_name, ''), COALESCE(last_name, ''), COALESCE(email_verified, false)
+		FROM identity.users
+		WHERE id = $1 OR (lower(email) = lower($2) AND $2 <> '')
+		LIMIT 1
+	`, userID, email).Scan(&existingID, &isBlocked, &dbRole, &phone, &dbFirst, &dbLast, &emailVerified)
 
 	if dbErr != nil {
-		_, syncErr := db.Pool.Exec(ctx, `
-			INSERT INTO identity.users (id, first_name, last_name, email, phone, user_role, is_active, is_blocked, email_verified)
-			VALUES ($1, $2, $3, $4, '', 'customer', true, false, false)
-			ON CONFLICT (email) DO UPDATE SET id = EXCLUDED.id
-		`, userID, firstName, lastName, email)
-		if syncErr != nil {
-			log.Printf("[AUTH SYNC WARNING] Failed to dynamically sync logged-in Keycloak user locally: %v", syncErr)
+		if !errors.Is(dbErr, pgx.ErrNoRows) {
+			log.Printf("[AUTH LOOKUP WARNING] Failed checking local user %s: %v", email, dbErr)
 		}
-	} else {
-		if isBlocked {
-			return nil, fmt.Errorf("blocked_user")
-		}
-		if dbRole != "" {
-			role = dbRole
-		}
-		_, syncErr := db.Pool.Exec(ctx, "UPDATE identity.users SET id = $1 WHERE email = $2 AND (id IS NULL OR id = '')", userID, email)
+		return &UserInfo{
+			ID:            userID,
+			FirstName:     firstName,
+			LastName:      lastName,
+			Email:         email,
+			Phone:         "",
+			Role:          "customer",
+			EmailVerified: false,
+		}, false, nil
+	}
+
+	if isBlocked {
+		return nil, true, fmt.Errorf("blocked_user")
+	}
+
+	role := "customer"
+	if dbRole != "" {
+		role = dbRole
+	}
+	if dbFirst == "" {
+		dbFirst = firstName
+	}
+	if dbLast == "" {
+		dbLast = lastName
+	}
+
+	if userID != "" && existingID != userID {
+		_, syncErr := db.Pool.Exec(ctx, "UPDATE identity.users SET id = $1 WHERE lower(email) = lower($2) AND (id IS NULL OR id = '' OR id != $1)", userID, email)
 		if syncErr != nil {
 			log.Printf("[AUTH SYNC WARNING] Failed to update keycloak ID for user %s: %v", email, syncErr)
 		}
@@ -258,116 +278,73 @@ func syncOrFetchLocalUser(ctx context.Context, userID, firstName, lastName, emai
 
 	return &UserInfo{
 		ID:            userID,
-		FirstName:     firstName,
-		LastName:      lastName,
+		FirstName:     dbFirst,
+		LastName:      dbLast,
 		Email:         email,
 		Phone:         phone,
 		Role:          role,
 		EmailVerified: emailVerified,
-	}, nil
+	}, true, nil
 }
 
-func (h *StoreAuthHandler) performKeycloakLogin(ctx context.Context, email, password string) (string, *UserInfo, error) {
+func requiresCustomerPhoneCompletion(u *UserInfo, existsInDB bool) bool {
+	if u == nil {
+		return true
+	}
+	if u.Role != "" && u.Role != "customer" {
+		return false
+	}
+	return !existsInDB || !phoneutil.IsRealisticPhone(u.Phone)
+}
+
+func (h *StoreAuthHandler) performKeycloakLogin(ctx context.Context, email, password string) (string, *UserInfo, bool, error) {
 	accessToken, err := h.requestKeycloakPasswordToken(ctx, email, password)
 	if err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	}
 
 	claims, err := decodeJWTClaims(accessToken)
 	if err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	}
 
 	userID, firstName, lastName, emailClaim := extractClaimsUserInfo(claims, email)
-	userInfo, err := syncOrFetchLocalUser(ctx, userID, firstName, lastName, emailClaim)
+	userInfo, existsInDB, err := lookupLocalUserForAuth(ctx, userID, firstName, lastName, emailClaim)
 	if err != nil {
-		return "", nil, err
+		return "", nil, false, err
 	}
-	if kcVerified, ok := claims["email_verified"].(bool); ok && kcVerified && !userInfo.EmailVerified {
-		if _, updErr := db.Pool.Exec(ctx, `UPDATE identity.users SET email_verified = true WHERE id = $1 OR lower(email) = lower($2)`, userID, emailClaim); updErr == nil {
-			userInfo.EmailVerified = true
+
+	if existsInDB {
+		if kcVerified, ok := claims["email_verified"].(bool); ok && kcVerified && !userInfo.EmailVerified {
+			if _, updErr := db.Pool.Exec(ctx, `UPDATE identity.users SET email_verified = true WHERE id = $1 OR lower(email) = lower($2)`, userID, emailClaim); updErr == nil {
+				userInfo.EmailVerified = true
+			}
 		}
 	}
 
-	return accessToken, userInfo, nil
+	return accessToken, userInfo, requiresCustomerPhoneCompletion(userInfo, existsInDB), nil
 }
 
-func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Geçersiz istek gövdesi"}`, http.StatusBadRequest)
-		return
-	}
-
-	// Honeypot trap: if this field is filled, it's a bot!
-	if req.WebsiteHP != "" {
-		log.Printf("[HONEYPOT DETECTED] Bot registration attempt from IP: %s (field filled: %s)", r.RemoteAddr, req.WebsiteHP)
-		// Return fake success response to isolate the bot without putting load on system
-		w.Header().Set(headerContentType, mimeApplicationJSON)
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{
-			"message": "Kayıt başarıyla oluşturuldu.",
-			"user_id": "fake-register-id-99124",
-		})
-		return
-	}
-
+func normalizeAndValidateRegisterInput(req *RegisterRequest) string {
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 	req.FirstName = strings.TrimSpace(req.FirstName)
 	req.LastName = strings.TrimSpace(req.LastName)
 	req.Phone = strings.TrimSpace(req.Phone)
 
 	if req.Email == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" {
-		http.Error(w, `{"error":"Ad, soyad, e-posta ve şifre alanları zorunludur"}`, http.StatusBadRequest)
-		return
+		return `{"error":"Ad, soyad, e-posta ve şifre alanları zorunludur"}`
 	}
 
-	if req.Phone == "" {
-		http.Error(w, `{"error":"Cep telefonu numarası zorunludur"}`, http.StatusBadRequest)
-		return
-	}
-
-	cleanPhone := strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' {
-			return r
-		}
-		return -1
-	}, req.Phone)
-
-	if len(cleanPhone) < 7 || len(cleanPhone) > 15 {
-		http.Error(w, `{"error":"Lütfen geçerli bir cep telefonu numarası giriniz (en az 7 haneli)"}`, http.StatusBadRequest)
-		return
-	}
-
-	// Verify reCAPTCHA v3 when both site_key + secret_key are configured (or when client supplied a token)
-	captchaValid, captchaErr := verifyPublicFormReCaptcha(h.Cfg, req.CaptchaToken, "register", true)
-	if captchaErr != nil {
-		log.Printf("[AUTH ERROR] reCAPTCHA validation error: %v", captchaErr)
-		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, captchaErr.Error()), http.StatusBadRequest)
-		return
-	}
-	if !captchaValid {
-		http.Error(w, `{"error":"Güvenlik doğrulaması (reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."}`, http.StatusBadRequest)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-	defer cancel()
-
-	adminToken, err := h.getAdminAccessToken(ctx)
+	normalizedPhone, err := phoneutil.NormalizeAndValidatePhone(req.Phone)
 	if err != nil {
-		log.Printf("[AUTH ERROR] Failed to fetch Keycloak admin token: %v", err)
-		http.Error(w, `{"error":"Kimlik sağlayıcı bağlantı hatası"}`, http.StatusInternalServerError)
-		return
+		return fmt.Sprintf(`{"error":%q}`, err.Error())
 	}
+	req.Phone = normalizedPhone
+	return ""
+}
 
+func (h *StoreAuthHandler) createKeycloakCustomer(ctx context.Context, adminToken string, req RegisterRequest) (string, int, string) {
 	createUserURL := fmt.Sprintf("%s/admin/realms/%s/users", h.Cfg.KeycloakURL, h.Cfg.KeycloakRealm)
-
 	keycloakUser := map[string]any{
 		"username":      req.Email,
 		"email":         req.Email,
@@ -389,14 +366,12 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := json.Marshal(keycloakUser)
 	if err != nil {
-		http.Error(w, `{"error":"İç hata oluştu"}`, http.StatusInternalServerError)
-		return
+		return "", http.StatusInternalServerError, `{"error":"İç hata oluştu"}`
 	}
 
 	kcReq, err := http.NewRequestWithContext(ctx, http.MethodPost, createUserURL, strings.NewReader(string(payload)))
 	if err != nil {
-		http.Error(w, `{"error":"İç hata oluştu"}`, http.StatusInternalServerError)
-		return
+		return "", http.StatusInternalServerError, `{"error":"İç hata oluştu"}`
 	}
 	kcReq.Header.Set(headerContentType, mimeApplicationJSON)
 	kcReq.Header.Set("Authorization", authBearerPrefix+adminToken)
@@ -404,32 +379,84 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	kcResp, err := httpclient.FastClient.Do(kcReq)
 	if err != nil {
 		log.Printf("[AUTH ERROR] Failed to make register call to Keycloak: %v", err)
-		http.Error(w, `{"error":"Kimlik sağlayıcı sunucusu yanıt vermedi"}`, http.StatusBadGateway)
-		return
+		return "", http.StatusBadGateway, `{"error":"Kimlik sağlayıcı sunucusu yanıt vermedi"}`
 	}
 	defer kcResp.Body.Close()
 
 	if kcResp.StatusCode == http.StatusConflict {
-		http.Error(w, `{"error":"Bu e-posta adresi ile zaten kayıtlı bir kullanıcı bulunuyor"}`, http.StatusConflict)
-		return
+		return "", http.StatusConflict, `{"error":"Bu e-posta adresi ile zaten kayıtlı bir kullanıcı bulunuyor"}`
 	}
-
 	if kcResp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(kcResp.Body)
 		log.Printf("[AUTH ERROR] Keycloak registration failed with status %d: %s", kcResp.StatusCode, string(body))
-		http.Error(w, `{"error":"Kayıt işlemi gerçekleştirilemedi"}`, http.StatusInternalServerError)
-		return
+		return "", http.StatusInternalServerError, `{"error":"Kayıt işlemi gerçekleştirilemedi"}`
 	}
 
 	location := kcResp.Header.Get("Location")
 	if location == "" {
 		log.Printf("[AUTH ERROR] Location header missing in Keycloak response")
-		http.Error(w, `{"error":"Kayıt sonrası kullanıcı tanımlayıcı alınamadı"}`, http.StatusInternalServerError)
-		return
+		return "", http.StatusInternalServerError, `{"error":"Kayıt sonrası kullanıcı tanımlayıcı alınamadı"}`
 	}
 
 	parts := strings.Split(location, "/")
-	keycloakUserID := parts[len(parts)-1]
+	return parts[len(parts)-1], http.StatusCreated, ""
+}
+
+func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Geçersiz istek gövdesi"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Honeypot trap: if this field is filled, it's a bot!
+	if req.WebsiteHP != "" {
+		log.Printf("[HONEYPOT DETECTED] Bot registration attempt from IP: %s (field filled: %s)", r.RemoteAddr, req.WebsiteHP)
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{
+			"message": "Kayıt başarıyla oluşturuldu.",
+			"user_id": "fake-register-id-99124",
+		})
+		return
+	}
+
+	if errJSON := normalizeAndValidateRegisterInput(&req); errJSON != "" {
+		http.Error(w, errJSON, http.StatusBadRequest)
+		return
+	}
+
+	captchaValid, captchaErr := verifyPublicFormReCaptcha(h.Cfg, req.CaptchaToken, "register", true)
+	if captchaErr != nil {
+		log.Printf("[AUTH ERROR] reCAPTCHA validation error: %v", captchaErr)
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, captchaErr.Error()), http.StatusBadRequest)
+		return
+	}
+	if !captchaValid {
+		http.Error(w, `{"error":"Güvenlik doğrulaması (reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	adminToken, err := h.getAdminAccessToken(ctx)
+	if err != nil {
+		log.Printf("[AUTH ERROR] Failed to fetch Keycloak admin token: %v", err)
+		http.Error(w, `{"error":"Kimlik sağlayıcı bağlantı hatası"}`, http.StatusInternalServerError)
+		return
+	}
+
+	keycloakUserID, statusCode, kcErrJSON := h.createKeycloakCustomer(ctx, adminToken, req)
+	if kcErrJSON != "" {
+		http.Error(w, kcErrJSON, statusCode)
+		return
+	}
 
 	ip := getClientIP(r)
 	verificationToken, _ := generateVerificationToken()
@@ -478,7 +505,7 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	loginToken, loginUser, err := h.performKeycloakLogin(ctx, req.Email, req.Password)
+	loginToken, loginUser, _, err := h.performKeycloakLogin(ctx, req.Email, req.Password)
 	if err != nil {
 		w.Header().Set(headerContentType, mimeApplicationJSON)
 		w.WriteHeader(http.StatusCreated)
@@ -554,7 +581,7 @@ func (h *StoreAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	token, user, err := h.performKeycloakLogin(ctx, req.Email, req.Password)
+	token, user, reqPhone, err := h.performKeycloakLogin(ctx, req.Email, req.Password)
 	if err != nil {
 		if err.Error() == "blocked_user" {
 			http.Error(w, `{"error":"Hesabınız yönetici tarafından engellenmiştir. Lütfen iletişime geçiniz."}`, http.StatusForbidden)
@@ -566,59 +593,71 @@ func (h *StoreAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
-	ip := getClientIP(r)
-	safe.Go("Record Login History Login", func() {
-		recordLoginHistory(context.Background(), user.ID, ip)
-	})
-	RecordMemberActivityAsync(r, MemberActivityInput{
-		UserID:        user.ID,
-		VisitorID:     req.VisitorID,
-		EventType:     "login",
-		EventCategory: "auth",
-		Title:         "Web mağazasından oturum açtı",
-		Subtitle:      "IP: " + ip,
-		EntityType:    "user",
-		EntityID:      user.ID,
-	})
+	if !reqPhone {
+		ip := getClientIP(r)
+		safe.Go("Record Login History Login", func() {
+			recordLoginHistory(context.Background(), user.ID, ip)
+		})
+		RecordMemberActivityAsync(r, MemberActivityInput{
+			UserID:        user.ID,
+			VisitorID:     req.VisitorID,
+			EventType:     "login",
+			EventCategory: "auth",
+			Title:         "Web mağazasından oturum açtı",
+			Subtitle:      "IP: " + ip,
+			EntityType:    "user",
+			EntityID:      user.ID,
+		})
+	}
 
 	json.NewEncoder(w).Encode(AuthResponse{
-		Token: token,
-		User:  user,
+		Token:         token,
+		User:          user,
+		RequiresPhone: reqPhone,
 	})
 }
 
-// verifyTokenAndGetUserID cryptographically verifies the JWT Bearer token (RS256 Keycloak or HS256 local) and returns userID if valid and not expired.
-func verifyTokenAndGetUserID(authHeader string) (string, error) {
+// verifyTokenAndGetClaims cryptographically verifies the JWT Bearer token and returns userID and claims.
+func verifyTokenAndGetClaims(authHeader string) (string, map[string]any, error) {
 	trimmed := strings.TrimSpace(authHeader)
 	if len(trimmed) < 7 || !strings.EqualFold(trimmed[:7], authBearerPrefix) {
-		return "", errors.New("missing or malformed authorization header")
+		return "", nil, errors.New("missing or malformed authorization header")
 	}
 	tokenStr := strings.TrimSpace(trimmed[7:])
 	if tokenStr == "" {
-		return "", errors.New("missing authorization token")
+		return "", nil, errors.New("missing authorization token")
 	}
 
 	claims, err := decodeJWTClaims(tokenStr)
 	if err != nil {
-		return "", fmt.Errorf("failed to verify jwt claims: %w", err)
+		return "", nil, fmt.Errorf("failed to verify jwt claims: %w", err)
 	}
 
 	expVal, exists := claims["exp"]
 	if !exists {
-		return "", errors.New("token missing exp claim")
+		return "", nil, errors.New("token missing exp claim")
 	}
 	if expFloat, ok := expVal.(float64); !ok || time.Now().Unix() > int64(expFloat) {
-		return "", errors.New("token expired")
+		return "", nil, errors.New("token expired")
 	}
 
 	userID, _ := claims["sub"].(string)
 	if strings.TrimSpace(userID) == "" {
-		return "", errors.New("subject missing from token")
+		return "", nil, errors.New("subject missing from token")
 	}
-	return userID, nil
+	return userID, claims, nil
 }
 
-const recaptchaSiteVerifyURL = "https://www.google.com/recaptcha/api/siteverify"
+// verifyTokenAndGetUserID cryptographically verifies the JWT Bearer token (RS256 Keycloak or HS256 local) and returns userID if valid and not expired.
+func verifyTokenAndGetUserID(authHeader string) (string, error) {
+	userID, _, err := verifyTokenAndGetClaims(authHeader)
+	return userID, err
+}
+
+const (
+	recaptchaSiteVerifyURL = "https://www.google.com/recaptcha/api/siteverify"
+	profileURLPath         = "/profile"
+)
 
 // verifyGoogleReCaptcha validates a Google reCAPTCHA token against siteverify using FastClient with timeout.
 func verifyGoogleReCaptcha(secret, token, action string) (bool, error) {
@@ -698,15 +737,6 @@ func verifyPublicFormReCaptcha(cfg *config.Config, token, action string, enforce
 	return verifyGoogleReCaptcha(secret, trimmedToken, action)
 }
 
-// verifyReCaptchaV3 validates Google reCAPTCHA token against Google siteverify API using FastClient with timeout.
-func (h *StoreAuthHandler) verifyReCaptchaV3(token string, action string) (bool, error) {
-	var cfg *config.Config
-	if h != nil {
-		cfg = h.Cfg
-	}
-	return verifyPublicFormReCaptcha(cfg, token, action, true)
-}
-
 type UserProfile struct {
 	ID                string `json:"id"`
 	FirstName         string `json:"first_name"`
@@ -783,22 +813,6 @@ type UpdateProfileRequest struct {
 	InstagramUsername string `json:"instagram_username"`
 }
 
-func validateOptionalPhone(phone string) error {
-	if phone == "" {
-		return nil
-	}
-	cleanPhone := strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' {
-			return r
-		}
-		return -1
-	}, phone)
-	if len(cleanPhone) < 7 || len(cleanPhone) > 15 {
-		return fmt.Errorf("Lütfen geçerli bir cep telefonu numarası giriniz (en az 7 haneli)")
-	}
-	return nil
-}
-
 func (h *StoreAuthHandler) asyncSyncKeycloakProfile(id, first, last, ph string) {
 	ctxBG, cancelBG := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelBG()
@@ -845,13 +859,138 @@ func (h *StoreAuthHandler) asyncSyncKeycloakProfile(id, first, last, ph string) 
 	}
 }
 
+func (h *StoreAuthHandler) insertOAuthCustomerProfile(ctx context.Context, r *http.Request, userID, email string, req UpdateProfileRequest) (int, string) {
+	if email == "" {
+		return http.StatusBadRequest, `{"error":"Oturum e-posta adresi doğrulanamadı"}`
+	}
+	ip := getClientIP(r)
+	_, dbErr := db.Pool.Exec(ctx, `
+		INSERT INTO identity.users (
+			id, first_name, last_name, email, phone, user_role, is_active, is_blocked,
+			registration_ip, preferred_lang, preferred_currency,
+			billing_address, delivery_address, tax_no_tckn, instagram_username,
+			email_verified, email_verified_at
+		)
+		VALUES ($1, $2, $3, $4, $5, 'customer', true, false, $6, $7, $8, $9, $10, $11, $12, true, CURRENT_TIMESTAMP)
+		ON CONFLICT (email) DO UPDATE SET
+			id = EXCLUDED.id,
+			first_name = EXCLUDED.first_name,
+			last_name = EXCLUDED.last_name,
+			phone = EXCLUDED.phone,
+			preferred_lang = EXCLUDED.preferred_lang,
+			preferred_currency = EXCLUDED.preferred_currency,
+			billing_address = EXCLUDED.billing_address,
+			delivery_address = EXCLUDED.delivery_address,
+			tax_no_tckn = EXCLUDED.tax_no_tckn,
+			instagram_username = EXCLUDED.instagram_username,
+			email_verified = true,
+			email_verified_at = COALESCE(identity.users.email_verified_at, CURRENT_TIMESTAMP),
+			updated_at = CURRENT_TIMESTAMP
+	`, userID, req.FirstName, req.LastName, email, req.Phone, ip, req.PreferredLang, req.PreferredCurrency,
+		req.BillingAddress, req.DeliveryAddress, req.TaxNoTCKN, req.InstagramUsername)
+	if dbErr != nil {
+		log.Printf("[PROFILE ERROR] Failed to insert pending customer %s in postgres: %v", userID, dbErr)
+		return http.StatusInternalServerError, `{"error":"Profil oluşturulurken veritabanı hatası oluştu"}`
+	}
+
+	meta := mailer.ExtractClientMeta(r)
+	mailer.SendCustomerRegisteredNotification(h.Cfg, req.FirstName, req.LastName, email, req.Phone, meta)
+	safe.Go("Record Login History OAuth Phone", func() {
+		recordLoginHistory(context.Background(), userID, ip)
+	})
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userID,
+		EventType:     "register",
+		EventCategory: "auth",
+		Title:         "Google hesabı ve telefon numarası ile üyeliğini tamamladı",
+		Subtitle:      fmt.Sprintf("%s %s • %s", req.FirstName, req.LastName, email),
+		URLPath:       profileURLPath,
+		EntityType:    "user",
+		EntityID:      userID,
+	})
+	return 0, ""
+}
+
+func (h *StoreAuthHandler) persistProfileWithPhone(ctx context.Context, r *http.Request, userID string, claims map[string]any, req UpdateProfileRequest) (int, string) {
+	_, _, _, claimEmail := extractClaimsUserInfo(claims, "")
+	claimEmail = strings.TrimSpace(strings.ToLower(claimEmail))
+
+	var existingID, prevPhone string
+	var isBlocked bool
+	lookupErr := db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(id, ''), is_blocked, COALESCE(phone, '')
+		FROM identity.users
+		WHERE id = $1 OR (lower(email) = lower($2) AND $2 <> '')
+		LIMIT 1
+	`, userID, claimEmail).Scan(&existingID, &isBlocked, &prevPhone)
+
+	if errors.Is(lookupErr, pgx.ErrNoRows) {
+		return h.insertOAuthCustomerProfile(ctx, r, userID, claimEmail, req)
+	}
+	if lookupErr != nil {
+		log.Printf("[PROFILE ERROR] Failed to query user %s in postgres: %v", userID, lookupErr)
+		return http.StatusInternalServerError, `{"error":"Profil güncellenirken veritabanı hatası oluştu"}`
+	}
+	if isBlocked {
+		return http.StatusForbidden, `{"error":"Hesabınız yönetici tarafından engellenmiştir."}`
+	}
+
+	_, dbErr := db.Pool.Exec(ctx, `
+		UPDATE identity.users SET
+			id = $10,
+			first_name = $1,
+			last_name = $2,
+			phone = $3,
+			preferred_lang = $4,
+			preferred_currency = $5,
+			billing_address = $6,
+			delivery_address = $7,
+			tax_no_tckn = $8,
+			instagram_username = $9,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = $11 OR (lower(email) = lower($12) AND $12 <> '')
+	`, req.FirstName, req.LastName, req.Phone, req.PreferredLang, req.PreferredCurrency,
+		req.BillingAddress, req.DeliveryAddress, req.TaxNoTCKN, req.InstagramUsername, userID, existingID, claimEmail)
+	if dbErr != nil {
+		log.Printf("[PROFILE ERROR] Failed to update user %s in postgres: %v", userID, dbErr)
+		return http.StatusInternalServerError, `{"error":"Profil güncellenirken veritabanı hatası oluştu"}`
+	}
+
+	if !phoneutil.IsRealisticPhone(prevPhone) && claimEmail != "" {
+		meta := mailer.ExtractClientMeta(r)
+		mailer.SendCustomerRegisteredNotification(h.Cfg, req.FirstName, req.LastName, claimEmail, req.Phone, meta)
+		RecordMemberActivityAsync(r, MemberActivityInput{
+			UserID:        userID,
+			EventType:     "register",
+			EventCategory: "auth",
+			Title:         "Cep telefonu tamamlanarak üyelik aktive edildi",
+			Subtitle:      fmt.Sprintf("%s %s • %s", req.FirstName, req.LastName, claimEmail),
+			URLPath:       profileURLPath,
+			EntityType:    "user",
+			EntityID:      userID,
+		})
+		return 0, ""
+	}
+
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userID,
+		EventType:     "profile_update",
+		EventCategory: "auth",
+		Title:         "Profil ve hesap tercihlerini güncelledi",
+		URLPath:       profileURLPath,
+		EntityType:    "user",
+		EntityID:      userID,
+	})
+	return 0, ""
+}
+
 func (h *StoreAuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
 
-	userID, err := verifyTokenAndGetUserID(r.Header.Get("Authorization"))
+	userID, claims, err := verifyTokenAndGetClaims(r.Header.Get("Authorization"))
 	if err != nil {
 		w.Header().Set(headerContentType, mimeApplicationJSON)
 		w.WriteHeader(http.StatusUnauthorized)
@@ -876,53 +1015,31 @@ func (h *StoreAuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := validateOptionalPhone(req.Phone); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusBadRequest)
+	normalizedPhone, phoneErr := phoneutil.NormalizeAndValidatePhone(req.Phone)
+	if phoneErr != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, phoneErr.Error()), http.StatusBadRequest)
 		return
 	}
+	req.Phone = normalizedPhone
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	// 1. Update local database
-	_, dbErr := db.Pool.Exec(ctx, `
-		UPDATE identity.users SET
-			first_name = $1,
-			last_name = $2,
-			phone = $3,
-			preferred_lang = $4,
-			preferred_currency = $5,
-			billing_address = $6,
-			delivery_address = $7,
-			tax_no_tckn = $8,
-			instagram_username = $9,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $10
-	`, req.FirstName, req.LastName, req.Phone, req.PreferredLang, req.PreferredCurrency,
-		req.BillingAddress, req.DeliveryAddress, req.TaxNoTCKN, req.InstagramUsername, userID)
-
-	if dbErr != nil {
-		log.Printf("[PROFILE ERROR] Failed to update user %s in postgres: %v", userID, dbErr)
-		http.Error(w, `{"error":"Profil güncellenirken veritabanı hatası oluştu"}`, http.StatusInternalServerError)
+	if statusCode, errJSON := h.persistProfileWithPhone(ctx, r, userID, claims, req); errJSON != "" {
+		http.Error(w, errJSON, statusCode)
 		return
 	}
 
-	// 2. Synchronize to Keycloak asynchronously
 	safe.Go("Keycloak Async Profile Sync", func() {
 		h.asyncSyncKeycloakProfile(userID, req.FirstName, req.LastName, req.Phone)
 	})
-	RecordMemberActivityAsync(r, MemberActivityInput{
-		UserID:        userID,
-		EventType:     "profile_update",
-		EventCategory: "auth",
-		Title:         "Profil ve hesap tercihlerini güncelledi",
-		URLPath:       "/profile",
-		EntityType:    "user",
-		EntityID:      userID,
-	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
-	w.Write([]byte(`{"success":true,"message":"Profiliniz başarıyla güncellendi."}`))
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"phone":   req.Phone,
+		"message": "Profiliniz başarıyla güncellendi.",
+	})
 }
 
 func (h *StoreAuthHandler) exchangeGoogleCodeForToken(ctx context.Context, code, redirectURI string) (string, error) {
@@ -1002,9 +1119,20 @@ func (h *StoreAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userInfo, err := syncOrFetchLocalUser(ctx, userID, firstName, lastName, emailClaim)
+	userInfo, existsInDB, err := lookupLocalUserForAuth(ctx, userID, firstName, lastName, emailClaim)
 	if err != nil {
 		http.Error(w, `{"error":"Hesabınız engellenmiştir"}`, http.StatusForbidden)
+		return
+	}
+
+	if requiresCustomerPhoneCompletion(userInfo, existsInDB) {
+		userInfo.EmailVerified = true
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		_ = json.NewEncoder(w).Encode(AuthResponse{
+			Token:         accessToken,
+			User:          userInfo,
+			RequiresPhone: true,
+		})
 		return
 	}
 
@@ -1019,9 +1147,10 @@ func (h *StoreAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request
 		recordLoginHistory(context.Background(), userID, ip)
 	})
 
-	json.NewEncoder(w).Encode(AuthResponse{
-		Token: accessToken,
-		User:  userInfo,
+	_ = json.NewEncoder(w).Encode(AuthResponse{
+		Token:         accessToken,
+		User:          userInfo,
+		RequiresPhone: false,
 	})
 	RecordMemberActivityAsync(r, MemberActivityInput{
 		UserID:        userInfo.ID,
@@ -1187,6 +1316,12 @@ func validateAddressRequestPayload(req *AddressRequestPayload) error {
 		return errors.New("Geçersiz adres tipi")
 	}
 
+	normalizedPhone, phoneErr := phoneutil.NormalizeAndValidatePhone(req.Phone)
+	if phoneErr != nil {
+		return phoneErr
+	}
+	req.Phone = normalizedPhone
+
 	if len(req.AddressLine) > 500 {
 		return errors.New("Adres satırı en fazla 500 karakter olabilir")
 	}
@@ -1316,7 +1451,7 @@ func (h *StoreAuthHandler) CreateAddress(w http.ResponseWriter, r *http.Request)
 		EventCategory: "auth",
 		Title:         fmt.Sprintf("“%s” başlıklı yeni adres tanımladı", req.Title),
 		Subtitle:      req.AddressLine,
-		URLPath:       "/profile",
+		URLPath:       profileURLPath,
 		EntityType:    "address",
 		EntityID:      newID,
 	})
