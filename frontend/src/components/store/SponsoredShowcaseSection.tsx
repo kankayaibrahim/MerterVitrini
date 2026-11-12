@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { ShieldCheck, Sparkles, ArrowUpRight, MapPin, Globe } from "lucide-react";
+import { normalizeLangCode, pickLangText, SupportedLangCode } from "@/app/i18n";
 
 export interface SponsoredSlotItem {
   id: string;
@@ -35,15 +36,14 @@ export interface SponsoredSlotItem {
   >;
 }
 
-const SECTION_LABELS: Record<
-  string,
-  {
-    featuredHeading: string;
-    featuredSub: string;
-    verifiedTag: string;
-    allSuppliersCta: string;
-  }
-> = {
+interface SponsoredSectionLabels {
+  featuredHeading: string;
+  featuredSub: string;
+  verifiedTag: string;
+  allSuppliersCta: string;
+}
+
+const SECTION_LABELS: Record<SupportedLangCode, SponsoredSectionLabels> = {
   tr: {
     featuredHeading: "ÖNE ÇIKAN DOĞRULANMIŞ MERTER ÜRETİCİLERİ",
     featuredSub: "Sponsorlu Üretici Vitrini • %0 Komisyonla Doğrudan Fabrikadan Toptan Sipariş",
@@ -68,7 +68,43 @@ const SECTION_LABELS: Record<
     verifiedTag: "مصنع معتمد",
     allSuppliersCta: "عرض دليل المصنعين بالكامل ←",
   },
+  de: {
+    featuredHeading: "EMPFOHLENE VERIFIZIERTE MERTER-HERSTELLER",
+    featuredSub: "Gesponsertes Schaufenster • Direkt ab Fabrik mit 0 % Provision",
+    verifiedTag: "Verifizierter Hersteller",
+    allSuppliersCta: "Alle Hersteller anzeigen →",
+  },
+  fr: {
+    featuredHeading: "FABRICANTS VÉRIFIÉS DE MERTER À LA UNE",
+    featuredSub: "Vitrine Sponsorisée • Commande en Gros Direct Usine à 0 % de Commission",
+    verifiedTag: "Fabricant Vérifié",
+    allSuppliersCta: "Voir Tout l'Annuaire des Fabricants →",
+  },
+  pl: {
+    featuredHeading: "WYRÓŻNIENI ZWERYFIKOWANI PRODUCENCI Z MERTER",
+    featuredSub: "Sponsorowana Witryna • Bezpośrednie Zamówienia Fabryczne 0% Prowizji",
+    verifiedTag: "Zweryfikowany Producent",
+    allSuppliersCta: "Zobacz Pełny Katalog Producentów →",
+  },
+  bg: {
+    featuredHeading: "ПРЕПОРЪЧАНИ ПРОВЕРЕНИ ПРОИЗВОДИТЕЛИ ОТ МЕРТЕР",
+    featuredSub: "Спонсорирана витрина • Директни фабрични поръчки на едро с 0% комисиона",
+    verifiedTag: "Проверен производител",
+    allSuppliersCta: "Виж целия каталог на производители →",
+  },
 };
+
+function withLangParam(urlPath: string, lang: string): string {
+  const code = normalizeLangCode(lang);
+  if (code === "tr" || !urlPath.startsWith("/")) {
+    return urlPath;
+  }
+  if (urlPath.includes("lang=")) {
+    return urlPath;
+  }
+  const sep = urlPath.includes("?") ? "&" : "?";
+  return `${urlPath}${sep}lang=${code}`;
+}
 
 function getLocalizedField(
   slot: SponsoredSlotItem,
@@ -124,7 +160,7 @@ export function PortalSponsoredSuppliersSection({
 
   if (slots.length === 0) return null;
 
-  const L = SECTION_LABELS[lang] || SECTION_LABELS.tr;
+  const L = pickLangText(lang, SECTION_LABELS);
 
   return (
     <section className="mb-16 select-none">
@@ -139,7 +175,7 @@ export function PortalSponsoredSuppliersSection({
           </h3>
         </div>
         <Link
-          href="/ureticiler"
+          href={withLangParam("/ureticiler", lang)}
           className="text-xs font-extrabold uppercase tracking-wider text-eerie-black hover:text-amber-700 no-underline transition-colors"
         >
           {L.allSuppliersCta}
@@ -152,7 +188,8 @@ export function PortalSponsoredSuppliersSection({
           const subtitle = getLocalizedField(slot, lang, "subtitle");
           const badge = getLocalizedField(slot, lang, "badge_text");
           const cta = getLocalizedField(slot, lang, "cta_text");
-          const href = slot.target_url || `/ureticiler/${slot.brand_slug || ""}`;
+          const rawHref = slot.target_url || `/ureticiler/${slot.brand_slug || ""}`;
+          const href = withLangParam(rawHref, lang);
 
           return (
             <Link
@@ -248,7 +285,8 @@ export function CategorySponsorBanner({
   const subtitle = getLocalizedField(slot, lang, "subtitle");
   const badge = getLocalizedField(slot, lang, "badge_text");
   const cta = getLocalizedField(slot, lang, "cta_text");
-  const href = slot.target_url || `/ureticiler/${slot.brand_slug || ""}`;
+  const rawHref = slot.target_url || `/ureticiler/${slot.brand_slug || ""}`;
+  const href = withLangParam(rawHref, lang);
 
   return (
     <div className="bg-gradient-to-r from-amber-50/90 via-white to-amber-50/50 border border-amber-200/80 rounded-[12px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">

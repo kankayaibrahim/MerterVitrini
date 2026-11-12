@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { Product, Brand, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getCategoryPrefix } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, apiFetch, showToast, ExchangeRate } from "@/app/utils";
@@ -26,6 +26,10 @@ interface StorefrontLayoutProps {
   readonly initialCategorySlug?: string;
   readonly preFetchedCategories?: Category[];
   readonly defaultLang?: string;
+  readonly initialProducts?: Product[];
+  readonly initialTotalProducts?: number;
+  readonly initialPortalProducts?: Product[];
+  readonly categoryFaqs?: ReadonlyArray<{ readonly q: string; readonly a: string }>;
 }
 
 interface ToastMessage {
@@ -164,7 +168,11 @@ export default function StorefrontLayout({
   mode,
   initialCategorySlug,
   preFetchedCategories,
-  defaultLang
+  defaultLang,
+  initialProducts,
+  initialTotalProducts,
+  initialPortalProducts,
+  categoryFaqs,
 }: Readonly<StorefrontLayoutProps>) {
   // --- UI States ---
   const [lang, setLang] = useState<string>(() => getInitialLang(defaultLang));
@@ -204,8 +212,8 @@ export default function StorefrontLayout({
   const [attributes, setAttributes] = useState<Record<string, string[]>>({});
   const [activeAttributes, setActiveAttributes] = useState<Record<string, string[]>>({});
   const [facets, setFacets] = useState<ProductsResponse["facets"] | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [portalNewArrivals, setPortalNewArrivals] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(initialProducts || []);
+  const [portalNewArrivals, setPortalNewArrivals] = useState<Product[]>(initialPortalProducts || []);
   const [fetchError, setFetchError] = useState<string | null>(null);
   
   const [activeCategoryId, setActiveCategoryId] = useState<string>(initialCategorySlug || "");
@@ -232,11 +240,18 @@ export default function StorefrontLayout({
   const [sortBy, setSortBy] = useState<string>("newest");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 24;
-  const [totalProductsCount, setTotalProductsCount] = useState<number>(0);
+  const [totalProductsCount, setTotalProductsCount] = useState<number>(
+    initialTotalProducts ?? (initialProducts?.length || 0)
+  );
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
-  
-  const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
+
+  const hasInitialSsrProducts =
+    mode === "portal"
+      ? Boolean(initialPortalProducts && initialPortalProducts.length > 0)
+      : Boolean(initialProducts && initialProducts.length > 0);
+  const [loadingProducts, setLoadingProducts] = useState<boolean>(!hasInitialSsrProducts);
+  const initialMountRef = useRef<boolean>(true);
   
   // --- B2B Details Modal States ---
   const [selectedColor, setSelectedColor] = useState<string>("");
@@ -442,15 +457,21 @@ export default function StorefrontLayout({
 
   // --- Products Catalog Loader ---
   useEffect(() => {
+    const isFirstMount = initialMountRef.current;
+    initialMountRef.current = false;
+
     const loadProducts = async () => {
       if (mode === "portal") {
-        // Portal only needs a fast preview of 4 items
+        if (isFirstMount && initialPortalProducts && initialPortalProducts.length > 0) {
+          setLoadingProducts(false);
+          return;
+        }
         setLoadingProducts(true);
         interface PortalResponse {
           products: Product[];
           total: number;
         }
-        const data = await apiFetch<PortalResponse>("/products?limit=4&sort_by=newest");
+        const data = await apiFetch<PortalResponse>("/products?limit=8&sort_by=newest");
         if (data?.products) {
           setPortalNewArrivals(data.products);
         }
@@ -458,7 +479,16 @@ export default function StorefrontLayout({
         return;
       }
 
-      setLoadingProducts(true);
+      const canKeepSsrVisible =
+        isFirstMount &&
+        Boolean(initialProducts && initialProducts.length > 0) &&
+        currentPage === 1 &&
+        sortBy === "newest" &&
+        !searchQuery;
+
+      if (!canKeepSsrVisible) {
+        setLoadingProducts(true);
+      }
       setFetchError(null);
       const queryParams = buildCatalogQueryParams({
         itemsPerPage,
@@ -475,18 +505,12 @@ export default function StorefrontLayout({
         activeAttributes,
       });
 
-      console.log(`[Search Log] Fetching products with queryParams: "${queryParams}"`);
       const data = await apiFetch<ProductsResponse>(`/products${queryParams}`);
-      console.log(`[Search Log] API response received. Product count: ${data?.products?.length || 0}`);
       if (data?.products) {
         setProducts(data.products);
         setTotalProductsCount(data.total);
-        if (data.facets) {
-          setFacets(data.facets);
-        } else {
-          setFacets(null);
-        }
-      } else {
+        setFacets(data.facets || null);
+      } else if (!canKeepSsrVisible) {
         setProducts([]);
         setTotalProductsCount(0);
         setFacets(null);
@@ -496,7 +520,7 @@ export default function StorefrontLayout({
     };
     
     void loadProducts();
-  }, [currentPage, itemsPerPage, activeCategoryId, activeBrandIds, searchQuery, sortBy, activeSpecs, b2bFilters, activeAttributes, minPrice, maxPrice, mode, displayCurrency]);
+  }, [currentPage, itemsPerPage, activeCategoryId, activeBrandIds, searchQuery, sortBy, activeSpecs, b2bFilters, activeAttributes, minPrice, maxPrice, mode, displayCurrency, initialPortalProducts, initialProducts]);
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
@@ -817,6 +841,7 @@ export default function StorefrontLayout({
           handleOpenModal={handleOpenModal}
           hasActiveFiltersCount={hasActiveFiltersCount}
           setIsMobileFiltersOpen={setIsMobileFiltersOpen}
+          categoryFaqs={categoryFaqs}
           sidebar={
             <FilterSidebar
               lang={lang}
@@ -979,7 +1004,7 @@ export default function StorefrontLayout({
           {/* Backdrop */}
           <button 
             type="button"
-            aria-label="Filtreleri Kapat"
+            aria-label={t("Close", lang) || "Close"}
             tabIndex={-1}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-fade-in border-none cursor-default" 
             onClick={() => setIsMobileFiltersOpen(false)}

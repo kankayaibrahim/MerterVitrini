@@ -1543,11 +1543,10 @@ async function performMultiImageUpload(
   if (files.length === 0 || !token) return;
   setLoading(true);
   try {
-    const uploadedUrls: string[] = [];
-    for (const file of files) {
-      const imageUrl = await uploadSupplierImageFile(token, file);
-      if (imageUrl) uploadedUrls.push(imageUrl);
-    }
+    const uploadedResults = await Promise.all(
+      files.map((file) => uploadSupplierImageFile(token, file))
+    );
+    const uploadedUrls = uploadedResults.filter((url): url is string => Boolean(url));
     if (uploadedUrls.length > 0) onUploaded(uploadedUrls);
   } catch (err: unknown) {
     alert((err as Error).message);

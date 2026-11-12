@@ -4,9 +4,194 @@ import React from "react";
 import Image from "next/image";
 import { X, ShoppingBag, Plus, Minus, ChevronLeft, ChevronRight, MessageCircle, Phone, Lock } from "lucide-react";
 import { Product } from "@/types/store";
-import { t, getProductTitle, getProductDescription, getProductAttributes, translateColor } from "@/app/i18n";
+import {
+  buildLocalizedProductHref,
+  getProductAttributes,
+  getProductDescription,
+  getProductTitle,
+  pickLangText,
+  SupportedLangCode,
+  t,
+  translateColor,
+} from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getMemberPriceLabel, getShortMemberPriceLabel } from "@/app/storeAuth";
+
+interface ModalLocalizedTexts {
+  selectMinOneItem: string;
+  whatsappWriteSupplier: string;
+  callSupplier: string;
+  waGreetingPrefix: string;
+  waOrderIntro: string;
+  waInquiryIntro: string;
+  waQtyLabel: string;
+  waTotalLabel: string;
+}
+
+const MODAL_LOCALIZED_TEXTS: Record<SupportedLangCode, ModalLocalizedTexts> = {
+  tr: {
+    selectMinOneItem: "Lütfen en az 1 ürün seçin.",
+    whatsappWriteSupplier: "WhatsApp ile Tedarikçiye Yaz",
+    callSupplier: "Ara",
+    waGreetingPrefix: "Merhaba",
+    waOrderIntro: "Merter Vitrini üzerindeki ürününüz hakkında doğrudan iletişime geçmek ve sipariş vermek istiyorum.",
+    waInquiryIntro: "Merter Vitrini üzerindeki ürününüz hakkında doğrudan iletişime geçmek ve fiyat bilgisi almak istiyorum.",
+    waQtyLabel: "Miktar",
+    waTotalLabel: "Toplam Tutar",
+  },
+  en: {
+    selectMinOneItem: "Please select at least 1 item.",
+    whatsappWriteSupplier: "Message Supplier on WhatsApp",
+    callSupplier: "Call",
+    waGreetingPrefix: "Hello",
+    waOrderIntro: "I would like to contact you directly and place a wholesale order for your product on Merter Vitrini.",
+    waInquiryIntro: "I would like to contact you directly and request wholesale pricing for your product on Merter Vitrini.",
+    waQtyLabel: "Quantity",
+    waTotalLabel: "Total Amount",
+  },
+  ru: {
+    selectMinOneItem: "Пожалуйста, выберите минимум 1 товар.",
+    whatsappWriteSupplier: "Написать поставщику в WhatsApp",
+    callSupplier: "Позвонить",
+    waGreetingPrefix: "Здравствуйте",
+    waOrderIntro: "Хочу связаться с вами напрямую и оформить оптовый заказ на ваш товар на Merter Vitrini.",
+    waInquiryIntro: "Хочу связаться с вами напрямую и уточнить оптовую цену на ваш товар на Merter Vitrini.",
+    waQtyLabel: "Количество",
+    waTotalLabel: "Итоговая сумма",
+  },
+  ar: {
+    selectMinOneItem: "يرجى اختيار منتج واحد على الأقل.",
+    whatsappWriteSupplier: "مراسلة المورد عبر واتساب",
+    callSupplier: "اتصال",
+    waGreetingPrefix: "مرحباً",
+    waOrderIntro: "أود التواصل معكم مباشرة وتقديم طلب جملة لمنتجكم على Merter Vitrini.",
+    waInquiryIntro: "أود التواصل معكم مباشرة والاستفسار عن سعر الجملة لمنتجكم على Merter Vitrini.",
+    waQtyLabel: "الكمية",
+    waTotalLabel: "المبلغ الإجمالي",
+  },
+  de: {
+    selectMinOneItem: "Bitte wählen Sie mindestens 1 Artikel aus.",
+    whatsappWriteSupplier: "Lieferant per WhatsApp kontaktieren",
+    callSupplier: "Anrufen",
+    waGreetingPrefix: "Hallo",
+    waOrderIntro: "Ich möchte Sie direkt kontaktieren und eine Großhandelsbestellung für Ihr Produkt auf Merter Vitrini aufgeben.",
+    waInquiryIntro: "Ich möchte Sie direkt kontaktieren und Großhandelspreise für Ihr Produkt auf Merter Vitrini anfragen.",
+    waQtyLabel: "Menge",
+    waTotalLabel: "Gesamtbetrag",
+  },
+  fr: {
+    selectMinOneItem: "Veuillez sélectionner au moins 1 article.",
+    whatsappWriteSupplier: "Écrire au fournisseur sur WhatsApp",
+    callSupplier: "Appeler",
+    waGreetingPrefix: "Bonjour",
+    waOrderIntro: "Je souhaite vous contacter directement et passer une commande en gros pour votre produit sur Merter Vitrini.",
+    waInquiryIntro: "Je souhaite vous contacter directement et demander le tarif de gros pour votre produit sur Merter Vitrini.",
+    waQtyLabel: "Quantité",
+    waTotalLabel: "Montant total",
+  },
+  pl: {
+    selectMinOneItem: "Proszę wybrać co najmniej 1 produkt.",
+    whatsappWriteSupplier: "Napisz do dostawcy na WhatsApp",
+    callSupplier: "Zadzwoń",
+    waGreetingPrefix: "Dzień dobry",
+    waOrderIntro: "Chcę skontaktować się bezpośrednio i złożyć zamówienie hurtowe na Państwa produkt na Merter Vitrini.",
+    waInquiryIntro: "Chcę skontaktować się bezpośrednio i zapytać o cenę hurtową Państwa produktu na Merter Vitrini.",
+    waQtyLabel: "Ilość",
+    waTotalLabel: "Kwota całkowita",
+  },
+  bg: {
+    selectMinOneItem: "Моля, изберете поне 1 артикул.",
+    whatsappWriteSupplier: "Пишете на доставчика в WhatsApp",
+    callSupplier: "Обади се",
+    waGreetingPrefix: "Здравейте",
+    waOrderIntro: "Искам да се свържа директно с вас и да направя поръчка на едро за вашия продукт в Merter Vitrini.",
+    waInquiryIntro: "Искам да се свържа директно с вас и да попитам за цената на едро за вашия продукт в Merter Vitrini.",
+    waQtyLabel: "Количество",
+    waTotalLabel: "Обща сума",
+  },
+};
+
+function buildSupplierWhatsAppMessage(params: {
+  lang: string;
+  isAuthenticated: boolean;
+  supplierName: string;
+  title: string;
+  sku: string;
+  pkgQty: number;
+  totalPieces: number;
+  totalPrice: number;
+  currency: string;
+}): string {
+  const txt = pickLangText(params.lang, MODAL_LOCALIZED_TEXTS);
+  const pkgWord = t("package", params.lang);
+  const pieceWord = t("piece", params.lang);
+  const intro = params.isAuthenticated ? txt.waOrderIntro : txt.waInquiryIntro;
+  const baseLines = [
+    `${txt.waGreetingPrefix} *${params.supplierName}*,`,
+    `*${params.title}* (SKU: ${params.sku}) — ${intro}`,
+    "",
+    `• ${txt.waQtyLabel}: ${params.pkgQty} ${pkgWord} (${params.totalPieces} ${pieceWord})`,
+  ];
+  if (params.isAuthenticated) {
+    baseLines.push(`• ${txt.waTotalLabel}: ${params.totalPrice.toFixed(2)} ${params.currency}`);
+  }
+  return baseLines.join("\n");
+}
+
+function ModalUnitPriceValue({
+  isAuthenticated,
+  hasDiscount,
+  unitPrice,
+  discountedPrice,
+  currency,
+  lang,
+  onClose,
+}: Readonly<{
+  isAuthenticated: boolean;
+  hasDiscount: boolean;
+  unitPrice: number;
+  discountedPrice: number;
+  currency: string;
+  lang: string;
+  onClose: () => void;
+}>) {
+  if (!isAuthenticated) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          openStoreAuthModal("login");
+        }}
+        className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-900 hover:bg-salmon-pink text-white text-[11px] font-extrabold transition-colors cursor-pointer border-none"
+      >
+        <Lock className="w-3 h-3 shrink-0" />
+        <span>{getMemberPriceLabel(lang)}</span>
+      </button>
+    );
+  }
+
+  if (hasDiscount) {
+    return (
+      <div className="flex items-baseline gap-2">
+        <span className="text-xs text-sonic-silver line-through">
+          {unitPrice.toFixed(2)} {currency}
+        </span>
+        <span className="text-lg font-extrabold text-salmon-pink">
+          {discountedPrice.toFixed(2)} {currency}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-lg font-extrabold text-eerie-black">
+        {unitPrice.toFixed(2)} {currency}
+      </span>
+    </div>
+  );
+}
 
 interface ProductDetailsModalProps {
   readonly product: Product;
@@ -130,7 +315,8 @@ export default function ProductDetailsModal({
   const totalWeight = hasSeries ? (pkgQty * totalPkgWeight) : 0;
   const totalPrice = hasSeries ? (pkgQty * finalPkgPrice) : 0;
 
-  const supplierName = product.brand_profile?.name || product.brand_name || "Merter Üreticisi";
+  const modalTexts = pickLangText(lang, MODAL_LOCALIZED_TEXTS);
+  const supplierName = product.brand_profile?.name || product.brand_name || t("merter_manufacturer", lang);
   const supplierWaRaw = product.brand_profile?.whatsapp_phone || product.brand_profile?.phone || "";
   const supplierCallRaw = product.brand_profile?.phone || product.brand_profile?.whatsapp_phone || "";
   const supplierWaDigits = (() => {
@@ -139,9 +325,17 @@ export default function ProductDetailsModal({
     if (digits.length === 10 && digits.startsWith("5")) return "90" + digits;
     return digits;
   })();
-  const directWaMessage = isAuthenticated
-    ? `Merhaba *${supplierName}*,\nMerter Vitrini üzerindeki *${title}* (SKU: ${product.custom_sku || "-"}) ürününüz hakkında doğrudan iletişime geçmek ve sipariş vermek istiyorum.\n\n• Miktar: ${pkgQty} Seri (${totalPieces} Adet)\n• Toplam Tutar: ${totalPrice.toFixed(2)} ${currency}`
-    : `Merhaba *${supplierName}*,\nMerter Vitrini üzerindeki *${title}* (SKU: ${product.custom_sku || "-"}) ürününüz hakkında doğrudan iletişime geçmek ve fiyat bilgisi almak istiyorum.\n\n• Miktar: ${pkgQty} Seri (${totalPieces} Adet)`;
+  const directWaMessage = buildSupplierWhatsAppMessage({
+    lang,
+    isAuthenticated,
+    supplierName,
+    title,
+    sku: product.custom_sku || "-",
+    pkgQty,
+    totalPieces,
+    totalPrice,
+    currency,
+  });
   const directWaUrl = supplierWaDigits
     ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(directWaMessage)}`
     : `https://wa.me/?text=${encodeURIComponent(directWaMessage)}`;
@@ -153,7 +347,7 @@ export default function ProductDetailsModal({
       return;
     }
     if (totalPieces === 0) {
-      showToast(lang === "tr" ? "Lütfen en az 1 ürün seçin." : "Please select at least 1 item.");
+      showToast(modalTexts.selectMinOneItem);
       return;
     }
     onAddToCart(hasSeries ? pkgQty : 0, {});
@@ -163,7 +357,7 @@ export default function ProductDetailsModal({
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
       <button
         type="button"
-        aria-label="Kapat"
+        aria-label={t("close_modal", lang)}
         tabIndex={-1}
         className="fixed inset-0 bg-transparent border-none cursor-default"
         onClick={onClose}
@@ -173,6 +367,7 @@ export default function ProductDetailsModal({
         <button
           type="button"
           onClick={onClose}
+          aria-label={t("close_modal", lang)}
           className="absolute top-4 right-4 w-9 h-9 rounded-[5px] bg-[#fafafa] hover:bg-cultured border border-cultured flex items-center justify-center text-onyx cursor-pointer transition-colors z-10"
         >
           <X className="w-4 h-4" />
@@ -186,7 +381,7 @@ export default function ProductDetailsModal({
               <button
                 type="button"
                 onClick={handleOpenLightbox}
-                aria-label={lang === "tr" ? "Büyük görseli aç" : "Open lightbox"}
+                aria-label={t("zoom_image", lang)}
                 className="w-full aspect-[4/5] max-h-[400px] md:max-h-[520px] rounded-[10px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group flex items-center justify-center p-0"
               >
                 <Image
@@ -212,7 +407,7 @@ export default function ProductDetailsModal({
                     >
                       <Image
                         src={getResizedImageUrl(img.image_url, 80, 106)}
-                        alt="thumb"
+                        alt={title}
                         fill
                         sizes="56px"
                         className="object-cover"
@@ -227,7 +422,7 @@ export default function ProductDetailsModal({
             <div className="flex flex-col gap-5">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-[0.5px] text-salmon-pink">
-                  {product.brand_name || "Merter Manufacturer"}
+                  {product.brand_name || t("merter_manufacturer", lang)}
                 </span>
                 <h2 className="font-sans font-extrabold text-xl md:text-2xl text-eerie-black leading-snug mt-1">
                   {title}
@@ -242,36 +437,15 @@ export default function ProductDetailsModal({
                 <span className="text-[10px] font-bold text-onyx uppercase tracking-[0.5px] shrink-0">
                   {t("unit_price_label", lang)}
                 </span>
-                {isAuthenticated ? (
-                  <div className="flex items-baseline gap-2">
-                    {hasDiscount ? (
-                      <>
-                        <span className="text-xs text-sonic-silver line-through">
-                          {unitPrice.toFixed(2)} {currency}
-                        </span>
-                        <span className="text-lg font-extrabold text-salmon-pink">
-                          {discountedPrice.toFixed(2)} {currency}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-lg font-extrabold text-eerie-black">
-                        {unitPrice.toFixed(2)} {currency}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      openStoreAuthModal("login");
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-900 hover:bg-salmon-pink text-white text-[11px] font-extrabold transition-colors cursor-pointer border-none"
-                  >
-                    <Lock className="w-3 h-3 shrink-0" />
-                    <span>{getMemberPriceLabel(lang)}</span>
-                  </button>
-                )}
+                <ModalUnitPriceValue
+                  isAuthenticated={isAuthenticated}
+                  hasDiscount={hasDiscount}
+                  unitPrice={unitPrice}
+                  discountedPrice={discountedPrice}
+                  currency={currency}
+                  lang={lang}
+                  onClose={onClose}
+                />
               </div>
 
               {/* Specs Table */}
@@ -295,7 +469,7 @@ export default function ProductDetailsModal({
                 <div className="border border-cultured rounded-[5px] p-2.5 bg-white flex flex-col gap-0.5 shadow-sm">
                   <span className="text-[9px] uppercase font-bold text-sonic-silver tracking-[0.5px]">{t("min_order_qty", lang)}</span>
                   <span className="font-bold text-eerie-black truncate">
-                    {product.minimum_order_quantity} {lang === "tr" ? "Adet" : t("piece", lang)}
+                    {product.minimum_order_quantity} {t("piece", lang)}
                   </span>
                 </div>
 
@@ -338,7 +512,7 @@ export default function ProductDetailsModal({
                   {product.color_variants?.map((sib) => (
                     <a
                       key={sib.id}
-                      href={`/product/${sib.slug || sib.id}`}
+                      href={buildLocalizedProductHref(sib.slug || sib.id, lang)}
                       className="flex flex-col items-center gap-1.5 p-1.5 rounded-[8px] border-2 border-transparent bg-white hover:border-[#e2e8f0] transition-all hover:scale-[1.03] opacity-80 hover:opacity-100 cursor-pointer select-none"
                     >
                       <div className="w-12 h-14 rounded-[5px] overflow-hidden bg-[#f0f0f0] border border-cultured">
@@ -380,7 +554,7 @@ export default function ProductDetailsModal({
                         return (
                           <div key={`size-${sz}-${idx}`} className="border border-cultured bg-[#fafafa] rounded-[5px] px-3 py-2 flex items-center justify-between text-[11px] font-bold shadow-inner">
                             <span className="text-sonic-silver">{sz}</span>
-                            <span className="text-salmon-pink">{count} {lang === "tr" ? "Adet" : t("piece", lang)}</span>
+                            <span className="text-salmon-pink">{count} {t("piece", lang)}</span>
                           </div>
                         );
                       })}
@@ -484,7 +658,7 @@ export default function ProductDetailsModal({
                 >
                   <MessageCircle className="w-4 h-4 shrink-0" />
                   <span>
-                    WhatsApp ile Tedarikçiye Yaz {supplierWaRaw ? `(${supplierWaRaw})` : ""}
+                    {modalTexts.whatsappWriteSupplier} {supplierWaRaw ? `(${supplierWaRaw})` : ""}
                   </span>
                 </a>
                 {supplierCallRaw && (
@@ -493,7 +667,7 @@ export default function ProductDetailsModal({
                     className="py-2.5 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-[5px] font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 no-underline shrink-0"
                   >
                     <Phone className="w-3.5 h-3.5 shrink-0" />
-                    <span>Ara</span>
+                    <span>{modalTexts.callSupplier}</span>
                   </a>
                 )}
               </div>
@@ -527,6 +701,7 @@ export default function ProductDetailsModal({
             <button
               type="button"
               onClick={() => setIsLightboxOpen(false)}
+              aria-label={t("close_modal", lang)}
               className="w-10 h-10 rounded-[5px] bg-white/10 hover:bg-white/20 hover:scale-105 border border-white/10 flex items-center justify-center text-white cursor-pointer transition-all active:scale-95"
             >
               <X className="w-5 h-5" />
@@ -539,6 +714,7 @@ export default function ProductDetailsModal({
             {product.images.length > 1 && (
               <button
                 type="button"
+                aria-label={t("prev", lang)}
                 onClick={(e) => {
                   e.stopPropagation();
                   setLightboxIndex((prev) => (prev - 1 + product.images!.length) % product.images!.length);
@@ -552,7 +728,7 @@ export default function ProductDetailsModal({
             {/* Backdrop click to close */}
             <button
               type="button"
-              aria-label="Kapat"
+              aria-label={t("close_modal", lang)}
               tabIndex={-1}
               className="absolute inset-0 bg-transparent border-none cursor-default z-0"
               onClick={() => setIsLightboxOpen(false)}
@@ -572,6 +748,7 @@ export default function ProductDetailsModal({
             {product.images.length > 1 && (
               <button
                 type="button"
+                aria-label={t("next_image", lang)}
                 onClick={(e) => {
                   e.stopPropagation();
                   setLightboxIndex((prev) => (prev + 1) % product.images!.length);

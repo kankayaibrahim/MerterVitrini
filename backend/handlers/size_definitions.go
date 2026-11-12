@@ -215,30 +215,54 @@ func loadAllowedSizesMap(ctx context.Context, existingProductID string) map[stri
 			allowed[norm] = d.SortOrder
 		}
 	}
-	if existingProductID != "" {
-		rows, err := db.Pool.Query(ctx, "SELECT variant_size FROM catalog.product_variants WHERE product_id = $1", existingProductID)
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var sz string
-				if rows.Scan(&sz) == nil {
-					norm := normalizeSizeCodeInput(sz)
-					if norm != "" {
-						if _, ok := allowed[norm]; !ok {
-							allowed[norm] = 950
-						}
-					}
-				}
-			}
+	mergeProductExistingVariantSizes(ctx, existingProductID, allowed)
+	return allowed
+}
+
+func mergeProductExistingVariantSizes(ctx context.Context, productID string, allowed map[string]int) {
+	if productID == "" {
+		return
+	}
+	rows, err := db.Pool.Query(ctx, "SELECT variant_size FROM catalog.product_variants WHERE product_id = $1", productID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sz string
+		if rows.Scan(&sz) != nil {
+			continue
+		}
+		norm := normalizeSizeCodeInput(sz)
+		if norm == "" {
+			continue
+		}
+		if _, ok := allowed[norm]; !ok {
+			allowed[norm] = 950
 		}
 	}
-	return allowed
 }
 
 func parseSeriesWeightsForSizes(rawRatio string, sizeCount int) ([]int, string, int) {
 	if sizeCount <= 0 {
 		return []int{1}, "1", 1
 	}
+	parsed := extractPositiveRatioTokens(rawRatio)
+	weights := buildWeightSliceFromParsed(parsed, sizeCount)
+
+	strParts := make([]string, sizeCount)
+	totalUnits := 0
+	for i, w := range weights {
+		strParts[i] = strconv.Itoa(w)
+		totalUnits += w
+	}
+	if totalUnits <= 0 {
+		totalUnits = sizeCount
+	}
+	return weights, strings.Join(strParts, "-"), totalUnits
+}
+
+func extractPositiveRatioTokens(rawRatio string) []int {
 	parts := strings.FieldsFunc(strings.TrimSpace(rawRatio), func(r rune) bool {
 		return r == '-' || r == ',' || r == '/' || r == '+' || r == ' '
 	})
@@ -253,30 +277,23 @@ func parseSeriesWeightsForSizes(rawRatio string, sizeCount int) ([]int, string, 
 			parsed = append(parsed, v)
 		}
 	}
+	return parsed
+}
 
+func buildWeightSliceFromParsed(parsed []int, sizeCount int) []int {
 	weights := make([]int, sizeCount)
 	if len(parsed) == sizeCount {
 		copy(weights, parsed)
-	} else if len(parsed) == 1 && parsed[0] > 1 {
-		for i := range weights {
-			weights[i] = parsed[0]
-		}
-	} else {
-		for i := range weights {
-			weights[i] = 1
-		}
+		return weights
 	}
-
-	strParts := make([]string, sizeCount)
-	totalUnits := 0
-	for i, w := range weights {
-		strParts[i] = strconv.Itoa(w)
-		totalUnits += w
+	fillVal := 1
+	if len(parsed) == 1 && parsed[0] > 1 {
+		fillVal = parsed[0]
 	}
-	if totalUnits <= 0 {
-		totalUnits = sizeCount
+	for i := range weights {
+		weights[i] = fillVal
 	}
-	return weights, strings.Join(strParts, "-"), totalUnits
+	return weights
 }
 
 func validateAndSortSelectedSizes(rawSizes []string, allowed map[string]int) ([]string, error) {

@@ -1,3 +1,5 @@
+import { normalizeLangCode, pickLangText, SupportedLangCode } from "@/app/i18n";
+
 export interface SupplierAgent {
   id: string;
   brand_id: string;
@@ -67,6 +69,38 @@ export interface CentrifugeEventEnvelope {
   data: ChatMessage | ChatRoom;
 }
 
+const DEFAULT_CHAT_NAMES: Record<SupportedLangCode, { member: string; guest: string }> = {
+  tr: { member: "B2B Müşteri", guest: "B2B Misafir Alıcı" },
+  en: { member: "B2B Buyer", guest: "B2B Guest Buyer" },
+  ru: { member: "B2B Покупатель", guest: "B2B Гость" },
+  ar: { member: "مشتري B2B", guest: "مشتري زائر B2B" },
+  de: { member: "B2B-Käufer", guest: "B2B-Gastkäufer" },
+  fr: { member: "Acheteur B2B", guest: "Acheteur invité B2B" },
+  pl: { member: "Kupujący B2B", guest: "Gość B2B" },
+  bg: { member: "B2B Купувач", guest: "B2B Гост купувач" },
+};
+
+export const CHAT_LOCALE_BY_LANG: Record<SupportedLangCode, string> = {
+  tr: "tr-TR",
+  en: "en-US",
+  ru: "ru-RU",
+  ar: "ar-SA",
+  de: "de-DE",
+  fr: "fr-FR",
+  pl: "pl-PL",
+  bg: "bg-BG",
+};
+
+export function resolveChatLang(lang?: string): SupportedLangCode {
+  if (lang && lang.trim()) {
+    return normalizeLangCode(lang);
+  }
+  if (typeof window !== "undefined") {
+    return normalizeLangCode(localStorage.getItem("preferred_lang") || "tr");
+  }
+  return "tr";
+}
+
 export function getCentrifugeWsUrl(): string {
   if (typeof window === "undefined") {
     return "ws://localhost:8080/api/v1/chat/ws";
@@ -76,17 +110,20 @@ export function getCentrifugeWsUrl(): string {
   return `${proto}//${host}/api/v1/chat/ws`;
 }
 
-export function getOrInitCustomerChatIdentity(): {
+export function getOrInitCustomerChatIdentity(lang?: string): {
   customerId: string;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
   token: string | null;
 } {
+  const effectiveLang = resolveChatLang(lang);
+  const defaults = pickLangText(effectiveLang, DEFAULT_CHAT_NAMES);
+
   if (typeof window === "undefined") {
     return {
       customerId: "guest_ssr",
-      customerName: "B2B Müşteri",
+      customerName: defaults.member,
       customerEmail: "",
       customerPhone: "",
       token: null,
@@ -105,7 +142,10 @@ export function getOrInitCustomerChatIdentity(): {
         phone?: string;
       };
       if (parsed.id) {
-        const fullName = `${parsed.first_name || ""} ${parsed.last_name || ""}`.trim() || parsed.email || "B2B Müşteri";
+        const fullName =
+          `${parsed.first_name || ""} ${parsed.last_name || ""}`.trim() ||
+          parsed.email ||
+          defaults.member;
         return {
           customerId: parsed.id,
           customerName: fullName,
@@ -128,7 +168,7 @@ export function getOrInitCustomerChatIdentity(): {
     guestId = `guest_${randomPart}`;
     localStorage.setItem("merter_chat_guest_id", guestId);
   }
-  const savedGuestName = localStorage.getItem("merter_chat_guest_name") || "B2B Misafir Alıcı";
+  const savedGuestName = localStorage.getItem("merter_chat_guest_name") || defaults.guest;
 
   return {
     customerId: guestId,

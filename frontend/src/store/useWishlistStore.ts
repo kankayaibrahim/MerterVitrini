@@ -2,6 +2,18 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { pickLangText, SupportedLangCode } from "@/app/i18n";
+
+const WISHLIST_ADDED_TOAST: Record<SupportedLangCode, string> = {
+  tr: "Favorilerime Eklendi!",
+  en: "Added to Favorites!",
+  ru: "Добавлено в избранное!",
+  ar: "تمت الإضافة إلى المفضلة!",
+  de: "Zu Favoriten hinzugefügt!",
+  fr: "Ajouté aux favoris !",
+  pl: "Dodano do ulubionych!",
+  bg: "Добавено в любими!",
+};
 
 interface WishlistStore {
   wishlistIds: string[];
@@ -27,9 +39,10 @@ export const useWishlistStore = create<WishlistStore>()(
         // Backward compatibility for existing listeners & toasts
         if (typeof window !== "undefined") {
           if (!exists && title) {
+            const effectiveLang = lang || localStorage.getItem("preferred_lang") || "tr";
             const newToast = {
               id: `toast-${Date.now()}-${productId}`,
-              message: `${title} - ${lang === "tr" ? "Favorilerime Eklendi!" : "Added to Favorites!"}`,
+              message: `${title} - ${pickLangText(effectiveLang, WISHLIST_ADDED_TOAST)}`,
             };
             window.dispatchEvent(new CustomEvent("merter-show-toast", { detail: newToast }));
           }

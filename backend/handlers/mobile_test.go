@@ -102,9 +102,22 @@ func TestSupplierLocalJWTAndMobileDeleteAccountViaDIP(t *testing.T) {
 }
 
 func TestMobileChatImageUploadViaInjectedMediaProcessor(t *testing.T) {
+	secret := "test-chat-upload-jwt-secret"
+	tokenSvc := services.NewUnifiedTokenService(secret, "", nil)
+	chatTok := tokenSvc.IssueSupplierJWT(&models.SupplierUser{
+		ID:          "01950000-0000-7000-8000-000000000011",
+		BrandID:     "01950000-0000-7000-8000-000000000022",
+		BrandName:   "Test Tedarikçi",
+		AliasCode:   "TST",
+		Email:       "chat@test.local",
+		ContactName: "Chat Test",
+		IsActive:    true,
+	})
+
 	mediaSvc := services.NewLocalImageMediaService(t.TempDir())
-	mh := NewMobileHandler(&config.Config{JWTSecret: "secret"}, nil, nil, MobileHandlerDeps{
-		Media: mediaSvc,
+	mh := NewMobileHandler(&config.Config{JWTSecret: secret}, nil, nil, MobileHandlerDeps{
+		Media:  mediaSvc,
+		Tokens: tokenSvc,
 	})
 
 	src := image.NewRGBA(image.Rect(0, 0, 2000, 1500))
@@ -129,7 +142,7 @@ func TestMobileChatImageUploadViaInjectedMediaProcessor(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/mobile/chat/upload-image", &body)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("X-Chat-Customer-Id", "guest-mob-123")
+	req.Header.Set("Authorization", "Bearer "+chatTok)
 	rec := httptest.NewRecorder()
 
 	mh.UploadChatImage(rec, req)

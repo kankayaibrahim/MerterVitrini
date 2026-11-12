@@ -3,7 +3,7 @@
 import React from "react";
 import { X, ShoppingBag, Lock } from "lucide-react";
 import { CartItem } from "@/types/store";
-import { t, getCategoryPrefix } from "@/app/i18n";
+import { t, getCategoryPrefix, pickLangText, SupportedLangCode } from "@/app/i18n";
 import { convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { UserAddress } from "@/app/profile/components/types";
@@ -30,6 +30,366 @@ interface CartDrawerProps {
   readonly onSubmitInquiry: (data: InquiryFormData) => void;
   readonly displayCurrency?: string;
   readonly exchangeRates?: readonly ExchangeRate[];
+}
+
+interface CartDrawerLabels {
+  packUnit: string;
+  pcsPerPack: string;
+  itemsVariety: string;
+  cartSyncError: string;
+  orderSubmitError: string;
+  networkError: string;
+  missingAddressesToast: string;
+  orderSuccessToast: string;
+  confirmB2bOrder: string;
+  addressPaymentHeader: string;
+  backToCart: string;
+  deliveryAddress: string;
+  deliveryAddressPlaceholder: string;
+  customDeliveryOption: string;
+  noDeliveryAddresses: string;
+  billingAddress: string;
+  billingAddressPlaceholder: string;
+  customBillingOption: string;
+  noBillingAddresses: string;
+  bankTransferHeader: string;
+  beneficiaryPrefix: string;
+  proformaIbanNotice: string;
+  paymentReferenceNote: string;
+  requestQuoteFormTitle: string;
+  goToCheckout: string;
+  orderViaBankTransfer: string;
+  requestProformaOnly: string;
+  registeredDealerPrompt: string;
+  signInBtn: string;
+  removeItemAria: string;
+}
+
+const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
+  tr: {
+    packUnit: "Paket",
+    pcsPerPack: "Adet/Paket",
+    itemsVariety: "Çeşit Ürün",
+    cartSyncError: "Sepet senkronizasyonu başarısız.",
+    orderSubmitError: "Sipariş verilirken bir hata oluştu.",
+    networkError: "Bir ağ hatası oluştu.",
+    missingAddressesToast: "Lütfen fatura ve teslimat adreslerini doldurunuz.",
+    orderSuccessToast:
+      "Siparişiniz başarıyla alındı! Sipariş No: {orderNo}\nKurumsal IBAN / SWIFT bilgileriniz proforma faturanızla iletilecektir.",
+    confirmB2bOrder: "Siparişi Onayla",
+    addressPaymentHeader: "Adres ve Ödeme Bilgileri",
+    backToCart: "Sepete Dön",
+    deliveryAddress: "Teslimat Adresi",
+    deliveryAddressPlaceholder: "Teslimat adresini yazınız...",
+    customDeliveryOption: "+ Yeni Adres Girişi",
+    noDeliveryAddresses: "Profilinizde kayıtlı teslimat adresi bulunamadı.",
+    billingAddress: "Fatura Adresi",
+    billingAddressPlaceholder: "Fatura adresini yazınız...",
+    customBillingOption: "+ Yeni Fatura Adresi Girişi",
+    noBillingAddresses: "Profilinizde kayıtlı fatura adresi bulunamadı.",
+    bankTransferHeader: "Kurumsal Banka Havale / SWIFT Bilgileri",
+    beneficiaryPrefix: "Alıcı Unvanı",
+    proformaIbanNotice:
+      "Sipariş onayının ardından seçtiğiniz döviz cinsine (TRY / USD / EUR) ait kurumsal banka hesap ve SWIFT bilgileri proforma faturanızla birlikte iletilir.",
+    paymentReferenceNote:
+      "* Havale / SWIFT açıklamasına sipariş numaranızı eklemeyi ve ödeme sonrasında profilinizden ödeme bildirimi oluşturmayı unutmayınız.",
+    requestQuoteFormTitle: "Fiyat Teklifi Talep Formu",
+    goToCheckout: "Sipariş Adımına Dön",
+    orderViaBankTransfer: "Banka Havalesi ile Sipariş Ver",
+    requestProformaOnly: "Sadece Fiyat Teklifi İste (Proforma)",
+    registeredDealerPrompt: "Kayıtlı bayimiz misiniz?",
+    signInBtn: "Giriş Yapın",
+    removeItemAria: "Ürünü sepetten kaldır",
+  },
+  en: {
+    packUnit: "Pack",
+    pcsPerPack: "Pcs/Pack",
+    itemsVariety: "Items",
+    cartSyncError: "Failed to synchronize wholesale cart.",
+    orderSubmitError: "An error occurred while placing your order.",
+    networkError: "A network error occurred.",
+    missingAddressesToast: "Please select or enter both billing and delivery addresses.",
+    orderSuccessToast:
+      "Your B2B order has been received! Order No: {orderNo}\nCorporate IBAN & SWIFT details will be shared with your proforma invoice.",
+    confirmB2bOrder: "Confirm B2B Order",
+    addressPaymentHeader: "Shipping & Payment Details",
+    backToCart: "Back to Cart",
+    deliveryAddress: "Delivery Address",
+    deliveryAddressPlaceholder: "Enter delivery address...",
+    customDeliveryOption: "+ Enter New Delivery Address",
+    noDeliveryAddresses: "No saved delivery addresses found in your profile.",
+    billingAddress: "Billing Address",
+    billingAddressPlaceholder: "Enter billing address...",
+    customBillingOption: "+ Enter New Billing Address",
+    noBillingAddresses: "No saved billing addresses found in your profile.",
+    bankTransferHeader: "Corporate Bank Transfer & SWIFT Details",
+    beneficiaryPrefix: "Beneficiary",
+    proformaIbanNotice:
+      "Following order confirmation, corporate bank account (IBAN) and SWIFT details for your selected currency (TRY / USD / EUR) will be provided alongside your proforma invoice.",
+    paymentReferenceNote:
+      "* Please include your order number as the payment reference and submit a payment notification from your profile after transfer.",
+    requestQuoteFormTitle: "Request Wholesale Quote Form",
+    goToCheckout: "Go to Checkout",
+    orderViaBankTransfer: "Order via Bank Transfer",
+    requestProformaOnly: "Request Price Quote Only (Proforma)",
+    registeredDealerPrompt: "Already a registered B2B buyer?",
+    signInBtn: "Sign In",
+    removeItemAria: "Remove item from cart",
+  },
+  ru: {
+    packUnit: "Упак.",
+    pcsPerPack: "шт./упак.",
+    itemsVariety: "Позиций",
+    cartSyncError: "Не удалось синхронизировать корзину.",
+    orderSubmitError: "Произошла ошибка при оформлении заказа.",
+    networkError: "Произошла сетевая ошибка.",
+    missingAddressesToast: "Пожалуйста, укажите адрес доставки и платежный адрес.",
+    orderSuccessToast:
+      "Ваш оптовый заказ успешно принят! № заказа: {orderNo}\nКорпоративные реквизиты IBAN / SWIFT будут направлены вместе с проформа-инвойсом.",
+    confirmB2bOrder: "Подтвердить B2B заказ",
+    addressPaymentHeader: "Адрес доставки и реквизиты оплаты",
+    backToCart: "Назад в корзину",
+    deliveryAddress: "Адрес доставки",
+    deliveryAddressPlaceholder: "Введите адрес доставки...",
+    customDeliveryOption: "+ Ввести новый адрес доставки",
+    noDeliveryAddresses: "В вашем профиле нет сохраненных адресов доставки.",
+    billingAddress: "Платежный адрес (для инвойса)",
+    billingAddressPlaceholder: "Введите платежный адрес...",
+    customBillingOption: "+ Ввести новый платежный адрес",
+    noBillingAddresses: "В вашем профиле нет сохраненных платежных адресов.",
+    bankTransferHeader: "Корпоративные банковские реквизиты / SWIFT",
+    beneficiaryPrefix: "Получатель",
+    proformaIbanNotice:
+      "После подтверждения заказа корпоративные банковские счета (IBAN) и реквизиты SWIFT для выбранной валюты (TRY / USD / EUR) предоставляются вместе с проформа-инвойсом.",
+    paymentReferenceNote:
+      "* Пожалуйста, укажите номер заказа в назначении платежа и отправьте уведомление об оплате в личном кабинете.",
+    requestQuoteFormTitle: "Форма запроса коммерческого предложения",
+    goToCheckout: "Перейти к оформлению",
+    orderViaBankTransfer: "Оформить заказ банковским переводом",
+    requestProformaOnly: "Запросить только расчет (Проформа)",
+    registeredDealerPrompt: "Уже зарегистрированы как оптовый партнер?",
+    signInBtn: "Войти",
+    removeItemAria: "Удалить товар из корзины",
+  },
+  ar: {
+    packUnit: "حزمة",
+    pcsPerPack: "قطعة/حزمة",
+    itemsVariety: "منتجات متنوعة",
+    cartSyncError: "تعذرت مزامنة السلة.",
+    orderSubmitError: "حدث خطأ أثناء إرسال الطلب.",
+    networkError: "حدث خطأ في الشبكة.",
+    missingAddressesToast: "يرجى تحديد أو إدخال عنوان الشحن وعنوان الفوترة.",
+    orderSuccessToast:
+      "تم استلام طلب الجملة بنجاح! رقم الطلب: {orderNo}\nسيتم إرسال تفاصيل الحساب البنكي المؤسسي (IBAN / SWIFT) مع الفاتورة المبدئية (Proforma).",
+    confirmB2bOrder: "تأكيد طلب الجملة B2B",
+    addressPaymentHeader: "معلومات العنوان والدفع",
+    backToCart: "العودة إلى السلة",
+    deliveryAddress: "عنوان التسليم والشحن",
+    deliveryAddressPlaceholder: "اكتب عنوان التسليم...",
+    customDeliveryOption: "+ إدخال عنوان تسليم جديد",
+    noDeliveryAddresses: "لا توجد عناوين تسليم محفوظة في ملفك الشخصي.",
+    billingAddress: "عنوان الفوترة",
+    billingAddressPlaceholder: "اكتب عنوان الفوترة...",
+    customBillingOption: "+ إدخال عنوان فوترة جديد",
+    noBillingAddresses: "لا توجد عناوين فوترة محفوظة في ملفك الشخصي.",
+    bankTransferHeader: "معلومات التحويل البنكي المؤسسي / SWIFT",
+    beneficiaryPrefix: "المستفيد",
+    proformaIbanNotice:
+      "بعد تأكيد الطلب، سيتم تزويدكم بتفاصيل الحساب البنكي المؤسسي (IBAN) ورمز SWIFT للعملة المختارة (TRY / USD / EUR) مع الفاتورة المبدئية (Proforma).",
+    paymentReferenceNote:
+      "* يرجى كتابة رقم الطلب في بيان التحويل البنكي وإرسال إشعار الدفع من ملفك الشخصي بعد التحويل.",
+    requestQuoteFormTitle: "نموذج طلب عرض سعر بالجملة",
+    goToCheckout: "الانتقال لإتمام الطلب",
+    orderViaBankTransfer: "الطلب عبر التحويل البنكي",
+    requestProformaOnly: "طلب عرض سعر فقط (فاتورة مبدئية)",
+    registeredDealerPrompt: "هل أنت عميل جملة مسجل لدينا؟",
+    signInBtn: "تسجيل الدخول",
+    removeItemAria: "إزالة المنتج من السلة",
+  },
+  de: {
+    packUnit: "Paket",
+    pcsPerPack: "Stk./Paket",
+    itemsVariety: "Positionen",
+    cartSyncError: "Warenkorb-Synchronisierung fehlgeschlagen.",
+    orderSubmitError: "Beim Aufgeben der Bestellung ist ein Fehler aufgetreten.",
+    networkError: "Ein Netzwerkfehler ist aufgetreten.",
+    missingAddressesToast: "Bitte wählen oder geben Sie Rechnungs- und Lieferadresse ein.",
+    orderSuccessToast:
+      "Ihre B2B-Bestellung ist eingegangen! Bestell-Nr.: {orderNo}\nDie Firmen-IBAN- und SWIFT-Daten erhalten Sie zusammen mit Ihrer Proforma-Rechnung.",
+    confirmB2bOrder: "B2B-Bestellung bestätigen",
+    addressPaymentHeader: "Adress- & Zahlungsinformationen",
+    backToCart: "Zurück zum Warenkorb",
+    deliveryAddress: "Lieferadresse",
+    deliveryAddressPlaceholder: "Lieferadresse eingeben...",
+    customDeliveryOption: "+ Neue Lieferadresse eingeben",
+    noDeliveryAddresses: "Keine gespeicherten Lieferadressen im Profil gefunden.",
+    billingAddress: "Rechnungsadresse",
+    billingAddressPlaceholder: "Rechnungsadresse eingeben...",
+    customBillingOption: "+ Neue Rechnungsadresse eingeben",
+    noBillingAddresses: "Keine gespeicherten Rechnungsadressen im Profil gefunden.",
+    bankTransferHeader: "Firmen-Banküberweisung & SWIFT-Daten",
+    beneficiaryPrefix: "Zahlungsempfänger",
+    proformaIbanNotice:
+      "Nach der Bestellbestätigung werden Ihnen die Firmenbankverbindung (IBAN) und SWIFT-Daten für Ihre gewählte Währung (TRY / USD / EUR) zusammen mit Ihrer Proforma-Rechnung übermittelt.",
+    paymentReferenceNote:
+      "* Bitte geben Sie Ihre Bestellnummer als Verwendungszweck an und senden Sie nach der Überweisung eine Zahlungsbestätigung in Ihrem Profil.",
+    requestQuoteFormTitle: "Angebotsanfrage-Formular",
+    goToCheckout: "Zur Bestellabwicklung",
+    orderViaBankTransfer: "Per Banküberweisung bestellen",
+    requestProformaOnly: "Nur Preisangebot anfordern (Proforma)",
+    registeredDealerPrompt: "Sind Sie bereits registrierter Händler?",
+    signInBtn: "Anmelden",
+    removeItemAria: "Artikel aus dem Warenkorb entfernen",
+  },
+  fr: {
+    packUnit: "Paquet",
+    pcsPerPack: "Pcs/Paquet",
+    itemsVariety: "Références",
+    cartSyncError: "Échec de la synchronisation du panier.",
+    orderSubmitError: "Une erreur est survenue lors de la validation de la commande.",
+    networkError: "Une erreur réseau s'est produite.",
+    missingAddressesToast: "Veuillez sélectionner ou saisir les adresses de facturation et de livraison.",
+    orderSuccessToast:
+      "Votre commande B2B a bien été enregistrée ! N° de commande : {orderNo}\nLes coordonnées bancaires IBAN / SWIFT vous seront transmises avec votre facture proforma.",
+    confirmB2bOrder: "Confirmer la commande B2B",
+    addressPaymentHeader: "Adresses & Modalités de Paiement",
+    backToCart: "Retour au panier",
+    deliveryAddress: "Adresse de livraison",
+    deliveryAddressPlaceholder: "Saisissez l'adresse de livraison...",
+    customDeliveryOption: "+ Saisir une nouvelle adresse de livraison",
+    noDeliveryAddresses: "Aucune adresse de livraison enregistrée dans votre profil.",
+    billingAddress: "Adresse de facturation",
+    billingAddressPlaceholder: "Saisissez l'adresse de facturation...",
+    customBillingOption: "+ Saisir une nouvelle adresse de facturation",
+    noBillingAddresses: "Aucune adresse de facturation enregistrée dans votre profil.",
+    bankTransferHeader: "Coordonnées Bancaires Professionnelles & SWIFT",
+    beneficiaryPrefix: "Bénéficiaire",
+    proformaIbanNotice:
+      "Après confirmation de votre commande, les coordonnées bancaires professionnelles (IBAN) et SWIFT correspondant à la devise choisie (TRY / USD / EUR) vous seront communiquées avec votre facture proforma.",
+    paymentReferenceNote:
+      "* Veuillez indiquer votre numéro de commande en référence de virement et soumettre un avis de paiement depuis votre profil.",
+    requestQuoteFormTitle: "Formulaire de Demande de Devis",
+    goToCheckout: "Aller au paiement",
+    orderViaBankTransfer: "Commander par virement bancaire",
+    requestProformaOnly: "Demander uniquement un devis (Proforma)",
+    registeredDealerPrompt: "Déjà client professionnel inscrit ?",
+    signInBtn: "Se connecter",
+    removeItemAria: "Retirer l'article du panier",
+  },
+  pl: {
+    packUnit: "Pakiet",
+    pcsPerPack: "szt./pakiet",
+    itemsVariety: "Pozycji",
+    cartSyncError: "Nie udało się zsynchronizować koszyka.",
+    orderSubmitError: "Wystąpił błąd podczas składania zamówienia.",
+    networkError: "Wystąpił błąd sieci.",
+    missingAddressesToast: "Proszę wybrać lub wpisać adres rozliczeniowy oraz adres dostawy.",
+    orderSuccessToast:
+      "Twoje zamówienie B2B zostało przyjęte! Nr zamówienia: {orderNo}\nFirmowe dane bankowe IBAN / SWIFT zostaną przekazane wraz z fakturą proforma.",
+    confirmB2bOrder: "Potwierdź zamówienie B2B",
+    addressPaymentHeader: "Adresy i Dane Płatności",
+    backToCart: "Powrót do koszyka",
+    deliveryAddress: "Adres dostawy",
+    deliveryAddressPlaceholder: "Wpisz adres dostawy...",
+    customDeliveryOption: "+ Wprowadź nowy adres dostawy",
+    noDeliveryAddresses: "Brak zapisanych adresów dostawy w profilu.",
+    billingAddress: "Adres do faktury",
+    billingAddressPlaceholder: "Wpisz adres do faktury...",
+    customBillingOption: "+ Wprowadź nowy adres do faktury",
+    noBillingAddresses: "Brak zapisanych adresów do faktury w profilu.",
+    bankTransferHeader: "Firmowe Dane do Przelewu Bankowego / SWIFT",
+    beneficiaryPrefix: "Odbiorca",
+    proformaIbanNotice:
+      "Po potwierdzeniu zamówienia firmowe dane konta bankowego (IBAN) oraz SWIFT dla wybranej waluty (TRY / USD / EUR) zostaną przesłane wraz z fakturą proforma.",
+    paymentReferenceNote:
+      "* Prosimy o podanie numeru zamówienia w tytule przelewu oraz zgłoszenie płatności w panelu profilu.",
+    requestQuoteFormTitle: "Formularz Zapytania Ofertowego",
+    goToCheckout: "Przejdź do zamówienia",
+    orderViaBankTransfer: "Zamów przelewem bankowym",
+    requestProformaOnly: "Poproś tylko o wycenę (Proforma)",
+    registeredDealerPrompt: "Jesteś zarejestrowanym kontrahentem?",
+    signInBtn: "Zaloguj się",
+    removeItemAria: "Usuń produkt z koszyka",
+  },
+  bg: {
+    packUnit: "Пакет",
+    pcsPerPack: "бр./пакет",
+    itemsVariety: "Артикула",
+    cartSyncError: "Неуспешна синхронизация на количката.",
+    orderSubmitError: "Възникна грешка при подаване на поръчката.",
+    networkError: "Възникна мрежова грешка.",
+    missingAddressesToast: "Моля, изберете или въведете адрес за доставка и фактуриране.",
+    orderSuccessToast:
+      "Вашата B2B поръчка е приета успешно! Поръчка №: {orderNo}\nКорпоративните банкови сметки (IBAN / SWIFT) ще бъдат изпратени с вашата проформа фактура.",
+    confirmB2bOrder: "Потвърди B2B поръчката",
+    addressPaymentHeader: "Адрес и Данни за Плащане",
+    backToCart: "Обратно към количката",
+    deliveryAddress: "Адрес за доставка",
+    deliveryAddressPlaceholder: "Въведете адрес за доставка...",
+    customDeliveryOption: "+ Въвеждане на нов адрес за доставка",
+    noDeliveryAddresses: "Няма запазени адреси за доставка във вашия профил.",
+    billingAddress: "Адрес за фактуриране",
+    billingAddressPlaceholder: "Въведете адрес за фактуриране...",
+    customBillingOption: "+ Въвеждане на нов адрес за фактуриране",
+    noBillingAddresses: "Няма запазени адреси за фактуриране във вашия профил.",
+    bankTransferHeader: "Корпоративен Банков Превод и SWIFT Данни",
+    beneficiaryPrefix: "Получател",
+    proformaIbanNotice:
+      "След потвърждение на поръчката корпоративните банкови сметки (IBAN) и SWIFT данни за избраната валута (TRY / USD / EUR) се предоставят заедно с вашата проформа фактура.",
+    paymentReferenceNote:
+      "* Моля, впишете номера на поръчката като основание за превода и подайте известие за плащане от профила си.",
+    requestQuoteFormTitle: "Формуляр за Оферта на Едро",
+    goToCheckout: "Към завършване на поръчката",
+    orderViaBankTransfer: "Поръчай с банков превод",
+    requestProformaOnly: "Поискай само оферта (Проформа)",
+    registeredDealerPrompt: "Регистриран B2B партньор ли сте?",
+    signInBtn: "Вход",
+    removeItemAria: "Премахни продукта от количката",
+  },
+};
+
+interface DynamicBankAccount {
+  readonly bank_name: string;
+  readonly iban: string;
+  readonly currency?: string;
+  readonly swift?: string;
+}
+
+interface StoreBankSettings {
+  readonly bank_accounts?: readonly DynamicBankAccount[];
+  readonly iban_try?: string;
+  readonly iban_usd?: string;
+  readonly iban_eur?: string;
+}
+
+function isValidConfiguredIban(raw?: string): boolean {
+  if (!raw) return false;
+  const trimmed = raw.trim();
+  if (trimmed.length < 10) return false;
+  return !/^x+$/i.test(trimmed);
+}
+
+function extractValidBankAccounts(settings: StoreBankSettings | null): DynamicBankAccount[] {
+  if (!settings) return [];
+  const list: DynamicBankAccount[] = [];
+  if (Array.isArray(settings.bank_accounts)) {
+    for (const acc of settings.bank_accounts) {
+      if (acc && isValidConfiguredIban(acc.iban)) {
+        list.push(acc);
+      }
+    }
+  }
+  if (list.length > 0) return list;
+  if (isValidConfiguredIban(settings.iban_try)) {
+    list.push({ bank_name: "TRY IBAN", iban: settings.iban_try!.trim(), currency: "TRY" });
+  }
+  if (isValidConfiguredIban(settings.iban_usd)) {
+    list.push({ bank_name: "USD IBAN", iban: settings.iban_usd!.trim(), currency: "USD" });
+  }
+  if (isValidConfiguredIban(settings.iban_eur)) {
+    list.push({ bank_name: "EUR IBAN", iban: settings.iban_eur!.trim(), currency: "EUR" });
+  }
+  return list;
 }
 
 function formatAddress(addr: UserAddress): string {
@@ -84,6 +444,7 @@ async function submitB2BOrder({
   deliveryAddress,
   lang,
 }: SubmitB2BOrderParams): Promise<string> {
+  const labels = pickLangText(lang, CART_DRAWER_LABELS);
   const syncRes = await fetch("/api/v1/store/cart/sync", {
     method: "POST",
     headers: {
@@ -100,8 +461,7 @@ async function submitB2BOrder({
 
   if (!syncRes.ok) {
     const syncData = await syncRes.json().catch(() => ({}));
-    const fallbackSyncMsg = lang === "tr" ? "Sepet senkronizasyonu başarısız." : "Failed to sync cart.";
-    throw new Error(syncData.error || fallbackSyncMsg);
+    throw new Error(syncData.error || labels.cartSyncError);
   }
 
   const res = await fetch("/api/v1/store/orders", {
@@ -119,8 +479,7 @@ async function submitB2BOrder({
 
   const data = await res.json();
   if (!res.ok || !data.success) {
-    const fallbackOrderMsg = lang === "tr" ? "Sipariş verilirken bir hata oluştu." : "Failed to place order.";
-    throw new Error(data.error || fallbackOrderMsg);
+    throw new Error(data.error || labels.orderSubmitError);
   }
 
   return data.order_number;
@@ -200,6 +559,9 @@ function CartItemCard({
   }
 
   const title = item.title_translations?.[lang] || item.title;
+  const labels = pickLangText(lang, CART_DRAWER_LABELS);
+  const pieceUnit = t("piece", lang);
+  const unitPriceSuffix = isAuthenticated ? ` x ${pricePerUnit.toFixed(2)} ${currency}` : "";
 
   return (
     <div className="border border-cultured bg-[#fafafa] rounded-[5px] p-3 flex gap-3 relative shadow-inner">
@@ -228,7 +590,7 @@ function CartItemCard({
             −
           </button>
           <span className="text-sm font-bold text-onyx">
-            {item.packages_qty} {lang === "tr" ? "Paket" : "Pack"}
+            {item.packages_qty} {labels.packUnit}
           </span>
           <button
             type="button"
@@ -240,8 +602,7 @@ function CartItemCard({
         </div>
 
         <span className="text-xs font-semibold text-sonic-silver mt-1.5 block">
-          {itemTotalUnits} {lang === "tr" ? "Adet" : t("piece", lang)} ({item.units_per_package} {lang === "tr" ? "Adet/Paket" : "Pcs/Pack"})
-          {isAuthenticated ? ` x ${pricePerUnit.toFixed(2)} ${currency}` : ""}
+          {itemTotalUnits} {pieceUnit} ({item.units_per_package} {labels.pcsPerPack}){unitPriceSuffix}
         </span>
       </div>
 
@@ -262,6 +623,7 @@ function CartItemCard({
 
       <button
         type="button"
+        aria-label={labels.removeItemAria}
         onClick={() => onRemove(idx)}
         className="absolute top-2 right-2 border-none bg-transparent text-sonic-silver hover:text-salmon-pink cursor-pointer text-sm font-extrabold"
       >
@@ -363,15 +725,17 @@ function CartTotalsSection({
   exchangeRates,
 }: Readonly<CartTotalsSectionProps>) {
   const isAuthenticated = useIsStoreAuthenticated();
+  const labels = pickLangText(lang, CART_DRAWER_LABELS);
+  const pieceUnit = t("piece", lang);
   return (
     <div className="border border-cultured bg-[#fafafa] p-4 rounded-[10px] flex flex-col gap-2.5 shadow-sm shrink-0">
       <div className="flex justify-between text-sm font-bold text-onyx">
         <span>{t("total_packages", lang)}:</span>
-        <span className="text-eerie-black font-extrabold">{totalPkgs} {lang === "tr" ? "Paket" : "Pack"}</span>
+        <span className="text-eerie-black font-extrabold">{totalPkgs} {labels.packUnit}</span>
       </div>
       <div className="flex justify-between text-sm font-bold text-onyx">
         <span>{t("total_qty", lang)}:</span>
-        <span className="text-eerie-black font-extrabold">{totalItemsCount} {lang === "tr" ? "Adet" : t("piece", lang)}</span>
+        <span className="text-eerie-black font-extrabold">{totalItemsCount} {pieceUnit}</span>
       </div>
       <div className="flex justify-between text-sm font-bold text-onyx">
         <span>{t("total_weight", lang)}:</span>
@@ -485,33 +849,62 @@ function AddressPicker({
 }
 
 function BankTransferInfo({ lang }: { readonly lang: string }) {
-  const isTr = lang === "tr";
+  const labels = pickLangText(lang, CART_DRAWER_LABELS);
+  const [bankAccounts, setBankAccounts] = React.useState<DynamicBankAccount[]>([]);
+
+  React.useEffect(() => {
+    let active = true;
+    fetch("/api/v1/store/settings", {
+      headers: { Accept: "application/json" },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: StoreBankSettings | null) => {
+        if (active) {
+          setBankAccounts(extractValidBankAccounts(data));
+        }
+      })
+      .catch(() => {
+        // Fallback cleanly to proforma IBAN notice
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
-    <div className="bg-[#eff6ff] border border-blue-100 rounded-lg p-3 flex flex-col gap-2.5 text-xs text-blue-900 shadow-sm leading-normal">
-      <div className="font-extrabold uppercase tracking-[0.5px] border-b border-blue-200/50 pb-1 text-[11px] text-blue-800">
-        🏦 {isTr ? "Banka Havale/EFT Hesapları" : "Bank Transfer IBAN Accounts"}
+    <div className="bg-[#eff6ff] border border-blue-100 rounded-lg p-3.5 flex flex-col gap-2.5 text-xs text-blue-900 shadow-sm leading-normal">
+      <div className="font-extrabold uppercase tracking-[0.5px] border-b border-blue-200/50 pb-1.5 text-[11px] text-blue-800">
+        🏦 {labels.bankTransferHeader}
       </div>
-      <div className="flex flex-col gap-1.5 font-semibold text-[11px]">
-        <div>
-          <span className="font-bold text-blue-900">Ziraat Bankası:</span>
-          <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
-          <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
-        </div>
-        <div>
-          <span className="font-bold text-blue-900">Garanti BBVA:</span>
-          <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
-          <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
-        </div>
-        <div>
-          <span className="font-bold text-blue-900">VakıfBank:</span>
-          <div className="font-mono text-[10px] text-zinc-700 bg-white/70 px-1 py-0.5 rounded select-all mt-0.5">XXX</div>
-          <span className="text-[9px] text-blue-800">Alıcı: Modanet B2B Tekstil</span>
-        </div>
+      <div className="text-[11px] font-bold text-blue-950 bg-white/80 border border-blue-100 px-2.5 py-1.5 rounded">
+        {labels.beneficiaryPrefix}: <span className="font-extrabold">Merter Vitrini B2B Tekstil</span>
       </div>
-      <div className="text-[9px] font-bold text-blue-800 italic mt-1 border-t border-blue-200/30 pt-1.5 leading-snug">
-        {isTr
-          ? "* Lütfen transfere sipariş numaranızı açıklama olarak ekleyiniz. Ödeme sonrası profilinizden bildirim yapmayı unutmayınız."
-          : "* Please add your order number as payment explanation. Submit notification from profile after transfer."}
+      {bankAccounts.length > 0 ? (
+        <div className="flex flex-col gap-1.5 font-semibold text-[11px]">
+          {bankAccounts.map((acc) => (
+            <div key={`${acc.bank_name}-${acc.iban}`} className="bg-white/70 px-2.5 py-1.5 rounded border border-blue-100/70">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-blue-900">{acc.bank_name}</span>
+                {acc.currency && (
+                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                    {acc.currency}
+                  </span>
+                )}
+              </div>
+              <div className="font-mono text-[10.5px] text-zinc-800 select-all mt-0.5">{acc.iban}</div>
+              {acc.swift && (
+                <div className="font-mono text-[10px] text-blue-800 mt-0.5">SWIFT: {acc.swift}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[11px] font-semibold text-blue-900 bg-white/75 border border-blue-100/80 rounded px-2.5 py-2 leading-relaxed">
+          {labels.proformaIbanNotice}
+        </p>
+      )}
+      <div className="text-[10px] font-semibold text-blue-800 italic border-t border-blue-200/40 pt-1.5 leading-snug">
+        {labels.paymentReferenceNote}
       </div>
     </div>
   );
@@ -532,48 +925,47 @@ function CartCheckoutForm({
   onBackToCart,
   onSubmit,
 }: Readonly<CartCheckoutFormProps>) {
-  const isTr = lang === "tr";
-  const submitButtonText = isTr ? "Siparişi Onayla" : "Confirm B2B Order";
+  const labels = pickLangText(lang, CART_DRAWER_LABELS);
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 pt-4 border-t border-cultured mt-2">
       <div className="flex items-center justify-between">
         <h4 className="text-xs uppercase font-extrabold text-salmon-pink tracking-[0.5px]">
-          {isTr ? "Adres ve Ödeme Bilgileri" : "Address & Payment Info"}
+          {labels.addressPaymentHeader}
         </h4>
         <button
           type="button"
           onClick={onBackToCart}
           className="text-xs font-bold text-sonic-silver hover:text-salmon-pink bg-transparent border-none cursor-pointer"
         >
-          &larr; {isTr ? "Sepete Dön" : "Back to Cart"}
+          &larr; {labels.backToCart}
         </button>
       </div>
 
       <AddressPicker
-        title={isTr ? "Teslimat Adresi" : "Delivery Address"}
+        title={labels.deliveryAddress}
         icon="🚚"
         addresses={addresses}
         selectedAddr={deliveryAddr}
         onSelectAddr={setDeliveryAddr}
         customAddr={customDeliveryAddr}
         onCustomAddrChange={setCustomDeliveryAddr}
-        customPlaceholder={isTr ? "Teslimat adresini yazınız..." : "Type delivery address..."}
-        customOptionLabel={isTr ? "+ Yeni Adres Girişi" : "+ Enter Custom Address"}
-        emptyNotice={isTr ? "Profilinizde kayıtlı teslimat adresi bulunamadı." : "No saved shipping addresses found."}
+        customPlaceholder={labels.deliveryAddressPlaceholder}
+        customOptionLabel={labels.customDeliveryOption}
+        emptyNotice={labels.noDeliveryAddresses}
       />
 
       <AddressPicker
-        title={isTr ? "Fatura Adresi" : "Billing Address"}
+        title={labels.billingAddress}
         icon="📄"
         addresses={addresses}
         selectedAddr={billingAddr}
         onSelectAddr={setBillingAddr}
         customAddr={customBillingAddr}
         onCustomAddrChange={setCustomBillingAddr}
-        customPlaceholder={isTr ? "Fatura adresini yazınız..." : "Type billing address..."}
-        customOptionLabel={isTr ? "+ Yeni Fatura Adresi Girişi" : "+ Enter Custom Billing Address"}
-        emptyNotice={isTr ? "Profilinizde kayıtlı fatura adresi bulunamadı." : "No saved billing addresses found."}
+        customPlaceholder={labels.billingAddressPlaceholder}
+        customOptionLabel={labels.customBillingOption}
+        emptyNotice={labels.noBillingAddresses}
       />
 
       <BankTransferInfo lang={lang} />
@@ -586,7 +978,7 @@ function CartCheckoutForm({
         {submittingOrder ? (
           <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
         ) : (
-          `✔️ ${submitButtonText}`
+          `✔️ ${labels.confirmB2bOrder}`
         )}
       </button>
     </form>
@@ -628,11 +1020,12 @@ function CartInquiryForm({
   onGoToCheckout,
   onSubmit,
 }: Readonly<CartInquiryFormProps>) {
+  const labels = pickLangText(lang, CART_DRAWER_LABELS);
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3.5 pt-4 border-t border-cultured mt-2">
       <div className="flex items-center justify-between">
         <span className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">
-          {lang === "tr" ? "Fiyat Teklifi Talep Formu" : "Request Quote Form"}
+          {labels.requestQuoteFormTitle}
         </span>
         {token && (
           <button
@@ -640,7 +1033,7 @@ function CartInquiryForm({
             onClick={onGoToCheckout}
             className="text-[10px] font-bold text-salmon-pink bg-transparent border-none cursor-pointer"
           >
-            &larr; {lang === "tr" ? "Checkout'a Git" : "Go to Checkout"}
+            &larr; {labels.goToCheckout}
           </button>
         )}
       </div>
@@ -801,6 +1194,8 @@ export default function CartDrawer({
     }
   }, [token, isCheckout]);
 
+  const labels = pickLangText(lang, CART_DRAWER_LABELS);
+
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
@@ -809,7 +1204,7 @@ export default function CartDrawer({
     const finalDelivery = resolveFinalAddress(deliveryAddr, customDeliveryAddr, addresses);
 
     if (!finalBilling || !finalDelivery) {
-      showToast(lang === "tr" ? "Lütfen fatura ve teslimat adreslerini doldurunuz." : "Please select or enter billing and delivery addresses.");
+      showToast(labels.missingAddressesToast);
       return;
     }
 
@@ -823,19 +1218,17 @@ export default function CartDrawer({
         lang,
       });
 
-      const successNotice = lang === "tr"
-        ? `Siparişiniz başarıyla alındı! Sipariş No: ${orderNumber}\nLütfen sipariş numaranızı belirterek belirtilen IBAN adreslerine banka havalesi gerçekleştiriniz.`
-        : `Your order has been received successfully! Order No: ${orderNumber}\nPlease transfer the amount to the provided IBANs mentioning your order number.`;
+      const successNotice = labels.orderSuccessToast.replace("{orderNo}", orderNumber);
 
       showToast(successNotice);
       localStorage.removeItem("merter_b2b_cart");
       window.dispatchEvent(new Event("merter-cart-update"));
       onClose();
-      window.location.href = `/${lang}/profile?tab=orders`;
+      const profileQuery = lang && lang !== "tr" ? `?tab=orders&lang=${encodeURIComponent(lang)}` : "?tab=orders";
+      window.location.href = `/profile${profileQuery}`;
     } catch (err: unknown) {
       console.error(err);
-      const fallbackMsg = lang === "tr" ? "Bir ağ hatası oluştu." : "A network error occurred.";
-      const errMsg = err instanceof Error ? err.message : fallbackMsg;
+      const errMsg = err instanceof Error ? err.message : labels.networkError;
       showToast(errMsg);
     } finally {
       setSubmittingOrder(false);
@@ -871,7 +1264,7 @@ export default function CartDrawer({
     <div className="fixed inset-0 z-50 bg-black/50 flex justify-end">
       <button
         type="button"
-        aria-label="Kapat"
+        aria-label={t("close", lang)}
         tabIndex={-1}
         className="fixed inset-0 bg-transparent border-none cursor-default"
         onClick={onClose}
@@ -885,6 +1278,7 @@ export default function CartDrawer({
           </h3>
           <button
             type="button"
+            aria-label={t("close", lang)}
             onClick={onClose}
             className="w-8 h-8 rounded-[5px] bg-[#fafafa] hover:bg-cultured border border-cultured flex items-center justify-center text-onyx cursor-pointer transition-colors"
           >
@@ -920,7 +1314,7 @@ export default function CartDrawer({
 
               <div className="flex justify-between items-center py-2 px-1 border-b border-cultured shrink-0 mt-1 select-none">
                 <span className="text-xs font-bold text-sonic-silver">
-                  {cart.length} {lang === "tr" ? "Çeşit Ürün" : "Items"}
+                  {cart.length} {labels.itemsVariety}
                 </span>
                 <button
                   type="button"
@@ -954,14 +1348,14 @@ export default function CartDrawer({
                       onClick={() => setIsCheckout(true)}
                       className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.99] transition-colors duration-300"
                     >
-                      💳 {lang === "tr" ? "Banka Havalesi ile Sipariş Ver" : "Order via Bank Transfer"}
+                      💳 {labels.orderViaBankTransfer}
                     </button>
                     <button
                       type="button"
                       onClick={handleOpenInquiryFromLoggedIn}
                       className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-[5px] font-bold text-xs uppercase border-none flex items-center justify-center gap-2 cursor-pointer select-none transition-colors"
                     >
-                      📄 {lang === "tr" ? "Sadece Fiyat Teklifi İste (Proforma)" : "Request Price Quote Only"}
+                      📄 {labels.requestProformaOnly}
                     </button>
                   </div>
                 )}
@@ -1012,7 +1406,7 @@ export default function CartDrawer({
 
                 {!token && (
                   <div className="mt-4 p-3 bg-zinc-50 border border-zinc-200/60 rounded-lg text-center text-xs font-semibold text-zinc-600 select-none">
-                    {lang === "tr" ? "Kayıtlı bayimiz misiniz?" : "Are you our registered dealer?"}{" "}
+                    {labels.registeredDealerPrompt}{" "}
                     <button
                       type="button"
                       onClick={() => {
@@ -1021,7 +1415,7 @@ export default function CartDrawer({
                       }}
                       className="text-salmon-pink font-extrabold hover:underline bg-transparent border-none cursor-pointer"
                     >
-                      {lang === "tr" ? "Giriş Yapın" : "Sign In"}
+                      {labels.signInBtn}
                     </button>
                   </div>
                 )}

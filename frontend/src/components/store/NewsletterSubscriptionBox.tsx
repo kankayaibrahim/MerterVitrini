@@ -2,23 +2,25 @@
 
 import React, { useState } from "react";
 import { Mail, CheckCircle2, Sparkles } from "lucide-react";
+import { pickLangText, SupportedLangCode } from "@/app/i18n";
 
-const NEWSLETTER_TEXTS: Record<
-  string,
-  {
-    badge: string;
-    title: string;
-    subtitle: string;
-    emailPlaceholder: string;
-    companyPlaceholder: string;
-    countryPlaceholder: string;
-    consentLabel: string;
-    submitBtn: string;
-    submittingBtn: string;
-    successMsg: string;
-    errorConsent: string;
-  }
-> = {
+interface NewsletterLabels {
+  badge: string;
+  title: string;
+  subtitle: string;
+  emailPlaceholder: string;
+  companyPlaceholder: string;
+  countryPlaceholder: string;
+  consentLabel: string;
+  submitBtn: string;
+  submittingBtn: string;
+  successMsg: string;
+  errorConsent: string;
+  errorGeneric: string;
+  errorNetwork: string;
+}
+
+const NEWSLETTER_TEXTS: Record<SupportedLangCode, NewsletterLabels> = {
   tr: {
     badge: "MERTER B2B E-BÜLTEN & KOLEKSİYON DUYURULARI",
     title: "Yeni Sezon Toptan Koleksiyonları ve Üretici Fırsatlarını İlk Siz Öğrenin",
@@ -33,6 +35,8 @@ const NEWSLETTER_TEXTS: Record<
     submittingBtn: "KAYDEDİLİYOR...",
     successMsg: "B2B E-Bülten aboneliğiniz izinli olarak başarıyla kaydedildi!",
     errorConsent: "Lütfen KVKK ve ticari elektronik ileti onay kutucuğunu işaretleyiniz.",
+    errorGeneric: "Bir hata oluştu.",
+    errorNetwork: "Bağlantı hatası oluştu.",
   },
   en: {
     badge: "MERTER B2B WHOLESALE NEWSLETTER",
@@ -48,6 +52,8 @@ const NEWSLETTER_TEXTS: Record<
     submittingBtn: "SAVING...",
     successMsg: "Your B2B newsletter subscription has been confirmed!",
     errorConsent: "Please check the commercial communication and privacy consent box.",
+    errorGeneric: "An error occurred.",
+    errorNetwork: "A network error occurred.",
   },
   ru: {
     badge: "ОПТОВАЯ B2B РАССЫЛКА МЕРТЕР",
@@ -63,6 +69,8 @@ const NEWSLETTER_TEXTS: Record<
     submittingBtn: "ОТПРАВКА...",
     successMsg: "Вы успешно подписались на B2B рассылку Merter Vitrini!",
     errorConsent: "Пожалуйста, подтвердите согласие на получение рассылки.",
+    errorGeneric: "Произошла ошибка.",
+    errorNetwork: "Ошибка подключения к сети.",
   },
   ar: {
     badge: "النشرة الإخبارية للأزياء بالجملة B2B",
@@ -78,13 +86,83 @@ const NEWSLETTER_TEXTS: Record<
     submittingBtn: "جاري التسجيل...",
     successMsg: "تم تسجيل اشتراكك في النشرة التجارية بنجاح!",
     errorConsent: "يرجى الموافقة على شروط الخصوصية والرسائل التجارية.",
+    errorGeneric: "حدث خطأ أثناء التسجيل.",
+    errorNetwork: "حدث خطأ في الاتصال بالشبكة.",
+  },
+  de: {
+    badge: "MERTER B2B GROSSHANDELS-NEWSLETTER",
+    title: "Erfahren Sie als Erste von neuen Großhandelskollektionen & Direktangeboten",
+    subtitle:
+      "Wöchentliche Updates zu verifizierten Merter-Herstellern, neuen Serienpaketen und freien Private-Label-Produktionskapazitäten.",
+    emailPlaceholder: "Geschäftliche E-Mail-Adresse *",
+    companyPlaceholder: "Firma / Boutique (Optional)",
+    countryPlaceholder: "Land (z. B. Deutschland, Österreich)",
+    consentLabel:
+      "Ich stimme dem Erhalt von B2B-Kollektionsbenachrichtigungen und geschäftlichen E-Mails gemäß den DSGVO-/KVKK-Datenschutzrichtlinien zu.",
+    submitBtn: "ABONNIEREN",
+    submittingBtn: "WIRD GESPEICHERT...",
+    successMsg: "Ihr B2B-Newsletter-Abonnement wurde erfolgreich bestätigt!",
+    errorConsent: "Bitte bestätigen Sie die Datenschutz- und Kommunikationseinwilligung.",
+    errorGeneric: "Ein Fehler ist aufgetreten.",
+    errorNetwork: "Ein Verbindungsfehler ist aufgetreten.",
+  },
+  fr: {
+    badge: "NEWSLETTER B2B VENTE EN GROS MERTER",
+    title: "Découvrez en avant-première les nouvelles collections et offres directes d'usine",
+    subtitle:
+      "Recevez chaque semaine les nouveautés des fabricants vérifiés de Merter, les lots assortis de saison et les disponibilités Private Label.",
+    emailPlaceholder: "Adresse E-mail Professionnelle *",
+    companyPlaceholder: "Entreprise / Boutique (Facultatif)",
+    countryPlaceholder: "Pays (ex. : France, Belgique)",
+    consentLabel:
+      "J'accepte de recevoir les alertes de collections B2B et les communications commerciales conformément au RGPD et à la politique de confidentialité.",
+    submitBtn: "S'ABONNER",
+    submittingBtn: "ENREGISTREMENT...",
+    successMsg: "Votre inscription à la newsletter B2B a bien été enregistrée !",
+    errorConsent: "Veuillez cocher la case de consentement commercial et de confidentialité.",
+    errorGeneric: "Une erreur s'est produite.",
+    errorNetwork: "Erreur de connexion au réseau.",
+  },
+  pl: {
+    badge: "BIULETYN HURTOWY B2B MERTER",
+    title: "Dowiedz się jako pierwszy o nowych kolekcjach hurtowych i ofertach fabryk",
+    subtitle:
+      "Cotygodniowe powiadomienia o zweryfikowanych producentach z Merter, nowych seriach sezonowych i mocach produkcyjnych Private Label.",
+    emailPlaceholder: "Firmowy adres e-mail *",
+    companyPlaceholder: "Nazwa firmy / butiku (Opcjonalnie)",
+    countryPlaceholder: "Kraj (np. Polska, Niemcy)",
+    consentLabel:
+      "Wyrażam zgodę na otrzymywanie powiadomień o kolekcjach hurtowych B2B oraz informacji handlowych zgodnie z polityką prywatności RODO/KVKK.",
+    submitBtn: "ZAPISZ SIĘ",
+    submittingBtn: "ZAPISYWANIE...",
+    successMsg: "Twoja subskrypcja biuletynu B2B została pomyślnie potwierdzona!",
+    errorConsent: "Proszę zaznaczyć zgodę na komunikację handlową i politykę prywatności.",
+    errorGeneric: "Wystąpił błąd.",
+    errorNetwork: "Wystąpił błąd połączenia.",
+  },
+  bg: {
+    badge: "B2B БЮЛЕТИН ЗА ТЪРГОВИЯ НА ЕДРО МЕРТЕР",
+    title: "Научете първи за новите колекции на едро и директните фабрични оферти",
+    subtitle:
+      "Седмични известия за проверени производители от Мертер, нови сезонни серии и капацитет за Private Label производство.",
+    emailPlaceholder: "Служебен имейл адрес *",
+    companyPlaceholder: "Име на фирма / бутик (По избор)",
+    countryPlaceholder: "Държава (напр. България, Румъния)",
+    consentLabel:
+      "Съгласен/на съм да получавам B2B известия за нови колекции и търговски съобщения в съответствие с политиката за поверителност GDPR/KVKK.",
+    submitBtn: "АБОНИРАЙ СЕ",
+    submittingBtn: "ЗАПИСВАНЕ...",
+    successMsg: "Вашият абонамент за B2B бюлетина беше потвърден успешно!",
+    errorConsent: "Моля, отбележете полето за съгласие за търговски съобщения и поверителност.",
+    errorGeneric: "Възникна грешка.",
+    errorNetwork: "Възникна грешка при свързването.",
   },
 };
 
 export default function NewsletterSubscriptionBox({
   lang,
 }: Readonly<{ lang: string }>) {
-  const L = NEWSLETTER_TEXTS[lang] || NEWSLETTER_TEXTS.tr;
+  const L = pickLangText(lang, NEWSLETTER_TEXTS);
 
   const [email, setEmail] = useState<string>("");
   const [companyName, setCompanyName] = useState<string>("");
@@ -125,10 +203,10 @@ export default function NewsletterSubscriptionBox({
         setCountry("");
       } else {
         const data = (await res.json()) as { error?: string };
-        setErrorMsg(data.error || "Bir hata oluştu.");
+        setErrorMsg(data.error || L.errorGeneric);
       }
     } catch {
-      setErrorMsg("Bağlantı hatası oluştu.");
+      setErrorMsg(L.errorNetwork);
     } finally {
       setSubmitting(false);
     }

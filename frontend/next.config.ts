@@ -8,7 +8,11 @@ let buildNumber = 1001;
 const buildNumPath = path.join(__dirname, "build_number.json");
 
 try {
-  if (!process.env.__BUILD_INC_DONE) {
+  const isProductionBuild =
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.INCREMENT_BUILD_NUMBER === "1";
+
+  if (isProductionBuild && !process.env.__BUILD_INC_DONE) {
     process.env.__BUILD_INC_DONE = "true";
     if (fs.existsSync(buildNumPath)) {
       const parsed = JSON.parse(fs.readFileSync(buildNumPath, "utf-8"));

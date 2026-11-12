@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -107,10 +109,79 @@ func (pr *progressReader) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func downloadImageWithSpeedTracking(url string, destPath string, runID string) error {
+func isBlockedInternalIP(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
+		return true
+	}
+	if v4 := ip.To4(); v4 != nil && v4[0] == 169 && v4[1] == 254 {
+		return true
+	}
+	return false
+}
+
+func validateSafeExternalFeedURL(rawURL string) error {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
+		return errors.New("feed URL boş olamaz")
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return errors.New("geçersiz URL formatı")
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return errors.New("yalnızca http ve https protokollerine izin verilmektedir")
+	}
+	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	if host == "" {
+		return errors.New("geçersiz URL sunucu adı")
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
+		return errors.New("yerel veya dahili ağ adreslerine erişim engellendi")
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if isBlockedInternalIP(ip) {
+			return errors.New("dahili veya özel IP adreslerine erişim engellendi")
+		}
+		return nil
+	}
+
+	lookupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addrs, err := net.DefaultResolver.LookupIPAddr(lookupCtx, host)
+	if err != nil || len(addrs) == 0 {
+		return errors.New("URL alan adı çözümlenemedi")
+	}
+	for _, addr := range addrs {
+		if isBlockedInternalIP(addr.IP) {
+			return errors.New("alan adı dahili veya özel bir IP adresine işaret ediyor")
+		}
+	}
+	return nil
+}
+
+func safeExternalHTTPGet(baseClient *http.Client, targetURL string) (*http.Response, error) {
+	if err := validateSafeExternalFeedURL(targetURL); err != nil {
+		return nil, err
+	}
+	clientCopy := *baseClient
+	clientCopy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return errors.New("çok fazla yönlendirme")
+		}
+		return validateSafeExternalFeedURL(req.URL.String())
+	}
+	return clientCopy.Get(targetURL)
+}
+
+func downloadImageWithSpeedTracking(imgURL string, destPath string, runID string) error {
 	p := getOrCreateProgress(runID)
 
-	resp, err := httpclient.DefaultPooledClient.Get(url)
+	resp, err := safeExternalHTTPGet(httpclient.DefaultPooledClient, imgURL)
 	if err != nil {
 		return err
 	}
@@ -376,7 +447,7 @@ func (h *IntegrationHandler) ListFeeds(w http.ResponseWriter, r *http.Request) {
 }
 
 func downloadXMLPreviewBytes(feedURL string) ([]byte, error) {
-	resp, err := httpclient.FastClient.Get(feedURL)
+	resp, err := safeExternalHTTPGet(httpclient.FastClient, feedURL)
 	if err != nil {
 		return nil, err
 	}
@@ -939,6 +1010,15 @@ func simulateBackgroundSync(runID string, ctx context.Context) {
 		return
 	}
 
+	if err := validateSafeExternalFeedURL(feedURL); err != nil {
+		log.Printf("[SYNC-%s] Unsafe feed URL blocked: %v", runID, err)
+		updateSyncStatus(runID, "failed", map[string]any{"error": "Güvenli olmayan XML URL engellendi: " + err.Error()})
+		progressMu.Lock()
+		delete(progressMap, runID)
+		progressMu.Unlock()
+		return
+	}
+
 	if parserType, _ := mappingConfig["parser_type"].(string); parserType == "python_script" {
 		script, _ := mappingConfig["python_script"].(string)
 		if script == "" {
@@ -957,7 +1037,7 @@ func simulateBackgroundSync(runID string, ctx context.Context) {
 		return
 	}
 
-	resp, err := httpclient.DefaultPooledClient.Get(feedURL)
+	resp, err := safeExternalHTTPGet(httpclient.DefaultPooledClient, feedURL)
 	if err != nil {
 		log.Printf("[SYNC-%s] Failed to download XML: %v", runID, err)
 		updateSyncStatus(runID, "failed", map[string]any{"error": "XML indirme hatası: " + err.Error()})

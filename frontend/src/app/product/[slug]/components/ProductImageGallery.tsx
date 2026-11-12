@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { getResizedImageUrl } from "@/app/utils";
 import { Product } from "@/types/store";
+import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
 
 interface ProductImageGalleryProps {
   readonly images: Product["images"];
@@ -11,12 +12,39 @@ interface ProductImageGalleryProps {
   readonly t: (key: string, lang: string) => string;
 }
 
+const GALLERY_FALLBACKS: Record<
+  SupportedSeoLang,
+  { zoom: string; close: string; prev: string; next: string }
+> = {
+  tr: { zoom: "Görseli büyüt", close: "Kapat", prev: "Önceki görsel", next: "Sonraki görsel" },
+  en: { zoom: "Zoom image", close: "Close", prev: "Previous image", next: "Next image" },
+  ru: { zoom: "Увеличить фото", close: "Закрыть", prev: "Предыдущее фото", next: "Следующее фото" },
+  ar: { zoom: "تكبير الصورة", close: "إغلاق", prev: "الصورة السابقة", next: "الصورة التالية" },
+  de: { zoom: "Bild vergrößern", close: "Schließen", prev: "Vorheriges Bild", next: "Nächstes Bild" },
+  fr: { zoom: "Agrandir l'image", close: "Fermer", prev: "Image précédente", next: "Image suivante" },
+  pl: { zoom: "Powiększ zdjęcie", close: "Zamknij", prev: "Poprzednie zdjęcie", next: "Następne zdjęcie" },
+  bg: { zoom: "Увеличи снимката", close: "Затвори", prev: "Предишна снимка", next: "Следваща снимка" },
+};
+
+function resolveGalleryLabel(
+  tFn: (key: string, lang: string) => string,
+  key: string,
+  lang: string,
+  fallback: string
+): string {
+  const translated = tFn(key, lang);
+  if (!translated || translated === key) return fallback;
+  return translated;
+}
+
 export default function ProductImageGallery({
   images,
   title,
   lang,
   t,
 }: ProductImageGalleryProps) {
+  const safeLang = normalizeSeoLang(lang, "tr");
+  const fb = GALLERY_FALLBACKS[safeLang];
   const [selectedImg, setSelectedImg] = useState<string | null>(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
   const [lightboxIndex, setLightboxIndex] = useState<number>(0);
@@ -37,28 +65,33 @@ export default function ProductImageGallery({
     setIsLightboxOpen(true);
   };
 
-  // Keyboard controls for lightbox navigation
   useEffect(() => {
     if (!isLightboxOpen) return;
+    const totalCount = images?.length || 1;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsLightboxOpen(false);
-      else if (e.key === "ArrowRight") {
-        setLightboxIndex((prev) => (prev + 1) % (images?.length || 1));
+      if (e.key === "Escape") {
+        setIsLightboxOpen(false);
+      } else if (e.key === "ArrowRight") {
+        setLightboxIndex((prev) => (prev + 1) % totalCount);
       } else if (e.key === "ArrowLeft") {
-        setLightboxIndex((prev) => (prev - 1 + (images?.length || 1)) % (images?.length || 1));
+        setLightboxIndex((prev) => (prev - 1 + totalCount) % totalCount);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isLightboxOpen, images]);
 
+  const zoomLabel = resolveGalleryLabel(t, "zoom_image", lang, fb.zoom);
+  const closeLabel = resolveGalleryLabel(t, "close", lang, fb.close);
+  const prevLabel = resolveGalleryLabel(t, "prev", lang, fb.prev);
+  const nextLabel = resolveGalleryLabel(t, "next", lang, fb.next);
+
   return (
     <>
-      {/* Left Column - Image Gallery */}
       <div className="flex flex-col gap-4 md:max-w-[550px] w-full md:mx-auto">
         <button
           type="button"
-          aria-label={t("zoom_image", lang) || "Görseli büyüt"}
+          aria-label={zoomLabel}
           onClick={handleOpenLightbox}
           className="aspect-[4/5] max-h-[460px] md:max-h-[680px] rounded-[12px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group flex items-center justify-center w-full p-0"
         >
@@ -75,10 +108,11 @@ export default function ProductImageGallery({
 
         {images && images.length > 1 && (
           <div className="flex gap-2.5 overflow-x-auto py-1 scrollbar-none select-none">
-            {images.map((img) => (
+            {images.map((img, idx) => (
               <button
                 key={img.id}
                 type="button"
+                aria-label={`${title} - ${idx + 1}`}
                 onClick={() => setSelectedImg(img.image_url)}
                 className={`w-16 h-20 rounded-[5px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${
                   mainImg === img.image_url
@@ -88,7 +122,7 @@ export default function ProductImageGallery({
               >
                 <img
                   src={getResizedImageUrl(img.image_url, 80, 106)}
-                  alt="thumb"
+                  alt={`${title} ${idx + 1}`}
                   width={80}
                   height={106}
                   loading="lazy"
@@ -100,17 +134,15 @@ export default function ProductImageGallery({
         )}
       </div>
 
-      {/* C. LIGHTBOX PREMIUM IMAGE GALLERY POPUP */}
       {isLightboxOpen && images && images.length > 0 && (
         <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col justify-between p-4 md:p-8 animate-in fade-in duration-200 select-none">
-          {/* Top Bar */}
           <div className="flex justify-between items-center text-white w-full max-w-[1720px] mx-auto z-10">
             <span className="text-xs font-extrabold tracking-wider bg-white/10 px-3.5 py-1.5 rounded-[5px]">
               {lightboxIndex + 1} / {images.length}
             </span>
             <button
               type="button"
-              aria-label={t("close", lang) || "Kapat"}
+              aria-label={closeLabel}
               onClick={() => setIsLightboxOpen(false)}
               className="w-10 h-10 rounded-[5px] bg-white/10 hover:bg-white/20 hover:scale-105 border border-white/10 flex items-center justify-center text-white cursor-pointer transition-all active:scale-95"
             >
@@ -118,13 +150,11 @@ export default function ProductImageGallery({
             </button>
           </div>
 
-          {/* Main Visualizer Area */}
           <div className="flex-grow flex items-center justify-center relative w-full max-w-5xl mx-auto my-4">
-            {/* Left navigation arrow */}
             {images.length > 1 && (
               <button
                 type="button"
-                aria-label={t("prev", lang) || "Önceki görsel"}
+                aria-label={prevLabel}
                 onClick={(e) => {
                   e.stopPropagation();
                   setLightboxIndex((prev) => (prev - 1 + images.length) % images.length);
@@ -135,11 +165,10 @@ export default function ProductImageGallery({
               </button>
             )}
 
-            {/* Middle Image display */}
             <div className="w-full h-full flex items-center justify-center p-2 relative">
               <button
                 type="button"
-                aria-label={t("close", lang) || "Kapat"}
+                aria-label={closeLabel}
                 onClick={() => setIsLightboxOpen(false)}
                 className="absolute inset-0 w-full h-full cursor-default bg-transparent border-none p-0 z-0"
               />
@@ -150,11 +179,10 @@ export default function ProductImageGallery({
               />
             </div>
 
-            {/* Right navigation arrow */}
             {images.length > 1 && (
               <button
                 type="button"
-                aria-label={t("next", lang) || "Sonraki görsel"}
+                aria-label={nextLabel}
                 onClick={(e) => {
                   e.stopPropagation();
                   setLightboxIndex((prev) => (prev + 1) % images.length);
@@ -166,13 +194,13 @@ export default function ProductImageGallery({
             )}
           </div>
 
-          {/* Bottom Thumbnails row */}
           {images.length > 1 && (
             <div className="w-full max-w-3xl mx-auto flex gap-2 justify-center overflow-x-auto py-3 scrollbar-none">
               {images.map((img, idx) => (
                 <button
                   key={img.id}
                   type="button"
+                  aria-label={`${title} - ${idx + 1}`}
                   onClick={() => setLightboxIndex(idx)}
                   className={`w-14 h-18 rounded-[4px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${
                     lightboxIndex === idx
@@ -180,7 +208,11 @@ export default function ProductImageGallery({
                       : "border-transparent opacity-40 hover:opacity-100"
                   }`}
                 >
-                  <img src={img.image_url} alt="thumb" className="w-full h-full object-cover" />
+                  <img
+                    src={img.image_url}
+                    alt={`${title} ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
                 </button>
               ))}
             </div>

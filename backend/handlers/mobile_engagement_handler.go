@@ -35,13 +35,16 @@ func (h *MobileHandler) ListNotifications(w http.ResponseWriter, r *http.Request
 	var unreadCount int
 	_ = db.Pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM catalog.mobile_notifications
-		WHERE user_id = $1 AND user_role = $2 AND is_read = false
+		WHERE ((user_id = $1 AND user_role = $2) OR (recipient_id = $1 AND recipient_type = $2))
+		  AND is_read = false
 	`, principal.UserID, principal.Role).Scan(&unreadCount)
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id::text, title, body, notification_type, metadata, is_read, created_at
+		SELECT id::text, title, body, notification_type,
+		       COALESCE(NULLIF(metadata, '{}'::jsonb), payload, '{}'::jsonb) AS metadata,
+		       is_read, created_at
 		FROM catalog.mobile_notifications
-		WHERE user_id = $1 AND user_role = $2
+		WHERE (user_id = $1 AND user_role = $2) OR (recipient_id = $1 AND recipient_type = $2)
 		ORDER BY created_at DESC
 		LIMIT 50
 	`, principal.UserID, principal.Role)
@@ -86,7 +89,8 @@ func (h *MobileHandler) MarkNotificationsReadAll(w http.ResponseWriter, r *http.
 	_, _ = db.Pool.Exec(ctx, `
 		UPDATE catalog.mobile_notifications
 		SET is_read = true
-		WHERE user_id = $1 AND user_role = $2 AND is_read = false
+		WHERE ((user_id = $1 AND user_role = $2) OR (recipient_id = $1 AND recipient_type = $2))
+		  AND is_read = false
 	`, principal.UserID, principal.Role)
 
 	httpx.JSON(w, http.StatusOK, map[string]bool{"success": true})
@@ -121,6 +125,9 @@ func (h *MobileHandler) ListWishlist(w http.ResponseWriter, r *http.Request) {
 	}
 	ids := make([]string, 0, len(prods))
 	for _, p := range prods {
+		p.BuyingPrice = nil
+		p.FeedID = nil
+		p.SourceProductID = ""
 		ids = append(ids, p.ID)
 	}
 

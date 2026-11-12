@@ -1,10 +1,19 @@
 import React from "react";
 import { Metadata } from "next";
-import { apiFetch } from "@/app/utils";
-import { Category } from "@/types/store";
 import { t as translate } from "@/app/i18n";
+import {
+  SITE_ORIGIN,
+  SUPPORTED_SEO_LANGS,
+  OG_LOCALE_BY_LANG,
+  GLOBAL_B2B_SEO_MATRIX,
+  SupportedSeoLang,
+  safeJsonLd,
+  toAbsoluteSiteUrl,
+  ssrStoreFetch,
+  fetchSsrCategories,
+} from "@/utils/seoHelpers";
 import BlogDetailClient from "./BlogDetailClient";
-import { BlogPost, Language } from "../page";
+import { BlogPost, fetchBlogLanguages, resolvePrefixLanguage } from "../page";
 
 interface PageProps {
   readonly params: Promise<{
@@ -13,242 +22,209 @@ interface PageProps {
   }>;
 }
 
-// Fetch active languages from database with static fallback
-async function fetchLanguages(): Promise<Language[]> {
-  try {
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/languages?t=" + Date.now());
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        return data.map((l: Language) => {
-          let code = l.code;
-          if (code.startsWith("en_")) code = "en";
-          else if (code.startsWith("tr_")) code = "tr";
-          else if (code.startsWith("pl_")) code = "pl";
-          else if (code.startsWith("bg_")) code = "bg";
-          else if (code.startsWith("de_")) code = "de";
-          else if (code.startsWith("fr_")) code = "fr";
-          else if (code.startsWith("ru_")) code = "ru";
-          else if (code.startsWith("ar_")) code = "ar";
-          return { ...l, code };
-        });
-      }
-    }
-  } catch (err) {
-    console.error("[SEO] Failed to fetch active languages, using fallback:", err);
-  }
-  
-  return [
-    { code: "tr", label: "Türkçe", flag: "🇹🇷", categoryPrefix: "tr", isActive: true, sortOrder: 0 },
-    { code: "en", label: "English", flag: "🇬🇧", categoryPrefix: "en", isActive: true, sortOrder: 1 },
-    { code: "pl", label: "Polski", flag: "🇵🇱", categoryPrefix: "pl", isActive: true, sortOrder: 2 },
-    { code: "bg", label: "Български", flag: "🇧🇬", categoryPrefix: "bg", isActive: true, sortOrder: 3 },
-    { code: "ar", label: "العربية", flag: "🇸🇦", categoryPrefix: "ar", dir: "rtl", isActive: true, sortOrder: 4 },
-    { code: "ru", label: "Русский", flag: "🇷🇺", categoryPrefix: "ru", isActive: true, sortOrder: 5 },
-    { code: "de", label: "Deutsch", flag: "🇩🇪", categoryPrefix: "de", isActive: true, sortOrder: 6 },
-    { code: "fr", label: "Français", flag: "🇫🇷", categoryPrefix: "fr", isActive: true, sortOrder: 7 },
-  ];
-}
+const AUTHOR_NAME_BY_LANG: Record<SupportedSeoLang, string> = {
+  tr: "Merter Vitrini B2B Editör Ekibi",
+  en: "Merter Vitrini B2B Editorial Desk",
+  ru: "Редакция Merter Vitrini B2B",
+  ar: "فريق تحرير Merter Vitrini B2B",
+  de: "Merter Vitrini B2B Redaktion",
+  fr: "Rédaction Merter Vitrini B2B",
+  pl: "Redakcja Merter Vitrini B2B",
+  bg: "Редакционен екип на Merter Vitrini B2B",
+};
 
-// Generate static params at compilation time for active blog posts
+const BLOG_CRUMB_BY_LANG: Record<SupportedSeoLang, string> = {
+  tr: "B2B Blog",
+  en: "B2B Blog",
+  ru: "Блог B2B",
+  ar: "مدونة B2B",
+  de: "B2B-Blog",
+  fr: "Blog B2B",
+  pl: "Blog B2B",
+  bg: "B2B Блог",
+};
+
 export async function generateStaticParams() {
   if (process.env.NEXT_BUILD_SSR === "true") return [];
-  try {
-    const activeLangs = await fetchLanguages();
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/blog?t=" + Date.now());
-    if (response.ok) {
-      const posts = await response.json();
-      if (Array.isArray(posts) && posts.length > 0) {
-        const params: { categoryPrefix: string; slug: string }[] = [];
-        
-        // Find unique prefixes
-        const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
-        
-        uniquePrefixes.forEach((prefix) => {
-          posts.forEach((post: BlogPost) => {
-            if (post.slug) {
-              params.push({
-                categoryPrefix: prefix,
-                slug: String(post.slug),
-              });
-            }
-          });
-        });
-        
-        return params;
+  const [activeLangs, posts] = await Promise.all([
+    fetchBlogLanguages(),
+    ssrStoreFetch<BlogPost[]>("/blog", 3600),
+  ]);
+
+  if (Array.isArray(posts) && posts.length > 0) {
+    const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
+    const params: { categoryPrefix: string; slug: string }[] = [];
+    for (const prefix of uniquePrefixes) {
+      for (const post of posts) {
+        if (post.slug) {
+          params.push({ categoryPrefix: prefix, slug: String(post.slug) });
+        }
       }
     }
-  } catch (err) {
-    console.error("[SEO] Blog post generateStaticParams failed, using fallback:", err);
+    return params;
   }
-  
-  // Return fallback path if not available during compile
-  const prefixes = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
-  const fallbackParams: { categoryPrefix: string; slug: string }[] = [];
-  prefixes.forEach((prefix) => {
-    fallbackParams.push({
-      categoryPrefix: prefix,
-      slug: "merter-toptan-giyim-piyasasi",
-    });
-  });
-  return fallbackParams;
+
+  return SUPPORTED_SEO_LANGS.map((prefix) => ({
+    categoryPrefix: prefix,
+    slug: "merter-toptan-giyim-piyasasi",
+  }));
 }
 
-// Generate dynamic SEO metadata for specific blog posts
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix, slug } = await params;
-  
-  const activeLangs = await fetchLanguages();
-  const prefixToLangMap = new Map<string, string>();
-  activeLangs.forEach((l) => {
-    if (!prefixToLangMap.has(l.categoryPrefix) || l.code === "tr" || l.code === "en") {
-      prefixToLangMap.set(l.categoryPrefix, l.code);
-    }
-  });
-  
-  const lang = prefixToLangMap.get(categoryPrefix) || "en";
-  const post = await apiFetch<BlogPost>(`/blog/${slug}`);
-  
+  const [activeLangs, post] = await Promise.all([
+    fetchBlogLanguages(),
+    ssrStoreFetch<BlogPost>(`/blog/${encodeURIComponent(slug)}`, 300),
+  ]);
+
+  const lang = resolvePrefixLanguage(activeLangs, categoryPrefix);
+
   if (!post) {
     return {
       title: translate("seo_page_not_found", lang),
       description: translate("seo_page_not_found_desc", lang),
+      robots: { index: false, follow: true },
     };
   }
 
-  // Find translation or fall back to any available
-  const t = post.translations[lang] || post.translations["tr"] || post.translations["en"] || Object.values(post.translations)[0];
-  
-  const title = t?.meta_title || t?.title || "Merter Vitrini";
-  const desc = t?.meta_description || t?.summary || translate("seo_fallback_desc", lang);
-  
-  const canonicalSlug = t?.slug || slug;
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/${canonicalSlug}`;
-  
-  // Build Hreflang alternates with each language's localized slug
+  const trans =
+    post.translations[lang] ||
+    post.translations["en"] ||
+    post.translations["tr"] ||
+    Object.values(post.translations)[0];
+
+  const title = trans?.meta_title || trans?.title || "Merter Vitrini B2B";
+  const desc = trans?.meta_description || trans?.summary || translate("seo_fallback_desc", lang);
+  const canonicalSlug = trans?.slug || slug;
+  const canonicalUrl = `${SITE_ORIGIN}/${lang}/blog/${canonicalSlug}`;
+
   const defaultSlug = post.translations["en"]?.slug || post.slug;
   const alternatesLanguages: Record<string, string> = {
-    "x-default": `https://mertervitrini.com.tr/en/blog/${defaultSlug}`,
+    "x-default": `${SITE_ORIGIN}/en/blog/${defaultSlug}`,
   };
-  activeLangs.forEach((l) => {
-    const langTrans = post.translations[l.code];
-    const targetSlug = langTrans?.slug || post.slug;
-    alternatesLanguages[l.code] = `https://mertervitrini.com.tr/${l.categoryPrefix}/blog/${targetSlug}`;
-  });
+  for (const supported of SUPPORTED_SEO_LANGS) {
+    const langSlug = post.translations[supported]?.slug || post.slug;
+    alternatesLanguages[supported] = `${SITE_ORIGIN}/${supported}/blog/${langSlug}`;
+  }
+
+  const ogImage = toAbsoluteSiteUrl(post.cover_image) || `${SITE_ORIGIN}/og-image.jpg`;
 
   return {
     title: `${title} | Merter Vitrini B2B`,
     description: desc,
+    keywords: GLOBAL_B2B_SEO_MATRIX[lang].keywords,
     alternates: {
       canonical: canonicalUrl,
       languages: alternatesLanguages,
     },
     openGraph: {
-      title: `${title} | Merter Vitrini`,
+      title: `${title} | Merter Vitrini B2B`,
       description: desc,
       url: canonicalUrl,
-      siteName: "Merter Vitrini",
-      images: post.cover_image ? [{ url: post.cover_image }] : undefined,
-      locale: lang === "tr" ? "tr_TR" : "en_US",
+      siteName: "Merter Vitrini B2B",
+      images: [{ url: ogImage, alt: title }],
+      locale: OG_LOCALE_BY_LANG[lang],
       type: "article",
-    }
+    },
   };
 }
 
 export default async function BlogDetailPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix, slug } = await params;
-  
-  // Parallel fetches on the server side
-  const activeLangs = await fetchLanguages();
-  const categoriesData = await apiFetch<Category[]>("/categories");
-  const postData = await apiFetch<BlogPost>(`/blog/${slug}`);
-  
-  const categories = categoriesData || [];
-  
-  // Resolve localized text for JSON-LD
-  const prefixToLangMap = new Map<string, string>();
-  activeLangs.forEach((l) => {
-    if (!prefixToLangMap.has(l.categoryPrefix) || l.code === "tr" || l.code === "en") {
-      prefixToLangMap.set(l.categoryPrefix, l.code);
-    }
-  });
-  const lang = prefixToLangMap.get(categoryPrefix) || "en";
-  const t = postData ? (postData.translations[lang] || postData.translations["tr"] || postData.translations["en"] || Object.values(postData.translations)[0]) : null;
-  const articleTitle = t?.title || "Merter Vitrini B2B Sourcing Blog";
-  const articleDesc = t?.meta_description || t?.summary || "Merter toptan tekstil hazır giyim analizleri ve B2B rehberleri.";
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/blog/${t?.slug || slug}`;
 
-  const articleJsonLd = postData ? {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "BlogPosting",
-        "@id": `${canonicalUrl}#article`,
-        "isPartOf": {
-          "@type": "WebPage",
-          "@id": canonicalUrl,
-        },
-        "headline": articleTitle,
-        "description": articleDesc,
-        "image": postData.cover_image ? [postData.cover_image] : ["https://mertervitrini.com.tr/og-image.jpg"],
-        "datePublished": postData.created_at || "2026-01-01T00:00:00Z",
-        "dateModified": postData.updated_at || postData.created_at || "2026-01-01T00:00:00Z",
-        "mainEntityOfPage": {
-          "@type": "WebPage",
-          "@id": canonicalUrl,
-        },
-        "author": {
-          "@type": "Organization",
-          "name": "Merter Vitrini B2B Editör Ekibi",
-          "url": "https://mertervitrini.com.tr",
-        },
-        "publisher": {
-          "@type": "Organization",
-          "name": "Merter Vitrini",
-          "url": "https://mertervitrini.com.tr",
-          "logo": {
-            "@type": "ImageObject",
-            "url": "https://mertervitrini.com.tr/placeholder.png",
-          },
-        },
-        "inLanguage": lang,
-      },
-      {
-        "@type": "BreadcrumbList",
-        "@id": `${canonicalUrl}#breadcrumb`,
-        "itemListElement": [
+  const [activeLangs, categories, postData] = await Promise.all([
+    fetchBlogLanguages(),
+    fetchSsrCategories(),
+    ssrStoreFetch<BlogPost>(`/blog/${encodeURIComponent(slug)}`, 300),
+  ]);
+
+  const lang = resolvePrefixLanguage(activeLangs, categoryPrefix);
+  const seoCopy = GLOBAL_B2B_SEO_MATRIX[lang];
+  const trans = postData
+    ? postData.translations[lang] ||
+      postData.translations["en"] ||
+      postData.translations["tr"] ||
+      Object.values(postData.translations)[0]
+    : null;
+
+  const articleTitle = trans?.title || "Merter Vitrini B2B Sourcing Blog";
+  const articleDesc = trans?.meta_description || trans?.summary || seoCopy.portalDescription;
+  const canonicalUrl = `${SITE_ORIGIN}/${lang}/blog/${trans?.slug || slug}`;
+  const coverImageUrl = toAbsoluteSiteUrl(postData?.cover_image) || `${SITE_ORIGIN}/og-image.jpg`;
+
+  const articleJsonLd = postData
+    ? {
+        "@context": "https://schema.org",
+        "@graph": [
           {
-            "@type": "ListItem",
-            "position": 1,
-            "name": "Ana Sayfa",
-            "item": `https://mertervitrini.com.tr/${categoryPrefix}`,
+            "@type": "BlogPosting",
+            "@id": `${canonicalUrl}#article`,
+            isPartOf: {
+              "@type": "WebPage",
+              "@id": canonicalUrl,
+            },
+            headline: articleTitle,
+            description: articleDesc,
+            image: [coverImageUrl],
+            datePublished: postData.created_at || "2026-01-01T00:00:00Z",
+            dateModified: postData.updated_at || postData.created_at || "2026-01-01T00:00:00Z",
+            mainEntityOfPage: {
+              "@type": "WebPage",
+              "@id": canonicalUrl,
+            },
+            author: {
+              "@type": "Organization",
+              name: AUTHOR_NAME_BY_LANG[lang],
+              url: SITE_ORIGIN,
+            },
+            publisher: {
+              "@type": "Organization",
+              name: "Merter Vitrini B2B",
+              url: SITE_ORIGIN,
+              logo: {
+                "@type": "ImageObject",
+                url: `${SITE_ORIGIN}/og-image.jpg`,
+              },
+            },
+            inLanguage: lang,
           },
           {
-            "@type": "ListItem",
-            "position": 2,
-            "name": "B2B Blog",
-            "item": `https://mertervitrini.com.tr/${categoryPrefix}/blog`,
-          },
-          {
-            "@type": "ListItem",
-            "position": 3,
-            "name": articleTitle,
-            "item": canonicalUrl,
+            "@type": "BreadcrumbList",
+            "@id": `${canonicalUrl}#breadcrumb`,
+            itemListElement: [
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: seoCopy.homeLabel,
+                item: `${SITE_ORIGIN}/${lang}`,
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: BLOG_CRUMB_BY_LANG[lang],
+                item: `${SITE_ORIGIN}/${lang}/blog`,
+              },
+              {
+                "@type": "ListItem",
+                position: 3,
+                name: articleTitle,
+                item: canonicalUrl,
+              },
+            ],
           },
         ],
-      },
-    ],
-  } : null;
+      }
+    : null;
 
   return (
     <>
       {articleJsonLd && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(articleJsonLd) }}
         />
       )}
-      <BlogDetailClient 
+      <BlogDetailClient
         categoryPrefix={categoryPrefix}
         slug={slug}
         post={postData}

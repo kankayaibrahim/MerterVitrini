@@ -1,77 +1,72 @@
 import React from "react";
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import StorefrontLayout from "@/components/store/StorefrontLayout";
+import {
+  buildOrganizationGraphJsonLd,
+  buildPrefixedAlternates,
+  fetchSsrCategories,
+  fetchSsrProducts,
+  fetchSsrStoreSettings,
+  GLOBAL_B2B_SEO_MATRIX,
+  OG_LOCALE_BY_LANG,
+  safeJsonLd,
+  SITE_ORIGIN,
+} from "@/utils/seoHelpers";
 
-// SEO optimization according to the B2B Keyword and Sourcing Strategy
+const rootEnCopy = GLOBAL_B2B_SEO_MATRIX.en;
+const rootAlternates = buildPrefixedAlternates("", "en");
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://mertervitrini.com.tr"),
-  title: "Wholesale Clothing Turkey - Buy Directly from Istanbul Suppliers",
-  description: "Discover surplus stock and brand new season wholesale ready-to-wear collections from Turkey's leading manufacturers at best factory prices. Turkish wholesale clothing online.",
+  metadataBase: new URL(SITE_ORIGIN),
+  title: rootEnCopy.portalTitle,
+  description: rootEnCopy.portalDescription,
+  keywords: rootEnCopy.keywords,
   alternates: {
-    canonical: "https://mertervitrini.com.tr",
+    canonical: SITE_ORIGIN,
     languages: {
-      "x-default": "https://mertervitrini.com.tr/en",
-      tr: "https://mertervitrini.com.tr/tr",
-      en: "https://mertervitrini.com.tr/en",
-      pl: "https://mertervitrini.com.tr/pl",
-      bg: "https://mertervitrini.com.tr/bg",
-      ar: "https://mertervitrini.com.tr/ar",
-      ru: "https://mertervitrini.com.tr/ru",
-      de: "https://mertervitrini.com.tr/de",
-      fr: "https://mertervitrini.com.tr/fr",
-    }
+      ...rootAlternates.languages,
+      "x-default": SITE_ORIGIN,
+    },
   },
   openGraph: {
-    title: "Wholesale Clothing Turkey - Buy Directly from Istanbul Suppliers",
-    description: "Turkish Wholesale Clothing Online. High-quality boutique outfits from Istanbul suppliers.",
-    url: "https://mertervitrini.com.tr",
-    siteName: "Merter Vitrini",
-    locale: "en_US",
+    title: rootEnCopy.portalTitle,
+    description: rootEnCopy.portalDescription,
+    url: SITE_ORIGIN,
+    siteName: "Merter Vitrini B2B",
+    locale: OG_LOCALE_BY_LANG.en,
     type: "website",
-  }
-};
-
-const jsonLdOrg = {
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "@id": "https://mertervitrini.com.tr/#organization",
-      "name": "Merter Vitrini B2B",
-      "url": "https://mertervitrini.com.tr",
-      "logo": "https://mertervitrini.com.tr/placeholder.png",
-      "description": "Türkiye'nin lider üreticilerinden doğrudan toptan hazır giyim ve tekstil e-ticaret platformu.",
-      "contactPoint": {
-        "@type": "ContactPoint",
-        "contactType": "customer service",
-        "availableLanguage": ["Turkish", "English", "Russian", "Arabic"]
-      }
-    },
-    {
-      "@type": "WebSite",
-      "@id": "https://mertervitrini.com.tr/#website",
-      "url": "https://mertervitrini.com.tr",
-      "name": "Merter Vitrini",
-      "publisher": {
-        "@id": "https://mertervitrini.com.tr/#organization"
+    images: [
+      {
+        url: `${SITE_ORIGIN}/og-image.jpg`,
+        width: 1200,
+        height: 630,
+        alt: "Merter Vitrini — Wholesale Clothing Istanbul Manufacturers",
       },
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://mertervitrini.com.tr/tr/tum-urunler?q={search_term_string}",
-        "query-input": "required name=search_term_string"
-      }
-    }
-  ]
+    ],
+  },
 };
 
-export default function StorefrontPage() {
+export default async function StorefrontPage() {
+  const [categories, portalPayload, settings] = await Promise.all([
+    fetchSsrCategories(),
+    fetchSsrProducts("?limit=8&sort_by=newest", 180),
+    fetchSsrStoreSettings(),
+  ]);
+
+  const jsonLdOrg = buildOrganizationGraphJsonLd("en", settings);
+
   return (
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdOrg) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLdOrg) }}
       />
-      <StorefrontLayout mode="portal" />
+      <StorefrontLayout
+        mode="portal"
+        defaultLang="en"
+        preFetchedCategories={categories}
+        initialPortalProducts={portalPayload.products}
+      />
     </>
   );
 }

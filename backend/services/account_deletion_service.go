@@ -70,7 +70,7 @@ func (r *AccountDeletionRegistry) Execute(ctx context.Context, principal MobileP
 
 		_, _ = r.pool.Exec(ctx, `DELETE FROM identity.mobile_devices WHERE user_id = $1`, principal.UserID)
 		_, _ = r.pool.Exec(ctx, `DELETE FROM catalog.mobile_wishlist WHERE user_id = $1`, principal.UserID)
-		_, _ = r.pool.Exec(ctx, `DELETE FROM catalog.mobile_notifications WHERE user_id = $1`, principal.UserID)
+		_, _ = r.pool.Exec(ctx, `DELETE FROM catalog.mobile_notifications WHERE user_id = $1 OR recipient_id = $1`, principal.UserID)
 	}
 
 	return strategy.DeleteAccount(ctx, principal, reason)

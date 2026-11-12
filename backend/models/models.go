@@ -183,6 +183,9 @@ type Product struct {
 	BrandProfile         *Brand               `json:"brand_profile,omitempty"`
 	CategoryTitle        *string              `json:"category_title,omitempty"`
 	SourceURL            *string              `json:"source_url,omitempty"`
+	SeoTitle             *string              `json:"seo_title,omitempty"`
+	SeoDescription       *string              `json:"seo_description,omitempty"`
+	AiHighlights         []string             `json:"ai_highlights,omitempty"`
 	Translations         map[string]any       `json:"translations,omitempty"`
 	ColorVariants        []*SiblingProduct    `json:"color_variants,omitempty"`
 	GroupProducts        []*GroupProductColor `json:"group_products,omitempty"`

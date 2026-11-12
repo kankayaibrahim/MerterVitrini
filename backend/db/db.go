@@ -530,6 +530,65 @@ func ConnectDB(cfg *config.Config) (*pgxpool.Pool, error) {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_buyer_rfq_offers_rfq_id ON catalog.buyer_rfq_offers(rfq_id, created_at DESC)`,
 		`ALTER TABLE catalog.brands ADD COLUMN IF NOT EXISTS description_translations JSONB NOT NULL DEFAULT '{}'::jsonb`,
+		`WITH ranked_carts AS (
+			SELECT id, user_id,
+			       FIRST_VALUE(id) OVER (PARTITION BY user_id ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC) AS canonical_id
+			FROM catalog.carts
+			WHERE user_id IS NOT NULL
+		)
+		UPDATE catalog.cart_items ci
+		SET cart_id = rc.canonical_id
+		FROM ranked_carts rc
+		WHERE ci.cart_id = rc.id AND rc.id <> rc.canonical_id`,
+		`DELETE FROM catalog.carts c
+		USING (
+			SELECT id,
+			       ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC) AS rn
+			FROM catalog.carts
+			WHERE user_id IS NOT NULL
+		) dup
+		WHERE c.id = dup.id AND dup.rn > 1`,
+		`WITH agg AS (
+			SELECT cart_id, product_id, SUM(quantity) AS total_qty,
+			       (ARRAY_AGG(id ORDER BY created_at DESC NULLS LAST, id DESC))[1] AS keep_id
+			FROM catalog.cart_items
+			GROUP BY cart_id, product_id
+			HAVING COUNT(*) > 1
+		)
+		UPDATE catalog.cart_items ci
+		SET quantity = agg.total_qty
+		FROM agg
+		WHERE ci.id = agg.keep_id`,
+		`DELETE FROM catalog.cart_items ci
+		USING (
+			SELECT id,
+			       ROW_NUMBER() OVER (PARTITION BY cart_id, product_id ORDER BY created_at DESC NULLS LAST, id DESC) AS rn
+			FROM catalog.cart_items
+		) dup
+		WHERE ci.id = dup.id AND dup.rn > 1`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_carts_user_id_uq ON catalog.carts(user_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_cart_items_cart_product_uq ON catalog.cart_items(cart_id, product_id)`,
+		`ALTER TABLE catalog.mobile_notifications ALTER COLUMN recipient_type SET DEFAULT 'customer'`,
+		`ALTER TABLE catalog.mobile_notifications ALTER COLUMN recipient_id SET DEFAULT ''`,
+		`ALTER TABLE catalog.mobile_notifications ADD COLUMN IF NOT EXISTS user_role VARCHAR(30) NOT NULL DEFAULT 'customer'`,
+		`ALTER TABLE catalog.mobile_notifications ADD COLUMN IF NOT EXISTS user_id VARCHAR(255) NOT NULL DEFAULT ''`,
+		`ALTER TABLE catalog.mobile_notifications ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb`,
+		`UPDATE catalog.mobile_notifications
+		SET user_role = recipient_type,
+		    user_id = recipient_id,
+		    metadata = COALESCE(payload, '{}'::jsonb)
+		WHERE user_id = '' AND recipient_id <> ''`,
+		`CREATE INDEX IF NOT EXISTS idx_mobile_notifications_user_role ON catalog.mobile_notifications (user_role, user_id, created_at DESC)`,
+		`ALTER TABLE identity.account_deletion_requests ADD COLUMN IF NOT EXISTS ip_address VARCHAR(64) NOT NULL DEFAULT ''`,
+		`ALTER TABLE identity.account_deletion_requests ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ`,
+		`ALTER TABLE identity.mobile_devices ALTER COLUMN fcm_token SET DEFAULT ''`,
+		`ALTER TABLE identity.mobile_devices
+			ADD COLUMN IF NOT EXISTS brand_id UUID NULL,
+			ADD COLUMN IF NOT EXISTS device_token TEXT NOT NULL DEFAULT '',
+			ADD COLUMN IF NOT EXISTS locale VARCHAR(10) NOT NULL DEFAULT 'tr',
+			ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP`,
+		`UPDATE identity.mobile_devices SET device_token = fcm_token WHERE device_token = '' AND fcm_token <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_mobile_devices_user_role_device_token ON identity.mobile_devices (user_id, user_role, device_token)`,
 	}
 
 	for _, ddl := range ddlQueries {

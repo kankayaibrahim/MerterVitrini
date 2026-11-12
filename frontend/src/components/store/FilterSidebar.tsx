@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { ChevronDown, Lock } from "lucide-react";
 import { Brand } from "@/types/store";
-import { t } from "@/app/i18n";
+import { t, pickLangText, SupportedLangCode } from "@/app/i18n";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 
 export interface B2BSourcingFilters {
@@ -70,7 +70,7 @@ function safeGetAttributeCount(
   return 0;
 }
 
-const B2B_SOURCING_LABELS: Record<string, {
+interface B2bSourcingLabelSet {
   title: string;
   capabilities: string;
   privateLabel: string;
@@ -89,7 +89,9 @@ const B2B_SOURCING_LABELS: Record<string, {
   moq60: string;
   exportCountry: string;
   exportAll: string;
-}> = {
+}
+
+const B2B_SOURCING_LABELS: Record<SupportedLangCode, B2bSourcingLabelSet> = {
   tr: {
     title: "B2B ÜRETİM, MOQ & İHRACAT",
     capabilities: "ÜRETİM YETKİNLİKLERİ",
@@ -170,22 +172,144 @@ const B2B_SOURCING_LABELS: Record<string, {
     exportCountry: "دول التصدير المستهدفة",
     exportAll: "جميع دول التصدير",
   },
+  de: {
+    title: "B2B-FERTIGUNG, MOQ & EXPORT",
+    capabilities: "PRODUKTIONSKOMPETENZEN",
+    privateLabel: "Private Label (Eigenmarke)",
+    fason: "Lohnfertigung / Nähwerkstatt",
+    companyType: "LIEFERANTENTYP",
+    allTypes: "Alle Lieferantentypen",
+    typeManufacturer: "Bekleidungshersteller & Großhändler",
+    typePrivateLabel: "Private-Label-Produzent",
+    typeFason: "Lohnnäherei (CMT)",
+    typeFabric: "Stofflieferant",
+    typeAccessory: "Kurzwaren & Zubehör",
+    maxMoq: "MAX. MINDESTBESTELLUNG (MOQ)",
+    moqAll: "Beliebiges MOQ",
+    moq6: "≤ 6 Stk. (1 Paket)",
+    moq30: "≤ 30 Stk. (5 Pakete)",
+    moq60: "≤ 60 Stk. (10 Pakete)",
+    exportCountry: "EXPORTMARKT / LAND",
+    exportAll: "Alle Exportmärkte",
+  },
+  fr: {
+    title: "PRODUCTION B2B, MOQ & EXPORT",
+    capabilities: "CAPACITÉS DE FABRICATION",
+    privateLabel: "Private Label (Marque Blanche)",
+    fason: "Atelier de Façon (CMT)",
+    companyType: "TYPE D'ACTIVITÉ DU FOURNISSEUR",
+    allTypes: "Tous les types de fournisseurs",
+    typeManufacturer: "Fabricant & Grossiste Prêt-à-porter",
+    typePrivateLabel: "Producteur Private Label",
+    typeFason: "Atelier de Confection à Façon",
+    typeFabric: "Fournisseur de Tissus",
+    typeAccessory: "Accessoires & Mercerie",
+    maxMoq: "COMMANDE MIN. MAXIMALE (MOQ)",
+    moqAll: "Tout MOQ",
+    moq6: "≤ 6 pcs (1 paquet)",
+    moq30: "≤ 30 pcs (5 paquets)",
+    moq60: "≤ 60 pcs (10 paquets)",
+    exportCountry: "MARCHÉ D'EXPORTATION / PAYS",
+    exportAll: "Tous les pays d'exportation",
+  },
+  pl: {
+    title: "PRODUKCJA B2B, MOQ I EKSPORT",
+    capabilities: "MOŻLIWOŚCI PRODUKCYJNE",
+    privateLabel: "Private Label (Marka Własna)",
+    fason: "Szwalnia Kontraktowa (CMT)",
+    companyType: "RODZAJ DOSTAWCY",
+    allTypes: "Wszystkie typy dostawców",
+    typeManufacturer: "Producent i Hurtownik Odzieży",
+    typePrivateLabel: "Producent Private Label",
+    typeFason: "Szwalnia Usługowa (Fason)",
+    typeFabric: "Dostawca Tkanin",
+    typeAccessory: "Dodatki Krawieckie i Akcesoria",
+    maxMoq: "MAKS. MIN. ZAMÓWIENIE (MOQ)",
+    moqAll: "Dowolne MOQ",
+    moq6: "≤ 6 szt. (1 pakiet)",
+    moq30: "≤ 30 szt. (5 pakietów)",
+    moq60: "≤ 60 szt. (10 pakietów)",
+    exportCountry: "RYNEK EKSPORTOWY / KRAJ",
+    exportAll: "Wszystkie rynki eksportowe",
+  },
+  bg: {
+    title: "B2B ПРОИЗВОДСТВО, MOQ И ИЗНОС",
+    capabilities: "ПРОИЗВОДСТВЕН КАПАЦИТЕТ",
+    privateLabel: "Private Label (Собствена марка)",
+    fason: "Работа на ишлеме (CMT цех)",
+    companyType: "ТИП ДОСТАВЧИК",
+    allTypes: "Всички типове доставчици",
+    typeManufacturer: "Производител и търговец на едро",
+    typePrivateLabel: "Private Label производител",
+    typeFason: "Шивашки цех на ишлеме",
+    typeFabric: "Доставчик на платове",
+    typeAccessory: "Аксесоари и материали",
+    maxMoq: "МАКС. МИН. ПОРЪЧКА (MOQ)",
+    moqAll: "Без ограничение",
+    moq6: "≤ 6 бр. (1 пакет)",
+    moq30: "≤ 30 бр. (5 пакета)",
+    moq60: "≤ 60 бр. (10 пакета)",
+    exportCountry: "ПАЗАР ЗА ИЗНОС / ДЪРЖАВА",
+    exportAll: "Всички експортни пазари",
+  },
 };
 
-const EXPORT_COUNTRY_OPTIONS = [
-  "Almanya",
-  "Rusya",
-  "İngiltere",
-  "Polonya",
-  "BAE",
-  "Suudi Arabistan",
-  "Fransa",
-  "Hollanda",
-  "İtalya",
-  "Kazakistan",
-  "Ukrayna",
-  "Romanya",
-  "Bulgaristan",
+const EXPORT_COUNTRY_OPTIONS: readonly {
+  readonly value: string;
+  readonly labels: Record<SupportedLangCode, string>;
+}[] = [
+  {
+    value: "Almanya",
+    labels: { tr: "Almanya", en: "Germany", ru: "Германия", ar: "ألمانيا", de: "Deutschland", fr: "Allemagne", pl: "Niemcy", bg: "Германия" },
+  },
+  {
+    value: "Rusya",
+    labels: { tr: "Rusya", en: "Russia", ru: "Россия", ar: "روسيا", de: "Russland", fr: "Russie", pl: "Rosja", bg: "Русия" },
+  },
+  {
+    value: "İngiltere",
+    labels: { tr: "İngiltere", en: "United Kingdom", ru: "Великобритания", ar: "المملكة المتحدة", de: "Vereinigtes Königreich", fr: "Royaume-Uni", pl: "Wielka Brytania", bg: "Великобритания" },
+  },
+  {
+    value: "Polonya",
+    labels: { tr: "Polonya", en: "Poland", ru: "Польша", ar: "بولندا", de: "Polen", fr: "Pologne", pl: "Polska", bg: "Полша" },
+  },
+  {
+    value: "BAE",
+    labels: { tr: "BAE", en: "UAE", ru: "ОАЭ", ar: "الإمارات", de: "VAE", fr: "Émirats arabes unis", pl: "ZEA", bg: "ОАЕ" },
+  },
+  {
+    value: "Suudi Arabistan",
+    labels: { tr: "Suudi Arabistan", en: "Saudi Arabia", ru: "Саудовская Аравия", ar: "السعودية", de: "Saudi-Arabien", fr: "Arabie saoudite", pl: "Arabia Saudyjska", bg: "Саудитска Арабия" },
+  },
+  {
+    value: "Fransa",
+    labels: { tr: "Fransa", en: "France", ru: "Франция", ar: "فرنسا", de: "Frankreich", fr: "France", pl: "Francja", bg: "Франция" },
+  },
+  {
+    value: "Hollanda",
+    labels: { tr: "Hollanda", en: "Netherlands", ru: "Нидерланды", ar: "هولندا", de: "Niederlande", fr: "Pays-Bas", pl: "Holandia", bg: "Нидерландия" },
+  },
+  {
+    value: "İtalya",
+    labels: { tr: "İtalya", en: "Italy", ru: "Италия", ar: "إيطاليا", de: "Italien", fr: "Italie", pl: "Włochy", bg: "Италия" },
+  },
+  {
+    value: "Kazakistan",
+    labels: { tr: "Kazakistan", en: "Kazakhstan", ru: "Казахстан", ar: "كازاخستان", de: "Kasachstan", fr: "Kazakhstan", pl: "Kazachstan", bg: "Казахстан" },
+  },
+  {
+    value: "Ukrayna",
+    labels: { tr: "Ukrayna", en: "Ukraine", ru: "Украина", ar: "أوكرانيا", de: "Ukraine", fr: "Ukraine", pl: "Ukraina", bg: "Украйна" },
+  },
+  {
+    value: "Romanya",
+    labels: { tr: "Romanya", en: "Romania", ru: "Румыния", ar: "رومانيا", de: "Rumänien", fr: "Roumanie", pl: "Rumunia", bg: "Румъния" },
+  },
+  {
+    value: "Bulgaristan",
+    labels: { tr: "Bulgaristan", en: "Bulgaria", ru: "Болгария", ar: "بلغاريا", de: "Bulgarien", fr: "Bulgarie", pl: "Bułgaria", bg: "България" },
+  },
 ];
 
 function B2bProductionSourcingSection({
@@ -201,7 +325,7 @@ function B2bProductionSourcingSection({
   b2bFilters: B2BSourcingFilters;
   onB2bFilterChange: (patch: Partial<B2BSourcingFilters>) => void;
 }>) {
-  const L = B2B_SOURCING_LABELS[lang] || B2B_SOURCING_LABELS.tr;
+  const L = pickLangText(lang, B2B_SOURCING_LABELS);
   const rotateCls = isOpen ? "transform rotate-180" : "";
 
   return (
@@ -297,8 +421,8 @@ function B2bProductionSourcingSection({
             >
               <option value="">{L.exportAll}</option>
               {EXPORT_COUNTRY_OPTIONS.map((country) => (
-                <option key={country} value={country}>
-                  {country}
+                <option key={country.value} value={country.value}>
+                  {pickLangText(lang, country.labels)}
                 </option>
               ))}
             </select>

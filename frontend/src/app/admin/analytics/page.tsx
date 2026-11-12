@@ -2,7 +2,7 @@ import React from "react";
 import AnalyticsDashboardClient from "@/components/admin/analytics/AnalyticsDashboardClient";
 
 export const metadata = {
-  title: "Ziyaretçi & Trafik Analitiği | Merter Vitrini Admin",
+  title: "İş Zekası (BI) & Veri Madenciliği Merkezi | Merter Vitrini Admin",
   robots: { index: false, follow: false },
 };
 

@@ -12,6 +12,22 @@ import SeoDescription from "@/components/store/SeoDescription";
 import HeroBanner from "@/components/store/HeroBanner";
 import { CategorySponsorBanner } from "@/components/store/SponsoredShowcaseSection";
 
+interface CatalogFaqItem {
+  readonly q: string;
+  readonly a: string;
+}
+
+const CATEGORY_FAQ_HEADINGS: Record<string, string> = {
+  tr: "Sıkça Sorulan Toptan Alım Soruları",
+  en: "Wholesale Buyer Frequently Asked Questions",
+  ru: "Частые вопросы оптовых покупателей",
+  ar: "الأسئلة الشائعة لتجار الجملة",
+  de: "Häufig gestellte B2B-Großhandelsfragen",
+  fr: "Questions fréquentes des acheteurs B2B",
+  pl: "Najczęstsze pytania kupujących hurtowo",
+  bg: "Често задавани въпроси за търговия на едро",
+};
+
 interface CatalogViewProps {
   readonly lang: string;
   readonly categories: Category[];
@@ -31,6 +47,7 @@ interface CatalogViewProps {
   readonly hasActiveFiltersCount: number;
   readonly setIsMobileFiltersOpen: (open: boolean) => void;
   readonly sidebar: React.ReactNode;
+  readonly categoryFaqs?: readonly CatalogFaqItem[];
 }
 
 const findCategory = (tree: Category[], target: string): Category | null => {
@@ -212,6 +229,7 @@ export default function CatalogView({
   hasActiveFiltersCount,
   setIsMobileFiltersOpen,
   sidebar,
+  categoryFaqs,
 }: Readonly<CatalogViewProps>) {
   const isAuthenticated = useIsStoreAuthenticated();
   const activeCatObj = activeCategoryId ? findCategory(categories, activeCategoryId) : null;
@@ -266,9 +284,9 @@ export default function CatalogView({
           />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-cultured pb-4 w-full">
             <div className="flex flex-col gap-1 select-none">
-              <h2 className="font-sans font-extrabold text-xl tracking-tight text-eerie-black">
+              <h1 className="font-sans font-extrabold text-xl tracking-tight text-eerie-black">
                 {categoryTitle || t("all_products", lang)}
-              </h2>
+              </h1>
               {activeCatObj ? (
                 <span className="text-[11px] font-semibold text-sonic-silver">
                   {t("active_products_label", lang)} <strong className="text-salmon-pink">{activeCatObj.active_products || 0}</strong> • {t("total_products_label", lang)} <strong className="text-eerie-black">{activeCatObj.total_products || 0}</strong>
@@ -384,6 +402,36 @@ export default function CatalogView({
           seoDesc={effectiveSeoDesc}
           lang={lang}
         />
+      )}
+
+      {/* Visible Category B2B FAQs (mirrors FAQPage JSON-LD for Google Rich Results compliance) */}
+      {categoryFaqs && categoryFaqs.length > 0 && (
+        <section
+          aria-labelledby="category-b2b-faq-heading"
+          className="mt-8 bg-white border border-cultured rounded-[15px] p-6 md:p-8 shadow-sm"
+        >
+          <h2
+            id="category-b2b-faq-heading"
+            className="font-sans font-extrabold text-sm sm:text-base uppercase tracking-wider text-eerie-black mb-4"
+          >
+            {CATEGORY_FAQ_HEADINGS[lang] || CATEGORY_FAQ_HEADINGS.en}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {categoryFaqs.map((faq) => (
+              <div
+                key={faq.q}
+                className="p-4 rounded-xl bg-[#FAFAFA] border border-cultured space-y-1.5"
+              >
+                <h3 className="text-xs sm:text-sm font-extrabold text-eerie-black leading-snug">
+                  {faq.q}
+                </h3>
+                <p className="text-xs text-sonic-silver leading-relaxed">
+                  {faq.a}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
     </main>
   );

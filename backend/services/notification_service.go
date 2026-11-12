@@ -34,6 +34,11 @@ func (d *PostgresNotificationDispatcher) NotifyUserAsync(userID, userRole, title
 		return
 	}
 
+	normalizedRole := "customer"
+	if strings.EqualFold(strings.TrimSpace(userRole), "supplier") {
+		normalizedRole = "supplier"
+	}
+
 	pool := d.pool
 	safe.Go("Mobile Notification Insert", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -47,9 +52,11 @@ func (d *PostgresNotificationDispatcher) NotifyUserAsync(userID, userRole, title
 		}
 
 		if _, err := pool.Exec(ctx, `
-			INSERT INTO catalog.mobile_notifications (user_id, user_role, title, body, notification_type, metadata)
-			VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-		`, uid, userRole, title, body, notifType, string(metaBytes)); err != nil {
+			INSERT INTO catalog.mobile_notifications (
+				recipient_type, recipient_id, user_role, user_id, title, body, notification_type, payload, metadata
+			)
+			VALUES ($1, $2, $1, $2, $3, $4, $5, $6::jsonb, $6::jsonb)
+		`, normalizedRole, uid, title, body, notifType, string(metaBytes)); err != nil {
 			log.Printf("[NOTIFICATION] Failed to insert notification for user=%s: %v", uid, err)
 		}
 	})

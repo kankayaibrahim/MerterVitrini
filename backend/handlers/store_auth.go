@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"mertervitrini/backend/config"
@@ -22,6 +22,7 @@ import (
 	"mertervitrini/backend/pkg/httpclient"
 	"mertervitrini/backend/pkg/mailer"
 	"mertervitrini/backend/pkg/safe"
+	"mertervitrini/backend/services"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -55,7 +56,29 @@ func generateVerificationToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+var (
+	storeVerifierMu          sync.Mutex
+	storeVerifierInitialized bool
+)
+
+func ensureDefaultTokenVerifier() {
+	storeVerifierMu.Lock()
+	defer storeVerifierMu.Unlock()
+	if storeVerifierInitialized {
+		return
+	}
+	cfg := config.LoadConfig()
+	services.ConfigureDefaultVerifier(cfg.JWTSecret, cfg.KeycloakPublicKey)
+	storeVerifierInitialized = true
+}
+
 func NewStoreAuthHandler(cfg *config.Config) *StoreAuthHandler {
+	if cfg != nil && (cfg.JWTSecret != "" || cfg.KeycloakPublicKey != "") {
+		storeVerifierMu.Lock()
+		services.ConfigureDefaultVerifier(cfg.JWTSecret, cfg.KeycloakPublicKey)
+		storeVerifierInitialized = true
+		storeVerifierMu.Unlock()
+	}
 	safe.Go("Ensure Identity Verification Schema", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -99,26 +122,8 @@ type AuthResponse struct {
 }
 
 func decodeJWTClaims(tokenStr string) (map[string]any, error) {
-	parts := strings.Split(tokenStr, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid token format")
-	}
-	payloadSegment := parts[1]
-	if l := len(payloadSegment) % 4; l > 0 {
-		payloadSegment += strings.Repeat("=", 4-l)
-	}
-	raw, err := base64.URLEncoding.DecodeString(payloadSegment)
-	if err != nil {
-		raw, err = base64.StdEncoding.DecodeString(payloadSegment)
-		if err != nil {
-			return nil, err
-		}
-	}
-	var claims map[string]any
-	if err := json.Unmarshal(raw, &claims); err != nil {
-		return nil, err
-	}
-	return claims, nil
+	ensureDefaultTokenVerifier()
+	return services.VerifyTokenClaims(tokenStr)
 }
 
 func (h *StoreAuthHandler) getAdminAccessToken(ctx context.Context) (string, error) {
@@ -577,54 +582,65 @@ func (h *StoreAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// verifyTokenAndGetUserID decodes the token from Authorization header and returns keycloak userID if valid and not expired
+// verifyTokenAndGetUserID cryptographically verifies the JWT Bearer token (RS256 Keycloak or HS256 local) and returns userID if valid and not expired.
 func verifyTokenAndGetUserID(authHeader string) (string, error) {
-	tokenStr := strings.TrimPrefix(strings.TrimSpace(authHeader), authBearerPrefix)
+	trimmed := strings.TrimSpace(authHeader)
+	if len(trimmed) < 7 || !strings.EqualFold(trimmed[:7], authBearerPrefix) {
+		return "", errors.New("missing or malformed authorization header")
+	}
+	tokenStr := strings.TrimSpace(trimmed[7:])
 	if tokenStr == "" {
-		return "", fmt.Errorf("missing authorization token")
+		return "", errors.New("missing authorization token")
 	}
 
 	claims, err := decodeJWTClaims(tokenStr)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode jwt claims: %w", err)
+		return "", fmt.Errorf("failed to verify jwt claims: %w", err)
 	}
 
-	// Check for token expiration
-	if expVal, exists := claims["exp"]; exists {
-		if expFloat, ok := expVal.(float64); ok {
-			if time.Now().Unix() > int64(expFloat) {
-				return "", fmt.Errorf("token expired")
-			}
-		}
+	expVal, exists := claims["exp"]
+	if !exists {
+		return "", errors.New("token missing exp claim")
+	}
+	if expFloat, ok := expVal.(float64); !ok || time.Now().Unix() > int64(expFloat) {
+		return "", errors.New("token expired")
 	}
 
 	userID, _ := claims["sub"].(string)
-	if userID == "" {
-		return "", fmt.Errorf("subject missing from token")
+	if strings.TrimSpace(userID) == "" {
+		return "", errors.New("subject missing from token")
 	}
 	return userID, nil
 }
 
-// verifyReCaptchaV3 validates Google reCAPTCHA v3 token against Google siteverify API with fail-safe tolerance.
-func (h *StoreAuthHandler) verifyReCaptchaV3(token string, action string) (bool, error) {
-	if h.Cfg.ReCaptchaSecret == "" {
-		log.Printf("[RECAPTCHA WARNING] reCAPTCHA secret is empty. Skipping verification as a fail-safe.")
+const recaptchaSiteVerifyURL = "https://www.google.com/recaptcha/api/siteverify"
+
+// verifyGoogleReCaptcha validates a Google reCAPTCHA token against siteverify using FastClient with timeout.
+func verifyGoogleReCaptcha(secret, token, action string) (bool, error) {
+	trimmedSecret := strings.TrimSpace(secret)
+	if trimmedSecret == "" {
 		return true, nil
 	}
 
-	if token == "" {
-		log.Printf("[RECAPTCHA INFO] Missing client reCAPTCHA token (adblocker/privacy shield). Proceeding.")
-		return true, nil
+	trimmedToken := strings.TrimSpace(token)
+	if trimmedToken == "" {
+		return false, errors.New("Güvenlik doğrulaması (reCAPTCHA) gerekli.")
 	}
 
-	resp, err := http.PostForm("https://www.google.com/recaptcha/api/siteverify",
-		url.Values{
-			"secret":   {h.Cfg.ReCaptchaSecret},
-			"response": {token},
-		})
+	form := url.Values{
+		"secret":   {trimmedSecret},
+		"response": {trimmedToken},
+	}
+	req, err := http.NewRequest(http.MethodPost, recaptchaSiteVerifyURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		log.Printf("[RECAPTCHA WARNING] reCAPTCHA service connection error: %v. Allowing as fail-safe.", err)
-		return true, nil
+		return false, errors.New("Güvenlik doğrulaması başlatılamadı.")
+	}
+	req.Header.Set(headerContentType, mimeFormURLEncoded)
+
+	resp, err := httpclient.FastClient.Do(req)
+	if err != nil {
+		log.Printf("[RECAPTCHA ERROR] siteverify connection error: %v", err)
+		return false, errors.New("Güvenlik doğrulama servisine ulaşılamadı.")
 	}
 	defer resp.Body.Close()
 
@@ -634,29 +650,35 @@ func (h *StoreAuthHandler) verifyReCaptchaV3(token string, action string) (bool,
 		Action     string   `json:"action"`
 		ErrorCodes []string `json:"error-codes"`
 	}
-
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("[RECAPTCHA WARNING] reCAPTCHA response decode error: %v. Allowing as fail-safe.", err)
-		return true, nil
+		log.Printf("[RECAPTCHA ERROR] siteverify decode error: %v", err)
+		return false, errors.New("Güvenlik doğrulama yanıtı okunamadı.")
 	}
 
 	if !result.Success {
-		log.Printf("[RECAPTCHA WARNING] Google verification failed with codes %v. Allowing fail-safe.", result.ErrorCodes)
-		return true, nil
+		log.Printf("[RECAPTCHA REJECT] Google verification failed with codes %v for action %s", result.ErrorCodes, action)
+		return false, nil
 	}
 
-	// Verify action matches if returned
 	if result.Action != "" && action != "" && result.Action != action {
 		log.Printf("[RECAPTCHA WARNING] Action mismatch: expected %s, got %s", action, result.Action)
 	}
 
-	// If score is explicitly detected as confirmed bot
-	if result.Score < 0.2 {
+	if result.Action != "" && result.Score < 0.2 {
 		log.Printf("[RECAPTCHA REJECT] Confirmed bot activity detected: %f for action: %s", result.Score, result.Action)
 		return false, fmt.Errorf("bot aktivitesi şüphesi (skor: %.2f)", result.Score)
 	}
 
-	return true, nil
+	return result.Success, nil
+}
+
+// verifyReCaptchaV3 validates Google reCAPTCHA token against Google siteverify API using FastClient with timeout.
+func (h *StoreAuthHandler) verifyReCaptchaV3(token string, action string) (bool, error) {
+	secret := ""
+	if h != nil && h.Cfg != nil {
+		secret = h.Cfg.ReCaptchaSecret
+	}
+	return verifyGoogleReCaptcha(secret, token, action)
 }
 
 type UserProfile struct {

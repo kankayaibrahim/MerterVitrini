@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -65,11 +66,12 @@ func main() {
 	rootHandler := BuildRouter(cfg, appHandlers)
 
 	server := &http.Server{
-		Addr:         ":" + cfg.ServerPort,
-		Handler:      rootHandler,
-		ReadTimeout:  20 * time.Second,
-		WriteTimeout: 20 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              ":" + cfg.ServerPort,
+		Handler:           withStreamingWriteDeadlines(rootHandler),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      120 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	stopChan := make(chan os.Signal, 1)
@@ -93,9 +95,19 @@ func main() {
 		log.Printf("Server shutdown error: %v", err)
 	}
 
-	dbPool.Close()
-	db.CloseRedis()
 	log.Println("Server stopped. Good bye!")
+}
+
+func withStreamingWriteDeadlines(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/ws") || strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+		} else if strings.Contains(path, "/mobile/apk") || strings.Contains(path, "/export") || strings.HasSuffix(path, "/images") {
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(10 * time.Minute))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func initBackgroundWorkers(appCtx context.Context) {

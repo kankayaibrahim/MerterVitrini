@@ -396,6 +396,8 @@ func (h *TranslateHandler) StartJob(w http.ResponseWriter, r *http.Request) {
 			SELECT COUNT(*) FROM catalog.fabrics f
 			LEFT JOIN catalog.fabric_translations ft ON f.id = ft.fabric_id AND (ft.language_code = $1 OR ft.language_code = LEFT($1, 2))
 			WHERE ft.fabric_id IS NULL OR ft.fabric_name = ''`, req.Language).Scan(&totalItems)
+	default:
+		totalErr = fmt.Errorf("unsupported translation table: %s", req.Table)
 	}
 
 	if totalErr != nil {
@@ -527,6 +529,8 @@ func fetchMissingTranslationItems(ctx context.Context, table, language string) (
 			FROM catalog.fabrics f
 			LEFT JOIN catalog.fabric_translations ft ON f.id = ft.fabric_id AND (ft.language_code = $1 OR ft.language_code = LEFT($1, 2))
 			WHERE ft.fabric_id IS NULL OR ft.fabric_name = ''`, language)
+	default:
+		return nil, fmt.Errorf("unsupported translation table: %s", table)
 	}
 
 	if err != nil {

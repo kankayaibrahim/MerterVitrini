@@ -4,17 +4,37 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Home, ChevronRight } from "lucide-react";
 import { Product, Category, CartItem } from "@/types/store";
-import { t, getProductTitle, getProductDescription, getProductAttributes, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, parseProductSeriesBreakdown, apiFetch, convertPrice, ExchangeRate, showToast as triggerToast } from "@/app/utils";
-import { useIsStoreMemberLoggedIn, openStoreAuthModal } from "@/app/storeAuth";
+import {
+  t,
+  getProductTitle,
+  getProductDescription,
+  getProductAttributes,
+  getCategoryTitle,
+  getCategoryTrail,
+  getCategoryUrl,
+  getCategoryPrefix,
+} from "@/app/i18n";
+import {
+  getUnitsFromSeriesRatio,
+  parseProductSeriesBreakdown,
+  apiFetch,
+  convertPrice,
+  ExchangeRate,
+  showToast as triggerToast,
+} from "@/app/utils";
+import {
+  useIsStoreMemberLoggedIn,
+  openStoreAuthModal,
+  syncShowPricesToGuestsSetting,
+} from "@/app/storeAuth";
 import { trackMemberEvent } from "@/components/analytics/AnalyticsTracker";
+import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
 
-// Reuse the premium Tailwind storefront components
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import ConfirmModal from "@/components/store/ConfirmModal";
+import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 
-// Modular sub-components
 import ProductImageGallery from "./components/ProductImageGallery";
 import ProductSpecs from "./components/ProductSpecs";
 import ColorVariants from "./components/ColorVariants";
@@ -28,51 +48,219 @@ import { ChatOfferMetadata } from "@/types/chat";
 
 interface ProductDetailClientProps {
   readonly product: Product | null;
+  readonly initialLang?: string;
+  readonly initialCategories?: Category[];
+  readonly initialShowPricesToGuests?: boolean;
 }
 
+type PolicyType = "cancellation_and_return" | "terms_of_service" | "privacy_policy" | "";
+
 const EXCLUDED_ATTR_NAMES = new Set([
-  // Turkish
-  "cinsiyet", "kumaş", "kumaş tipi", "kumas tipi", "renk",
-  // English
-  "gender", "fabric", "fabric type", "color", "colour",
-  // German
-  "geschlecht", "stoff", "stoffart", "farbe",
-  // French
-  "genre", "sexe", "tissu", "type de tissu", "couleur",
-  // Russian
-  "пол", "ткань", "тип ткани", "цвет",
-  // Polish
-  "płeć", "plec", "tkanina", "rodzaj tkaniny", "kolor",
-  // Bulgarian
-  "пол", "тъкан", "тип тъкан", "тип материя", "цвят",
-  // Arabic
-  "الجنس", "القماش", "نوع القماش", "اللون"
+  "cinsiyet",
+  "kumaş",
+  "kumaş tipi",
+  "kumas tipi",
+  "renk",
+  "gender",
+  "fabric",
+  "fabric type",
+  "color",
+  "colour",
+  "geschlecht",
+  "stoff",
+  "stoffart",
+  "farbe",
+  "genre",
+  "sexe",
+  "tissu",
+  "type de tissu",
+  "couleur",
+  "пол",
+  "ткань",
+  "тип ткани",
+  "цвет",
+  "płeć",
+  "plec",
+  "tkanina",
+  "rodzaj tkaniny",
+  "kolor",
+  "тъкан",
+  "тип тъкан",
+  "тип материя",
+  "цвят",
+  "الجنس",
+  "القماش",
+  "نوع القماش",
+  "اللون",
 ]);
 
-export default function ProductDetailClient({ product }: Readonly<ProductDetailClientProps>) {
+interface ProductClientLocaleCopy {
+  readonly defaultColor: string;
+  readonly defaultBrand: string;
+  readonly offerAcceptedToast: string;
+  readonly inquiryErrorToast: string;
+  readonly waOrderHeader: string;
+  readonly waOrderNo: string;
+  readonly waContact: string;
+  readonly waCompany: string;
+  readonly waPhone: string;
+  readonly waLines: string;
+  readonly waPieces: string;
+  readonly waTotal: string;
+  readonly waNote: string;
+  readonly b2bTitleSuffix: string;
+}
+
+const CLIENT_LOCALE_COPY: Record<SupportedSeoLang, ProductClientLocaleCopy> = {
+  tr: {
+    defaultColor: "Standart",
+    defaultBrand: "Merter Üreticisi",
+    offerAcceptedToast: "Özel fiyat teklifi kabul edildi ve indirimli fiyattan sepete eklendi!",
+    inquiryErrorToast: "Talep gönderimi sırasında bir hata oluştu.",
+    waOrderHeader: "*MERTER VİTRİNİ DOĞRUDAN SİPARİŞ TALEBİ*",
+    waOrderNo: "Sipariş No",
+    waContact: "Yetkili",
+    waCompany: "Firma",
+    waPhone: "Telefon",
+    waLines: "Toplam Kalem",
+    waPieces: "Toplam Adet",
+    waTotal: "Toplam Tutar",
+    waNote: "Not",
+    b2bTitleSuffix: "Merter Vitrini Toptan B2B",
+  },
+  en: {
+    defaultColor: "Standard",
+    defaultBrand: "Merter Manufacturer",
+    offerAcceptedToast: "Custom price offer accepted and added to your cart!",
+    inquiryErrorToast: "An error occurred while submitting your inquiry.",
+    waOrderHeader: "*MERTER VITRINI DIRECT WHOLESALE ORDER*",
+    waOrderNo: "Order Ref",
+    waContact: "Contact",
+    waCompany: "Company",
+    waPhone: "Phone",
+    waLines: "Total Styles",
+    waPieces: "Total Pieces",
+    waTotal: "Estimated Total",
+    waNote: "Note",
+    b2bTitleSuffix: "Merter Vitrini Wholesale B2B",
+  },
+  ru: {
+    defaultColor: "Стандарт",
+    defaultBrand: "Фабрика Мертер",
+    offerAcceptedToast: "Специальное предложение принято и добавлено в корзину!",
+    inquiryErrorToast: "Произошла ошибка при отправке заявки.",
+    waOrderHeader: "*ПРЯМОЙ ОПТОВЫЙ ЗАКАЗ MERTER VITRINI*",
+    waOrderNo: "Номер заказа",
+    waContact: "Контактное лицо",
+    waCompany: "Компания",
+    waPhone: "Телефон",
+    waLines: "Позиций",
+    waPieces: "Всего единиц",
+    waTotal: "Сумма",
+    waNote: "Примечание",
+    b2bTitleSuffix: "Merter Vitrini Оптом B2B",
+  },
+  ar: {
+    defaultColor: "قياسي",
+    defaultBrand: "مصنع مارتر",
+    offerAcceptedToast: "تم قبول عرض السعر الخاص وإضافته إلى السلة!",
+    inquiryErrorToast: "حدث خطأ أثناء إرسال الطلب.",
+    waOrderHeader: "*طلب جملة مباشر — MERTER VITRINI*",
+    waOrderNo: "رقم الطلب",
+    waContact: "المسؤول",
+    waCompany: "الشركة",
+    waPhone: "الهاتف",
+    waLines: "عدد الموديلات",
+    waPieces: "إجمالي القطع",
+    waTotal: "الإجمالي",
+    waNote: "ملاحظة",
+    b2bTitleSuffix: "Merter Vitrini بالجملة B2B",
+  },
+  de: {
+    defaultColor: "Standard",
+    defaultBrand: "Merter Hersteller",
+    offerAcceptedToast: "Sonderpreisangebot akzeptiert und in den Warenkorb gelegt!",
+    inquiryErrorToast: "Beim Senden Ihrer Anfrage ist ein Fehler aufgetreten.",
+    waOrderHeader: "*MERTER VITRINI DIREKTE GROSSHANDELSBESTELLUNG*",
+    waOrderNo: "Bestell-Nr.",
+    waContact: "Ansprechpartner",
+    waCompany: "Firma",
+    waPhone: "Telefon",
+    waLines: "Positionen",
+    waPieces: "Gesamtstückzahl",
+    waTotal: "Gesamtbetrag",
+    waNote: "Notiz",
+    b2bTitleSuffix: "Merter Vitrini Großhandel B2B",
+  },
+  fr: {
+    defaultColor: "Standard",
+    defaultBrand: "Fabricant Merter",
+    offerAcceptedToast: "Offre tarifaire acceptée et ajoutée au panier !",
+    inquiryErrorToast: "Une erreur est survenue lors de l'envoi de la demande.",
+    waOrderHeader: "*COMMANDE EN GROS DIRECTE MERTER VITRINI*",
+    waOrderNo: "Réf. Commande",
+    waContact: "Contact",
+    waCompany: "Société",
+    waPhone: "Téléphone",
+    waLines: "Articles",
+    waPieces: "Total Pièces",
+    waTotal: "Montant Total",
+    waNote: "Note",
+    b2bTitleSuffix: "Merter Vitrini Grossiste B2B",
+  },
+  pl: {
+    defaultColor: "Standardowy",
+    defaultBrand: "Producent Merter",
+    offerAcceptedToast: "Oferta specjalna zaakceptowana i dodana do koszyka!",
+    inquiryErrorToast: "Wystąpił błąd podczas wysyłania zapytania.",
+    waOrderHeader: "*BEZPOŚREDNIE ZAMÓWIENIE HURTOWE MERTER VITRINI*",
+    waOrderNo: "Nr zamówienia",
+    waContact: "Osoba kontaktowa",
+    waCompany: "Firma",
+    waPhone: "Telefon",
+    waLines: "Pozycje",
+    waPieces: "Łącznie sztuk",
+    waTotal: "Suma",
+    waNote: "Uwagi",
+    b2bTitleSuffix: "Merter Vitrini Hurt B2B",
+  },
+  bg: {
+    defaultColor: "Стандартен",
+    defaultBrand: "Производител Мертер",
+    offerAcceptedToast: "Специалната оферта е приета и добавена в количката!",
+    inquiryErrorToast: "Възникна грешка при изпращане на запитването.",
+    waOrderHeader: "*ДИРЕКТНА ПОРЪЧКА НА ЕДРО MERTER VITRINI*",
+    waOrderNo: "Поръчка №",
+    waContact: "Лице за контакт",
+    waCompany: "Фирма",
+    waPhone: "Телефон",
+    waLines: "Артикули",
+    waPieces: "Общо бройки",
+    waTotal: "Обща сума",
+    waNote: "Бележка",
+    b2bTitleSuffix: "Merter Vitrini На Едро B2B",
+  },
+};
+
+export default function ProductDetailClient({
+  product,
+  initialLang = "tr",
+  initialCategories = [],
+  initialShowPricesToGuests,
+}: Readonly<ProductDetailClientProps>) {
   const isAuthenticated = useIsStoreMemberLoggedIn();
-  const [lang, setLang] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlLang = urlParams.get("lang");
-      if (urlLang) return urlLang;
-      return localStorage.getItem("preferred_lang") || "tr";
-    }
-    return "tr";
-  });
+  const [lang, setLang] = useState<string>(() => normalizeSeoLang(initialLang, "tr"));
+  const safeLang = normalizeSeoLang(lang, "tr");
+  const copy = CLIENT_LOCALE_COPY[safeLang];
+
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [activePolicy, setActivePolicy] = useState<PolicyType>("");
+  const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [activeCategoryId, setActiveCategoryId] = useState<string>("");
 
-  // --- Multi-Currency States ---
-  const [displayCurrency, setDisplayCurrency] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("merter_preferred_currency") || "TRY";
-    }
-    return "TRY";
-  });
+  const [displayCurrency, setDisplayCurrency] = useState<string>("TRY");
   const [exchangeRates, setExchangeRates] = useState<ExchangeRate[]>([]);
 
   const handleCurrencyChange = (curr: string) => {
@@ -80,10 +268,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
     localStorage.setItem("merter_preferred_currency", curr);
   };
 
-  // --- B2B Selection States ---
-  const [selectedColor] = useState<string>(() => {
-    return product?.color || "Standart";
-  });
+  const [selectedColor] = useState<string>(() => product?.color || copy.defaultColor);
   const [pkgQty, setPkgQty] = useState<number>(() => {
     if (!product) return 1;
     const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
@@ -91,46 +276,55 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
     return Math.max(minPkgs, 1);
   });
 
-  // --- Shared Cart Persistent State ---
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    if (typeof window !== "undefined") {
-      const savedCart = localStorage.getItem("merter_b2b_cart");
-      if (savedCart) {
-        try {
-          return JSON.parse(savedCart) as CartItem[];
-        } catch (err) {
-          console.error("Failed to parse cart storage", err);
-        }
-      }
-    }
-    return [];
-  });
-
-  // --- Quote inquiry form states ---
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [submittingInquiry, setSubmittingInquiry] = useState<boolean>(false);
   const [whatsappUrl, setWhatsappUrl] = useState<string>("");
   const [showSuccessOverlay, setShowSuccessOverlay] = useState<boolean>(false);
-  const [pendingRemove, setPendingRemove] = useState<{ index: number; change: number } | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<{
+    index: number;
+    change: number;
+  } | null>(null);
 
-  // Sync lang to document element
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      document.documentElement.setAttribute("lang", lang);
+    if (typeof initialShowPricesToGuests === "boolean") {
+      syncShowPricesToGuestsSetting(initialShowPricesToGuests);
     }
-  }, [lang]);
 
-  // Dynamic browser title synchronization when language changes
+    async function hydrateClientStorage() {
+      await Promise.resolve();
+      const savedCurr = localStorage.getItem("merter_preferred_currency");
+      if (savedCurr) {
+        setDisplayCurrency(savedCurr);
+      }
+      const savedCart = localStorage.getItem("merter_b2b_cart");
+      if (savedCart) {
+        try {
+          setCart(JSON.parse(savedCart) as CartItem[]);
+        } catch {
+          // Ignore malformed cart JSON
+        }
+      }
+    }
+
+    void hydrateClientStorage();
+  }, [initialShowPricesToGuests]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("lang", safeLang);
+    document.documentElement.setAttribute("dir", safeLang === "ar" ? "rtl" : "ltr");
+  }, [safeLang]);
+
   useEffect(() => {
     if (product) {
-      const localizedTitle = getProductTitle(product, lang);
-      const brandName = product.brand_name || "Merter Manufacturer";
-      document.title = `${localizedTitle} - ${brandName} | Merter Vitrini Toptan B2B`;
+      const localizedTitle = getProductTitle(product, safeLang);
+      const brandName = product.brand_name || copy.defaultBrand;
+      document.title = `${localizedTitle} - ${brandName} | ${copy.b2bTitleSuffix}`;
     }
-  }, [lang, product]);
+  }, [safeLang, product, copy.defaultBrand, copy.b2bTitleSuffix]);
 
-  // Initial mount loaders for categories and rates
   useEffect(() => {
-    const loadCategories = async () => {
+    const loadCategoriesIfEmpty = async () => {
+      if (initialCategories.length > 0) return;
       const data = await apiFetch<Category[]>("/categories");
       if (data) setCategories(data);
     };
@@ -141,27 +335,28 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
     };
 
     void loadRates();
-    void loadCategories();
-  }, []);
+    void loadCategoriesIfEmpty();
+  }, [initialCategories.length]);
 
-  // Handle case where product is null (Product Not Found)
+  const portalHref = `/${getCategoryPrefix(safeLang)}`;
+
   if (!product) {
     const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
 
     return (
       <div
         className="min-h-screen flex flex-col font-sans antialiased bg-[#fcfcfc] text-[#1c191f]"
-        style={{ direction: lang === "ar" ? "rtl" : "ltr" }}
+        style={{ direction: safeLang === "ar" ? "rtl" : "ltr" }}
       >
         <Header
-          lang={lang}
+          lang={safeLang}
           setLang={setLang}
           isLangOpen={isLangOpen}
           setIsLangOpen={setIsLangOpen}
           totalPkgs={totalPkgs}
           setIsCartOpen={setIsCartOpen}
-          setSearchQuery={() => { }}
-          setCurrentPage={() => { }}
+          setSearchQuery={() => {}}
+          setCurrentPage={() => {}}
           setActiveCategoryId={setActiveCategoryId}
           categories={categories}
           activeCategoryId={activeCategoryId}
@@ -171,32 +366,37 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         <main className="flex-grow flex flex-col items-center justify-center p-8 text-center select-none py-24">
           <span className="text-5xl mb-4">🔍</span>
           <h1 className="text-2xl font-extrabold text-[#1c191f] mb-3">
-            {t("product_not_found", lang)}
+            {t("product_not_found", safeLang)}
           </h1>
           <p className="text-sm font-semibold text-[#71717a] mb-8 max-w-md mx-auto leading-relaxed">
-            {t("product_not_found_desc", lang)}
+            {t("product_not_found_desc", safeLang)}
           </p>
           <Link
-            href="/"
+            href={portalHref}
             className="px-8 py-3 bg-[#a855f7] text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase hover:bg-[#1c191f] transition-all cursor-pointer shadow-md no-underline"
           >
-            {t("back_to_homepage", lang)}
+            {t("back_to_homepage", safeLang)}
           </Link>
         </main>
-        <Footer lang={lang} />
+        <Footer lang={safeLang} onOpenPolicy={(p) => setActivePolicy(p)} />
+        <PolicyViewerModal
+          isOpen={activePolicy !== ""}
+          onClose={() => setActivePolicy("")}
+          policyType={activePolicy}
+          lang={safeLang}
+        />
       </div>
     );
   }
 
-  // --- Specs Variables & Computations ---
-  const title = getProductTitle(product, lang);
-  const desc = getProductDescription(product, lang);
-  const dynamicAttrs = getProductAttributes(product, lang).filter(
+  const title = getProductTitle(product, safeLang);
+  const desc = getProductDescription(product, safeLang);
+  const dynamicAttrs = getProductAttributes(product, safeLang).filter(
     (attr) => !EXCLUDED_ATTR_NAMES.has(attr.name.toLowerCase().trim())
   );
 
   const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
-  const hasSeries = !!(product.series_ratio && unitsPerPkg > 1);
+  const hasSeries = Boolean(product.series_ratio && unitsPerPkg > 1);
 
   const { sizes, ratios } = parseProductSeriesBreakdown(
     product.packing_ratio,
@@ -207,14 +407,23 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
   const minPkgs = Math.ceil(product.minimum_order_quantity / unitsPerPkg);
   const actualMinPkgs = Math.max(minPkgs, 1);
 
-  // Single unit price & discount calculation
-  const unitPrice = convertPrice(product.price, product.currency || "USD", displayCurrency, exchangeRates);
-  const hasDiscount = product.discounted_price > 0 && product.discounted_price < product.price;
+  const unitPrice = convertPrice(
+    product.price,
+    product.currency || "USD",
+    displayCurrency,
+    exchangeRates
+  );
+  const hasDiscount =
+    product.discounted_price > 0 && product.discounted_price < product.price;
   const discountedPrice = hasDiscount
-    ? convertPrice(product.discounted_price, product.currency || "USD", displayCurrency, exchangeRates)
+    ? convertPrice(
+        product.discounted_price,
+        product.currency || "USD",
+        displayCurrency,
+        exchangeRates
+      )
     : unitPrice;
 
-  // Order summary calculations
   const totalPieces = pkgQty * unitsPerPkg;
   const singleItemWeight = Number(product.shipping_weight_kg) || 0.25;
   const totalWeight = Number((totalPieces * singleItemWeight).toFixed(2));
@@ -222,12 +431,10 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
   const totalPrice = finalPricePerUnit * totalPieces;
   const currency = displayCurrency;
 
-  // Package quantity adjustments
   const handleAdjustPkgQty = (change: number) => {
     setPkgQty((prev) => Math.max(actualMinPkgs, prev + change));
   };
 
-  // Add configured item to cart
   const handleAddToCart = () => {
     if (!isAuthenticated) {
       openStoreAuthModal("login");
@@ -235,12 +442,15 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
     }
     if (pkgQty < actualMinPkgs) {
       triggerToast(
-        `${t("min_order_warning", lang) || "Minimum sipariş miktarı"}: ${product.minimum_order_quantity} ${t("piece", lang)} (${actualMinPkgs} ${t("package", lang)})`
+        `${t("min_order_warning", safeLang)}: ${product.minimum_order_quantity} ${t("piece", safeLang)} (${actualMinPkgs} ${t("package", safeLang)})`
       );
       return;
     }
 
-    const coverImg = product.images?.find((img) => img.is_cover)?.image_url || product.images?.[0]?.image_url || "/placeholder.png";
+    const coverImg =
+      product.images?.find((img) => img.is_cover)?.image_url ||
+      product.images?.[0]?.image_url ||
+      "/placeholder.png";
 
     const newItem: CartItem = {
       product_id: product.id,
@@ -257,42 +467,39 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
     };
 
     setCart((prev) => {
-      const existingIdx = prev.findIndex((item) => item.product_id === newItem.product_id && item.color === newItem.color);
+      const existingIdx = prev.findIndex(
+        (item) => item.product_id === newItem.product_id && item.color === newItem.color
+      );
       let updated: CartItem[];
       if (existingIdx >= 0) {
         updated = [...prev];
         const existing = updated[existingIdx];
-        const updatedPkgs = existing.packages_qty + newItem.packages_qty;
-
         updated[existingIdx] = {
           ...existing,
-          packages_qty: updatedPkgs,
+          packages_qty: existing.packages_qty + newItem.packages_qty,
         };
       } else {
         updated = [...prev, newItem];
       }
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
-      }
+      localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
       return updated;
     });
 
     trackMemberEvent({
       event_type: "cart_add",
       event_category: "commerce",
-      title: `“${title}” ürününden ${pkgQty} seri sepete ekledi`,
-      subtitle: `SKU: ${newItem.custom_sku || "-"} • ${pkgQty * unitsPerPkg} Adet`,
+      title: `${title} (${pkgQty} pack)`,
+      subtitle: `SKU: ${newItem.custom_sku || "-"} • ${pkgQty * unitsPerPkg} pcs`,
       entity_type: "product",
       entity_id: product.id,
       image_url: coverImg,
     });
 
     setIsCartOpen(true);
-    triggerToast(t("product_added_to_cart", lang) || "Ürün sepete eklendi!");
+    triggerToast(t("product_added_to_cart", safeLang));
   };
 
-  // Accept custom supplier price offer from Centrifuge chat and add to cart
   const handleAcceptOfferToCart = (offer: ChatOfferMetadata) => {
     const offeredUnitConv = convertPrice(
       offer.offered_unit_price || product.price,
@@ -310,7 +517,8 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
       units_per_package: offer.units_per_package || unitsPerPkg,
       price_per_unit: offeredUnitConv,
       weight_per_unit: offer.weight_per_unit || singleItemWeight,
-      image_url: offer.image_url || product.images?.[0]?.image_url || "/placeholder.png",
+      image_url:
+        offer.image_url || product.images?.[0]?.image_url || "/placeholder.png",
       currency: displayCurrency,
       slug: offer.slug || product.slug,
     };
@@ -331,28 +539,13 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         updated = [...prev, newItem];
       }
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
-      }
+      localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
       return updated;
     });
 
     setIsChatOpen(false);
     setIsCartOpen(true);
-    triggerToast("🎁 Özel fiyat teklifi kabul edildi ve indirimli fiyattan sepete eklendi!");
-  };
-
-  // Adjust cart item quantities
-  const handleAdjustCartItemQty = (idx: number, change: number) => {
-    const item = cart[idx];
-    if (!item) return;
-
-    if (change < 0 && item.packages_qty <= 1) {
-      setPendingRemove({ index: idx, change });
-      return;
-    }
-
-    applyCartItemQtyChange(idx, change);
+    triggerToast(`🎁 ${copy.offerAcceptedToast}`);
   };
 
   const applyCartItemQtyChange = (idx: number, change: number) => {
@@ -365,17 +558,24 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
       if (nextPkgs <= 0) {
         updated.splice(idx, 1);
       } else {
-        updated[idx] = {
-          ...item,
-          packages_qty: nextPkgs,
-        };
+        updated[idx] = { ...item, packages_qty: nextPkgs };
       }
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
-      }
+      localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
       return updated;
     });
+  };
+
+  const handleAdjustCartItemQty = (idx: number, change: number) => {
+    const item = cart[idx];
+    if (!item) return;
+
+    if (change < 0 && item.packages_qty <= 1) {
+      setPendingRemove({ index: idx, change });
+      return;
+    }
+
+    applyCartItemQtyChange(idx, change);
   };
 
   const confirmRemove = () => {
@@ -388,14 +588,35 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
   const handleRemoveCartItem = (idx: number) => {
     setCart((prev) => {
       const updated = prev.filter((_, i) => i !== idx);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
-      }
+      localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
       return updated;
     });
   };
 
-  // Submit Quote Inquiry
+  const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
+  const totalItemsCount = cart.reduce(
+    (sum, item) => sum + item.packages_qty * item.units_per_package,
+    0
+  );
+  const totalWeightCart = Number(
+    cart
+      .reduce(
+        (sum, item) =>
+          sum + item.packages_qty * item.units_per_package * item.weight_per_unit,
+        0
+      )
+      .toFixed(2)
+  );
+  const totalPriceCart = Number(
+    cart
+      .reduce(
+        (sum, item) =>
+          sum + item.packages_qty * item.units_per_package * item.price_per_unit,
+        0
+      )
+      .toFixed(2)
+  );
+
   const handleSubmitInquiry = async (formData: InquiryFormData) => {
     if (cart.length === 0) return;
 
@@ -419,7 +640,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         total_price: totalPriceCart,
         total_pieces: totalItemsCount,
         total_weight: totalWeightCart,
-        lang,
+        lang: safeLang,
       };
 
       const res = await fetch("/api/v1/store/inquiries", {
@@ -430,144 +651,71 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Talep gönderilemedi.");
+        throw new Error(data.error || copy.inquiryErrorToast);
       }
 
       if (data.whatsapp_url) {
         setWhatsappUrl(data.whatsapp_url);
       } else {
-        // Fallback WhatsApp order message for buyer
-        let waMsg = `*MERTER VITRINI DOĞRUDAN SIPARIS TALEBI*\n`;
-        waMsg += `Sipariş No: #${data.order_number || data.id || "NEW"}\n`;
-        waMsg += `Yetkili: ${formData.fullName}\n`;
-        waMsg += `Firma: ${formData.companyName || "-"}\n`;
-        waMsg += `Telefon: ${formData.phoneNumber}\n`;
-        waMsg += `Toplam Kalem: ${cart.length} çeşit\n`;
-        waMsg += `Toplam Adet: ${totalItemsCount} adet\n`;
-        waMsg += `Toplam Tutar: ${totalPriceCart.toFixed(2)} ${displayCurrency}\n`;
+        let waMsg = `${copy.waOrderHeader}\n`;
+        waMsg += `${copy.waOrderNo}: #${data.order_number || data.id || "NEW"}\n`;
+        waMsg += `${copy.waContact}: ${formData.fullName}\n`;
+        waMsg += `${copy.waCompany}: ${formData.companyName || "-"}\n`;
+        waMsg += `${copy.waPhone}: ${formData.phoneNumber}\n`;
+        waMsg += `${copy.waLines}: ${cart.length}\n`;
+        waMsg += `${copy.waPieces}: ${totalItemsCount}\n`;
+        waMsg += `${copy.waTotal}: ${totalPriceCart.toFixed(2)} ${displayCurrency}\n`;
         waMsg += `----------------------------\n`;
         cart.forEach((cItem, i) => {
           const itemPieces = cItem.packages_qty * cItem.units_per_package;
           const itemTotal = itemPieces * cItem.price_per_unit;
-          waMsg += `${i + 1}. ${cItem.title} (${cItem.color}) - ${cItem.packages_qty} Paket (${itemPieces} Adet) -> ${itemTotal.toFixed(2)} ${displayCurrency}\n`;
+          waMsg += `${i + 1}. ${cItem.title} (${cItem.color}) - ${cItem.packages_qty} ${t("package", safeLang)} (${itemPieces} ${t("piece", safeLang)}) -> ${itemTotal.toFixed(2)} ${displayCurrency}\n`;
         });
         if (formData.customerMessage) {
-          waMsg += `----------------------------\nNot: ${formData.customerMessage}`;
+          waMsg += `----------------------------\n${copy.waNote}: ${formData.customerMessage}`;
         }
-        const supplierWaDigits = (product?.brand_profile?.whatsapp_phone || product?.brand_profile?.phone || "").replace(/\D/g, "");
+        const supplierWaDigits = (
+          product.brand_profile?.whatsapp_phone ||
+          product.brand_profile?.phone ||
+          ""
+        ).replace(/\D/g, "");
         const encodedWa = supplierWaDigits
           ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(waMsg)}`
           : `https://wa.me/?text=${encodeURIComponent(waMsg)}`;
         setWhatsappUrl(encodedWa);
       }
 
-      // Clear local cart
       setCart([]);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("merter_b2b_cart");
-      }
+      localStorage.removeItem("merter_b2b_cart");
       setIsCartOpen(false);
       setShowSuccessOverlay(true);
     } catch (err: unknown) {
-      console.error(err);
-      triggerToast((err as Error).message || "Talep gönderimi sırasında bir hata oluştu.");
+      triggerToast((err as Error).message || copy.inquiryErrorToast);
     } finally {
       setSubmittingInquiry(false);
     }
   };
 
-  // Cart summary aggregations
-  const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
-  const totalItemsCount = cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package), 0);
-  const totalWeightCart = Number(cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package * item.weight_per_unit), 0).toFixed(2));
-  const totalPriceCart = Number(cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package * item.price_per_unit), 0).toFixed(2));
-
-  // Structured Data (JSON-LD @graph) for Google Rich Snippets
-  const catTrail = product.category_id ? getCategoryTrail(categories, product.category_id) : [];
-  const breadcrumbElements: Array<{ "@type": string; position: number; name: string; item: string }> = [
-    {
-      "@type": "ListItem",
-      "position": 1,
-      "name": t("home", lang),
-      "item": "https://mertervitrini.com.tr",
-    },
-  ];
-
-  catTrail?.forEach((cat, idx) => {
-    breadcrumbElements.push({
-      "@type": "ListItem",
-      "position": idx + 2,
-      "name": getCategoryTitle(cat, lang),
-      "item": `https://mertervitrini.com.tr${getCategoryUrl(categories, cat, lang)}`,
-    });
-  });
-
-  breadcrumbElements.push({
-    "@type": "ListItem",
-    "position": breadcrumbElements.length + 1,
-    "name": title,
-    "item": `https://mertervitrini.com.tr/product/${product.slug || product.id}`,
-  });
-
-  const jsonLdData = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Product",
-        "name": title,
-        "description": desc,
-        "image": product.images?.map((img) => img.image_url) || [],
-        "sku": product.custom_sku || product.source_product_id,
-        "mpn": product.custom_sku || product.source_product_id,
-        "brand": {
-          "@type": "Brand",
-          "name": product.brand_name || t("merter_manufacturer", lang)
-        },
-        "offers": {
-          "@type": "Offer",
-          "url": `https://mertervitrini.com.tr/product/${product.slug || product.id}`,
-          "priceCurrency": currency,
-          "price": finalPricePerUnit.toFixed(2),
-          "availability": "https://schema.org/InStock",
-          "itemCondition": "https://schema.org/NewCondition",
-          "priceValidUntil": "2027-12-31",
-          "valueAddedTaxIncluded": "false",
-          "seller": {
-            "@type": "Organization",
-            "name": "Merter Vitrini B2B"
-          }
-        }
-      },
-      {
-        "@type": "BreadcrumbList",
-        "itemListElement": breadcrumbElements
-      }
-    ]
-  };
-
-  const safeJsonLdString = JSON.stringify(jsonLdData)
-    .replace(/</g, String.raw`\u003c`)
-    .replace(/>/g, String.raw`\u003e`);
+  const supplierSlug = product.brand_profile?.slug || product.brand_id;
+  const supplierHref =
+    safeLang === "tr"
+      ? `/ureticiler/${encodeURIComponent(supplierSlug)}`
+      : `/ureticiler/${encodeURIComponent(supplierSlug)}?lang=${safeLang}`;
 
   return (
     <div
       className="min-h-screen flex flex-col font-sans antialiased bg-bg-dark text-text-primary"
-      style={{ direction: lang === "ar" ? "rtl" : "ltr" }}
+      style={{ direction: safeLang === "ar" ? "rtl" : "ltr" }}
     >
-      <script type="application/ld+json">
-        {safeJsonLdString}
-      </script>
-
-      {/* Header */}
       <Header
-        lang={lang}
+        lang={safeLang}
         setLang={setLang}
         isLangOpen={isLangOpen}
         setIsLangOpen={setIsLangOpen}
         totalPkgs={totalPkgs}
         setIsCartOpen={setIsCartOpen}
-        setSearchQuery={() => { }}
-        setCurrentPage={() => { }}
+        setSearchQuery={() => {}}
+        setCurrentPage={() => {}}
         setActiveCategoryId={setActiveCategoryId}
         categories={categories}
         activeCategoryId={activeCategoryId}
@@ -575,50 +723,61 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         onCurrencyChange={handleCurrencyChange}
       />
 
-      {/* Main Content Area */}
       <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-
-        {/* Google SEO Breadcrumbs */}
-        <nav className="flex items-center gap-1.5 text-[11px] font-semibold text-sonic-silver mb-6 uppercase tracking-wider select-none">
-          <Link href="/" className="hover:text-salmon-pink flex items-center gap-1 transition-colors no-underline text-sonic-silver">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex items-center flex-wrap gap-1.5 text-[11px] font-semibold text-sonic-silver mb-6 uppercase tracking-wider select-none"
+        >
+          <Link
+            href={portalHref}
+            className="hover:text-salmon-pink flex items-center gap-1 transition-colors no-underline text-sonic-silver"
+          >
             <Home className="w-3.5 h-3.5" />
-            <span>{t("home", lang)}</span>
+            <span>{t("home", safeLang)}</span>
           </Link>
-          {product.category_id && getCategoryTrail(categories, product.category_id)?.map((cat) => (
-            <React.Fragment key={cat.id}>
-              <ChevronRight className="w-3 h-3 text-spanish-gray" />
+          {product.category_id &&
+            getCategoryTrail(categories, product.category_id)?.map((cat) => (
+              <React.Fragment key={cat.id}>
+                <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
+                <Link
+                  href={getCategoryUrl(categories, cat, safeLang).replace(/\/+$/, "")}
+                  className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver font-bold"
+                >
+                  {getCategoryTitle(cat, safeLang)}
+                </Link>
+              </React.Fragment>
+            ))}
+          {product.brand_name && (
+            <>
+              <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
               <Link
-                href={getCategoryUrl(categories, cat, lang)}
+                href={supplierHref}
                 className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver font-bold"
               >
-                {getCategoryTitle(cat, lang)}
+                {product.brand_name}
               </Link>
-            </React.Fragment>
-          ))}
-          <ChevronRight className="w-3 h-3 text-spanish-gray" />
-          <span className="text-salmon-pink font-extrabold truncate max-w-[200px]">
+            </>
+          )}
+          <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
+          <span className="text-salmon-pink font-extrabold truncate max-w-[240px]">
             {title}
           </span>
         </nav>
 
-        {/* Product Details Display Grid */}
         <div className="bg-white border border-cultured rounded-[15px] p-6 md:p-8 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-
-            {/* Left Column - Image Gallery */}
             <ProductImageGallery
               images={product.images}
               title={title}
-              lang={lang}
+              lang={safeLang}
               t={t}
             />
 
-            {/* Right Column - Specs & B2B Calculator */}
             <div className="flex flex-col gap-6">
               <ProductSpecs
                 product={product}
                 title={title}
-                lang={lang}
+                lang={safeLang}
                 t={t}
                 hasDiscount={hasDiscount}
                 unitPrice={unitPrice}
@@ -627,11 +786,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
                 dynamicAttrs={dynamicAttrs}
               />
 
-              <ColorVariants
-                product={product}
-                lang={lang}
-                t={t}
-              />
+              <ColorVariants product={product} lang={safeLang} t={t} />
 
               <OrderCalculator
                 hasSeries={hasSeries}
@@ -644,7 +799,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
                 totalWeight={totalWeight}
                 totalPrice={totalPrice}
                 currency={currency}
-                lang={lang}
+                lang={safeLang}
                 t={t}
                 handleAddToCart={handleAddToCart}
                 onOpenSupplierChat={() => {
@@ -662,6 +817,7 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
                 totalPieces={totalPieces}
                 totalPrice={totalPrice}
                 currency={currency}
+                lang={safeLang}
                 onOpenChat={() => {
                   if (!isAuthenticated) {
                     openStoreAuthModal("login");
@@ -671,36 +827,35 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
                 }}
               />
 
-              <SocialShare
-                title={title}
-                lang={lang}
-                t={t}
-              />
+              <SocialShare title={title} lang={safeLang} t={t} />
             </div>
           </div>
 
-          {/* Description Block */}
           <div className="border-t border-cultured pt-6 mt-8">
             <h2 className="font-sans font-extrabold text-sm tracking-[0.5px] mb-3 uppercase text-eerie-black select-none">
-              {t("description_label", lang)}
+              {t("description_label", safeLang)}
             </h2>
             <p className="text-xs text-sonic-silver leading-relaxed font-semibold whitespace-pre-line">
               {desc}
             </p>
           </div>
         </div>
-
       </main>
 
-      {/* Footer */}
-      <Footer lang={lang} />
+      <Footer lang={safeLang} onOpenPolicy={(p) => setActivePolicy(p)} />
 
-      {/* Cart components overlay */}
+      <PolicyViewerModal
+        isOpen={activePolicy !== ""}
+        onClose={() => setActivePolicy("")}
+        policyType={activePolicy}
+        lang={safeLang}
+      />
+
       <ProductInquiryCart
         isCartOpen={isCartOpen}
         setIsCartOpen={setIsCartOpen}
         cart={cart}
-        lang={lang}
+        lang={safeLang}
         totalPkgs={totalPkgs}
         totalItemsCount={totalItemsCount}
         totalWeightCart={totalWeightCart}
@@ -718,8 +873,8 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
 
       {pendingRemove !== null && (
         <ConfirmModal
-          lang={lang}
-          message={t("remove_from_cart_confirm", lang) || "Sepetten komple kaldırılacaktır onaylıyor musunuz?"}
+          lang={safeLang}
+          message={t("remove_from_cart_confirm", safeLang)}
           onConfirm={confirmRemove}
           onCancel={() => setPendingRemove(null)}
         />
@@ -730,8 +885,8 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         onClose={() => setIsChatOpen(false)}
         initialBrandId={product.brand_id}
         initialProductId={product.id}
-        supplierDisplayName={product.brand_name || "Merter Üreticisi"}
-        lang={lang}
+        supplierDisplayName={product.brand_name || copy.defaultBrand}
+        lang={safeLang}
         displayCurrency={displayCurrency}
         exchangeRates={exchangeRates}
         onAcceptOfferToCart={handleAcceptOfferToCart}

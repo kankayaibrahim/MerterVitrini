@@ -937,6 +937,9 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 	}
 
 	triggerProductMVRefresh()
+	if req.IsActive {
+		NotifyIndexNowProductSlug(slug)
+	}
 
 	writeSupplierJSON(w, http.StatusCreated, map[string]any{
 		"message":    "Ürün başarıyla oluşturuldu ve vitrinde yayına alındı.",
@@ -1387,7 +1390,7 @@ func upsertSupplierProductTranslations(
 			description = EXCLUDED.description`,
 		productID, strings.TrimSpace(trTitle), strings.TrimSpace(trShort), strings.TrimSpace(trDesc))
 
-	supportedLangs := []string{"en", "ru", "ar"}
+	supportedLangs := []string{"en", "ru", "ar", "de", "fr", "pl", "bg"}
 	for _, lang := range supportedLangs {
 		item, exists := translations[lang]
 		if !exists {
@@ -1513,7 +1516,7 @@ func (h *SupplierPortalHandler) UpdateProductTranslations(w http.ResponseWriter,
 	triggerProductMVRefresh()
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
 		"success": true,
-		"message": "Çok dilli ürün çevirileri (TR / EN / RU / AR) başarıyla güncellendi.",
+		"message": "Çok dilli ürün çevirileri (TR / EN / RU / AR / DE / FR / PL / BG) başarıyla güncellendi.",
 	})
 }
 
@@ -1522,7 +1525,7 @@ func isValidTargetLang(lang, sourceLang string) bool {
 		return false
 	}
 	switch lang {
-	case "en", "ru", "ar", "tr":
+	case "en", "ru", "ar", "de", "fr", "pl", "bg", "tr":
 		return true
 	default:
 		return false
@@ -1549,7 +1552,7 @@ func translateFieldsForTargetLang(ctx context.Context, fields map[string]string,
 	return langMap
 }
 
-// AutoTranslateFields translates given text fields from source language (default 'tr') into target languages ('en', 'ru', 'ar') using LibreTranslate
+// AutoTranslateFields translates given text fields from source language (default 'tr') into all 7 storefront target languages ('en', 'ru', 'ar', 'de', 'fr', 'pl', 'bg') using LibreTranslate
 func (h *SupplierPortalHandler) AutoTranslateFields(w http.ResponseWriter, r *http.Request) {
 	_, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
@@ -1573,7 +1576,7 @@ func (h *SupplierPortalHandler) AutoTranslateFields(w http.ResponseWriter, r *ht
 	}
 	targetLangs := req.TargetLangs
 	if len(targetLangs) == 0 {
-		targetLangs = []string{"en", "ru", "ar"}
+		targetLangs = []string{"en", "ru", "ar", "de", "fr", "pl", "bg"}
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)

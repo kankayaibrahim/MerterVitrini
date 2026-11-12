@@ -1,6 +1,96 @@
 import React from "react";
 import { Settings, Clipboard, Globe, Plus, Check, AlertCircle } from "lucide-react";
 import { t } from "@/app/i18n";
+import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
+
+interface EmailVerifyCopy {
+  readonly verifiedBadge: string;
+  readonly unverifiedBadge: string;
+  readonly verifyNotice: string;
+  readonly sendingBtn: string;
+  readonly sendBtn: string;
+}
+
+const EMAIL_VERIFY_COPY: Record<SupportedSeoLang, EmailVerifyCopy> = {
+  tr: {
+    verifiedBadge: "E-Posta Doğrulandı",
+    unverifiedBadge: "Doğrulanmadı",
+    verifyNotice:
+      "Siparişleriniz ve tekliflerinizin üreticiler tarafından öncelikli yanıtlanması için e-postanızı doğrulayın.",
+    sendingBtn: "Gönderiliyor...",
+    sendBtn: "Doğrulama E-postası Gönder",
+  },
+  en: {
+    verifiedBadge: "Email Verified",
+    unverifiedBadge: "Unverified",
+    verifyNotice:
+      "Verify your email so Merter manufacturers prioritize your wholesale orders and RFQ inquiries.",
+    sendingBtn: "Sending...",
+    sendBtn: "Send Verification Email",
+  },
+  ru: {
+    verifiedBadge: "E-mail подтвержден",
+    unverifiedBadge: "Не подтвержден",
+    verifyNotice:
+      "Подтвердите e-mail, чтобы фабрики приоритетно обрабатывали ваши заказы и запросы.",
+    sendingBtn: "Отправка...",
+    sendBtn: "Отправить письмо подтверждения",
+  },
+  ar: {
+    verifiedBadge: "البريد مؤكد",
+    unverifiedBadge: "غير مؤكد",
+    verifyNotice:
+      "أكّد بريدك الإلكتروني لمنح طلباتك واستفساراتك الأولوية لدى المصانع المعتمدة.",
+    sendingBtn: "جاري الإرسال...",
+    sendBtn: "إرسال رابط التأكيد",
+  },
+  de: {
+    verifiedBadge: "E-Mail bestätigt",
+    unverifiedBadge: "Unbestätigt",
+    verifyNotice:
+      "Bestätigen Sie Ihre E-Mail-Adresse, damit Hersteller Ihre Bestellungen und Anfragen bevorzugt bearbeiten.",
+    sendingBtn: "Wird gesendet...",
+    sendBtn: "Bestätigungs-E-Mail senden",
+  },
+  fr: {
+    verifiedBadge: "E-mail vérifié",
+    unverifiedBadge: "Non vérifié",
+    verifyNotice:
+      "Vérifiez votre adresse e-mail afin que les fabricants traitent vos commandes et demandes en priorité.",
+    sendingBtn: "Envoi...",
+    sendBtn: "Envoyer l'e-mail de vérification",
+  },
+  pl: {
+    verifiedBadge: "E-mail zweryfikowany",
+    unverifiedBadge: "Niezweryfikowany",
+    verifyNotice:
+      "Zweryfikuj swój adres e-mail, aby producenci priorytetowo obsługiwali Twoje zamówienia i zapytania.",
+    sendingBtn: "Wysyłanie...",
+    sendBtn: "Wyślij e-mail weryfikacyjny",
+  },
+  bg: {
+    verifiedBadge: "Имейлът е потвърден",
+    unverifiedBadge: "Непотвърден",
+    verifyNotice:
+      "Потвърдете имейла си, за да получавате приоритетен отговор от фабриките за вашите поръчки и запитвания.",
+    sendingBtn: "Изпращане...",
+    sendBtn: "Изпрати имейл за потвърждение",
+  },
+};
+
+function getResendVerificationLabel(
+  resendingVerification: boolean,
+  resendCountdown: number,
+  copy: EmailVerifyCopy
+): string {
+  if (resendingVerification) {
+    return copy.sendingBtn;
+  }
+  if (resendCountdown > 0) {
+    return `${resendCountdown}s`;
+  }
+  return copy.sendBtn;
+}
 
 // Custom Instagram SVG Icon to avoid older lucide-react import issues
 const Instagram = (props: Readonly<React.SVGProps<SVGSVGElement>>) => (
@@ -40,7 +130,7 @@ interface ProfileDetailsProps {
   readonly setInstagramUsername: (val: string) => void;
   readonly savingProfile: boolean;
   readonly handleSaveProfile: (e: React.FormEvent) => void;
-  
+
   // Legacy migration props
   readonly addressesCount: number;
   readonly billingAddress?: string;
@@ -92,6 +182,14 @@ export default function ProfileDetails({
   resendingVerification = false,
   resendCountdown = 0,
 }: Readonly<ProfileDetailsProps>) {
+  const safeLang = normalizeSeoLang(lang, "tr");
+  const verifyCopy = EMAIL_VERIFY_COPY[safeLang];
+  const resendBtnLabel = getResendVerificationLabel(
+    resendingVerification,
+    resendCountdown,
+    verifyCopy
+  );
+
   return (
     <div className="bg-white rounded-2xl p-6 sm:p-8 border border-cultured shadow-sm">
       <h2 className="font-sans font-extrabold text-xl text-eerie-black mb-1 select-none flex items-center gap-2">
@@ -155,12 +253,12 @@ export default function ProfileDetails({
                 {emailVerified ? (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                     <Check className="w-3 h-3 text-emerald-600" />
-                    {lang === "tr" ? "E-Posta Doğrulandı" : "Email Verified"}
+                    {verifyCopy.verifiedBadge}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                     <AlertCircle className="w-3 h-3 text-amber-600" />
-                    {lang === "tr" ? "Doğrulanmadı" : "Unverified"}
+                    {verifyCopy.unverifiedBadge}
                   </span>
                 )}
               </div>
@@ -172,29 +270,22 @@ export default function ProfileDetails({
               />
               {!emailVerified && handleResendVerification && (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-1 text-[11px] text-amber-800 bg-amber-50/80 p-2.5 rounded-lg border border-amber-200">
-                  <span className="leading-snug">
-                    {lang === "tr"
-                      ? "Siparişleriniz ve tekliflerinizin üreticiler tarafından öncelikli yanıtlanması için e-postanızı doğrulayın."
-                      : "Verify your email to have suppliers prioritize your orders and inquiries."}
-                  </span>
+                  <span className="leading-snug">{verifyCopy.verifyNotice}</span>
                   <button
                     type="button"
                     onClick={handleResendVerification}
                     disabled={resendingVerification || resendCountdown > 0}
                     className="shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded font-bold text-[10px] transition-colors cursor-pointer border-none shadow-xs text-center"
                   >
-                    {resendingVerification
-                      ? (lang === "tr" ? "Gönderiliyor..." : "Sending...")
-                      : resendCountdown > 0
-                      ? `${resendCountdown}s`
-                      : (lang === "tr" ? "Doğrulama E-postası Gönder" : "Send Verification Email")}
+                    {resendBtnLabel}
                   </button>
                 </div>
               )}
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                {t("phone_number_field", lang)} <span className="text-red-500 font-bold">*</span>
+                {t("phone_number_field", lang)}{" "}
+                <span className="text-red-500 font-bold">*</span>
               </label>
               <input
                 type="tel"
@@ -287,39 +378,50 @@ export default function ProfileDetails({
         </div>
 
         {/* Legacy Address Migration Banner */}
-        {addressesCount === 0 && (billingAddress?.trim() !== "" || deliveryAddress?.trim() !== "") && (
-          <div className="p-5 bg-gradient-to-r from-salmon-pink/10 to-salmon-pink/5 border border-salmon-pink/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
-            <div className="flex gap-3">
-              <div className="w-10 h-10 rounded-full bg-salmon-pink/10 flex items-center justify-center text-salmon-pink shrink-0">
-                <Globe className="w-5 h-5" />
-              </div>
-              <div>
-                <h5 className="text-xs font-extrabold text-eerie-black mb-1">
-                  {getAddressT("legacy_migration_notice")}
-                </h5>
-                <div className="text-[10px] font-bold text-sonic-silver">
-                  {billingAddress && <p>• {getAddressT("billing_address")}: {billingAddress.substring(0, 80)}...</p>}
-                  {deliveryAddress && <p>• {getAddressT("shipping_address")}: {deliveryAddress.substring(0, 80)}...</p>}
+        {addressesCount === 0 &&
+          (billingAddress?.trim() !== "" || deliveryAddress?.trim() !== "") && (
+            <div className="p-5 bg-gradient-to-r from-salmon-pink/10 to-salmon-pink/5 border border-salmon-pink/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-300">
+              <div className="flex gap-3">
+                <div className="w-10 h-10 rounded-full bg-salmon-pink/10 flex items-center justify-center text-salmon-pink shrink-0">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h5 className="text-xs font-extrabold text-eerie-black mb-1">
+                    {getAddressT("legacy_migration_notice")}
+                  </h5>
+                  <div className="text-[10px] font-bold text-sonic-silver">
+                    {billingAddress && (
+                      <p>
+                        • {getAddressT("billing_address")}:{" "}
+                        {billingAddress.substring(0, 80)}...
+                      </p>
+                    )}
+                    {deliveryAddress && (
+                      <p>
+                        • {getAddressT("shipping_address")}:{" "}
+                        {deliveryAddress.substring(0, 80)}...
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
+              <button
+                type="button"
+                disabled={isMigrating}
+                onClick={handleMigrateLegacyAddresses}
+                className="px-5 py-2.5 bg-salmon-pink text-white rounded-lg font-extrabold text-[10px] uppercase tracking-[0.5px] border-none shadow-md hover:bg-eerie-black active:scale-[0.98] transition-all shrink-0 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isMigrating ? (
+                  <div className="spinner animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    {getAddressT("migrate_addresses_btn")}
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              type="button"
-              disabled={isMigrating}
-              onClick={handleMigrateLegacyAddresses}
-              className="px-5 py-2.5 bg-salmon-pink text-white rounded-lg font-extrabold text-[10px] uppercase tracking-[0.5px] border-none shadow-md hover:bg-eerie-black active:scale-[0.98] transition-all shrink-0 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              {isMigrating ? (
-                <div className="spinner animate-spin w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" />
-              ) : (
-                <>
-                  <Plus className="w-3.5 h-3.5" />
-                  {getAddressT("migrate_addresses_btn")}
-                </>
-              )}
-            </button>
-          </div>
-        )}
+          )}
 
         {/* Submit button */}
         <button

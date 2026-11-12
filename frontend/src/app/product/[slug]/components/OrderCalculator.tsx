@@ -9,6 +9,7 @@ import {
   getMemberPriceLabel,
   getShortMemberPriceLabel,
 } from "@/app/storeAuth";
+import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
 
 interface OrderCalculatorProps {
   readonly hasSeries: boolean;
@@ -26,6 +27,60 @@ interface OrderCalculatorProps {
   readonly handleAddToCart: () => void;
   readonly onOpenSupplierChat?: () => void;
 }
+
+const CHAT_CTA_COPY: Record<
+  SupportedSeoLang,
+  { askSupplier: string; loginForChat: string; decPkg: string; incPkg: string }
+> = {
+  tr: {
+    askSupplier: "Tedarikçiye Sor / Özel Fiyat İste (Canlı)",
+    loginForChat: "Canlı Sohbet & Özel Fiyat İçin Giriş Yap",
+    decPkg: "Paket sayısını azalt",
+    incPkg: "Paket sayısını artır",
+  },
+  en: {
+    askSupplier: "Ask Manufacturer / Request Custom Price (Live)",
+    loginForChat: "Sign In for Live B2B Chat & Custom Pricing",
+    decPkg: "Decrease pack quantity",
+    incPkg: "Increase pack quantity",
+  },
+  ru: {
+    askSupplier: "Написать фабрике / Запросить спеццену (Чат)",
+    loginForChat: "Войдите для онлайн-чата с фабрикой и спеццены",
+    decPkg: "Уменьшить количество серий",
+    incPkg: "Увеличить количество серий",
+  },
+  ar: {
+    askSupplier: "اسأل المصنع / اطلب سعر جملة خاص (مباشر)",
+    loginForChat: "سجّل الدخول للدردشة المباشرة وطلب عرض سعر خاص",
+    decPkg: "تقليل عدد الباكيتات",
+    incPkg: "زيادة عدد الباكيتات",
+  },
+  de: {
+    askSupplier: "Hersteller fragen / Sonderpreis anfordern (Live)",
+    loginForChat: "Anmelden für Live-B2B-Chat & Sonderpreise",
+    decPkg: "Paketanzahl verringern",
+    incPkg: "Paketanzahl erhöhen",
+  },
+  fr: {
+    askSupplier: "Contacter le fabricant / Tarif sur mesure (Live)",
+    loginForChat: "Connectez-vous pour le chat B2B & tarif spécial",
+    decPkg: "Diminuer le nombre de lots",
+    incPkg: "Augmenter le nombre de lots",
+  },
+  pl: {
+    askSupplier: "Zapytaj producenta / Poproś o cenę specjalną (Live)",
+    loginForChat: "Zaloguj się, aby otworzyć czat B2B i negocjować cenę",
+    decPkg: "Zmniejsz liczbę pakietów",
+    incPkg: "Zwiększ liczbę pakietów",
+  },
+  bg: {
+    askSupplier: "Попитай фабриката / Поискай специална цена (Чат)",
+    loginForChat: "Влезте за чат на живо и индивидуална оферта",
+    decPkg: "Намали броя серии",
+    incPkg: "Увеличи броя серии",
+  },
+};
 
 export default function OrderCalculator({
   hasSeries,
@@ -45,9 +100,11 @@ export default function OrderCalculator({
 }: OrderCalculatorProps) {
   const isAuthenticated = useIsStoreAuthenticated();
   const isMemberLoggedIn = useIsStoreMemberLoggedIn();
+  const safeLang = normalizeSeoLang(lang, "tr");
+  const cta = CHAT_CTA_COPY[safeLang];
+
   return (
     <>
-      {/* A. SERIES PACK SALES CALCULATOR */}
       {hasSeries && (
         <div className="flex flex-col gap-3.5 pt-4 border-t border-cultured">
           <div className="flex items-center justify-between select-none">
@@ -59,7 +116,6 @@ export default function OrderCalculator({
             </span>
           </div>
 
-          {/* Pack sizes/ratios content */}
           <div>
             <span className="block text-[9px] uppercase font-bold text-sonic-silver mb-2 tracking-[0.5px] select-none">
               {t("pkg_content", lang)}
@@ -82,7 +138,6 @@ export default function OrderCalculator({
             </div>
           </div>
 
-          {/* Quantity counters */}
           <div className="bg-[#fafafa] border border-cultured p-3.5 rounded-[10px] flex items-center justify-between shadow-inner select-none">
             <span className="text-[10px] font-extrabold text-onyx uppercase tracking-[0.5px]">
               {t("pkg_qty_label", lang)}
@@ -91,6 +146,7 @@ export default function OrderCalculator({
             <div className="flex items-center bg-white border border-cultured rounded-[5px] p-0.5 shadow-sm">
               <button
                 type="button"
+                aria-label={cta.decPkg}
                 onClick={() => handleAdjustPkgQty(-1)}
                 className="w-7 h-7 rounded-[5px] border-none bg-transparent hover:bg-[#fafafa] flex items-center justify-center font-bold text-sm cursor-pointer text-onyx select-none transition-colors"
               >
@@ -98,12 +154,14 @@ export default function OrderCalculator({
               </button>
               <input
                 type="text"
+                aria-label={t("pkg_qty_label", lang)}
                 className="w-10 text-center font-extrabold text-xs focus:outline-none border-none bg-transparent text-eerie-black"
                 value={pkgQty}
                 readOnly
               />
               <button
                 type="button"
+                aria-label={cta.incPkg}
                 onClick={() => handleAdjustPkgQty(1)}
                 className="w-7 h-7 rounded-[5px] border-none bg-transparent hover:bg-[#fafafa] flex items-center justify-center font-bold text-sm cursor-pointer text-onyx select-none transition-colors"
               >
@@ -114,7 +172,6 @@ export default function OrderCalculator({
         </div>
       )}
 
-      {/* B2B CALCULATIONS SUMMARY */}
       <div className="bg-[#fafafa] border border-cultured p-4.5 rounded-[10px] flex flex-col gap-3.5 shadow-inner mt-2">
         <span className="text-[10px] font-extrabold text-salmon-pink uppercase tracking-[0.5px] block select-none">
           {t("order_summary", lang)}
@@ -155,7 +212,6 @@ export default function OrderCalculator({
         </div>
       </div>
 
-      {/* Add to Inquiry Cart Button */}
       <button
         type="button"
         onClick={isAuthenticated ? handleAddToCart : () => openStoreAuthModal("login")}
@@ -174,7 +230,6 @@ export default function OrderCalculator({
         )}
       </button>
 
-      {/* Ask Supplier / Request Custom Price Button (Centrifuge Live B2B Chat) */}
       {onOpenSupplierChat && (
         <button
           type="button"
@@ -184,12 +239,12 @@ export default function OrderCalculator({
           {isMemberLoggedIn ? (
             <>
               <MessageSquare className="w-4 h-4 text-purple-300" />
-              <span>Tedarikçiye Sor / Özel Fiyat İste (Canlı)</span>
+              <span>{cta.askSupplier}</span>
             </>
           ) : (
             <>
               <Lock className="w-4 h-4 text-purple-300" />
-              <span>Canlı Sohbet & Özel Fiyat İçin Giriş Yap</span>
+              <span>{cta.loginForChat}</span>
             </>
           )}
         </button>

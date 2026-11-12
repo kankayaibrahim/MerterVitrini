@@ -3,7 +3,16 @@
 import React, { useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import { Search, ShoppingBag, Heart, User, ChevronDown, Menu, Smartphone } from "lucide-react";
-import { languages, t, getCategoryPrefix as getCategoryPrefixFn, getCategoryTitle, getCategoryUrl } from "@/app/i18n";
+import {
+  languages,
+  t,
+  getCategoryPrefix as getCategoryPrefixFn,
+  getCategoryTitle,
+  getCategoryUrl,
+  normalizeLangCode,
+  pickLangText,
+  SupportedLangCode,
+} from "@/app/i18n";
 import { Category } from "@/types/store";
 import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/app/utils";
@@ -40,6 +49,202 @@ interface CurrencyOption {
   code: string;
   label: string;
   flag: string;
+}
+
+interface HeaderTexts {
+  manufacturers: string;
+  buyingLeads: string;
+  b2bServices: string;
+  androidApp: string;
+  officialAndroidApp: string;
+  getApk: string;
+  submitSearch: string;
+  myWishlist: string;
+  myCart: string;
+  userMenu: string;
+  loginOrRegister: string;
+  emailUnverifiedShort: string;
+  emailUnverified: string;
+  verifyNow: string;
+}
+
+const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
+  tr: {
+    manufacturers: "ÜRETİCİ FİRMALAR",
+    buyingLeads: "ALIM TALEPLERİ (RFQ)",
+    b2bServices: "LOJİSTİK & HİZMETLER",
+    androidApp: "ANDROID APK",
+    officialAndroidApp: "Resmi Android Uygulaması",
+    getApk: "APK İNDİR",
+    submitSearch: "Arama yap",
+    myWishlist: "Favorilerim",
+    myCart: "Sepetim",
+    userMenu: "Kullanıcı menüsü",
+    loginOrRegister: "Giriş yap veya kayıt ol",
+    emailUnverifiedShort: "⚠️ Mail Onaysız",
+    emailUnverified: "⚠️ E-Posta Onaysız",
+    verifyNow: "Doğrula",
+  },
+  en: {
+    manufacturers: "MANUFACTURERS",
+    buyingLeads: "BUYING LEADS (RFQ)",
+    b2bServices: "B2B SERVICES",
+    androidApp: "ANDROID APP",
+    officialAndroidApp: "Official Android App",
+    getApk: "GET APK",
+    submitSearch: "Submit search",
+    myWishlist: "My Wishlist",
+    myCart: "My Cart",
+    userMenu: "User menu",
+    loginOrRegister: "Login or register",
+    emailUnverifiedShort: "⚠️ Unverified Email",
+    emailUnverified: "⚠️ Email Unverified",
+    verifyNow: "Verify",
+  },
+  ru: {
+    manufacturers: "ПРОИЗВОДИТЕЛИ",
+    buyingLeads: "ЗАПРОСЫ ЗАКУПОК (RFQ)",
+    b2bServices: "ЛОГИСТИКА И УСЛУГИ",
+    androidApp: "ANDROID APK",
+    officialAndroidApp: "Официальное Android-приложение",
+    getApk: "СКАЧАТЬ APK",
+    submitSearch: "Найти",
+    myWishlist: "Избранное",
+    myCart: "Моя корзина",
+    userMenu: "Меню пользователя",
+    loginOrRegister: "Войти или зарегистрироваться",
+    emailUnverifiedShort: "⚠️ Почта не подтв.",
+    emailUnverified: "⚠️ Email не подтвержден",
+    verifyNow: "Подтвердить",
+  },
+  ar: {
+    manufacturers: "المصنّعون",
+    buyingLeads: "طلبات الشراء (RFQ)",
+    b2bServices: "الشحن والخدمات",
+    androidApp: "تطبيق أندرويد",
+    officialAndroidApp: "تطبيق أندرويد الرسمي",
+    getApk: "تحميل APK",
+    submitSearch: "بحث",
+    myWishlist: "المفضلة",
+    myCart: "سلتي",
+    userMenu: "قائمة المستخدم",
+    loginOrRegister: "تسجيل الدخول أو إنشاء حساب",
+    emailUnverifiedShort: "⚠️ البريد غير مؤكد",
+    emailUnverified: "⚠️ البريد الإلكتروني غير مؤكد",
+    verifyNow: "تأكيد",
+  },
+  de: {
+    manufacturers: "HERSTELLER",
+    buyingLeads: "KAUFGESUCHE (RFQ)",
+    b2bServices: "B2B-SERVICES",
+    androidApp: "ANDROID APP",
+    officialAndroidApp: "Offizielle Android-App",
+    getApk: "APK LADEN",
+    submitSearch: "Suche starten",
+    myWishlist: "Meine Favoriten",
+    myCart: "Mein Warenkorb",
+    userMenu: "Benutzermenü",
+    loginOrRegister: "Anmelden oder registrieren",
+    emailUnverifiedShort: "⚠️ E-Mail unbestätigt",
+    emailUnverified: "⚠️ E-Mail nicht bestätigt",
+    verifyNow: "Bestätigen",
+  },
+  fr: {
+    manufacturers: "FABRICANTS",
+    buyingLeads: "APPELS D'OFFRES (RFQ)",
+    b2bServices: "SERVICES B2B",
+    androidApp: "APP ANDROID",
+    officialAndroidApp: "Application Android Officielle",
+    getApk: "TÉLÉCHARGER APK",
+    submitSearch: "Lancer la recherche",
+    myWishlist: "Mes Favoris",
+    myCart: "Mon Panier",
+    userMenu: "Menu utilisateur",
+    loginOrRegister: "Connexion ou inscription",
+    emailUnverifiedShort: "⚠️ E-mail non vérifié",
+    emailUnverified: "⚠️ Adresse e-mail non vérifiée",
+    verifyNow: "Vérifier",
+  },
+  pl: {
+    manufacturers: "PRODUCENCI",
+    buyingLeads: "ZAPYTANIA OFERTOWE (RFQ)",
+    b2bServices: "USŁUGI B2B",
+    androidApp: "APLIKACJA ANDROID",
+    officialAndroidApp: "Oficjalna aplikacja Android",
+    getApk: "POBIERZ APK",
+    submitSearch: "Szukaj",
+    myWishlist: "Ulubione",
+    myCart: "Mój koszyk",
+    userMenu: "Menu użytkownika",
+    loginOrRegister: "Zaloguj lub zarejestruj się",
+    emailUnverifiedShort: "⚠️ E-mail niezweryf.",
+    emailUnverified: "⚠️ E-mail niezweryfikowany",
+    verifyNow: "Zweryfikuj",
+  },
+  bg: {
+    manufacturers: "ПРОИЗВОДИТЕЛИ",
+    buyingLeads: "ЗАПИТВАНИЯ (RFQ)",
+    b2bServices: "B2B УСЛУГИ",
+    androidApp: "ANDROID ПРИЛОЖЕНИЕ",
+    officialAndroidApp: "Официално Android приложение",
+    getApk: "ИЗТЕГЛИ APK",
+    submitSearch: "Търсене",
+    myWishlist: "Любими",
+    myCart: "Моята количка",
+    userMenu: "Потребителско меню",
+    loginOrRegister: "Вход или регистрация",
+    emailUnverifiedShort: "⚠️ Непотвърден имейл",
+    emailUnverified: "⚠️ Имейлът не е потвърден",
+    verifyNow: "Потвърди",
+  },
+};
+
+const QUERY_LOCALIZED_ROUTES = [
+  "/product/",
+  "/ureticiler",
+  "/alim-talepleri",
+  "/hizmet-saglayicilar",
+  "/mobil-uygulama",
+] as const;
+
+function buildQueryLocalizedRouteHref(basePath: string, lang: string): string {
+  const safeCode = normalizeLangCode(lang);
+  if (safeCode === "tr") {
+    return basePath;
+  }
+  return `${basePath}?lang=${safeCode}`;
+}
+
+function isQueryLocalizedPathname(pathname: string): boolean {
+  return QUERY_LOCALIZED_ROUTES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`)
+  );
+}
+
+function resolveLanguageSwitchUrl(
+  pathname: string,
+  currentSearch: string,
+  oldPrefix: string,
+  newCode: string
+): string | null {
+  const newPrefix = getCategoryPrefixFn(newCode);
+  if (pathname === `/${oldPrefix}`) {
+    return `/${newPrefix}${currentSearch}`;
+  }
+  if (pathname.startsWith(`/${oldPrefix}/`)) {
+    return `${pathname.replace(`/${oldPrefix}/`, `/${newPrefix}/`)}${currentSearch}`;
+  }
+  if (isQueryLocalizedPathname(pathname)) {
+    const params = new URLSearchParams(currentSearch);
+    if (normalizeLangCode(newCode) === "tr") {
+      params.delete("lang");
+    } else {
+      params.set("lang", normalizeLangCode(newCode));
+    }
+    const qs = params.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }
+  return null;
 }
 
 const currenciesList: readonly CurrencyOption[] = [
@@ -91,6 +296,8 @@ function HeaderTopBar({
 }: Readonly<HeaderTopBarProps>) {
   const currentLangObj = languages.find((l) => l.code === lang) || languages[0];
   const activeCurrObj = currenciesList.find((c) => c.code === displayCurrency) || currenciesList[0];
+  const ui = pickLangText(lang, HEADER_TEXTS);
+  const closeLabel = t("close", lang);
 
   return (
     <div className="hidden sm:block border-b border-cultured py-2.5 text-[13px] text-sonic-silver">
@@ -153,29 +360,29 @@ function HeaderTopBar({
         {/* Language & Currency Selectors */}
         <div className="flex items-center gap-2">
           <Link
-            href="/ureticiler"
+            href={buildQueryLocalizedRouteHref("/ureticiler", lang)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
           >
-            <span>{lang === "tr" ? "ÜRETİCİ FİRMALAR" : "MANUFACTURERS"}</span>
+            <span>{ui.manufacturers}</span>
           </Link>
           <Link
-            href="/alim-talepleri"
+            href={buildQueryLocalizedRouteHref("/alim-talepleri", lang)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
           >
-            <span>{lang === "tr" ? "ALIM TALEPLERİ (RFQ)" : "BUYING LEADS (RFQ)"}</span>
+            <span>{ui.buyingLeads}</span>
           </Link>
           <Link
-            href="/hizmet-saglayicilar"
+            href={buildQueryLocalizedRouteHref("/hizmet-saglayicilar", lang)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
           >
-            <span>{lang === "tr" ? "LOJİSTİK & HİZMETLER" : "B2B SERVICES"}</span>
+            <span>{ui.b2bServices}</span>
           </Link>
           <Link
-            href="/mobil-uygulama"
+            href={buildQueryLocalizedRouteHref("/mobil-uygulama", lang)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-50 hover:bg-violet-100 text-violet-800 border border-violet-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
           >
             <Smartphone className="w-3.5 h-3.5 text-violet-600 shrink-0" />
-            <span>{lang === "tr" ? "ANDROID APK" : "ANDROID APP"}</span>
+            <span>{ui.androidApp}</span>
           </Link>
           {/* Language selector */}
           <div className="relative">
@@ -198,7 +405,7 @@ function HeaderTopBar({
               <>
                 <button
                   type="button"
-                  aria-label="Kapat"
+                  aria-label={closeLabel}
                   tabIndex={-1}
                   className="fixed inset-0 z-40 bg-transparent border-none cursor-default"
                   onClick={() => setIsLangOpen(false)}
@@ -244,7 +451,7 @@ function HeaderTopBar({
               <>
                 <button
                   type="button"
-                  aria-label="Kapat"
+                  aria-label={closeLabel}
                   tabIndex={-1}
                   className="fixed inset-0 z-40 bg-transparent border-none cursor-default"
                   onClick={() => setIsCurrencyOpen(false)}
@@ -460,7 +667,7 @@ function MobileCategoryAccordion({
       {isMobileMenuOpen && (
         <button
           type="button"
-          aria-label="Kapat"
+          aria-label={t("close", lang)}
           tabIndex={-1}
           className="fixed inset-0 top-[210px] sm:top-[220px] bg-black/25 backdrop-blur-[2px] z-40 border-none cursor-default"
           onClick={() => setIsMobileMenuOpen(false)}
@@ -726,19 +933,21 @@ export default function Header({
   const handleSelectLanguage = (newCode: string) => {
     const oldPrefix = getCategoryPrefix();
     setLang(newCode);
+    const currentSearch = typeof window !== "undefined" ? window.location.search : "";
     if (typeof window !== "undefined") {
       localStorage.setItem("preferred_lang", newCode);
     }
     setIsLangOpen(false);
     setCurrentPage(1);
-    if (pathname.includes(`/${oldPrefix}/`)) {
-      const newPrefix = getCategoryPrefixFn(newCode);
-      const newPath = pathname.replace(`/${oldPrefix}/`, `/${newPrefix}/`);
-      router.push(newPath);
+    const nextUrl = resolveLanguageSwitchUrl(pathname, currentSearch, oldPrefix, newCode);
+    if (nextUrl) {
+      router.push(nextUrl);
     }
   };
 
   const currentLangObj = languages.find((l) => l.code === lang) || languages[0];
+  const ui = pickLangText(lang, HEADER_TEXTS);
+  const closeLabel = t("close", lang);
 
   return (
     <header className="w-full bg-white select-none border-b border-cultured">
@@ -747,14 +956,14 @@ export default function Header({
         <div className="flex items-center gap-1.5 min-w-0">
           <Smartphone className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
           <span className="text-[10.5px] font-bold tracking-wide truncate">
-            {lang === "tr" ? "Resmi Android Uygulaması" : "Official Android App"}
+            {ui.officialAndroidApp}
           </span>
         </div>
         <Link
-          href="/mobil-uygulama"
+          href={buildQueryLocalizedRouteHref("/mobil-uygulama", lang)}
           className="px-2.5 py-1 bg-[#D4AF37] text-[#111111] text-[10px] font-extrabold tracking-wider uppercase shrink-0 no-underline"
         >
-          {lang === "tr" ? "APK İNDİR" : "GET APK"}
+          {ui.getApk}
         </Link>
       </div>
 
@@ -788,7 +997,7 @@ export default function Header({
                 />
                 <button
                   type="button"
-                  aria-label={lang === "tr" ? "Arama yap" : "Submit search"}
+                  aria-label={ui.submitSearch}
                   className="absolute right-0 top-0 bottom-0 px-1 bg-white hover:text-accent-gold transition-colors flex items-center justify-center cursor-pointer text-eerie-black border-none"
                 >
                   <Search className="w-4 h-4" />
@@ -833,7 +1042,7 @@ export default function Header({
                   <>
                     <button
                       type="button"
-                      aria-label="Kapat"
+                      aria-label={closeLabel}
                       tabIndex={-1}
                       className="fixed inset-0 z-40 bg-transparent border-none cursor-default"
                       onClick={() => setIsLangOpen(false)}
@@ -878,7 +1087,7 @@ export default function Header({
                   <>
                     <button
                       type="button"
-                      aria-label="Kapat"
+                      aria-label={closeLabel}
                       tabIndex={-1}
                       className="fixed inset-0 z-40 bg-transparent border-none cursor-default"
                       onClick={() => setIsCurrencyOpen(false)}
@@ -911,7 +1120,7 @@ export default function Header({
                 type="button"
                 onClick={() => setIsWishlistOpen(true)}
                 className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
-                aria-label={lang === "tr" ? "Favorilerim" : "My Wishlist"}
+                aria-label={ui.myWishlist}
               >
                 <Heart className="w-[19px] h-[19px]" />
                 <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
@@ -926,7 +1135,7 @@ export default function Header({
                     type="button"
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                     className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
-                    aria-label={lang === "tr" ? "Kullanıcı menüsü" : "User menu"}
+                    aria-label={ui.userMenu}
                   >
                     <User className="w-[19px] h-[19px] text-accent-gold" />
                     {user.email_verified === false && (
@@ -941,7 +1150,7 @@ export default function Header({
                       setIsAuthOpen(true);
                     }}
                     className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
-                    aria-label={lang === "tr" ? "Giriş yap veya kayıt ol" : "Login or register"}
+                    aria-label={ui.loginOrRegister}
                   >
                     <User className="w-[19px] h-[19px]" />
                   </button>
@@ -951,7 +1160,7 @@ export default function Header({
                   <>
                     <button
                       type="button"
-                      aria-label="Kapat"
+                      aria-label={closeLabel}
                       tabIndex={-1}
                       className="fixed inset-0 z-40 bg-transparent border-none cursor-default"
                       onClick={() => setIsUserMenuOpen(false)}
@@ -961,16 +1170,17 @@ export default function Header({
                         {user.first_name} {user.last_name}
                       </div>
                       {user.email_verified === false && (
-                        <div
+                        <button
+                          type="button"
                           onClick={() => {
                             setIsUserMenuOpen(false);
                             router.push("/profile");
                           }}
-                          className="px-3 py-1.5 bg-amber-50 border-b border-amber-200 text-amber-800 text-[10px] font-bold flex items-center justify-between cursor-pointer"
+                          className="w-full px-3 py-1.5 bg-amber-50 border-x-0 border-t-0 border-b border-amber-200 text-amber-800 text-[10px] font-bold flex items-center justify-between gap-2 cursor-pointer"
                         >
-                          <span>⚠️ Mail Onaysız</span>
-                          <span className="underline text-[9px]">Doğrula</span>
-                        </div>
+                          <span>{ui.emailUnverifiedShort}</span>
+                          <span className="underline text-[9px]">{ui.verifyNow}</span>
+                        </button>
                       )}
                       <button
                         type="button"
@@ -987,7 +1197,7 @@ export default function Header({
                         onClick={handleLogout}
                         className="w-full text-left px-3 py-2.5 border-t border-cultured text-xs font-bold text-red-500 hover:bg-red-50 transition-colors border-none bg-transparent cursor-pointer"
                       >
-                        {t("logout", lang) || "Çıkış Yap"}
+                        {t("logout", lang)}
                       </button>
                     </div>
                   </>
@@ -999,7 +1209,7 @@ export default function Header({
                 type="button"
                 onClick={() => setIsCartOpen(true)}
                 className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent shrink-0"
-                aria-label={lang === "tr" ? "Sepetim" : "My Cart"}
+                aria-label={ui.myCart}
               >
                 <ShoppingBag className="w-[19px] h-[19px]" />
                 <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
@@ -1022,7 +1232,7 @@ export default function Header({
               />
               <button
                 type="button"
-                aria-label={lang === "tr" ? "Arama yap" : "Submit search"}
+                aria-label={ui.submitSearch}
                 className="absolute right-0 top-0 bottom-0 px-1 bg-white hover:text-accent-gold transition-colors flex items-center justify-center cursor-pointer text-eerie-black border-none"
               >
                 <Search className="w-4 h-4" />
@@ -1054,7 +1264,7 @@ export default function Header({
                     <>
                       <button
                         type="button"
-                        aria-label="Kapat"
+                        aria-label={closeLabel}
                         tabIndex={-1}
                         className="fixed inset-0 z-40 bg-transparent border-none cursor-default"
                         onClick={() => setIsUserMenuOpen(false)}
@@ -1064,16 +1274,17 @@ export default function Header({
                           {user.email}
                         </div>
                         {user.email_verified === false && (
-                          <div
+                          <button
+                            type="button"
                             onClick={() => {
                               setIsUserMenuOpen(false);
                               router.push("/profile");
                             }}
-                            className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-[10px] font-bold flex items-center justify-between cursor-pointer hover:bg-amber-100 transition-colors"
+                            className="w-full px-4 py-2 bg-amber-50 border-x-0 border-t-0 border-b border-amber-200 text-amber-800 text-[10px] font-bold flex items-center justify-between gap-2 cursor-pointer hover:bg-amber-100 transition-colors"
                           >
-                            <span>⚠️ E-Posta Onaysız</span>
-                            <span className="underline text-[9px]">Doğrula</span>
-                          </div>
+                            <span>{ui.emailUnverified}</span>
+                            <span className="underline text-[9px]">{ui.verifyNow}</span>
+                          </button>
                         )}
                         <button
                           type="button"
@@ -1116,7 +1327,7 @@ export default function Header({
               type="button"
               onClick={() => setIsWishlistOpen(true)}
               className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
-              aria-label={lang === "tr" ? "Favorilerim" : "My Wishlist"}
+              aria-label={ui.myWishlist}
             >
               <Heart className="w-[20px] h-[20px]" />
               <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">
@@ -1129,7 +1340,7 @@ export default function Header({
               type="button"
               onClick={() => setIsCartOpen(true)}
               className="p-1 hover:text-accent-gold transition-colors relative cursor-pointer border-none bg-transparent"
-              aria-label={lang === "tr" ? "Sepetim" : "My Cart"}
+              aria-label={ui.myCart}
             >
               <ShoppingBag className="w-[20px] h-[20px]" />
               <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">

@@ -48,13 +48,21 @@ export interface ApiFetchOptions extends RequestInit {
   tags?: string[];
 }
 
+export const SSR_PREFETCH_HEADERS: Record<string, string> = {
+  "X-SSR-Prefetch": "1",
+};
+
 export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {}): Promise<T | null> {
   try {
     // Determine target host base path.
     // On the server (SSR / Metadata generation), we query the backend API.
     // In the browser, we use relative paths mapped via reverse proxy.
     const isServer = typeof window === "undefined";
-    const baseUrl = isServer ? (process.env.INTERNAL_API_URL || "https://mertervitrini.com.tr") : "";
+    const defaultInternalUrl =
+      process.env.NODE_ENV === "development"
+        ? "http://127.0.0.1:8080"
+        : "https://mertervitrini.com.tr";
+    const baseUrl = isServer ? (process.env.INTERNAL_API_URL || defaultInternalUrl) : "";
     const url = `${baseUrl}/api/v1/store${endpoint}`;
 
     const { revalidate = 60, tags, ...fetchOptions } = options;
@@ -65,6 +73,7 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
       next: nextConfig,
       headers: {
         Accept: "application/json",
+        ...(isServer ? SSR_PREFETCH_HEADERS : {}),
         ...fetchOptions.headers,
       },
     });

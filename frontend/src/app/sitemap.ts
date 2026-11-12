@@ -1,204 +1,307 @@
-import { MetadataRoute } from "next";
+import type { MetadataRoute } from "next";
+import {
+  buildPrefixedAlternates,
+  buildQueryLangAlternates,
+  SITE_ORIGIN,
+  ssrStoreFetch,
+  SUPPORTED_SEO_LANGS,
+} from "@/utils/seoHelpers";
 
 export const revalidate = 3600;
 
-interface Category {
+interface SitemapCategory {
   id: string;
-  title: string;
   slug?: string;
-  children?: Category[];
+  children?: SitemapCategory[];
 }
 
-interface Product {
+interface SitemapProduct {
   id: string;
-  slug: string;
+  slug?: string;
   updated_at?: string;
 }
 
-interface Language {
-  code: string;
-  categoryPrefix: string;
-}
-
-interface BlogPost {
+interface SitemapBlogPost {
   id: string;
-  slug: string;
+  slug?: string;
   translations?: Record<string, { slug?: string; title?: string }>;
   updated_at?: string;
 }
 
-// Fetch active languages from DB API with robust fallback
-async function fetchActiveLanguages(): Promise<Language[]> {
-  try {
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/languages?t=" + Date.now());
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        return data.map((l: { code: string; categoryPrefix: string }) => {
-          let code = l.code;
-          if (code.startsWith("en_")) code = "en";
-          else if (code.startsWith("tr_")) code = "tr";
-          else if (code.startsWith("pl_")) code = "pl";
-          else if (code.startsWith("bg_")) code = "bg";
-          else if (code.startsWith("de_")) code = "de";
-          else if (code.startsWith("fr_")) code = "fr";
-          else if (code.startsWith("ru_")) code = "ru";
-          else if (code.startsWith("ar_")) code = "ar";
-          return { ...l, code };
-        });
+interface SitemapStaticPage {
+  slug?: string;
+  updated_at?: string;
+}
+
+interface SitemapBrand {
+  id: string;
+  slug?: string;
+  is_active?: boolean;
+  updated_at?: string;
+}
+
+function parseProductsPayload(raw: unknown): SitemapProduct[] {
+  if (Array.isArray(raw)) return raw as SitemapProduct[];
+  if (raw && typeof raw === "object" && "products" in raw) {
+    const list = (raw as { products?: unknown }).products;
+    if (Array.isArray(list)) return list as SitemapProduct[];
+  }
+  return [];
+}
+
+function parseBlogPayload(raw: unknown): SitemapBlogPost[] {
+  if (Array.isArray(raw)) return raw as SitemapBlogPost[];
+  if (raw && typeof raw === "object" && "posts" in raw) {
+    const list = (raw as { posts?: unknown }).posts;
+    if (Array.isArray(list)) return list as SitemapBlogPost[];
+  }
+  return [];
+}
+
+function collectCategoryPaths(
+  nodes: readonly SitemapCategory[],
+  parentSlugs: readonly string[] = []
+): string[] {
+  const paths: string[] = [];
+  for (const node of nodes) {
+    if (!node.slug) continue;
+    const trail = [...parentSlugs, node.slug];
+    paths.push(trail.join("/"));
+    if (node.children && node.children.length > 0) {
+      paths.push(...collectCategoryPaths(node.children, trail));
+    }
+  }
+  return paths;
+}
+
+function appendPrefixedStaticRoutes(
+  entries: MetadataRoute.Sitemap,
+  now: Date
+): void {
+  const subRoutes: ReadonlyArray<{
+    subPath: string;
+    freq: "daily" | "weekly" | "monthly";
+    priority: number;
+  }> = [
+    { subPath: "", freq: "daily", priority: 0.95 },
+    { subPath: "tum-urunler", freq: "daily", priority: 0.9 },
+    { subPath: "b2b", freq: "weekly", priority: 0.85 },
+    { subPath: "faq", freq: "weekly", priority: 0.8 },
+    { subPath: "contact", freq: "monthly", priority: 0.8 },
+    { subPath: "tedarikci-basvuru", freq: "monthly", priority: 0.8 },
+    { subPath: "site-haritasi", freq: "weekly", priority: 0.7 },
+    { subPath: "blog", freq: "daily", priority: 0.8 },
+  ];
+
+  for (const route of subRoutes) {
+    for (const lang of SUPPORTED_SEO_LANGS) {
+      const alt = buildPrefixedAlternates(route.subPath, lang);
+      entries.push({
+        url: alt.canonical,
+        lastModified: now,
+        changeFrequency: route.freq,
+        priority: route.priority,
+        alternates: { languages: alt.languages },
+      });
+    }
+  }
+}
+
+function appendStandaloneDirectoryRoutes(
+  entries: MetadataRoute.Sitemap,
+  brands: readonly SitemapBrand[],
+  now: Date
+): void {
+  const standalonePaths: ReadonlyArray<{
+    path: string;
+    freq: "daily" | "weekly" | "monthly";
+    priority: number;
+  }> = [
+    { path: "/ureticiler", freq: "daily", priority: 0.9 },
+    { path: "/alim-talepleri", freq: "daily", priority: 0.85 },
+    { path: "/hizmet-saglayicilar", freq: "weekly", priority: 0.8 },
+    { path: "/mobil-uygulama", freq: "weekly", priority: 0.75 },
+    { path: "/account-deletion", freq: "monthly", priority: 0.4 },
+  ];
+
+  for (const item of standalonePaths) {
+    const alt = buildQueryLangAlternates(item.path, "tr");
+    entries.push({
+      url: alt.canonical,
+      lastModified: now,
+      changeFrequency: item.freq,
+      priority: item.priority,
+      alternates: { languages: alt.languages },
+    });
+  }
+
+  for (const brand of brands) {
+    if (!brand.slug || brand.is_active === false) continue;
+    const modDate = brand.updated_at ? new Date(brand.updated_at) : now;
+    const showcaseAlt = buildQueryLangAlternates(
+      `/ureticiler/${brand.slug}`,
+      "tr"
+    );
+    const editorialAlt = buildQueryLangAlternates(
+      `/ureticiler/${brand.slug}/tanitim`,
+      "tr"
+    );
+    entries.push(
+      {
+        url: showcaseAlt.canonical,
+        lastModified: modDate,
+        changeFrequency: "daily",
+        priority: 0.85,
+        alternates: { languages: showcaseAlt.languages },
+      },
+      {
+        url: editorialAlt.canonical,
+        lastModified: modDate,
+        changeFrequency: "weekly",
+        priority: 0.8,
+        alternates: { languages: editorialAlt.languages },
+      }
+    );
+  }
+}
+
+function appendCmsPages(
+  entries: MetadataRoute.Sitemap,
+  pages: readonly SitemapStaticPage[],
+  now: Date
+): void {
+  const defaultSlugs = [
+    "hakkimizda",
+    "gizlilik-politikasi",
+    "mesafeli-satis-sozlesmesi",
+    "iptal-iade-kosullari",
+  ];
+  const slugMap = new Map<string, Date>();
+  for (const s of defaultSlugs) {
+    slugMap.set(s, now);
+  }
+  for (const p of pages) {
+    if (p.slug) {
+      slugMap.set(p.slug, p.updated_at ? new Date(p.updated_at) : now);
+    }
+  }
+
+  for (const [slug, modDate] of slugMap.entries()) {
+    for (const lang of SUPPORTED_SEO_LANGS) {
+      const alt = buildPrefixedAlternates(`pages/${slug}`, lang);
+      entries.push({
+        url: alt.canonical,
+        lastModified: modDate,
+        changeFrequency: "monthly",
+        priority: 0.65,
+        alternates: { languages: alt.languages },
+      });
+    }
+  }
+}
+
+function appendBlogPosts(
+  entries: MetadataRoute.Sitemap,
+  posts: readonly SitemapBlogPost[],
+  now: Date
+): void {
+  for (const post of posts) {
+    const modDate = post.updated_at ? new Date(post.updated_at) : now;
+    const languages: Record<string, string> = {};
+
+    for (const lang of SUPPORTED_SEO_LANGS) {
+      const localizedSlug =
+        post.translations?.[lang]?.slug ||
+        post.translations?.en?.slug ||
+        post.translations?.tr?.slug ||
+        post.slug;
+      if (localizedSlug) {
+        languages[lang] = `${SITE_ORIGIN}/${lang}/blog/${localizedSlug}`;
       }
     }
-  } catch (err) {
-    console.error("[SITEMAP] Failed to fetch active languages:", err);
+    if (!languages.en && !languages.tr) continue;
+    languages["x-default"] = languages.en || languages.tr;
+
+    for (const lang of SUPPORTED_SEO_LANGS) {
+      const targetUrl = languages[lang];
+      if (!targetUrl) continue;
+      entries.push({
+        url: targetUrl,
+        lastModified: modDate,
+        changeFrequency: "weekly",
+        priority: 0.75,
+        alternates: { languages },
+      });
+    }
   }
-  return [
-    { code: "tr", categoryPrefix: "tr" },
-    { code: "en", categoryPrefix: "en" },
-    { code: "pl", categoryPrefix: "pl" },
-    { code: "bg", categoryPrefix: "bg" },
-    { code: "ar", categoryPrefix: "ar" },
-    { code: "ru", categoryPrefix: "ru" },
-    { code: "de", categoryPrefix: "de" },
-    { code: "fr", categoryPrefix: "fr" },
-  ];
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = "https://mertervitrini.com.tr";
+  const now = new Date();
   const sitemapUrls: MetadataRoute.Sitemap = [];
 
-  try {
-    // 1. Root Domain Homepage
-    sitemapUrls.push({
-      url: baseUrl,
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 1.0,
-    });
+  const rootAlternates = buildPrefixedAlternates("", "en");
+  sitemapUrls.push({
+    url: SITE_ORIGIN,
+    lastModified: now,
+    changeFrequency: "daily",
+    priority: 1,
+    alternates: {
+      languages: {
+        ...rootAlternates.languages,
+        "x-default": SITE_ORIGIN,
+      },
+    },
+  });
 
-    const langs = await fetchActiveLanguages();
-    const uniquePrefixes = Array.from(new Set(langs.map((l) => l.categoryPrefix)));
+  appendPrefixedStaticRoutes(sitemapUrls, now);
 
-    // 2. Language Root Homepages (e.g. /tr, /en, /ru)
-    uniquePrefixes.forEach((prefix) => {
-      sitemapUrls.push(
-        {
-          url: `${baseUrl}/${prefix}`,
-          lastModified: new Date(),
-          changeFrequency: "daily",
-          priority: 0.95,
-        },
-        {
-          url: `${baseUrl}/${prefix}/tum-urunler`,
-          lastModified: new Date(),
-          changeFrequency: "daily",
-          priority: 0.85,
-        },
-        {
-          url: `${baseUrl}/${prefix}/tedarikci-basvuru`,
-          lastModified: new Date(),
-          changeFrequency: "monthly",
-          priority: 0.8,
-        }
-      );
-    });
+  const [categoriesRaw, productsRaw, blogRaw, brandsRaw, pagesRaw] =
+    await Promise.all([
+      ssrStoreFetch<SitemapCategory[]>("/categories", 3600),
+      ssrStoreFetch<unknown>("/products?limit=10000", 3600),
+      ssrStoreFetch<unknown>("/blog", 3600),
+      ssrStoreFetch<SitemapBrand[]>("/brands", 3600),
+      ssrStoreFetch<SitemapStaticPage[]>("/pages", 3600),
+    ]);
 
-    // 3. Fetch Active Categories
-    const categoriesResponse = await fetch(`${baseUrl}/api/v1/store/categories?t=${Date.now()}`);
-    if (categoriesResponse.ok) {
-      const categories: Category[] = await categoriesResponse.json();
-      
-      const extractCategoryUrls = (nodes: Category[], prefix: string, parentSlugs: string[] = []) => {
-        nodes.forEach((n) => {
-          if (n.slug) {
-            const currentTrail = [...parentSlugs, n.slug];
-            const path = currentTrail.join("/");
-            sitemapUrls.push({
-              url: `${baseUrl}/${prefix}/${path}`,
-              lastModified: new Date(),
-              changeFrequency: "weekly",
-              priority: 0.85,
-            });
-            if (n.children && n.children.length > 0) {
-              extractCategoryUrls(n.children, prefix, currentTrail);
-            }
-          }
-        });
-      };
-
-      if (Array.isArray(categories)) {
-        uniquePrefixes.forEach((prefix) => {
-          extractCategoryUrls(categories, prefix);
-        });
-      }
-    }
-
-    // 4. Fetch All Active Products (handles both array and { products: [...] } dictionary response)
-    const productsResponse = await fetch(`${baseUrl}/api/v1/store/products?limit=10000&t=${Date.now()}`);
-    if (productsResponse.ok) {
-      const prodData = await productsResponse.json();
-      let productsList: Product[] = [];
-      if (Array.isArray(prodData)) {
-        productsList = prodData;
-      } else if (prodData && typeof prodData === "object" && Array.isArray(prodData.products)) {
-        productsList = prodData.products;
-      }
-
-      productsList.forEach((p) => {
-        if (p.slug) {
-          sitemapUrls.push({
-            url: `${baseUrl}/product/${p.slug}`,
-            lastModified: p.updated_at ? new Date(p.updated_at) : new Date(),
-            changeFrequency: "daily",
-            priority: 0.9,
-          });
-        }
+  const categories = Array.isArray(categoriesRaw) ? categoriesRaw : [];
+  const categoryPaths = collectCategoryPaths(categories);
+  for (const catPath of categoryPaths) {
+    for (const lang of SUPPORTED_SEO_LANGS) {
+      const alt = buildPrefixedAlternates(catPath, lang);
+      sitemapUrls.push({
+        url: alt.canonical,
+        lastModified: now,
+        changeFrequency: "daily",
+        priority: 0.85,
+        alternates: { languages: alt.languages },
       });
     }
-
-    // 5. Fetch Blog Posts and Multi-language Blog Routes
-    try {
-      const blogResponse = await fetch(`${baseUrl}/api/v1/store/blog?t=${Date.now()}`);
-      if (blogResponse.ok) {
-        const blogData = await blogResponse.json();
-        let blogList: BlogPost[] = [];
-        if (Array.isArray(blogData)) {
-          blogList = blogData;
-        } else if (blogData && typeof blogData === "object" && Array.isArray(blogData.posts)) {
-          blogList = blogData.posts;
-        }
-
-        uniquePrefixes.forEach((prefix) => {
-          // Blog index per language
-          sitemapUrls.push({
-            url: `${baseUrl}/${prefix}/blog`,
-            lastModified: new Date(),
-            changeFrequency: "daily",
-            priority: 0.8,
-          });
-
-          // Blog articles
-          blogList.forEach((post) => {
-            const trans = post.translations?.[prefix] || post.translations?.["en"] || post.translations?.["tr"];
-            const postSlug = trans?.slug || post.slug;
-            if (postSlug) {
-              sitemapUrls.push({
-                url: `${baseUrl}/${prefix}/blog/${postSlug}`,
-                lastModified: post.updated_at ? new Date(post.updated_at) : new Date(),
-                changeFrequency: "weekly",
-                priority: 0.75,
-              });
-            }
-          });
-        });
-      }
-    } catch (blogErr) {
-      console.error("[SITEMAP] Blog fetch failed:", blogErr);
-    }
-
-  } catch (err) {
-    console.error("[SITEMAP] Failed to generate sitemap dynamically:", err);
   }
+
+  appendStandaloneDirectoryRoutes(
+    sitemapUrls,
+    Array.isArray(brandsRaw) ? brandsRaw : [],
+    now
+  );
+
+  appendCmsPages(sitemapUrls, Array.isArray(pagesRaw) ? pagesRaw : [], now);
+
+  const products = parseProductsPayload(productsRaw);
+  for (const prod of products) {
+    if (!prod.slug) continue;
+    const alt = buildQueryLangAlternates(`/product/${prod.slug}`, "tr");
+    sitemapUrls.push({
+      url: alt.canonical,
+      lastModified: prod.updated_at ? new Date(prod.updated_at) : now,
+      changeFrequency: "daily",
+      priority: 0.9,
+      alternates: { languages: alt.languages },
+    });
+  }
+
+  appendBlogPosts(sitemapUrls, parseBlogPayload(blogRaw), now);
 
   return sitemapUrls;
 }

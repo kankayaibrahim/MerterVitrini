@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -39,16 +40,58 @@ type UnifiedTokenService struct {
 	pool          *pgxpool.Pool
 }
 
+const (
+	errInvalidSessionToken   = "geçersiz oturum anahtarı"
+	errExpiredOrInvalidToken = "geçersiz veya süresi dolmuş oturum anahtarı"
+	roleSupplierLiteral      = "supplier"
+)
+
+var (
+	defaultVerifierMu sync.RWMutex
+	defaultVerifier   *UnifiedTokenService
+)
+
+// ConfigureDefaultVerifier registers the process-wide cryptographic JWT verifier.
+func ConfigureDefaultVerifier(jwtSecret, keycloakPublicKey string) {
+	svc := NewUnifiedTokenService(jwtSecret, keycloakPublicKey, nil)
+	defaultVerifierMu.Lock()
+	defaultVerifier = svc
+	defaultVerifierMu.Unlock()
+}
+
+// VerifyTokenClaims cryptographically verifies a JWT (HS256 or RS256) and validates its expiration.
+func VerifyTokenClaims(tokenStr string) (map[string]any, error) {
+	defaultVerifierMu.RLock()
+	svc := defaultVerifier
+	defaultVerifierMu.RUnlock()
+	if svc == nil {
+		return nil, errors.New(errInvalidSessionToken)
+	}
+	return svc.parseAndVerifyClaims(strings.TrimSpace(tokenStr))
+}
+
+// VerifyJWTWithKeys cryptographically verifies a JWT against explicit HS256 secret and/or RS256 public key.
+func VerifyJWTWithKeys(tokenStr, jwtSecret, keycloakPublicKey string) (map[string]any, error) {
+	svc := NewUnifiedTokenService(jwtSecret, keycloakPublicKey, nil)
+	return svc.parseAndVerifyClaims(strings.TrimSpace(tokenStr))
+}
+
 func NewUnifiedTokenService(jwtSecret, keycloakPublicKey string, pool *pgxpool.Pool) *UnifiedTokenService {
 	var parsedPub *rsa.PublicKey
 	if strings.TrimSpace(keycloakPublicKey) != "" {
 		parsedPub, _ = parseRSAPublicKey(keycloakPublicKey)
 	}
-	return &UnifiedTokenService{
+	svc := &UnifiedTokenService{
 		jwtSecret:    jwtSecret,
 		rsaPublicKey: parsedPub,
 		pool:         pool,
 	}
+	defaultVerifierMu.Lock()
+	if defaultVerifier == nil && (jwtSecret != "" || parsedPub != nil) {
+		defaultVerifier = svc
+	}
+	defaultVerifierMu.Unlock()
+	return svc
 }
 
 func (s *UnifiedTokenService) IssueSupplierJWT(u *models.SupplierUser) string {
@@ -63,7 +106,7 @@ func (s *UnifiedTokenService) IssueSupplierJWT(u *models.SupplierUser) string {
 		"alias_code":   u.AliasCode,
 		"email":        u.Email,
 		"contact_name": u.ContactName,
-		"role":         "supplier",
+		"role":         roleSupplierLiteral,
 		"iat":          now.Unix(),
 		"exp":          now.Add(7 * 24 * time.Hour).Unix(),
 	}
@@ -94,7 +137,7 @@ func (s *UnifiedTokenService) ResolvePrincipal(ctx context.Context, authHeader s
 	roleClaim, _ := claims["role"].(string)
 	brandID, _ := claims["brand_id"].(string)
 
-	if roleClaim == "supplier" || brandID != "" {
+	if roleClaim == roleSupplierLiteral || brandID != "" {
 		return s.resolveSupplierPrincipal(ctx, sub, email, brandID)
 	}
 
@@ -110,6 +153,9 @@ func (s *UnifiedTokenService) ResolvePrincipal(ctx context.Context, authHeader s
 }
 
 func (s *UnifiedTokenService) parseAndVerifyClaims(tokenStr string) (map[string]any, error) {
+	if s == nil {
+		return nil, errors.New(errInvalidSessionToken)
+	}
 	parts := strings.Split(tokenStr, ".")
 	if len(parts) != 3 {
 		return nil, errors.New(errInvalidSessionToken)
@@ -121,23 +167,18 @@ func (s *UnifiedTokenService) parseAndVerifyClaims(tokenStr string) (map[string]
 	}
 	alg, _ := headerMap["alg"].(string)
 
-	if strings.HasPrefix(strings.ToUpper(alg), "HS") && s.jwtSecret != "" {
+	if strings.EqualFold(alg, "HS256") && s.jwtSecret != "" {
 		return verifyHMACTokenClaims(tokenStr, s.jwtSecret)
 	}
 	if strings.EqualFold(alg, "RS256") && s.rsaPublicKey != nil {
 		return verifyRSATokenClaims(tokenStr, s.rsaPublicKey)
 	}
-	return decodeUnverifiedClaimsWithExp(parts[1])
+	return nil, errors.New(errInvalidSessionToken)
 }
-
-const (
-	errInvalidSessionToken   = "geçersiz oturum anahtarı"
-	errExpiredOrInvalidToken = "geçersiz veya süresi dolmuş oturum anahtarı"
-)
 
 func verifyHMACTokenClaims(tokenStr, secret string) (map[string]any, error) {
 	tok, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		if t.Method != jwt.SigningMethodHS256 {
 			return nil, fmt.Errorf("beklenmeyen imza algoritması: %v", t.Header["alg"])
 		}
 		return []byte(secret), nil
@@ -154,7 +195,7 @@ func verifyHMACTokenClaims(tokenStr, secret string) (map[string]any, error) {
 
 func verifyRSATokenClaims(tokenStr string, pub *rsa.PublicKey) (map[string]any, error) {
 	tok, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+		if t.Method != jwt.SigningMethodRS256 {
 			return nil, fmt.Errorf("beklenmeyen imza algoritması: %v", t.Header["alg"])
 		}
 		return pub, nil
@@ -169,22 +210,10 @@ func verifyRSATokenClaims(tokenStr string, pub *rsa.PublicKey) (map[string]any, 
 	return map[string]any(mc), nil
 }
 
-func decodeUnverifiedClaimsWithExp(payloadSeg string) (map[string]any, error) {
-	claims, err := decodeBase64JSONSegment(payloadSeg)
-	if err != nil {
-		return nil, errors.New(errInvalidSessionToken)
-	}
-	expFloat, ok := claims["exp"].(float64)
-	if ok && time.Now().Unix() > int64(expFloat) {
-		return nil, errors.New("oturum süresi dolmuş")
-	}
-	return claims, nil
-}
-
 func (s *UnifiedTokenService) resolveSupplierPrincipal(ctx context.Context, sub, email, brandID string) (*MobilePrincipal, error) {
 	p := &MobilePrincipal{
 		UserID:  sub,
-		Role:    "supplier",
+		Role:    roleSupplierLiteral,
 		Email:   email,
 		BrandID: brandID,
 		IsOwner: true,
@@ -222,12 +251,29 @@ func decodeBase64JSONSegment(seg string) (map[string]any, error) {
 	return out, nil
 }
 
-func parseRSAPublicKey(rawKey string) (*rsa.PublicKey, error) {
+func formatPublicKeyPEM(rawKey string) string {
 	trimmed := strings.TrimSpace(rawKey)
-	if !strings.Contains(trimmed, "BEGIN PUBLIC KEY") {
-		trimmed = "-----BEGIN PUBLIC KEY-----\n" + trimmed + "\n-----END PUBLIC KEY-----"
+	if strings.Contains(trimmed, "BEGIN PUBLIC KEY") {
+		return trimmed
 	}
-	block, _ := pem.Decode([]byte(trimmed))
+	clean := strings.NewReplacer("\n", "", "\r", "", " ", "").Replace(trimmed)
+	var sb strings.Builder
+	sb.WriteString("-----BEGIN PUBLIC KEY-----\n")
+	for len(clean) > 0 {
+		chunk := 64
+		if len(clean) < chunk {
+			chunk = len(clean)
+		}
+		sb.WriteString(clean[:chunk])
+		sb.WriteByte('\n')
+		clean = clean[chunk:]
+	}
+	sb.WriteString("-----END PUBLIC KEY-----")
+	return sb.String()
+}
+
+func parseRSAPublicKey(rawKey string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(formatPublicKeyPEM(rawKey)))
 	if block == nil {
 		return nil, errors.New("invalid PEM block")
 	}

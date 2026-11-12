@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { X, Printer, Copy, Check, FileText, Calendar, AlertCircle } from "lucide-react";
 import { apiFetch } from "../../app/utils";
+import { pickLangText, SupportedLangCode, t } from "@/app/i18n";
 
 interface LegalPolicy {
   id: string;
@@ -22,20 +23,161 @@ interface PolicyViewerModalProps {
   readonly lang: string;
 }
 
+interface PolicyUiTexts {
+  locale: string;
+  loadingTitle: string;
+  defaultTitle: string;
+  retrievingDb: string;
+  retryOrContact: string;
+  loadFailed: string;
+  dbError: string;
+  versionLabel: string;
+  updatedAtLabel: string;
+  printBtn: string;
+  copyBtn: string;
+  copiedBtn: string;
+  gotItBtn: string;
+}
+
+const POLICY_UI_TEXTS: Record<SupportedLangCode, PolicyUiTexts> = {
+  tr: {
+    locale: "tr-TR",
+    loadingTitle: "Yükleniyor...",
+    defaultTitle: "Sözleşme Metni",
+    retrievingDb: "Sözleşme veritabanından çekiliyor...",
+    retryOrContact: "Lütfen daha sonra tekrar deneyin veya müşteri temsilcimizle iletişime geçin.",
+    loadFailed: "Aktif yasal metin yüklenemedi.",
+    dbError: "Veritabanı bağlantı hatası oluştu.",
+    versionLabel: "Sürüm",
+    updatedAtLabel: "Güncelleme Tarihi",
+    printBtn: "Yazdır",
+    copyBtn: "Kopyala",
+    copiedBtn: "Kopyalandı",
+    gotItBtn: "Anladım",
+  },
+  en: {
+    locale: "en-US",
+    loadingTitle: "Loading...",
+    defaultTitle: "Legal Policy",
+    retrievingDb: "Retrieving policy from database...",
+    retryOrContact: "Please try again later or contact our B2B representatives.",
+    loadFailed: "Failed to load active policy text.",
+    dbError: "Database connection error occurred.",
+    versionLabel: "Version",
+    updatedAtLabel: "Last Updated",
+    printBtn: "Print",
+    copyBtn: "Copy",
+    copiedBtn: "Copied",
+    gotItBtn: "Got it",
+  },
+  ru: {
+    locale: "ru-RU",
+    loadingTitle: "Загрузка...",
+    defaultTitle: "Юридический документ",
+    retrievingDb: "Загрузка документа из базы данных...",
+    retryOrContact: "Пожалуйста, попробуйте позже или свяжитесь с нашим B2B представителем.",
+    loadFailed: "Не удалось загрузить текст документа.",
+    dbError: "Произошла ошибка подключения к базе данных.",
+    versionLabel: "Версия",
+    updatedAtLabel: "Дата обновления",
+    printBtn: "Печать",
+    copyBtn: "Копировать",
+    copiedBtn: "Скопировано",
+    gotItBtn: "Понятно",
+  },
+  ar: {
+    locale: "ar-SA",
+    loadingTitle: "جاري التحميل...",
+    defaultTitle: "النص القانوني",
+    retrievingDb: "جاري استرداد السياسة من قاعدة البيانات...",
+    retryOrContact: "يرجى المحاولة مرة أخرى لاحقاً أو التواصل مع ممثلي B2B لدينا.",
+    loadFailed: "تعذر تحميل النص القانوني النشط.",
+    dbError: "حدث خطأ في الاتصال بقاعدة البيانات.",
+    versionLabel: "الإصدار",
+    updatedAtLabel: "تاريخ التحديث",
+    printBtn: "طباعة",
+    copyBtn: "نسخ",
+    copiedBtn: "تم النسخ",
+    gotItBtn: "حسناً",
+  },
+  de: {
+    locale: "de-DE",
+    loadingTitle: "Wird geladen...",
+    defaultTitle: "Rechtstext",
+    retrievingDb: "Richtlinie wird aus der Datenbank geladen...",
+    retryOrContact: "Bitte versuchen Sie es später erneut oder kontaktieren Sie unser B2B-Team.",
+    loadFailed: "Aktiver Rechtstext konnte nicht geladen werden.",
+    dbError: "Datenbankverbindungsfehler aufgetreten.",
+    versionLabel: "Version",
+    updatedAtLabel: "Aktualisiert am",
+    printBtn: "Drucken",
+    copyBtn: "Kopieren",
+    copiedBtn: "Kopiert",
+    gotItBtn: "Verstanden",
+  },
+  fr: {
+    locale: "fr-FR",
+    loadingTitle: "Chargement...",
+    defaultTitle: "Politique juridique",
+    retrievingDb: "Récupération du texte depuis la base de données...",
+    retryOrContact: "Veuillez réessayer plus tard ou contacter nos conseillers B2B.",
+    loadFailed: "Impossible de charger le texte juridique actif.",
+    dbError: "Erreur de connexion à la base de données.",
+    versionLabel: "Version",
+    updatedAtLabel: "Dernière mise à jour",
+    printBtn: "Imprimer",
+    copyBtn: "Copier",
+    copiedBtn: "Copié",
+    gotItBtn: "Compris",
+  },
+  pl: {
+    locale: "pl-PL",
+    loadingTitle: "Ładowanie...",
+    defaultTitle: "Dokument prawny",
+    retrievingDb: "Pobieranie dokumentu z bazy danych...",
+    retryOrContact: "Spróbuj ponownie później lub skontaktuj się z naszym działem B2B.",
+    loadFailed: "Nie udało się załadować aktywnego tekstu prawnego.",
+    dbError: "Wystąpił błąd połączenia z bazą danych.",
+    versionLabel: "Wersja",
+    updatedAtLabel: "Data aktualizacji",
+    printBtn: "Drukuj",
+    copyBtn: "Kopiuj",
+    copiedBtn: "Skopiowano",
+    gotItBtn: "Rozumiem",
+  },
+  bg: {
+    locale: "bg-BG",
+    loadingTitle: "Зареждане...",
+    defaultTitle: "Правна политика",
+    retrievingDb: "Извличане на документа от базата данни...",
+    retryOrContact: "Моля, опитайте отново по-късно или се свържете с наш B2B представител.",
+    loadFailed: "Неуспешно зареждане на активния правен текст.",
+    dbError: "Възникна грешка при връзка с базата данни.",
+    versionLabel: "Версия",
+    updatedAtLabel: "Дата на обновяване",
+    printBtn: "Принтирай",
+    copyBtn: "Копирай",
+    copiedBtn: "Копирано",
+    gotItBtn: "Разбрах",
+  },
+};
+
 function getModalTitle(loading: boolean, policy: LegalPolicy | null, lang: string): string {
+  const txt = pickLangText(lang, POLICY_UI_TEXTS);
   if (loading) {
-    return lang === "tr" ? "Yükleniyor..." : "Loading...";
+    return txt.loadingTitle;
   }
   if (policy?.title) {
     return policy.title;
   }
-  return lang === "tr" ? "Sözleşme Metni" : "Legal Policy";
+  return txt.defaultTitle;
 }
 
 function formatDate(dateStr: string, lang: string): string {
+  const txt = pickLangText(lang, POLICY_UI_TEXTS);
   try {
     const d = new Date(dateStr);
-    return d.toLocaleDateString(lang === "tr" ? "tr-TR" : "en-US", {
+    return d.toLocaleDateString(txt.locale, {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -69,14 +211,13 @@ function PolicyModalBody({
   lang,
   onClose,
 }: Readonly<PolicyModalBodyProps>) {
+  const txt = pickLangText(lang, POLICY_UI_TEXTS);
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
         <p className="text-xs font-bold text-slate-400 select-none animate-pulse">
-          {lang === "tr"
-            ? "Sözleşme veritabanından çekiliyor..."
-            : "Retrieving policy from database..."}
+          {txt.retrievingDb}
         </p>
       </div>
     );
@@ -91,9 +232,7 @@ function PolicyModalBody({
         <div>
           <p className="text-sm font-extrabold text-slate-800">{error}</p>
           <p className="text-xs text-slate-400 font-semibold mt-1">
-            {lang === "tr"
-              ? "Lütfen daha sonra tekrar deneyin veya müşteri temsilcimizle iletişime geçin."
-              : "Please try again later or contact our B2B representatives."}
+            {txt.retryOrContact}
           </p>
         </div>
         <button
@@ -101,7 +240,7 @@ function PolicyModalBody({
           onClick={onClose}
           className="mt-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer border-none"
         >
-          {lang === "tr" ? "Kapat" : "Close"}
+          {t("close", lang)}
         </button>
       </div>
     );
@@ -130,6 +269,7 @@ export default function PolicyViewerModal({
   const [error, setError] = useState<string | null>(null);
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [animate, setAnimate] = useState<boolean>(false);
+  const txt = pickLangText(lang, POLICY_UI_TEXTS);
 
   if (prevIsOpen !== isOpen) {
     setPrevIsOpen(isOpen);
@@ -149,6 +289,7 @@ export default function PolicyViewerModal({
     if (!isOpen || !policyType) return;
 
     async function fetchPolicy() {
+      const currentTxt = pickLangText(lang, POLICY_UI_TEXTS);
       setLoading(true);
       setError(null);
       setPolicy(null);
@@ -158,19 +299,11 @@ export default function PolicyViewerModal({
         if (data) {
           setPolicy(data);
         } else {
-          setError(
-            lang === "tr"
-              ? "Aktif yasal metin yüklenemedi."
-              : "Failed to load active policy text."
-          );
+          setError(currentTxt.loadFailed);
         }
       } catch (err) {
         console.error("Failed to fetch policy", err);
-        setError(
-          lang === "tr"
-            ? "Veritabanı bağlantı hatası oluştu."
-            : "Database connection error occurred."
-        );
+        setError(currentTxt.dbError);
       } finally {
         setLoading(false);
       }
@@ -198,7 +331,7 @@ export default function PolicyViewerModal({
     const escapedTitle = escapeHtml(policy.title);
     const escapedContent = escapeHtml(policy.content);
     const policyVersion = String(policy.version);
-    const policyDate = new Date(policy.updated_at).toLocaleDateString("tr-TR");
+    const policyDate = new Date(policy.updated_at).toLocaleDateString(txt.locale);
 
     const htmlContent = `<!DOCTYPE html>
 <html>
@@ -213,7 +346,7 @@ pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; }
 </head>
 <body>
 <h1>${escapedTitle}</h1>
-<div class="meta">Sürüm: v${policyVersion} | Güncelleme Tarihi: ${policyDate}</div>
+<div class="meta">${escapeHtml(txt.versionLabel)}: v${policyVersion} | ${escapeHtml(txt.updatedAtLabel)}: ${escapeHtml(policyDate)}</div>
 <pre>${escapedContent}</pre>
 </body>
 </html>`;
@@ -238,7 +371,7 @@ pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; }
       {/* Accessible Backdrop Overlay */}
       <button
         type="button"
-        aria-label="Kapat"
+        aria-label={t("close_modal", lang)}
         tabIndex={-1}
         className="absolute inset-0 bg-slate-950/70 backdrop-blur-md transition-opacity cursor-default border-none"
         onClick={onClose}
@@ -281,6 +414,7 @@ pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; }
           <button
             type="button"
             onClick={onClose}
+            aria-label={t("close_modal", lang)}
             className="w-8 h-8 rounded-full border border-slate-100 hover:border-slate-200 hover:bg-slate-50 flex items-center justify-center text-slate-500 hover:text-slate-900 transition-all active:scale-90 cursor-pointer shadow-sm"
           >
             <X className="w-4 h-4" />
@@ -308,7 +442,7 @@ pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; }
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-slate-200/80 hover:border-slate-300 hover:bg-slate-100/50 rounded-xl text-slate-600 hover:text-slate-900 transition-all font-semibold text-xs cursor-pointer shadow-sm"
               >
                 <Printer className="w-4 h-4" />
-                <span>{lang === "tr" ? "Yazdır" : "Print"}</span>
+                <span>{txt.printBtn}</span>
               </button>
 
               <button
@@ -320,13 +454,13 @@ pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; }
                   <>
                     <Check className="w-4 h-4 text-emerald-600" />
                     <span className="text-emerald-700 font-bold">
-                      {lang === "tr" ? "Kopyalandı" : "Copied"}
+                      {txt.copiedBtn}
                     </span>
                   </>
                 ) : (
                   <>
                     <Copy className="w-4 h-4" />
-                    <span>{lang === "tr" ? "Kopyala" : "Copy"}</span>
+                    <span>{txt.copyBtn}</span>
                   </>
                 )}
               </button>
@@ -337,7 +471,7 @@ pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; }
               onClick={onClose}
               className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer border-none"
             >
-              {lang === "tr" ? "Anladım" : "Got it"}
+              {txt.gotItBtn}
             </button>
           </div>
         )}

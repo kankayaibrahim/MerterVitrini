@@ -1,7 +1,19 @@
 import React from "react";
 import { Metadata } from "next";
 import StorefrontLayout from "@/components/store/StorefrontLayout";
-import { Category } from "@/types/store";
+import { Category, Product } from "@/types/store";
+import {
+  SITE_ORIGIN,
+  SupportedSeoLang,
+  OG_LOCALE_BY_LANG,
+  GLOBAL_B2B_SEO_MATRIX,
+  normalizeSeoLang,
+  safeJsonLd,
+  buildPrefixedAlternates,
+  ssrStoreFetch,
+  fetchSsrCategories,
+  fetchSsrProducts,
+} from "@/utils/seoHelpers";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +25,9 @@ interface PageProps {
 }
 
 interface MetadataProps extends PageProps {
-  readonly searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+  readonly searchParams?: Promise<{
+    [key: string]: string | string[] | undefined;
+  }>;
 }
 
 export interface Language {
@@ -26,52 +40,37 @@ export interface Language {
   sortOrder: number;
 }
 
-// Fetch active languages from database with static fallback
+const FALLBACK_LANGUAGES: Language[] = [
+  { code: "tr", label: "Türkçe", flag: "🇹🇷", categoryPrefix: "tr", isActive: true, sortOrder: 0 },
+  { code: "en", label: "English", flag: "🇬🇧", categoryPrefix: "en", isActive: true, sortOrder: 1 },
+  { code: "pl", label: "Polski", flag: "🇵🇱", categoryPrefix: "pl", isActive: true, sortOrder: 2 },
+  { code: "bg", label: "Български", flag: "🇧🇬", categoryPrefix: "bg", isActive: true, sortOrder: 3 },
+  { code: "ar", label: "العربية", flag: "🇸🇦", categoryPrefix: "ar", dir: "rtl", isActive: true, sortOrder: 4 },
+  { code: "ru", label: "Русский", flag: "🇷🇺", categoryPrefix: "ru", isActive: true, sortOrder: 5 },
+  { code: "de", label: "Deutsch", flag: "🇩🇪", categoryPrefix: "de", isActive: true, sortOrder: 6 },
+  { code: "fr", label: "Français", flag: "🇫🇷", categoryPrefix: "fr", isActive: true, sortOrder: 7 },
+];
+
 async function fetchLanguages(): Promise<Language[]> {
-  try {
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/languages", { next: { revalidate: 3600 } });
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        return data.map((l: Language) => {
-          let code = l.code;
-          if (code.startsWith("en_")) code = "en";
-          else if (code.startsWith("tr_")) code = "tr";
-          else if (code.startsWith("pl_")) code = "pl";
-          else if (code.startsWith("bg_")) code = "bg";
-          else if (code.startsWith("de_")) code = "de";
-          else if (code.startsWith("fr_")) code = "fr";
-          else if (code.startsWith("ru_")) code = "ru";
-          else if (code.startsWith("ar_")) code = "ar";
-          return { ...l, code };
-        });
-      }
-    }
-  } catch (err) {
-    console.error("[SEO] Failed to fetch active languages, using fallback:", err);
+  const data = await ssrStoreFetch<Language[]>("/languages", 3600);
+  if (Array.isArray(data) && data.length > 0) {
+    return data.map((langItem) => ({
+      ...langItem,
+      code: normalizeSeoLang(langItem.code, "en"),
+    }));
   }
-  
-  return [
-    { code: "tr", label: "Türkçe", flag: "🇹🇷", categoryPrefix: "tr", isActive: true, sortOrder: 0 },
-    { code: "en", label: "English", flag: "🇬🇧", categoryPrefix: "en", isActive: true, sortOrder: 1 },
-    { code: "pl", label: "Polski", flag: "🇵🇱", categoryPrefix: "pl", isActive: true, sortOrder: 2 },
-    { code: "bg", label: "Български", flag: "🇧🇬", categoryPrefix: "bg", isActive: true, sortOrder: 3 },
-    { code: "ar", label: "العربية", flag: "🇸🇦", categoryPrefix: "ar", dir: "rtl", isActive: true, sortOrder: 4 },
-    { code: "ru", label: "Русский", flag: "🇷🇺", categoryPrefix: "ru", isActive: true, sortOrder: 5 },
-    { code: "de", label: "Deutsch", flag: "🇩🇪", categoryPrefix: "de", isActive: true, sortOrder: 6 },
-    { code: "fr", label: "Français", flag: "🇫🇷", categoryPrefix: "fr", isActive: true, sortOrder: 7 },
-  ];
+  return FALLBACK_LANGUAGES;
 }
 
 const SLUG_ALIASES: Record<string, string> = {
-  "kadin": "kadin-giyim",
+  kadin: "kadin-giyim",
   "kadin-triko": "triko-hirka-kazak",
   "kadin-elbise": "elbise-abiye",
-  "triko": "triko-hirka-kazak",
-  "elbise": "elbise-abiye",
-  "kazak": "triko-hirka-kazak",
-  "erkek": "erkek-giyim",
-  "kumas": "kadin-giyim",
+  triko: "triko-hirka-kazak",
+  elbise: "elbise-abiye",
+  kazak: "triko-hirka-kazak",
+  erkek: "erkek-giyim",
+  kumas: "kadin-giyim",
 };
 
 export function resolveSlugAlias(slug: string): string {
@@ -80,7 +79,6 @@ export function resolveSlugAlias(slug: string): string {
   return SLUG_ALIASES[lower] || lower;
 }
 
-// Helper to find a category recursively in a tree by slug
 function findCategoryBySlug(tree: Category[], slug: string): Category | null {
   if (!Array.isArray(tree) || !slug) return null;
   for (const cat of tree) {
@@ -94,8 +92,11 @@ function findCategoryBySlug(tree: Category[], slug: string): Category | null {
   return null;
 }
 
-// Helper to get the full slug trail list of a category
-function getCategorySlugPath(tree: Category[], targetSlug: string, path: string[] = []): string[] | null {
+function getCategorySlugPath(
+  tree: Category[],
+  targetSlug: string,
+  path: string[] = []
+): string[] | null {
   if (!Array.isArray(tree) || !targetSlug) return null;
   for (const cat of tree) {
     if (!cat?.slug) continue;
@@ -111,124 +112,132 @@ function getCategorySlugPath(tree: Category[], targetSlug: string, path: string[
   return null;
 }
 
-function getCustomSeoOverride(cleanSlug: string, lang: string): { title: string; description: string } | null {
-  if (cleanSlug === "kadin-giyim" || cleanSlug === "kadin") {
-    const kadinTitles: Record<string, string> = {
+interface CustomCategorySeoRule {
+  readonly matches: (slug: string) => boolean;
+  readonly titles: Record<SupportedSeoLang, string>;
+  readonly descriptions: Record<SupportedSeoLang, string>;
+}
+
+const CUSTOM_CATEGORY_SEO_RULES: readonly CustomCategorySeoRule[] = [
+  {
+    matches: (s) => s === "kadin-giyim" || s === "kadin",
+    titles: {
       tr: "Merter Toptan Kadın Giyim | İmalatçıdan Yeni Sezon Ürünler",
       en: "Merter Wholesale Women's Clothing | Factory Direct New Season",
-      ru: "Одежда Оптом из Мертера | Напрямую от Фабрик Стамбула",
+      ru: "Женская Одежда Оптом из Мертера | Напрямую от Фабрик Стамбула",
       ar: "ملابس نسائية بالجملة من مصانع مارتر إسطنبول | Merter Vitrini",
       de: "Merter Großhandel Damenmode | Direkt vom Hersteller Istanbul",
       fr: "Vêtements Femme en Gros Merter | En Direct des Fabricants",
-      pl: "Hurtownia Odzieży Merter | Bezpośrednio od Producenta",
+      pl: "Hurtownia Odzieży Damskiej Merter | Bezpośrednio od Producenta",
       bg: "Дамски Дрехи на Едро от Мертер | Директно от Производител",
-    };
-    const kadinDescs: Record<string, string> = {
+    },
+    descriptions: {
       tr: "Doğrudan Merter tekstil imalatçılarından en yeni sezon toptan kadın giyim ürünleri. Aracısız fabrika fiyatları, butikler için serili paketler ve hızlı teslimat.",
-      en: "Buy new season wholesale women's apparel directly from Merter Istanbul manufacturers. No middlemen, factory prices, boutique packs, and express global shipping.",
-      ru: "Женская одежда оптом напрямую от фабрик и производителей Мертер (Стамбул). Новые коллекции без посредников, фабричные цены для бутиков и быстрая доставка карго.",
-      ar: "تسوق ملابس نسائية بالجملة مباشرة من مصانع مارتر في إسطنبول بدون وسطاء. أحدث موديلات الموسم بأسعار المصنع المباشرة، سيري للبوتيكات مع شحن جوي سريع لكافة الدول.",
-      de: "Damenmode im Großhandel direkt von Herstellern aus Merter Istanbul kaufen. Ohne Zwischenhändler, Fabrikpreise, Serien für Boutiquen und schneller EU-Versand.",
-      fr: "Achetez la nouvelle collection de vêtements femme en gros directement auprès des fabricants de Merter Istanbul. Prix d'usine, sans intermédiaire et livraison rapide.",
+      en: "Buy new season wholesale women's apparel directly from Merter Istanbul manufacturers. No middlemen, factory prices, size-run boutique packs, and express global shipping.",
+      ru: "Женская одежда оптом напрямую от фабрик и производителей Мертер (Стамбул). Новые коллекции размерными рядами без посредников, фабричные цены и быстрая доставка карго.",
+      ar: "تسوق ملابس نسائية بالجملة مباشرة من مصانع مارتر في إسطنبول بدون وسطاء. أحدث موديلات الموسم بأسعار المصنع المباشرة بنظام الباكيدج مع شحن جوي سريع.",
+      de: "Damenmode im Großhandel direkt von Herstellern aus Merter Istanbul kaufen. Ohne Zwischenhändler, Fabrikpreise, Serienpakete für Boutiquen und schneller EU-Versand.",
+      fr: "Achetez la nouvelle collection de vêtements femme en gros directement auprès des fabricants de Merter Istanbul. Prix d'usine, lots par séries et livraison rapide.",
       pl: "Hurt damskiej odzieży nowej kolekcji bezpośrednio od producentów z Merter Stambuł. Ceny fabryczne bez pośredników, pakiety rozmiarowe dla butików i szybka dostawa.",
-      bg: "Дамска мода нова колекция на едро директно от производители в Мертер, Истанбул. Фабрични цени без посредници, серии за бутици и бърз транспорт до България.",
-    };
-    return { title: kadinTitles[lang] || kadinTitles.en, description: kadinDescs[lang] || kadinDescs.en };
-  }
-  if (cleanSlug === "yaz-koleksiyonu" || cleanSlug.includes("boho") || cleanSlug.includes("bohem")) {
-    const bohoTitles: Record<string, string> = {
-      tr: "Toptan Bohem Giyim Tarzı - Butik Elbiseler Türkiye",
-      en: "Wholesale Boho Chic Fashion Style - Boutique Outfits Turkey",
-      ru: "Оптом Богемный Стиль Одежды (Бохо-Шик) - Бутик Турция",
-      de: "Großhandel Boho Chic Modestil - Boutique Kleidung Türkei",
-      pl: "Hurt Boho Chic Moda Styl - Butikowe Ubrania Turcja",
-      bg: "Бохо Шик Стил Дрехи на Едро - Бутикови Облекла Турция",
-      ar: "ملابس بوهو شيك بالجملة - أزياء بوتيك تركيا",
-      fr: "Mode Bohème en Gros - Vêtements Chic de Boutique Turquie",
-    };
-    const bohoDescs: Record<string, string> = {
-      tr: "En trend toptan bohem giyim ve boho chic butik ürünleri. Türkiye'nin lider üreticilerinden doğrudan toptan sipariş.",
-      en: "Discover the best wholesale boho chic fashion styles and boutique outfits directly from Turkey manufacturers.",
-      ru: "Покупайте оптом стильную богемную одежду и бохо-шик платья напрямую от производителей в Турции.",
-      de: "Kaufen Sie Boho-Chic-Kleidung im Großhandel direkt bei den besten Herstellern in der Türkei.",
-      pl: "Hurtownia mody boho chic i odzieży butikowej bezpośrednio od producentów z Turcji.",
-      bg: "Купете бохо шик дрехи на едро директно от най-добрите производители в Турция.",
-      ar: "اكتشف أفضل ملابس بوهو شيك بالجملة وأزياء البوتيك الفاخرة مباشرة من المصانع التركية.",
+      bg: "Дамска мода нова колекция на едро директно от производители в Мертер, Истанбул. Фабрични цени без посредници, размерни серии за бутици и бърз транспорт.",
+    },
+  },
+  {
+    matches: (s) => s === "yaz-koleksiyonu" || s.includes("boho") || s.includes("bohem"),
+    titles: {
+      tr: "Toptan Bohem Giyim Tarzı — Butik Elbiseler Türkiye",
+      en: "Wholesale Boho Chic Fashion Style — Boutique Outfits Turkey",
+      ru: "Оптом Богемный Стиль Одежды (Бохо-Шик) — Бутик Турция",
+      ar: "ملابس بوهو شيك بالجملة — أزياء بوتيك تركيا",
+      de: "Großhandel Boho Chic Modestil — Boutique Kleidung Türkei",
+      fr: "Mode Bohème en Gros — Vêtements Chic de Boutique Turquie",
+      pl: "Hurt Boho Chic Moda Styl — Butikowe Ubrania Turcja",
+      bg: "Бохо Шик Стил Дрехи на Едро — Бутикови Облекла Турция",
+    },
+    descriptions: {
+      tr: "En trend toptan bohem giyim ve boho chic butik ürünleri. Türkiye'nin lider üreticilerinden doğrudan serili toptan sipariş.",
+      en: "Discover wholesale boho chic fashion styles and boutique size-run outfits directly from Merter Istanbul manufacturers.",
+      ru: "Покупайте оптом стильную богемную одежду и бохо-шик платья размерными рядами напрямую от производителей в Турции.",
+      ar: "اكتشف أفضل ملابس بوهو شيك بالجملة وأزياء البوتيك الفاخرة مباشرة من المصانع التركية بنظام الباكيدج.",
+      de: "Kaufen Sie Boho-Chic-Kleidung im Großhandel in Serienpaketen direkt bei den besten Herstellern in der Türkei.",
       fr: "Découvrez la mode bohème chic en gros et les vêtements de boutique en direct des fabricants turcs.",
-    };
-    return { title: bohoTitles[lang] || bohoTitles.en, description: bohoDescs[lang] || bohoDescs.en };
-  }
-  if (cleanSlug === "vintage-retro" || cleanSlug.includes("vintage") || cleanSlug.includes("retro")) {
-    const vintageTitles: Record<string, string> = {
-      tr: "Toptan Vintage ve Retro Giyim Türkiye - Merter Tekstil",
-      en: "Wholesale Vintage Clothing Turkey - Retro Boutique Sourcing",
-      ru: "Винтажная Одежда Оптом Турция - Ретро Стиль Мертер",
-      de: "Wholesale Vintage Kleidung Türkei - Retro Stil Großhandel",
-      pl: "Hurtownia Odzieży Vintage Turcja - Retro Styl Stambuł",
-      bg: "Ретро и Винтидж Дрехи на Едро Турция - Мертер Текстил",
-      ar: "ملابس عتيقة (فينتاج) ورترو بالجملة تركيا - مارتر اسطنبول",
-      fr: "Vêtements Vintage en Gros Turquie - Vêtements Rétro Boutique Merter",
-    };
-    const vintageDescs: Record<string, string> = {
-      tr: "Türkiye'nin en seçkin retro ve vintage giyim ürünleri serili ve asortili toptan alım imkanlarıyla.",
-      en: "Premium wholesale vintage & retro apparel from Turkey's top boutique suppliers and factories.",
-      ru: "Высококачественная винтажная и ретро одежда оптом от лучших фабрик Турции.",
-      de: "Hochwertige Vintage- und Retro-Bekleidung im Großhandel von den besten türkischen Lieferanten.",
-      pl: "Najwyższej jakości odzież retro i vintage w hurcie bezpośrednio od tureckich dostawców.",
-      bg: "Висококачествени ретро и винтидж дрехи на едро от най-добрите доставчици в Турция.",
-      ar: "أفضل ملابس عتيقة ورترو بالجملة مباشرة من المصانع والموردين في تركيا.",
+      pl: "Hurtownia mody boho chic i odzieży butikowej w paczkach bezpośrednio od producentów z Turcji.",
+      bg: "Купете бохо шик дрехи на едро на серии директно от най-добрите производители в Турция.",
+    },
+  },
+  {
+    matches: (s) => s === "vintage-retro" || s.includes("vintage") || s.includes("retro"),
+    titles: {
+      tr: "Toptan Vintage ve Retro Giyim Türkiye — Merter Tekstil",
+      en: "Wholesale Vintage Clothing Turkey — Retro Boutique Sourcing",
+      ru: "Винтажная Одежда Оптом Турция — Ретро Стиль Мертер",
+      ar: "ملابس فينتاج ورترو بالجملة تركيا — مارتر إسطنبول",
+      de: "Großhandel Vintage Kleidung Türkei — Retro Stil Merter",
+      fr: "Vêtements Vintage en Gros Turquie — Boutique Rétro Merter",
+      pl: "Hurtownia Odzieży Vintage Turcja — Retro Styl Stambuł",
+      bg: "Ретро и Винтидж Дрехи на Едро Турция — Мертер Текстил",
+    },
+    descriptions: {
+      tr: "Türkiye'nin en seçkin retro ve vintage giyim ürünleri serili ve asortili toptan alım imkanlarıyla Merter Vitrini'nde.",
+      en: "Premium wholesale vintage and retro apparel packs from Turkey's top boutique suppliers and Merter factories.",
+      ru: "Высококачественная винтажная и ретро одежда оптом сериями от лучших фабрик Турции.",
+      ar: "أفضل ملابس عتيقة ورترو بالجملة مباشرة من المصانع والموردين في مارتر إسطنبول.",
+      de: "Hochwertige Vintage- und Retro-Bekleidung im Großhandel von führenden türkischen Herstellern.",
       fr: "Vêtements vintage et rétro de qualité supérieure en gros provenant des meilleurs fabricants turcs.",
-    };
-    return { title: vintageTitles[lang] || vintageTitles.en, description: vintageDescs[lang] || vintageDescs.en };
-  }
-  if (cleanSlug === "elbise-abiye" || cleanSlug === "elbise") {
-    const elbiseTitles: Record<string, string> = {
+      pl: "Najwyższej jakości odzież retro i vintage w hurcie bezpośrednio od tureckich producentów.",
+      bg: "Висококачествени ретро и винтидж дрехи на едро от най-добрите производители в Турция.",
+    },
+  },
+  {
+    matches: (s) => s === "elbise-abiye" || s === "elbise",
+    titles: {
       tr: "Toptan Kadın Elbise Modelleri & Fiyatları | Merter Vitrini",
-      en: "Wholesale Women's Dresses from Turkey | Factory Direct Prices",
+      en: "Wholesale Women's Dresses from Turkey | Factory Direct Packs",
       ru: "Женские Платья Оптом из Турции | Каталог Фабрик Стамбул",
       ar: "فساتين نسائية بالجملة من تركيا | تصاميم راقية وأسعار المصنع",
       de: "Großhandel Damenkleider Türkei | Trendige Kleider B2B Istanbul",
       fr: "Robes Femme en Gros Turquie | Fournisseur Prêt-à-Porter Merter",
       pl: "Hurtownia Sukienek Damskich Turcja | Sukienki z Merter Stambuł",
       bg: "Дамски Рокли на Едро от Турция | Модели и Фабрични Цени",
-    };
-    const elbiseDescs: Record<string, string> = {
-      tr: "En şık toptan kadın elbise modelleri Merter Vitrini'nde. Günlük, şifon, mini, midi ve maxi boy elbiseler doğrudan üretici fiyatlarıyla toptan satışta.",
-      en: "Discover stunning wholesale women's dresses direct from Istanbul manufacturers. Casual, floral, midi and maxi dresses with low MOQ and worldwide cargo.",
-      ru: "Купить женские платья оптом напрямую от турецких фабрик. Повседневные, шифоновые, вечерние и летние платья по ценам производителя с доставкой карго.",
-      ar: "أجمل تشكيلة فساتين نسائية بالجملة مباشرة من مصانع تركيا. فساتين يومية، ماكسي وميدي للبوتيكات بأفضل الأسعار وشحن جوي سريع لكافة الدول.",
-      de: "Damenkleider im Großhandel direkt aus Istanbul Merter bestellen. Elegante Alltags-, Midi- und Maxikleider zu Werkspreisen mit schnellem EU-Versand.",
-      fr: "Achetez des robes femme tendance en gros auprès des fabricants textiles d'Istanbul. Robes décontractées, midi et maxi avec expédition rapide en Europe.",
-      pl: "Modne sukienki damskie w hurcie prosto od tureckich producentów. Sukienki codzienne, midi i maxi w atrakcyjnych pakietach dla butików.",
-      bg: "Богат избор на дамски рокли на едро от производители в Истанбул. Ежедневни, миди и макси рокли на топ цени с бърза доставка до България.",
-    };
-    return { title: elbiseTitles[lang] || elbiseTitles.en, description: elbiseDescs[lang] || elbiseDescs.en };
-  }
-  if (cleanSlug === "abiye" || cleanSlug === "gece-elbesi" || cleanSlug.includes("night-dress")) {
-    const nightTitles: Record<string, string> = {
+    },
+    descriptions: {
+      tr: "En şık toptan kadın elbise modelleri Merter Vitrini'nde. Günlük, şifon, mini, midi ve maxi boy elbiseler doğrudan üretici fiyatlarıyla serili toptan satışta.",
+      en: "Discover wholesale women's dresses direct from Istanbul Merter manufacturers. Casual, floral, midi and maxi dress packs with low MOQ and worldwide cargo.",
+      ru: "Купить женские платья оптом размерными рядами напрямую от турецких фабрик Мертера. Повседневные, шифоновые и вечерние платья по ценам производителя.",
+      ar: "أجمل تشكيلة فساتين نسائية بالجملة مباشرة من مصانع مارتر تركيا بنظام الباكيدج. فساتين يومية وماكسي وميدي للبوتيكات مع شحن جوي سريع.",
+      de: "Damenkleider im Großhandel in Serienpaketen direkt aus Istanbul Merter bestellen. Alltags-, Midi- und Maxikleider zu Werkspreisen mit schnellem EU-Versand.",
+      fr: "Achetez des robes femme tendance en gros par séries auprès des fabricants textiles de Merter Istanbul avec expédition rapide en Europe.",
+      pl: "Modne sukienki damskie w hurcie w paczkach prosto od tureckich producentów z Merter Stambuł.",
+      bg: "Богат избор на дамски рокли на едро на серии от производители в Мертер Истанбул с бърза доставка до България.",
+    },
+  },
+  {
+    matches: (s) => s === "abiye" || s === "gece-elbesi" || s.includes("night-dress"),
+    titles: {
       tr: "Toptan Abiye & Gece Elbisesi Modelleri | Merter İmalatçı",
       en: "Wholesale Evening Dresses & Gowns | Istanbul Fashion Direct",
-      ru: "Вечерние Платья Оптом из Турции | Роскошный Выпускной и Праздник",
-      ar: "فساتين سهرة وأعراس بالجملة تركيا | تصاميم فخمة وأقمشة فاخرة",
+      ru: "Вечерние Платья Оптом из Турции | Праздничная Мода Мертер",
+      ar: "فساتين سهرة وأعراس بالجملة تركيا | تصاميم فخمة وأسعار المصنع",
       de: "Großhandel Abendkleider Türkei | Elegante Festmode Istanbul",
       fr: "Robes de Soirée en Gros Turquie | Robes de Fête Istanbul B2B",
       pl: "Hurt Sukienek Wieczorowych Turcja | Suknie Balowe Stambuł",
       bg: "Официални и Вечерни Рокли на Едро | Бални Тоалети Турция",
-    };
-    const nightDescs: Record<string, string> = {
-      tr: "Özel günler ve davetler için toptan abiye ve gece elbiseleri. Saten, şifon, simli ve işlemeli abiyeler İstanbul üreticilerinden doğrudan toptan satışta.",
-      en: "Premium wholesale evening dresses, prom gowns, and cocktail outfits from Istanbul designers. Luxurious fabrics, factory prices, and express boutique delivery.",
-      ru: "Элегантные вечерние платья оптом от ведущих стамбульских дизайнеров. Атласные, шифоновые и праздничные наряды для свадеб и торжеств по фабричным ценам.",
-      ar: "أرقى موديلات فساتين السهرة والأعراس بالجملة من مصانع إسطنبول مباشرة. فساتين ساتان وشيفون فخمة للبوتيكات بأسعار الجملة وشحن دولي سريع.",
-      de: "Exklusive Abendkleider und Cocktailkleider im Großhandel aus Istanbul. Hochwertige Seiden- und Chiffonstoffe zu Fabrikpreisen für Modehäuser.",
-      fr: "Collection de robes de soirée chic et robes de cocktail en gros. Matières satinées, dentelle raffinée et finitions soignées en direct des créateurs turcs.",
-      pl: "Eleganckie suknie wieczorowe i balowe w hurcie bezpośrednio ze Stambułu. Luksusowe satyny, szyfony i kreacje wizytowe w cenach fabrycznych.",
-      bg: "Елегантни вечерни и бални рокли на едро от производители в Истанбул. Сатен, шифон и луксозни кройки за бутици с директна доставка.",
-    };
-    return { title: nightTitles[lang] || nightTitles.en, description: nightDescs[lang] || nightDescs.en };
-  }
-  if (cleanSlug === "triko-hirka-kazak" || cleanSlug === "triko" || cleanSlug === "kazak-suveter" || cleanSlug === "hirka") {
-    const trikoTitles: Record<string, string> = {
+    },
+    descriptions: {
+      tr: "Özel günler ve davetler için toptan abiye ve gece elbiseleri. Saten, şifon ve işlemeli abiyeler İstanbul üreticilerinden doğrudan serili toptan satışta.",
+      en: "Premium wholesale evening dresses, prom gowns, and cocktail outfits from Istanbul Merter manufacturers at factory prices.",
+      ru: "Элегантные вечерние платья оптом сериями от ведущих стамбульских фабрик. Атласные и шифоновые наряды по фабричным ценам.",
+      ar: "أرقى موديلات فساتين السهرة والأعراس بالجملة من مصانع إسطنبول مباشرة بأسعار المصنع وشحن دولي سريع.",
+      de: "Exklusive Abendkleider und Cocktailkleider im Großhandel aus Istanbul zu Fabrikpreisen für Boutiquen.",
+      fr: "Collection de robes de soirée chic et robes de cocktail en gros en direct des fabricants turcs d'Istanbul.",
+      pl: "Eleganckie suknie wieczorowe i balowe w hurcie bezpośrednio ze Stambułu w cenach fabrycznych.",
+      bg: "Елегантни вечерни и бални рокли на едро от производители в Истанбул с директна доставка.",
+    },
+  },
+  {
+    matches: (s) =>
+      s === "triko-hirka-kazak" || s === "triko" || s === "kazak-suveter" || s === "hirka",
+    titles: {
       tr: "Toptan Kadın Triko Modelleri | Merter İmalatçı Kazak & Hırka",
       en: "Wholesale Women's Knitwear from Turkey | Sweaters & Cardigans",
       ru: "Женский Трикотаж Оптом из Турции | Свитера и Кардиганы Мертер",
@@ -236,175 +245,159 @@ function getCustomSeoOverride(cleanSlug: string, lang: string): { title: string;
       de: "Großhandel Damenstrickwaren Türkei | Pullover & Strickjacken",
       fr: "Tricots Femme en Gros Turquie | Pulls et Gilets Merter B2B",
       pl: "Hurtownia Dzianin Damskich Turcja | Swetry i Kardigany Merter",
-      bg: "Дамско Трикотаж и Плетиво на Едро | Пуловери и Жилетки Турция",
-    };
-    const trikoDescs: Record<string, string> = {
-      tr: "Merter triko imalatçılarından kaliteli kadın kazak, hırka ve triko takımlar. Sonbahar-kış sezonunun en trend örgü modelleri toptan fiyatlarla.",
-      en: "High-quality wholesale women's knitwear, pullovers, and cardigans from Merter manufacturers. Warm yarns, trendy stitches, and low MOQ series.",
-      ru: "Качественный турецкий женский трикотаж оптом напрямую с фабрик Мертера. Вязаные свитера, джемперы и кардиганы по низким ценам производителя.",
-      ar: "أفخم تشكيلات التريكو النسائي والكنزات الشتوية بالجملة من مصانع مارتر إسطنبول. غرز متقنة وخامات دافئة للبوتيكات بأسعار الجملة.",
-      de: "Erstklassige Damen-Strickwaren, Pullover und Cardigans im Großhandel aus Istanbul Merter. Weiche Garne, moderne Muster und Fabrikpreise.",
-      fr: "Maille et tricots femme de qualité supérieure en gros. Pulls chauds, gilets tendance et cardigans doux directement des fabricants turcs.",
-      pl: "Wysokogatunkowa dzianina damska, modne swetry i kardigany w hurcie ze Stambułu. Ciepłe przędze, nowoczesne fasony i szybka wysyłka.",
-      bg: "Качествено дамско плетиво, жилетки и пуловери на едро директно от Мертер, Истанбул. Меки прежди, топли зимни модели и отлични цени.",
-    };
-    return { title: trikoTitles[lang] || trikoTitles.en, description: trikoDescs[lang] || trikoDescs.en };
-  }
-  if (cleanSlug === "buyuk-beden" || cleanSlug.startsWith("buyuk-beden")) {
-    const plusTitles: Record<string, string> = {
+      bg: "Дамски Трикотаж и Плетиво на Едро | Пуловери и Жилетки Турция",
+    },
+    descriptions: {
+      tr: "Merter triko imalatçılarından kaliteli kadın kazak, hırka ve triko takımlar. Yeni sezon örgü modelleri serili fabrika fiyatlarıyla.",
+      en: "High-quality wholesale women's knitwear, pullovers, and cardigans from Merter Istanbul manufacturers in low-MOQ packs.",
+      ru: "Качественный турецкий женский трикотаж оптом напрямую с фабрик Мертера: вязаные свитера, джемперы и кардиганы.",
+      ar: "أفخم تشكيلات التريكو النسائي والكنزات الشتوية بالجملة من مصانع مارتر إسطنبول بأسعار المصنع.",
+      de: "Erstklassige Damen-Strickwaren, Pullover und Cardigans im Großhandel direkt ab Werk aus Istanbul Merter.",
+      fr: "Maille et tricots femme de qualité supérieure en gros directement des fabricants turcs de Merter.",
+      pl: "Wysokogatunkowa dzianina damska, modne swetry i kardigany w hurcie w paczkach ze Stambułu.",
+      bg: "Качествено дамско плетиво, жилетки и пуловери на едро на серии директно от Мертер, Истанбул.",
+    },
+  },
+  {
+    matches: (s) => s === "buyuk-beden" || s.startsWith("buyuk-beden"),
+    titles: {
       tr: "Toptan Büyük Beden Kadın Giyim Modelleri & Fiyatları | Merter",
       en: "Wholesale Plus Size Women's Apparel Turkey | Curvy Fashion B2B",
       ru: "Женская Одежда Больших Размеров Оптом | Батал из Турции",
-      ar: "ملابس نسائية مقاسات كبيرة بالجملة تركيا | بلس سايز وباطال",
+      ar: "ملابس نسائية مقاسات كبيرة بالجملة تركيا | بلس سايز مارتر",
       de: "Großhandel Plus Size Damenmode Türkei | Große Größen B2B Merter",
       fr: "Vêtements Grande Taille Femme en Gros | Mode Curvy Istanbul B2B",
       pl: "Hurtownia Odzieży Plus Size Turcja | Duże Rozmiary Damskie Merter",
       bg: "Дамски Дрехи Големи Размери на Едро | Плюс Сайз и Макси Мода",
-    };
-    const plusDescs: Record<string, string> = {
-      tr: "Türkiye'nin lider üreticilerinden toptan büyük beden kadın kıyafetleri. 44-58 beden aralığında şık, dökümlü ve trend modeller imalatçı fiyatlarıyla.",
-      en: "Source trend-forward wholesale plus size women's clothing from Istanbul. Flattering cuts, EU sizes 44-58, premium stretch fabrics, and worldwide cargo.",
-      ru: "Стильная женская одежда больших размеров (батал, plus size) оптом от производителей Стамбула. Размерные ряды 48-64, идеальная посадка и качество.",
-      ar: "أفضل تشكيلة ملابس نسائية مقاسات كبيرة (بلس سايز) بالجملة من مصانع مارتر. تصاميم عصرية تخفي العيوب وخامات مرنة بأسعار الجملة.",
-      de: "Modische Übergrößen-Damenbekleidung (Größen 44-58) im Großhandel direkt aus Istanbul. Bequeme Passformen und vorteilhafte Einkaufskonditionen.",
-      fr: "Collection prêt-à-porter grande taille femme (du 44 au 58) en gros. Coupes flatteuses, matières extensibles et prix direct fabricant.",
-      pl: "Modna odzież damska w dużych rozmiarach (Plus Size, rozmiary 44-58) w hurcie ze Stambułu. Fasony maskujące, elastyczne tkaniny i świetne ceny.",
-      bg: "Дамска макси мода и големи размери (44-58) на едро директно от турски производители. Удобни кройки, стилни визии и бърз транспорт.",
-    };
-    return { title: plusTitles[lang] || plusTitles.en, description: plusDescs[lang] || plusDescs.en };
-  }
-  if (cleanSlug === "dis-giyim" || cleanSlug === "kaban-palto" || cleanSlug === "trenckot") {
-    const coatTitles: Record<string, string> = {
+    },
+    descriptions: {
+      tr: "Türkiye'nin lider üreticilerinden toptan büyük beden kadın kıyafetleri. 44-58 beden aralığında şık modeller serili imalatçı fiyatlarıyla.",
+      en: "Source wholesale plus-size women's clothing from Istanbul Merter. EU sizes 44-58 size-run packs with worldwide cargo.",
+      ru: "Стильная женская одежда больших размеров (батал, plus size) оптом размерными рядами от производителей Стамбула.",
+      ar: "أفضل تشكيلة ملابس نسائية مقاسات كبيرة (بلس سايز) بالجملة من مصانع مارتر إسطنبول بأسعار الجملة.",
+      de: "Modische Übergrößen-Damenbekleidung (Größen 44-58) im Großhandel direkt aus Istanbul Merter.",
+      fr: "Collection prêt-à-porter grande taille femme (du 44 au 58) en gros à prix direct fabricant.",
+      pl: "Modna odzież damska w dużych rozmiarach (Plus Size 44-58) w hurcie w seriach ze Stambułu.",
+      bg: "Дамска макси мода и големи размери (44-58) на едро директно от турски производители.",
+    },
+  },
+  {
+    matches: (s) => s === "dis-giyim" || s === "kaban-palto" || s === "trenckot",
+    titles: {
       tr: "Toptan Kadın Dış Giyim Modelleri | Kaban, Mont & Trençkot",
       en: "Wholesale Women's Outerwear Turkey | Coats, Jackets & Trench",
-      ru: "Женская Верхняя Одежда Оптом из Турции | Пальто, Куртки, Пуховики",
-      ar: "ملابس خارجية نسائية بالجملة تركيا | معاطف، جواكت وترنشكوت",
+      ru: "Женская Верхняя Одежда Оптом из Турции | Пальто, Куртки, Тренчи",
+      ar: "ملابس خارجية نسائية بالجملة تركيا | معاطف وجاكيتات وترنشكوت",
       de: "Großhandel Damen-Oberbekleidung Türkei | Mäntel, Jacken & Trench",
       fr: "Vêtements d'Extérieur Femme en Gros | Manteaux et Vestes Merter",
       pl: "Hurtownia Odzieży Wierzchniej Damskiej | Płaszcze i Kurtki Merter",
       bg: "Дамски Връхни Дрехи на Едро | Палта, Якета и Тренчкоти Турция",
-    };
-    const coatDescs: Record<string, string> = {
-      tr: "En yeni sezon toptan kadın dış giyim ürünleri Merter Vitrini'nde. Kaşe kabanlar, şişme montlar, trençkotlar ve ceketler doğrudan üreticiden toptan satışta.",
-      en: "Source premium wholesale women's outerwear from Istanbul manufacturers. Woolen coats, puffer jackets, trenches, and blazers with worldwide delivery.",
-      ru: "Широкий выбор женской верхней одежды оптом из Стамбула (Мертер). Кашемировые пальто, тренчи, пуховики и куртки напрямую от производителей.",
-      ar: "أحدث تشكيلات الملابس الخارجية النسائية بالجملة من مصانع مارتر إسطنبول. معاطف كشمير، جاكيتات منفوخة وترنشكوت بأفضل أسعار الجملة.",
-      de: "Hochwertige Damen-Outdoorbekleidung im Großhandel aus Merter Istanbul. Wollmäntel, Pufferjacken, Trenchcoats und Übergangsjacken zu Werkspreisen.",
-      fr: "Grossiste en manteaux chauds, vestes matelassées, doudounes et trench-coats pour femmes. Fabrication turque haut de gamme pour vos rayons.",
-      pl: "Ciepłe płaszcze wełniane, kurtki puchowe i klasyczne trencze w hurcie z Turcji. Niezbędne w każdym butiku na chłodniejsze miesiące.",
-      bg: "Богат асортимент от дамски връхни дрехи на едро от Мертер, Истанбул. Вълнени палта, пухенки и стилни тренчкоти на достъпни складови цени.",
-    };
-    return { title: coatTitles[lang] || coatTitles.en, description: coatDescs[lang] || coatDescs.en };
-  }
-  if (cleanSlug === "ikili-takim" || cleanSlug === "takim-tulum") {
-    const suitTitles: Record<string, string> = {
+    },
+    descriptions: {
+      tr: "En yeni sezon toptan kadın dış giyim ürünleri Merter Vitrini'nde. Kaşe kaban, şişme mont, trençkot ve ceketler doğrudan üreticiden serili satışta.",
+      en: "Source wholesale women's outerwear from Istanbul Merter manufacturers: woolen coats, puffer jackets, trenches, and blazers.",
+      ru: "Широкий выбор женской верхней одежды оптом из Стамбула (Мертер): пальто, тренчи, пуховики и куртки от производителей.",
+      ar: "أحدث تشكيلات الملابس الخارجية النسائية بالجملة من مصانع مارتر إسطنبول بأفضل أسعار المصنع.",
+      de: "Hochwertige Damen-Oberbekleidung im Großhandel aus Merter Istanbul: Wollmäntel, Pufferjacken und Trenchcoats zu Werkspreisen.",
+      fr: "Grossiste en manteaux, vestes matelassées, doudounes et trench-coats pour femmes fabriqués à Istanbul.",
+      pl: "Ciepłe płaszcze, kurtki puchowe i trencze damskie w hurcie w paczkach bezpośrednio z Turcji.",
+      bg: "Богат асортимент от дамски връхни дрехи на едро от Мертер, Истанбул на фабрични цени.",
+    },
+  },
+  {
+    matches: (s) => s === "ikili-takim" || s === "takim-tulum",
+    titles: {
       tr: "Toptan Kadın İkili Takım Modelleri | Şık & Günlük Kombinler",
-      en: "Wholesale Women's Two-Piece Co-ord Sets | Casual & Chic Outfits",
+      en: "Wholesale Women's Two-Piece Co-ord Sets | Merter Factory Direct",
       ru: "Женские Костюмы-Двойки Оптом из Турции | Стильные Комплекты",
       ar: "أطقم نسائية قطعتين بالجملة تركيا | ملابس كاجوال ورسمية مارتر",
       de: "Großhandel Zweiteiler Damen-Sets | Trendige Co-Ord Ensembles",
       fr: "Ensembles Coordonnés Femme 2 Pièces en Gros | Mode Istanbul",
       pl: "Komplety Dwuczęściowe Damskie Hurt | Modne Zestawy ze Stambułu",
       bg: "Дамски Комплекти от Две Части на Едро | Ежедневни и Елегантни",
-    };
-    const suitDescs: Record<string, string> = {
+    },
+    descriptions: {
       tr: "En popüler kadın ikili takım modelleri toptan satışta. Gömlek-pantolon, bluz-etek ve spor-şık takımlar Merter Vitrini imalatçı fiyatlarıyla.",
-      en: "Trend-setting wholesale women's two-piece matching sets and coordinated outfits. Shirt-pant and top-skirt ensembles direct from Turkey.",
-      ru: "Широкий выбор женских костюмов-двоек оптом: повседневные комплекты с брюками, шортами и юбками по фабричным ценам из Стамбула.",
-      ar: "تشكيلة أطقم نسائية قطعتين (بلوزة وبنطلون / قميص وتنانير) بالجملة من مصانع مارتر إسطنبول. أناقة يومية متكاملة وسهلة البيع للمتاجر.",
-      de: "Moderne zweiteilige Damen-Sets (Hose mit Bluse/Top) im Großhandel aus Merter. Gefragte Co-Ord Ensembles zu attraktiven Serienpreisen.",
-      fr: "Grossiste d'ensembles coordonnés 2 pièces pour femmes : chemise-pantalon, top-jupe et looks décontractés en direct des ateliers turcs.",
-      pl: "Modne komplety dwuczęściowe damskie (spodnie + koszula/top) w hurcie z Turcji. Gotowe, chętnie kupowane stylizacje dla każdego butiku.",
-      bg: "Тенденции в дамските сетове от две части (риза с панталон/пола) на едро от Мертер, Истанбул. Бързооборотни стоки на топ фабрични цени.",
-    };
-    return { title: suitTitles[lang] || suitTitles.en, description: suitDescs[lang] || suitDescs.en };
-  }
-  if (cleanSlug === "kumas" || cleanSlug.includes("fabric") || cleanSlug.includes("tekstil")) {
-    const fabricTitles: Record<string, string> = {
-      tr: "Toptan Türk Kumaşları ve Tekstil Tedariği - İstanbul",
-      en: "Turkish Fabric Wholesale - Premium Textile Sourcing",
-      ru: "Турецкие Ткани Оптом - Премиальный Текстиль и Сырье",
-      de: "Türkische Stoffe Großhandel - Premium Textilbeschaffung",
-      pl: "Tureckie Tkaniny Hurt - Zaopatrzenie Tekstylne Stambuł",
-      bg: "Турски Плат на Едро - Текстилни Материали Истанбул",
-      ar: "أقمشة تركية بالجملة - توريد المنسوجات الفاخرة اسطنبول",
-      fr: "Tissus Turcs en Gros - Approvisionnement Textile Premium Istanbul",
-    };
-    const fabricDescs: Record<string, string> = {
-      tr: "En kaliteli Türk kumaşları, örme, dokuma ve iplik çeşitleriyle doğrudan toptan tedarik kanalları.",
-      en: "Source high-quality Turkish fabrics, knitted, woven textiles directly from Istanbul premium suppliers.",
-      ru: "Оптовые закупки турецких тканей и текстильного сырья напрямую от фабрик-производителей.",
-      de: "Direkter Bezug von hochwertigen türkischen Stoffen und Geweben bei führenden Webereien.",
-      pl: "Bezpośrednie zaopatrzenie w wysokiej jakości tkaniny tureckie od czołowych producentów.",
-      bg: "Директна доставка на висококачествени турски платове от водещи текстилни фабрики.",
-      ar: "احصل على أفضل الأقمشة والمنسوجات التركية الفاخرة مباشرة من المصانع والموردين في اسطنبول.",
-      fr: "Achetez des tissus turcs de haute qualité, tricotés ou tissés directement des fournisseurs premium d'Istanbul.",
-    };
-    return { title: fabricTitles[lang] || fabricTitles.en, description: fabricDescs[lang] || fabricDescs.en };
-  }
-  if (cleanSlug === "surdurulebilir" || cleanSlug.includes("organotex") || cleanSlug.includes("organic")) {
-    const organicTitles: Record<string, string> = {
-      tr: "Sürdürülebilir Tekstil Tedariği: Organotex ve Sertifikalı Kumaşlar",
-      en: "Sustainable Textile Sourcing: Organotex & Certified Fabrics",
-      ru: "Экологичный Текстиль: Organotex и Сертифицированные Ткани",
-      de: "Nachhaltige Textilien: Organotex & Zertifizierte Stoffe",
-      pl: "Zrównoważone Tekstylia: Organotex i Certyfikowane Tkaniny",
-      bg: "Устойчив Текстил: Organotex и Сертифицирани Тъкани",
-      ar: "توريد المنسوجات المستدامة: أورغانوتكس والأقمشة المعتمدة",
-      fr: "Approvisionnement Textile Durable : Organotex et Tissus Certifiés",
-    };
-    const organicDescs: Record<string, string> = {
-      tr: "Organotex sertifikalı sürdürülebilir, ekolojik kumaş ve tekstil ürünleri toptan tedarik rehberi.",
-      en: "Eco-friendly, certified fabrics and sustainable textile sourcing including Organotex materials in Turkey.",
-      ru: "Поставки экологически чистых сертифицированных тканей и материалов Organotex оптом из Турции.",
-      de: "Bezug von umweltfreundlichen, zertifizierten Stoffen und nachhaltigen Textilien (Organotex) in der Türkei.",
-      pl: "Hurtowe zaopatrzenie w ekologiczne, certyfikowane tkaniny i materiały Organotex z Turcji.",
-      bg: "Доставка на екологични сертифицирани платове и устойчиви текстилни материали Organotex на едро.",
-      ar: "دليل توريد المنسوجات المستدامة والأقمشة العضوية المعتمدة بما في ذلك أورغانوتكس في تركيا.",
-      fr: "Guide d'achat de tissus durables et biologiques certifiés Organotex en gros en Turquie.",
-    };
-    return { title: organicTitles[lang] || organicTitles.en, description: organicDescs[lang] || organicDescs.en };
-  }
-  return null;
+      en: "Wholesale women's two-piece matching sets and co-ord outfits sold in size-run packs directly from Merter Istanbul factories.",
+      ru: "Широкий выбор женских костюмов-двоек оптом размерными рядами по фабричным ценам из Стамбула.",
+      ar: "تشكيلة أطقم نسائية قطعتين بالجملة بنظام الباكيدج من مصانع مارتر إسطنبول.",
+      de: "Moderne zweiteilige Damen-Sets im Großhandel in Serienpaketen direkt aus Merter Istanbul.",
+      fr: "Grossiste d'ensembles coordonnés 2 pièces pour femmes en direct des ateliers de Merter Istanbul.",
+      pl: "Modne komplety dwuczęściowe damskie w hurcie w seriach bezpośrednio z Turcji.",
+      bg: "Дамски сетове от две части на едро на серии от Мертер, Истанбул на фабрични цени.",
+    },
+  },
+];
+
+function getCustomSeoOverride(
+  cleanSlug: string,
+  lang: SupportedSeoLang
+): { title: string; description: string } | null {
+  const matched = CUSTOM_CATEGORY_SEO_RULES.find((rule) => rule.matches(cleanSlug));
+  if (!matched) return null;
+  return {
+    title: matched.titles[lang],
+    description: matched.descriptions[lang],
+  };
 }
 
-function getCategorySuffixAndDesc(title: string, lang: string): { titleSuffix: string; descTemplate: string } {
-  switch (lang) {
-    case "en":
-      return {
-        titleSuffix: "Wholesale B2B",
-        descTemplate: `Wholesale ${title} series and assorted order options. High quality Merter wholesale apparel.`,
-      };
-    case "pl":
-      return {
-        titleSuffix: "Hurt B2B",
-        descTemplate: `Zamówienia hurtowe ${title} w seriach i pakietach. Najwyższej jakości odzież hurtowa z Merter.`,
-      };
-    case "de":
-      return {
-        titleSuffix: "Großhandel B2B",
-        descTemplate: `Großhandel ${title} in Serien und Sortimenten. Hochwertige Großhandelskleidung aus Merter.`,
-      };
-    case "ru":
-      return {
-        titleSuffix: "Оптом B2B",
-        descTemplate: `Оптовые заказы ${title} сериями и пакетами. Высококачественная оптовая одежда из Мертер.`,
-      };
-    case "fr":
-      return {
-        titleSuffix: "Vente en Gros B2B",
-        descTemplate: `Vente en gros ${title} en séries et assortiments. Vêtements en gros de Merter de haute qualité.`,
-      };
-    default:
-      return {
-        titleSuffix: "Toptan B2B",
-        descTemplate: `Toptan ${title} serili ve asortili sipariş imkanları. En kaliteli Merter toptan giyim ürünleri.`,
-      };
-  }
+function getCategorySuffixAndDesc(
+  title: string,
+  lang: SupportedSeoLang
+): { titleSuffix: string; descTemplate: string } {
+  const templates: Record<SupportedSeoLang, { titleSuffix: string; descTemplate: string }> = {
+    tr: {
+      titleSuffix: "Toptan B2B",
+      descTemplate: `Toptan ${title} serili ve asortili sipariş imkanları. Doğrudan Merter İstanbul üretici fabrikalarından B2B toptan giyim tedariği.`,
+    },
+    en: {
+      titleSuffix: "Wholesale B2B",
+      descTemplate: `Wholesale ${title} size-run packs and direct factory orders from verified Merter Istanbul clothing manufacturers.`,
+    },
+    ru: {
+      titleSuffix: "Оптом B2B",
+      descTemplate: `${title} оптом размерными рядами (сериями) напрямую от фабрик Мертера (Стамбул) без посредников с карго доставкой.`,
+    },
+    ar: {
+      titleSuffix: "بالجملة B2B",
+      descTemplate: `${title} بالجملة بنظام السيري والباكيدج مباشرة من مصانع مارتر إسطنبول بدون وسطاء مع شحن دولي سريع.`,
+    },
+    de: {
+      titleSuffix: "Großhandel B2B",
+      descTemplate: `${title} im Großhandel in sortierten Serienpaketen direkt ab Werk von Herstellern aus Merter Istanbul.`,
+    },
+    fr: {
+      titleSuffix: "Vente en Gros B2B",
+      descTemplate: `Vente en gros ${title} par séries assorties directement auprès des fabricants textiles de Merter Istanbul.`,
+    },
+    pl: {
+      titleSuffix: "Hurt B2B",
+      descTemplate: `${title} hurt w pełnych seriach rozmiarowych (paczkach) bezpośrednio od producentów z Merter Stambuł.`,
+    },
+    bg: {
+      titleSuffix: "На Едро B2B",
+      descTemplate: `${title} на едро на размерни серии директно от турски фабрики в Мертер Истанбул без посредници.`,
+    },
+  };
+  return templates[lang];
 }
 
-function getCategoryB2BFAQ(catTitle: string, lang: string): { q: string; a: string }[] {
-  const faqData: Record<string, { q: string; a: string }[]> = {
+function trimSeoMetaDescription(raw?: string | null): string {
+  if (!raw) return "";
+  const cleaned = raw
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return "";
+  if (cleaned.length <= 165) return cleaned;
+  return `${cleaned.slice(0, 162).trimEnd()}...`;
+}
+
+function getCategoryB2BFAQ(
+  catTitle: string,
+  lang: SupportedSeoLang
+): { q: string; a: string }[] {
+  const faqData: Record<SupportedSeoLang, { q: string; a: string }[]> = {
     tr: [
       {
         q: `${catTitle} toptan siparişlerinde minimum alım miktarı (MOQ) nedir?`,
@@ -430,7 +423,7 @@ function getCategoryB2BFAQ(catTitle: string, lang: string): { q: string; a: stri
       },
       {
         q: "Can I order multiple brands and categories in a single combined shipment?",
-        a: "Yes! Merter Vitrini consolidates all your items from multiple Turkish textile manufacturers into one consolidated parcel to minimize international freight costs.",
+        a: "Yes! Merter Vitrini consolidates all your items from multiple Turkish textile manufacturers into one combined parcel to minimize international freight costs.",
       },
     ],
     ru: [
@@ -440,27 +433,27 @@ function getCategoryB2BFAQ(catTitle: string, lang: string): { q: string; a: stri
       },
       {
         q: "Сколько времени занимает доставка из Стамбула в Россию и СНГ?",
-        a: "Отправка осуществляется карго-компаниями или авиапочтой. Сроки доставки карго в Москву и регионы составляют от 4 до 9 дней.",
+        a: "Отправка осуществляется проверенными карго-компаниями или авиапочтой. Сроки доставки карго составляют от 4 до 9 дней.",
       },
     ],
     ar: [
       {
         q: `ما هو الحد الأدنى للطلب (MOQ) لمنتجات ${catTitle} بالجملة؟`,
-        a: `تباع منتجاتنا بالجملة بنظام السيري / الباكت المقاسات المتنوعة. الحد الأدنى للطلب يبدأ من باكت واحد فقط (4-6 قطع).`,
+        a: `تباع منتجات ${catTitle} بالجملة بنظام السيري والباكيدج المقاسات المتنوعة، ويبدأ الحد الأدنى للطلب من باكت واحد فقط (4-6 قطع).`,
       },
       {
         q: "كم تستغرق مدة شحن الطلبات من إسطنبول إلى الدول العربية؟",
-        a: "يتم تجهيز الشحنات خلال 1-3 أيام عمل وشحنها عبر الشحن الجوي السريع أو شركات الكارجو لتصل خلال 3-6 أيام إلى دول الخليج والشرق الأوسط.",
+        a: "يتم تجهيز الشحنات خلال 1-3 أيام عمل وشحنها عبر الشحن الجوي السريع أو شركات الكارجو لتصل خلال 3-6 أيام إلى الخليج والشرق الأوسط.",
       },
     ],
     de: [
       {
         q: `Was ist die Mindestbestellmenge (MOQ) für ${catTitle} im Großhandel?`,
-        a: `Unsere ${catTitle}-Kollektionen werden in Serienpacks (Größenassortiert, üblicherweise 4-6 Stück) verkauft. Mindestbestellmenge ist 1 Pack.`,
+        a: `Unsere ${catTitle}-Kollektionen werden in Serienpacks (größenassortiert, üblicherweise 4-6 Stück) verkauft. Mindestbestellmenge ist 1 Pack.`,
       },
       {
         q: "Wie läuft der Versand aus der Türkei nach Deutschland und Europa?",
-        a: "Lieferungen nach Deutschland und EU-Länder dauern per Express-Kurier oder Spedition ca. 3-5 Werktage mit vollständigen Zollpapieren.",
+        a: "Lieferungen nach Deutschland und EU-Länder dauern per Express-Kurier oder Spedition ca. 3-5 Werktage inklusive ATR-Zolldokumenten.",
       },
     ],
     fr: [
@@ -486,7 +479,7 @@ function getCategoryB2BFAQ(catTitle: string, lang: string): { q: string; a: stri
     bg: [
       {
         q: `Какво е минималното количество за поръчка (MOQ) за ${catTitle} на едро?`,
-        a: `Продуктите се продават в размерни серии/пакети (обикновено 4-6 броя). Минималната поръчка започва от 1 серия.`,
+        a: `Продуктите ${catTitle} се продават в размерни серии/пакети (обикновено 4-6 броя). Минималната поръчка започва от 1 серия.`,
       },
       {
         q: "Какви са сроковете за доставка от Истанбул до България?",
@@ -495,11 +488,12 @@ function getCategoryB2BFAQ(catTitle: string, lang: string): { q: string; a: stri
     ],
   };
 
-  return faqData[lang] || faqData.en;
+  return faqData[lang];
 }
 
 export function getCategoryB2BDefaultDesc(categoryTitle: string, lang: string): string {
-  const descMap: Record<string, string> = {
+  const safeLang = normalizeSeoLang(lang, "en");
+  const descMap: Record<SupportedSeoLang, string> = {
     tr: `Merter Vitrini toptan ${categoryTitle} kategorisi, İstanbul Merter ve Güngören tekstil imalatçılarının en güncel butik ve mağaza koleksiyonlarını bir araya getirmektedir. Ürünlerimiz toptan seri ve paketler halinde satılmakta olup, paket içi asortili beden dağılımı sayesinde butiğinizin tüm beden taleplerini karşılar. Doğrudan üretici fiyatlarıyla minimum sipariş (MOQ) avantajından yararlanabilir, siparişlerinizi tek bir konsolide kargo ile dünya geneline güvenle ulaştırabilirsiniz.`,
     en: `The Merter Vitrini wholesale ${categoryTitle} catalog brings together the latest boutique collections from Istanbul Merter and Gungoren textile manufacturers. All products are supplied in wholesale packs and size runs with full ratio distribution, ensuring balanced inventory for your fashion retail business. Benefit from direct factory pricing, low MOQ, and worldwide express delivery with combined international shipments.`,
     ru: `Каталог ${categoryTitle} оптом на платформе Merter Vitrini объединяет новейшие коллекции ведущих фабрик Стамбула (Мертер, Гюнгёрен). Все товары поставляются фабричными сериями и размерными пакетами с пропорциональной разбивкой размеров. Покупайте напрямую от турецких производителей по оптовым ценам с минимальным объемом заказа (от 1 серии) и быстрой доставкой карго по всей России и СНГ.`,
@@ -509,233 +503,221 @@ export function getCategoryB2BDefaultDesc(categoryTitle: string, lang: string): 
     pl: `Kategoria hurtowa ${categoryTitle} na Merter Vitrini łączy najnowsze kolekcje odzieży butikowej od renomowanych producentów ze Stambułu (Merter). Wszystkie produkty sprzedawane są w seriach rozmiarowych z pełną asortymentacją. Skorzystaj z bezpośrednich cen fabrycznych, niskiego MOQ i szybkiej konsolidowanej wysyłki międzynarodowej do Polski.`,
     bg: `Категорията ${categoryTitle} на едро в Merter Vitrini събира най-актуалните бутикови колекции от текстилни производители в Истанбул (Мертер). Продуктите се предлагат в размерни серии с пълно разпределение на размерите. Възползвайте се от директни фабрични цени, минимални количества за поръчка (от 1 серия) и бърза доставка до България.`,
   };
-  return descMap[lang] || descMap.en;
+  return descMap[safeLang];
 }
 
 const FILTER_KEYS = new Set([
-  "color", "size", "brand", "brand_id", "gender", "season",
-  "min_price", "max_price", "sort_by", "q", "page"
+  "color",
+  "size",
+  "brand",
+  "brand_id",
+  "gender",
+  "season",
+  "min_price",
+  "max_price",
+  "sort_by",
+  "q",
+  "page",
 ]);
 
-async function checkHasFilterParams(searchParamsPromise?: Promise<{ [key: string]: string | string[] | undefined }>): Promise<boolean> {
+async function checkHasFilterParams(
+  searchParamsPromise?: Promise<{ [key: string]: string | string[] | undefined }>
+): Promise<boolean> {
   if (!searchParamsPromise) return false;
   const search = await searchParamsPromise;
   if (!search) return false;
   return Object.keys(search).some((k) => FILTER_KEYS.has(k));
 }
 
-function resolveLangForPrefix(prefix: string, activeLangs: Language[]): string {
+function resolveLangForPrefix(prefix: string, activeLangs: Language[]): SupportedSeoLang {
   const matched = activeLangs.find((l) => l.categoryPrefix === prefix);
-  return matched?.code || "en";
+  return normalizeSeoLang(matched?.code || prefix, "tr");
 }
 
-function buildAlternatesLanguages(nestedPath: string, activeLangs: Language[]): Record<string, string> {
-  const alternatesLanguages: Record<string, string> = {
-    "x-default": `https://mertervitrini.com.tr/en/${nestedPath}`,
-  };
-  activeLangs.forEach((l) => {
-    alternatesLanguages[l.code] = `https://mertervitrini.com.tr/${l.categoryPrefix}/${nestedPath}`;
+function resolveRawSlug(slugArr: string[] | string): string {
+  if (Array.isArray(slugArr) && slugArr.length > 0) {
+    return slugArr.at(-1) || "";
+  }
+  return typeof slugArr === "string" ? slugArr : "";
+}
+
+function humanizeSlug(slug: string): string {
+  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function buildCategoryItemListElements(products: Product[], lang: SupportedSeoLang) {
+  return products.slice(0, 12).map((prod, idx) => {
+    const prodSlug = prod.slug || prod.id;
+    const prodUrl =
+      lang === "tr"
+        ? `${SITE_ORIGIN}/product/${prodSlug}`
+        : `${SITE_ORIGIN}/product/${prodSlug}?lang=${lang}`;
+    const prodTitle = prod.translations?.[lang]?.title || prod.title;
+    return {
+      "@type": "ListItem",
+      position: idx + 1,
+      name: prodTitle,
+      url: prodUrl,
+    };
   });
-  return alternatesLanguages;
 }
 
-function createCategoryMetadata({
-  fullTitle,
-  finalDesc,
-  canonicalUrl,
-  alternatesLanguages,
-  hasFilterParams,
-  categoryTitle,
-  lang,
-}: {
-  fullTitle: string;
-  finalDesc: string;
-  canonicalUrl: string;
-  alternatesLanguages: Record<string, string>;
-  hasFilterParams: boolean;
-  categoryTitle: string;
-  lang: string;
-}): Metadata {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: MetadataProps): Promise<Metadata> {
+  const { categoryPrefix, slug: slugArr } = await params;
+  const slug = resolveSlugAlias(resolveRawSlug(slugArr));
+  const [hasFilterParams, activeLangs, categories] = await Promise.all([
+    checkHasFilterParams(searchParams),
+    fetchLanguages(),
+    fetchSsrCategories(),
+  ]);
+
+  const lang = resolveLangForPrefix(categoryPrefix, activeLangs);
+  const catObj = findCategoryBySlug(categories, slug);
+  const slugPathArr = getCategorySlugPath(categories, slug);
+  const nestedPath = slugPathArr ? slugPathArr.join("/") : slug;
+  const alternates = buildPrefixedAlternates(nestedPath, lang);
+
+  const fallbackTitle = humanizeSlug(slug);
+  const categoryTitle = catObj
+    ? catObj.translations?.[lang]?.title || catObj.title
+    : fallbackTitle;
+
+  const { titleSuffix, descTemplate } = getCategorySuffixAndDesc(categoryTitle, lang);
+  const customSeo = getCustomSeoOverride(slug.toLowerCase(), lang);
+  const dbSeoDesc = trimSeoMetaDescription(catObj?.translations?.[lang]?.seo_description);
+
+  const fullTitle = customSeo
+    ? customSeo.title
+    : `${categoryTitle} | Merter Vitrini ${titleSuffix}`;
+  const finalDesc = dbSeoDesc || customSeo?.description || descTemplate;
+
   return {
     title: fullTitle,
     description: finalDesc,
+    keywords: `${categoryTitle}, ${GLOBAL_B2B_SEO_MATRIX[lang].keywords}`,
     robots: hasFilterParams
       ? { index: false, follow: true }
       : { index: true, follow: true },
-    alternates: {
-      canonical: canonicalUrl,
-      languages: alternatesLanguages,
-    },
+    alternates,
     openGraph: {
       title: fullTitle,
       description: finalDesc,
-      url: canonicalUrl,
-      siteName: "Merter Vitrini",
+      url: alternates.canonical,
+      siteName: "Merter Vitrini B2B",
       images: [
         {
-          url: "https://mertervitrini.com.tr/placeholder.png",
-          width: 800,
-          height: 600,
+          url: `${SITE_ORIGIN}/og-image.jpg`,
+          width: 1200,
+          height: 630,
           alt: categoryTitle,
-        }
+        },
       ],
-      locale: lang === "tr" ? "tr_TR" : "en_US",
+      locale: OG_LOCALE_BY_LANG[lang],
       type: "website",
-    }
-  };
-}
-
-// Generate dynamic SEO metadata on the server side using prefix and category slug
-export async function generateMetadata({ params, searchParams }: MetadataProps): Promise<Metadata> {
-  const { categoryPrefix, slug: slugArr } = await params;
-  const rawSlug = (Array.isArray(slugArr) && slugArr.length > 0 ? slugArr.at(-1) : slugArr) as string;
-  const slug = resolveSlugAlias(rawSlug);
-  
-  const hasFilterParams = await checkHasFilterParams(searchParams);
-  const activeLangs = await fetchLanguages();
-  const lang = resolveLangForPrefix(categoryPrefix, activeLangs);
-  
-  try {
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/categories", { next: { revalidate: 300 } });
-    if (response.ok) {
-      const categories = await response.json();
-      const catObj = findCategoryBySlug(categories, slug);
-      const slugPathArr = getCategorySlugPath(categories, slug);
-      
-      if (catObj && slugPathArr) {
-        const nestedPath = slugPathArr.join("/");
-        const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/${nestedPath}`;
-        const alternatesLanguages = buildAlternatesLanguages(nestedPath, activeLangs);
-
-        const categoryTitle = catObj.translations?.[lang]?.title || catObj.title;
-        const { titleSuffix, descTemplate: defaultDesc } = getCategorySuffixAndDesc(categoryTitle, lang);
-        const customSeo = getCustomSeoOverride(String(slug).toLowerCase(), lang);
-
-        const fullTitle = customSeo ? customSeo.title : `${categoryTitle} | Merter Vitrini ${titleSuffix}`;
-        const finalDesc = customSeo ? customSeo.description : defaultDesc;
-
-        return createCategoryMetadata({
-          fullTitle,
-          finalDesc,
-          canonicalUrl,
-          alternatesLanguages,
-          hasFilterParams,
-          categoryTitle,
-          lang,
-        });
-      }
-    }
-  } catch (err) {
-    console.error("[SEO] Unified generateMetadata failed:", err);
-  }
-
-  // Dynamic fallback metadata based on requested slug
-  const cleanTitle = String(slug).replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  return {
-    title: `Toptan ${cleanTitle} Modelleri ve İmalatçı Fiyatları | Merter Vitrini B2B`,
-    description: `Toptan ${cleanTitle} serili ve asortili butik sipariş imkanları. Doğrudan Merter tekstil üreticilerinden en uygun toptan hazır giyim fiyatları. Minimum paket alımı.`,
-    robots: hasFilterParams
-      ? { index: false, follow: true }
-      : { index: true, follow: true },
-    alternates: {
-      canonical: `https://mertervitrini.com.tr/${categoryPrefix}/${slug}`,
-      languages: {
-        "x-default": `https://mertervitrini.com.tr/en/${slug}`,
-        tr: `https://mertervitrini.com.tr/tr/${slug}`,
-        en: `https://mertervitrini.com.tr/en/${slug}`,
-        ru: `https://mertervitrini.com.tr/ru/${slug}`,
-        ar: `https://mertervitrini.com.tr/ar/${slug}`,
-        de: `https://mertervitrini.com.tr/de/${slug}`,
-        pl: `https://mertervitrini.com.tr/pl/${slug}`,
-        fr: `https://mertervitrini.com.tr/fr/${slug}`,
-        bg: `https://mertervitrini.com.tr/bg/${slug}`,
-      },
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: fullTitle,
+      description: finalDesc,
+      images: [`${SITE_ORIGIN}/og-image.jpg`],
     },
   };
 }
 
 export default async function CategoryPage({ params }: PageProps) {
   const { categoryPrefix, slug: slugArr } = await params;
-  const rawSlug = (Array.isArray(slugArr) && slugArr.length > 0 ? slugArr.at(-1) : slugArr) as string;
-  const slug = resolveSlugAlias(rawSlug);
-  
-  const activeLangs = await fetchLanguages();
-  const prefixToLangMap = new Map<string, string>();
-  activeLangs.forEach((l) => {
-    if (!prefixToLangMap.has(l.categoryPrefix) || l.code === "tr" || l.code === "en") {
-      prefixToLangMap.set(l.categoryPrefix, l.code);
-    }
-  });
-  
-  const defaultLang = prefixToLangMap.get(categoryPrefix) || "tr";
-  
-  const cleanCategoryTitle = String(slug).replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  let preFetchedCategories: Category[] = [];
-  try {
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/categories", { next: { revalidate: 300 } });
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        preFetchedCategories = data;
-      }
-    }
-  } catch (err) {
-    console.error("Failed to pre-fetch categories:", err);
-  }
+  const slug = resolveSlugAlias(resolveRawSlug(slugArr));
 
-  // Schema.org JSON-LD BreadcrumbList
-  const slugPathArr = getCategorySlugPath(preFetchedCategories, slug) || [slug];
+  const [activeLangs, preFetchedCategories] = await Promise.all([
+    fetchLanguages(),
+    fetchSsrCategories(),
+  ]);
+
+  const defaultLang = resolveLangForPrefix(categoryPrefix, activeLangs);
   const catObj = findCategoryBySlug(preFetchedCategories, slug);
+  const slugPathArr = getCategorySlugPath(preFetchedCategories, slug) || [slug];
+
+  const initialProductsPayload = catObj
+    ? await fetchSsrProducts(
+        `?limit=24&offset=0&sort_by=newest&category_id=${encodeURIComponent(catObj.id)}`
+      )
+    : { products: [], total: 0 };
+
   const breadcrumbElements = [
     {
       "@type": "ListItem",
-      "position": 1,
-      "name": "Ana Sayfa",
-      "item": `https://mertervitrini.com.tr/${categoryPrefix}`,
+      position: 1,
+      name: GLOBAL_B2B_SEO_MATRIX[defaultLang].homeLabel,
+      item: `${SITE_ORIGIN}/${defaultLang}`,
     },
   ];
 
   let cumulativePath = "";
-  slugPathArr.forEach((s, idx) => {
-    cumulativePath += `/${s}`;
-    const matchedNode = findCategoryBySlug(preFetchedCategories, s);
-    const nodeTitle = matchedNode ? (matchedNode.translations?.[defaultLang]?.title || matchedNode.title) : s;
+  slugPathArr.forEach((segment, idx) => {
+    cumulativePath += `/${segment}`;
+    const matchedNode = findCategoryBySlug(preFetchedCategories, segment);
+    const nodeTitle = matchedNode
+      ? matchedNode.translations?.[defaultLang]?.title || matchedNode.title
+      : humanizeSlug(segment);
     breadcrumbElements.push({
       "@type": "ListItem",
-      "position": idx + 2,
-      "name": nodeTitle,
-      "item": `https://mertervitrini.com.tr/${categoryPrefix}${cumulativePath}`,
+      position: idx + 2,
+      name: nodeTitle,
+      item: `${SITE_ORIGIN}/${defaultLang}${cumulativePath}`,
     });
   });
 
-  const categoryTitle = catObj ? (catObj.translations?.[defaultLang]?.title || catObj.title) : cleanCategoryTitle;
+  const categoryTitle = catObj
+    ? catObj.translations?.[defaultLang]?.title || catObj.title
+    : humanizeSlug(slug);
   const faqs = getCategoryB2BFAQ(categoryTitle, defaultLang);
+  const { descTemplate } = getCategorySuffixAndDesc(categoryTitle, defaultLang);
+  const dbSeoDesc = trimSeoMetaDescription(
+    catObj?.translations?.[defaultLang]?.seo_description
+  );
+  const itemListElements = buildCategoryItemListElements(
+    initialProductsPayload.products,
+    defaultLang
+  );
 
   const categoryJsonLd = {
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": "CollectionPage",
-        "name": categoryTitle,
-        "url": `https://mertervitrini.com.tr/${categoryPrefix}/${slugPathArr.join("/")}`,
-        "description": `Toptan ${categoryTitle} modelleri ve serili sipariş imkanları. Merter B2B toptan hazır giyim tedarik platformu.`,
-        "breadcrumb": {
+        name: categoryTitle,
+        url: `${SITE_ORIGIN}/${defaultLang}/${slugPathArr.join("/")}`,
+        inLanguage: defaultLang,
+        description: dbSeoDesc || descTemplate,
+        breadcrumb: {
           "@type": "BreadcrumbList",
-          "itemListElement": breadcrumbElements,
+          itemListElement: breadcrumbElements,
         },
+        ...(itemListElements.length > 0
+          ? {
+              mainEntity: {
+                "@type": "ItemList",
+                numberOfItems: initialProductsPayload.total || itemListElements.length,
+                itemListElement: itemListElements,
+              },
+            }
+          : {}),
       },
       {
         "@type": "BreadcrumbList",
-        "itemListElement": breadcrumbElements,
+        itemListElement: breadcrumbElements,
       },
       {
         "@type": "FAQPage",
-        "mainEntity": faqs.map((f) => ({
+        mainEntity: faqs.map((f) => ({
           "@type": "Question",
-          "name": f.q,
-          "acceptedAnswer": {
+          name: f.q,
+          acceptedAnswer: {
             "@type": "Answer",
-            "text": f.a,
+            text: f.a,
           },
         })),
       },
@@ -746,9 +728,17 @@ export default async function CategoryPage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(categoryJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(categoryJsonLd) }}
       />
-      <StorefrontLayout mode="catalog" initialCategorySlug={slug} preFetchedCategories={preFetchedCategories} defaultLang={defaultLang} />
+      <StorefrontLayout
+        mode="catalog"
+        initialCategorySlug={slug}
+        preFetchedCategories={preFetchedCategories}
+        defaultLang={defaultLang}
+        initialProducts={initialProductsPayload.products}
+        initialTotalProducts={initialProductsPayload.total}
+        categoryFaqs={faqs}
+      />
     </>
   );
 }

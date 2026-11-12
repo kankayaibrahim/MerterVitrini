@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { t, getCategoryPrefix } from "../../app/i18n";
+import { t, getCategoryPrefix, normalizeLangCode, pickLangText, SupportedLangCode } from "../../app/i18n";
 import { apiFetch } from "../../app/utils";
 import SupplierApplicationSection from "./SupplierApplicationSection";
 import NewsletterSubscriptionBox from "./NewsletterSubscriptionBox";
@@ -188,8 +188,72 @@ function FooterContactColumn({ settings, lang }: { readonly settings: Settings; 
   );
 }
 
+interface FooterUiLabels {
+  serviceProviders: string;
+  androidAppApk: string;
+  localDev: string;
+  lastUpdatedPrefix: string;
+}
+
+const FOOTER_UI_LABELS: Record<SupportedLangCode, FooterUiLabels> = {
+  tr: {
+    serviceProviders: "Sektörel Hizmet Sağlayıcılar (Kargo / Stüdyo)",
+    androidAppApk: "Android Uygulama (APK)",
+    localDev: "Yerel Geliştirme",
+    lastUpdatedPrefix: "Son Güncelleme",
+  },
+  en: {
+    serviceProviders: "B2B Sectoral Service Providers",
+    androidAppApk: "Android App (APK)",
+    localDev: "Local Development",
+    lastUpdatedPrefix: "Last Updated",
+  },
+  ru: {
+    serviceProviders: "Отраслевые B2B-услуги (Карго / Студия)",
+    androidAppApk: "Приложение Android (APK)",
+    localDev: "Локальная разработка",
+    lastUpdatedPrefix: "Последнее обновление",
+  },
+  ar: {
+    serviceProviders: "مقدمو الخدمات القطاعية B2B (الشحن / الاستوديو)",
+    androidAppApk: "تطبيق أندرويد (APK)",
+    localDev: "تطوير محلي",
+    lastUpdatedPrefix: "آخر تحديث",
+  },
+  de: {
+    serviceProviders: "B2B-Branchendienstleister (Logistik / Studio)",
+    androidAppApk: "Android-App (APK)",
+    localDev: "Lokale Entwicklung",
+    lastUpdatedPrefix: "Letzte Aktualisierung",
+  },
+  fr: {
+    serviceProviders: "Prestataires de Services B2B (Cargo / Studio)",
+    androidAppApk: "Application Android (APK)",
+    localDev: "Développement Local",
+    lastUpdatedPrefix: "Dernière mise à jour",
+  },
+  pl: {
+    serviceProviders: "Branżowi Dostawcy Usług B2B (Cargo / Studio)",
+    androidAppApk: "Aplikacja Android (APK)",
+    localDev: "Środowisko Lokalne",
+    lastUpdatedPrefix: "Ostatnia aktualizacja",
+  },
+  bg: {
+    serviceProviders: "Секторни B2B Доставчици на Услуги (Карго / Студио)",
+    androidAppApk: "Android Приложение (APK)",
+    localDev: "Локална среда",
+    lastUpdatedPrefix: " Последна актуализация".trim(),
+  },
+};
+
+function buildFooterQueryRoute(basePath: string, lang: string): string {
+  const safeCode = normalizeLangCode(lang);
+  return safeCode === "tr" ? basePath : `${basePath}?lang=${safeCode}`;
+}
+
 function FooterAboutColumn({ lang }: { readonly lang: string }) {
   const prefix = getCategoryPrefix(lang);
+  const labels = pickLangText(lang, FOOTER_UI_LABELS);
   return (
     <div>
       <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
@@ -217,8 +281,8 @@ function FooterAboutColumn({ lang }: { readonly lang: string }) {
           </a>
         </li>
         <li>
-          <Link href="/hizmet-saglayicilar" className="text-sky-700 font-bold hover:text-sky-800 hover:underline transition-colors duration-200">
-            {lang === "tr" ? "Sektörel Hizmet Sağlayıcılar (Kargo / Stüdyo)" : "B2B Sectoral Service Providers"}
+          <Link href={buildFooterQueryRoute("/hizmet-saglayicilar", lang)} className="text-sky-700 font-bold hover:text-sky-800 hover:underline transition-colors duration-200">
+            {labels.serviceProviders}
           </Link>
         </li>
         <li>
@@ -235,11 +299,11 @@ function FooterAboutColumn({ lang }: { readonly lang: string }) {
         </li>
         <li className="pt-1">
           <Link
-            href="/mobil-uygulama"
+            href={buildFooterQueryRoute("/mobil-uygulama", lang)}
             className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#111111] hover:bg-zinc-800 text-white text-xs font-extrabold tracking-wider uppercase transition-colors no-underline"
           >
             <Smartphone className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-            <span>{lang === "tr" ? "Android Uygulama (APK)" : "Android App (APK)"}</span>
+            <span>{labels.androidAppApk}</span>
           </Link>
         </li>
       </ul>
@@ -468,9 +532,10 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = false
   const sanitizedWhatsapp = settings.whatsapp.replace(/\D/g, "");
   const whatsappUrl = `https://wa.me/${sanitizedWhatsapp}`;
 
+  const labels = pickLangText(lang, FOOTER_UI_LABELS);
   const commitSuffix = process.env.NEXT_PUBLIC_GIT_COMMIT ? ` (${process.env.NEXT_PUBLIC_GIT_COMMIT})` : "";
-  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME || "Yerel Geliştirme";
-  const lastUpdatedTitle = `Son Güncelleme: ${buildTime}${commitSuffix}`;
+  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME || labels.localDev;
+  const lastUpdatedTitle = `${labels.lastUpdatedPrefix}: ${buildTime}${commitSuffix}`;
 
   return (
     <>

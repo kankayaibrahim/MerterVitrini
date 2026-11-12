@@ -57,12 +57,12 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
       },
       {
         id: "analytics",
-        title: "Ziyaretçi & Trafik Analitiği",
+        title: "BI & Veri Madenciliği",
         href: "/admin/analytics",
         icon: BarChart3,
-        badge: "Canlı",
+        badge: "BI",
         badgeColor: "emerald",
-        description: "Günlük tekil ziyaretçiler, yönlendiren URL'ler ve 7x24 ısı haritası"
+        description: "B2B dönüşüm hunisi, sıcak alıcı skorları, sıfır sonuçlu arama madenciliği, Web Vitals ve SEO bot radarı"
       }
     ]
   },

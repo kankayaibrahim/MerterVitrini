@@ -34,12 +34,17 @@ export default function ExecutiveMetricCards({
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {/* 1. B2B Ciro / GMV */}
+      {/* 1. B2B Ciro / GMV (TCMB FX-Normalized TRY Equivalent) */}
       <div className="glass-card bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex flex-col justify-between hover:border-emerald-300 transition-all">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-            Toplam B2B Hacmi
-          </span>
+          <div>
+            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">
+              Toplam B2B Hacmi (GMV)
+            </span>
+            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.5 rounded-md inline-block mt-1">
+              TCMB Kur Karşılığı (TRY)
+            </span>
+          </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
             <TrendingUp size={20} />
           </div>
@@ -48,9 +53,10 @@ export default function ExecutiveMetricCards({
           <div className="text-2xl font-black text-zinc-900 tracking-tight">
             {loading ? "..." : `₺${totalRev.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </div>
-          <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1">
+          <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1 flex-wrap">
             <span className="font-semibold text-emerald-600">AOV:</span>
             <span>₺{aov.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / sipariş</span>
+            <span className="text-[10px] text-zinc-400">• TCMB Kur Karşılığı</span>
           </p>
         </div>
       </div>

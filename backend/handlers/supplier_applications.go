@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -85,57 +84,13 @@ func NewSupplierApplicationsHandler(cfg *config.Config) *SupplierApplicationsHan
 	return &SupplierApplicationsHandler{Cfg: cfg}
 }
 
-// verifyReCaptcha validates Google reCAPTCHA v3 token with fail-safe tolerance
+// verifyReCaptcha validates Google reCAPTCHA v3 token using FastClient with timeout and strict success check.
 func (h *SupplierApplicationsHandler) verifyReCaptcha(token, action string) (bool, error) {
-	if h.Cfg.ReCaptchaSecret == "" {
-		return true, nil
+	secret := ""
+	if h != nil && h.Cfg != nil {
+		secret = h.Cfg.ReCaptchaSecret
 	}
-	// If token is empty (e.g. client adblocker, tracking protection, or privacy shield)
-	if token == "" {
-		log.Printf("[RECAPTCHA INFO] No reCAPTCHA token provided (likely blocked by client adblocker/privacy shield). Allowing submission.")
-		return true, nil
-	}
-
-	resp, err := http.PostForm("https://www.google.com/recaptcha/api/siteverify",
-		url.Values{
-			"secret":   {h.Cfg.ReCaptchaSecret},
-			"response": {token},
-		})
-	if err != nil {
-		log.Printf("[RECAPTCHA WARNING] reCAPTCHA service connection error: %v. Allowing submission.", err)
-		return true, nil
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Success    bool     `json:"success"`
-		Score      float64  `json:"score"`
-		Action     string   `json:"action"`
-		ErrorCodes []string `json:"error-codes"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("[RECAPTCHA WARNING] reCAPTCHA response decode error: %v. Allowing submission.", err)
-		return true, nil
-	}
-
-	if !result.Success {
-		log.Printf("[RECAPTCHA WARNING] Google verification returned errors %v for action %s. Tolerating to prevent legitimate lead dropoff.", result.ErrorCodes, action)
-		return true, nil
-	}
-
-	// Verify action matches if present
-	if result.Action != "" && action != "" && result.Action != action {
-		log.Printf("[RECAPTCHA WARNING] Action mismatch: expected %s, got %s", action, result.Action)
-	}
-
-	// Only reject if Google explicitly verified and confirmed a bot score < 0.2
-	if result.Score < 0.2 {
-		log.Printf("[RECAPTCHA REJECT] Confirmed bot activity detected: %f", result.Score)
-		return false, fmt.Errorf("bot aktivitesi şüphesi (skor: %.2f)", result.Score)
-	}
-
-	return true, nil
+	return verifyGoogleReCaptcha(secret, token, action)
 }
 
 // SubmitApplication handles public prospective supplier submissions with 30-min email verification

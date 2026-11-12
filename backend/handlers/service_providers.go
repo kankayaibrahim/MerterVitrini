@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -138,33 +136,7 @@ func slugifyServiceProviderName(name string) string {
 }
 
 func verifyServiceProviderReCaptcha(secret, token, action string) (bool, error) {
-	if secret == "" || token == "" {
-		return true, nil
-	}
-	resp, err := http.PostForm("https://www.google.com/recaptcha/api/siteverify",
-		url.Values{
-			"secret":   {secret},
-			"response": {token},
-		})
-	if err != nil {
-		log.Printf("[RECAPTCHA WARNING] Service provider reCAPTCHA connection error: %v. Allowing submission.", err)
-		return true, nil
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Success bool    `json:"success"`
-		Score   float64 `json:"score"`
-		Action  string  `json:"action"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || !result.Success {
-		return true, nil
-	}
-	if result.Score < 0.2 {
-		log.Printf("[RECAPTCHA REJECT] Confirmed bot activity on %s: %.2f", action, result.Score)
-		return false, fmt.Errorf("bot aktivitesi şüphesi (skor: %.2f)", result.Score)
-	}
-	return true, nil
+	return verifyGoogleReCaptcha(secret, token, action)
 }
 
 // ListPublicServiceProviders handles GET /api/v1/store/service-providers.

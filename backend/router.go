@@ -7,6 +7,7 @@ import (
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/handlers"
 	"mertervitrini/backend/middleware"
+	"mertervitrini/backend/models"
 	"mertervitrini/backend/services"
 )
 
@@ -196,9 +197,12 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 	mux.HandleFunc("OPTIONS /api/v1/store/member-events", h.Analytics.TrackMemberEvent)
 	mux.HandleFunc("POST /api/v1/store/brand-events", h.Analytics.TrackBrandEvent)
 	mux.HandleFunc("OPTIONS /api/v1/store/brand-events", h.Analytics.TrackBrandEvent)
+	mux.HandleFunc("POST /api/v1/store/search-events", h.Analytics.TrackSearchClick)
+	mux.HandleFunc("OPTIONS /api/v1/store/search-events", h.Analytics.TrackSearchClick)
 	mux.HandleFunc("GET /api/v1/store/blog", h.StoreCatalog.ListBlogPosts)
 	mux.HandleFunc("GET /api/v1/store/blog/{slug}", h.StoreCatalog.GetBlogPostBySlug)
 	mux.HandleFunc("GET /api/v1/store/feeds/google-merchant.xml", h.StoreCatalog.GoogleMerchantFeed)
+	mux.HandleFunc("GET /api/v1/store/feeds/yandex-market.xml", h.StoreCatalog.YandexMarketFeed)
 	mux.HandleFunc("POST /api/v1/store/inquiries", h.StoreInquiry.SubmitInquiry)
 	mux.HandleFunc("GET /api/v1/store/rfqs", h.Marketplace.ListPublicRfqs)
 	mux.HandleFunc("POST /api/v1/store/rfqs", h.Marketplace.CreatePublicRfq)
@@ -210,22 +214,25 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 	mux.HandleFunc("GET /api/v1/store/service-providers/verify", h.Marketplace.VerifyServiceProviderEmail)
 	mux.HandleFunc("POST /api/v1/store/service-providers/{id}/click", h.Marketplace.TrackServiceProviderClick)
 
-	// Dynamic WebP Image Resizing
+	// Dynamic WebP Image Resizing (public read-only on-the-fly resize; bulk admin ops live in registerAdminRoutes)
 	mux.HandleFunc("GET /api/v1/store/images/resize", h.Image.ResizeImage)
-	mux.HandleFunc("POST /api/v1/store/images/bulk-resize", h.Image.StartBulkResize)
-	mux.HandleFunc("GET /api/v1/store/images/bulk-status", h.Image.GetBulkStatus)
-	mux.HandleFunc("GET /api/v1/store/images/scan-missing", h.Image.ScanMissingImages)
-	mux.HandleFunc("POST /api/v1/store/images/bulk-stop", h.Image.StopBulkResize)
 }
 
 func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Handler) http.Handler) {
+	adminRoleMW := middleware.RequireRole(models.RoleAdmin, models.RoleEditor, models.RoleSalesManager, models.RoleWarehouse)
 	protect := func(fn http.HandlerFunc) http.Handler {
-		return authMW(fn)
+		return authMW(adminRoleMW(fn))
 	}
 
 	mux.HandleFunc("POST /api/v1/auth/login", h.AdminAuth.Login)
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", h.AdminAuth.VerifyOTP)
 	mux.HandleFunc("POST /api/v1/auth/keycloak-callback", h.AdminAuth.KeycloakCallback)
+
+	// Admin Bulk Image Operations
+	mux.Handle("POST /api/v1/store/images/bulk-resize", protect(h.Image.StartBulkResize))
+	mux.Handle("GET /api/v1/store/images/bulk-status", protect(h.Image.GetBulkStatus))
+	mux.Handle("GET /api/v1/store/images/scan-missing", protect(h.Image.ScanMissingImages))
+	mux.Handle("POST /api/v1/store/images/bulk-stop", protect(h.Image.StopBulkResize))
 
 	// Catalog & Settings
 	mux.Handle("GET /api/v1/categories", protect(h.AdminCatalog.ListCategories))
@@ -338,7 +345,10 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("PUT /api/v1/customers/{id}/block", protect(h.Customers.ToggleBlockCustomer))
 	mux.Handle("DELETE /api/v1/customers/{id}", protect(h.Customers.DeleteCustomer))
 	mux.Handle("GET /api/v1/admin/member-journeys", protect(h.Customers.ListMemberJourneys))
+	mux.Handle("GET /api/v1/analytics/stats", protect(h.Analytics.GetAnalyticsStats))
 	mux.Handle("GET /api/v1/admin/analytics/stats", protect(h.Analytics.GetAnalyticsStats))
+	mux.Handle("GET /api/v1/analytics/bi-mining", protect(h.Analytics.GetBIMiningReport))
+	mux.Handle("GET /api/v1/admin/analytics/bi-mining", protect(h.Analytics.GetBIMiningReport))
 	mux.Handle("GET /api/v1/admin/dashboard/stats", protect(h.AdminDashboard.GetDashboardStats))
 
 	mux.Handle("GET /api/v1/admin/marketplace/sub-orders", protect(h.Marketplace.ListAdminSubOrders))

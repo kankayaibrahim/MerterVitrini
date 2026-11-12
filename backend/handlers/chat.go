@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -16,12 +17,17 @@ import (
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/middleware"
+	"mertervitrini/backend/models"
 	"mertervitrini/backend/services"
 )
 
 const (
-	chatRoomChannelPrefix = "chat:room#"
-	errMsgUnauthorized    = "Yetkisiz erişim."
+	chatRoomChannelPrefix         = "chat:room#"
+	chatSupplierChannelPrefix     = "chat:supplier#"
+	chatSupplierUserChannelPrefix = "chat:supplier_user#"
+	chatCustomerChannelPrefix     = "chat:customer#"
+	chatAnonUserID                = "anon"
+	errMsgUnauthorized            = "Yetkisiz erişim."
 )
 
 type ChatHandler struct {
@@ -131,6 +137,167 @@ type SendSupplierMessageRequest struct {
 	DiscountPercent  float64 `json:"discount_percent,omitempty"`
 }
 
+type wsClientMeta struct {
+	Role           string `json:"role,omitempty"`
+	BrandID        string `json:"brand_id,omitempty"`
+	SupplierUserID string `json:"supplier_user_id,omitempty"`
+}
+
+func stripOptionalBearer(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if len(trimmed) >= 7 && strings.EqualFold(trimmed[:7], "bearer ") {
+		return strings.TrimSpace(trimmed[7:])
+	}
+	return trimmed
+}
+
+func enrichSupplierWSMeta(ctx context.Context, sub, email string, meta *wsClientMeta) string {
+	if db.Pool == nil {
+		return sub
+	}
+	var supUID, brandID string
+	err := db.Pool.QueryRow(ctx, `
+		SELECT id::text, brand_id::text
+		FROM catalog.supplier_users
+		WHERE (id::text = $1 OR keycloak_id = $1 OR ($2 <> '' AND lower(email) = lower($2))) AND is_active = true
+		LIMIT 1
+	`, sub, email).Scan(&supUID, &brandID)
+	if err == nil {
+		meta.Role = "supplier"
+		meta.SupplierUserID = supUID
+		meta.BrandID = brandID
+		if sub == "" {
+			return supUID
+		}
+	}
+	return sub
+}
+
+func resolveCentrifugeConnect(ctx context.Context, cfg *config.Config, rawToken string) (centrifuge.ConnectReply, error) {
+	tokenStr := stripOptionalBearer(rawToken)
+	if tokenStr == "" {
+		return centrifuge.ConnectReply{
+			Credentials: &centrifuge.Credentials{UserID: chatAnonUserID},
+		}, nil
+	}
+
+	hasCryptoConfig := cfg != nil && (cfg.JWTSecret != "" || cfg.KeycloakPublicKey != "")
+	if !hasCryptoConfig && db.Pool == nil {
+		return centrifuge.ConnectReply{
+			Credentials: &centrifuge.Credentials{UserID: tokenStr},
+		}, nil
+	}
+	if !hasCryptoConfig {
+		return centrifuge.ConnectReply{}, centrifuge.DisconnectInvalidToken
+	}
+
+	claims, err := middleware.VerifyJWTClaims(tokenStr, cfg.JWTSecret, cfg.KeycloakPublicKey)
+	if err != nil {
+		return centrifuge.ConnectReply{}, centrifuge.DisconnectInvalidToken
+	}
+
+	sub, _ := claims["sub"].(string)
+	email, _ := claims["email"].(string)
+	brandID, _ := claims["brand_id"].(string)
+	role := middleware.ExtractVerifiedUserRole(claims)
+
+	meta := wsClientMeta{
+		Role:    string(role),
+		BrandID: brandID,
+	}
+	if string(role) == "supplier" || brandID != "" {
+		sub = enrichSupplierWSMeta(ctx, sub, email, &meta)
+		if meta.SupplierUserID == "" {
+			meta.SupplierUserID = sub
+		}
+	}
+	if strings.TrimSpace(sub) == "" {
+		return centrifuge.ConnectReply{}, centrifuge.DisconnectInvalidToken
+	}
+
+	infoBytes, _ := json.Marshal(meta)
+	return centrifuge.ConnectReply{
+		Credentials: &centrifuge.Credentials{
+			UserID: sub,
+			Info:   infoBytes,
+		},
+	}, nil
+}
+
+func isSupplierAuthorizedForBrand(ctx context.Context, uid string, meta wsClientMeta, brandID string) bool {
+	if brandID == "" {
+		return false
+	}
+	if meta.BrandID != "" && meta.BrandID == brandID {
+		return true
+	}
+	if db.Pool == nil {
+		return false
+	}
+	var allowed bool
+	_ = db.Pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM catalog.supplier_users
+			WHERE brand_id::text = $1 AND (id::text = $2 OR keycloak_id = $2) AND is_active = true
+		)
+	`, brandID, uid).Scan(&allowed)
+	return allowed
+}
+
+func isAuthorizedForRoomChannel(ctx context.Context, uid string, meta wsClientMeta, roomID string) bool {
+	if roomID == "" {
+		return false
+	}
+	if db.Pool == nil {
+		return true
+	}
+	var roomCustomerID, roomBrandID string
+	err := db.Pool.QueryRow(ctx, `
+		SELECT customer_id, brand_id::text FROM catalog.chat_rooms WHERE id::text = $1
+	`, roomID).Scan(&roomCustomerID, &roomBrandID)
+	if err != nil {
+		return false
+	}
+	if roomCustomerID == uid {
+		return true
+	}
+	return isSupplierAuthorizedForBrand(ctx, uid, meta, roomBrandID)
+}
+
+func authorizeCentrifugeSubscribe(client *centrifuge.Client, channel string) bool {
+	uid := strings.TrimSpace(client.UserID())
+	if uid == "" || uid == chatAnonUserID {
+		return false
+	}
+	var meta wsClientMeta
+	if rawInfo := client.Info(); len(rawInfo) > 0 {
+		_ = json.Unmarshal(rawInfo, &meta)
+	}
+	if meta.Role == string(models.RoleAdmin) || meta.Role == string(models.RoleSuperAdmin) {
+		return strings.HasPrefix(channel, "chat:")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	switch {
+	case strings.HasPrefix(channel, chatCustomerChannelPrefix):
+		targetID := strings.TrimPrefix(channel, chatCustomerChannelPrefix)
+		return targetID != "" && uid == targetID
+	case strings.HasPrefix(channel, chatSupplierChannelPrefix):
+		brandID := strings.TrimPrefix(channel, chatSupplierChannelPrefix)
+		return isSupplierAuthorizedForBrand(ctx, uid, meta, brandID)
+	case strings.HasPrefix(channel, chatSupplierUserChannelPrefix):
+		supUID := strings.TrimPrefix(channel, chatSupplierUserChannelPrefix)
+		return supUID != "" && (uid == supUID || meta.SupplierUserID == supUID)
+	case strings.HasPrefix(channel, chatRoomChannelPrefix):
+		roomID := strings.TrimPrefix(channel, chatRoomChannelPrefix)
+		return isAuthorizedForRoomChannel(ctx, uid, meta, roomID)
+	default:
+		return false
+	}
+}
+
 func NewChatHandler(cfg *config.Config, notifiers ...services.NotificationDispatcher) *ChatHandler {
 	node, err := centrifuge.New(centrifuge.Config{})
 	if err != nil {
@@ -138,23 +305,12 @@ func NewChatHandler(cfg *config.Config, notifiers ...services.NotificationDispat
 	}
 
 	node.OnConnecting(func(ctx context.Context, e centrifuge.ConnectEvent) (centrifuge.ConnectReply, error) {
-		clientID := strings.TrimSpace(e.Token)
-		if clientID == "" {
-			clientID = "anon"
-		}
-		return centrifuge.ConnectReply{
-			Credentials: &centrifuge.Credentials{
-				UserID: clientID,
-			},
-		}, nil
+		return resolveCentrifugeConnect(ctx, cfg, e.Token)
 	})
 
 	node.OnConnect(func(client *centrifuge.Client) {
 		client.OnSubscribe(func(e centrifuge.SubscribeEvent, cb centrifuge.SubscribeCallback) {
-			if strings.HasPrefix(e.Channel, chatRoomChannelPrefix) ||
-				strings.HasPrefix(e.Channel, "chat:supplier#") ||
-				strings.HasPrefix(e.Channel, "chat:supplier_user#") ||
-				strings.HasPrefix(e.Channel, "chat:customer#") {
+			if authorizeCentrifugeSubscribe(client, e.Channel) {
 				cb(centrifuge.SubscribeReply{}, nil)
 				return
 			}
@@ -206,9 +362,9 @@ func (h *ChatHandler) publishEvent(channel string, eventType string, payload any
 }
 
 func (h *ChatHandler) publishToSupplierChannels(brandID string, supplierUserID *string, eventType string, payload any) {
-	h.publishEvent("chat:supplier#"+brandID, eventType, payload)
+	h.publishEvent(chatSupplierChannelPrefix+brandID, eventType, payload)
 	if supplierUserID != nil && *supplierUserID != "" {
-		h.publishEvent("chat:supplier_user#"+*supplierUserID, eventType, payload)
+		h.publishEvent(chatSupplierUserChannelPrefix+*supplierUserID, eventType, payload)
 	}
 }
 
@@ -225,7 +381,7 @@ func resolveCustomerIdentity(r *http.Request, _, fallbackName, fallbackEmail, fa
 
 	var firstName, lastName, email, phone string
 	errScan := db.Pool.QueryRow(r.Context(), `
-		SELECT COALESCE(first_name, ''), COALESCE(last_name, ''), COALESCE(email, ''), COALESCE(phone_number, '')
+		SELECT COALESCE(first_name, ''), COALESCE(last_name, ''), COALESCE(email, ''), COALESCE(phone, '')
 		FROM identity.users WHERE id = $1
 	`, userID).Scan(&firstName, &lastName, &email, &phone)
 	if errScan == nil {
@@ -584,10 +740,16 @@ func insertChatMessage(ctx context.Context, p insertChatMessageParams) (ChatMess
 
 func queryRoomMessages(ctx context.Context, roomID string) ([]ChatMessageDTO, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, room_id::text, sender_type, sender_id, sender_name,
+		SELECT id, room_id, sender_type, sender_id, sender_name,
 		       message_type, content, metadata, is_read, created_at
-		FROM catalog.chat_messages
-		WHERE room_id = $1
+		FROM (
+			SELECT id, room_id::text AS room_id, sender_type, sender_id, sender_name,
+			       message_type, content, metadata, is_read, created_at
+			FROM catalog.chat_messages
+			WHERE room_id = $1
+			ORDER BY created_at DESC
+			LIMIT 200
+		) recent
 		ORDER BY created_at ASC
 	`, roomID)
 	if err != nil {
@@ -679,9 +841,20 @@ func (h *ChatHandler) ListCustomerMessages(w http.ResponseWriter, r *http.Reques
 	}
 
 	ctx := r.Context()
+	var roomCustomerID string
+	errRoom := db.Pool.QueryRow(ctx, `SELECT customer_id FROM catalog.chat_rooms WHERE id = $1`, roomID).Scan(&roomCustomerID)
+	if errRoom != nil {
+		writeSupplierJSON(w, http.StatusNotFound, map[string]string{"error": "Sohbet odası bulunamadı."})
+		return
+	}
+	if roomCustomerID != customerID {
+		writeSupplierJSON(w, http.StatusForbidden, map[string]string{"error": errMsgUnauthorized})
+		return
+	}
+
 	_, _ = db.Pool.Exec(ctx, `
-		UPDATE catalog.chat_rooms SET unread_customer_count = 0 WHERE id = $1
-	`, roomID)
+		UPDATE catalog.chat_rooms SET unread_customer_count = 0 WHERE id = $1 AND customer_id = $2
+	`, roomID, customerID)
 
 	messages, err := queryRoomMessages(ctx, roomID)
 	if err != nil {
@@ -757,13 +930,17 @@ func (h *ChatHandler) SendCustomerMessage(w http.ResponseWriter, r *http.Request
 	}
 
 	ctx := r.Context()
-	var brandID string
+	var brandID, roomCustomerID string
 	var supplierUserID *string
 	err = db.Pool.QueryRow(ctx, `
-		SELECT brand_id::text, supplier_user_id::text FROM catalog.chat_rooms WHERE id = $1
-	`, roomID).Scan(&brandID, &supplierUserID)
+		SELECT brand_id::text, supplier_user_id::text, customer_id FROM catalog.chat_rooms WHERE id = $1
+	`, roomID).Scan(&brandID, &supplierUserID, &roomCustomerID)
 	if err != nil {
 		writeSupplierJSON(w, http.StatusNotFound, map[string]string{"error": "Sohbet odası bulunamadı."})
+		return
+	}
+	if roomCustomerID != customerID {
+		writeSupplierJSON(w, http.StatusForbidden, map[string]string{"error": errMsgUnauthorized})
 		return
 	}
 
@@ -826,6 +1003,10 @@ func (h *ChatHandler) AcceptCustomOffer(w http.ResponseWriter, r *http.Request) 
 		writeSupplierJSON(w, http.StatusNotFound, map[string]string{"error": "Özel fiyat teklifi bulunamadı."})
 		return
 	}
+	if customerID != authUserID {
+		writeSupplierJSON(w, http.StatusForbidden, map[string]string{"error": errMsgUnauthorized})
+		return
+	}
 
 	_ = json.Unmarshal(rawMeta, &msg.Metadata)
 	msg.Metadata.OfferStatus = "accepted"
@@ -839,9 +1020,7 @@ func (h *ChatHandler) AcceptCustomOffer(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if authUserID, errAuth := verifyTokenAndGetUserID(r.Header.Get("Authorization")); errAuth == nil && authUserID != "" {
-		upsertAcceptedOfferToServerCart(ctx, authUserID, messageID, msg.Metadata)
-	}
+	upsertAcceptedOfferToServerCart(ctx, authUserID, messageID, msg.Metadata)
 
 	confirmText := fmt.Sprintf("✅ Özel Teklif Kabul Edildi: %s (%d Paket - Birim: %.2f %s)",
 		msg.Metadata.Title, msg.Metadata.PackagesQty, msg.Metadata.OfferedUnitPrice, msg.Metadata.Currency)
@@ -869,8 +1048,30 @@ func (h *ChatHandler) AcceptCustomOffer(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+func ensureCartForCustomer(ctx context.Context, userID string) (string, error) {
+	var cartID string
+	err := db.Pool.QueryRow(ctx, `SELECT id FROM catalog.carts WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, userID).Scan(&cartID)
+	if err == nil {
+		_, _ = db.Pool.Exec(ctx, `UPDATE catalog.carts SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`, cartID)
+		return cartID, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+	err = db.Pool.QueryRow(ctx, `
+		INSERT INTO catalog.carts (user_id)
+		VALUES ($1)
+		RETURNING id
+	`, userID).Scan(&cartID)
+	if err == nil {
+		return cartID, nil
+	}
+	err = db.Pool.QueryRow(ctx, `SELECT id FROM catalog.carts WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, userID).Scan(&cartID)
+	return cartID, err
+}
+
 func upsertAcceptedOfferToServerCart(ctx context.Context, userID, messageID string, meta ChatOfferMetadata) {
-	if meta.ProductID == "" {
+	if meta.ProductID == "" || userID == "" || db.Pool == nil {
 		return
 	}
 	units := meta.UnitsPerPackage
@@ -883,20 +1084,9 @@ func upsertAcceptedOfferToServerCart(ctx context.Context, userID, messageID stri
 	}
 	totalPieces := pkgs * units
 
-	var cartID string
-	err := db.Pool.QueryRow(ctx, `
-		INSERT INTO catalog.carts (user_id)
-		VALUES ($1)
-		ON CONFLICT (user_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-		RETURNING id
-	`, userID).Scan(&cartID)
-	if err != nil {
-		var existingCartID string
-		if errFind := db.Pool.QueryRow(ctx, `SELECT id FROM catalog.carts WHERE user_id = $1 LIMIT 1`, userID).Scan(&existingCartID); errFind == nil {
-			cartID = existingCartID
-		} else {
-			return
-		}
+	cartID, err := ensureCartForCustomer(ctx, userID)
+	if err != nil || cartID == "" {
+		return
 	}
 
 	var existingItemID string
@@ -904,13 +1094,14 @@ func upsertAcceptedOfferToServerCart(ctx context.Context, userID, messageID stri
 		SELECT id FROM catalog.cart_items WHERE cart_id = $1 AND product_id = $2 LIMIT 1
 	`, cartID, meta.ProductID).Scan(&existingItemID)
 
-	switch errFindItem {
-	case pgx.ErrNoRows:
+	if errors.Is(errFindItem, pgx.ErrNoRows) {
 		_, _ = db.Pool.Exec(ctx, `
 			INSERT INTO catalog.cart_items (cart_id, product_id, quantity, custom_unit_price, offer_message_id)
 			VALUES ($1, $2, $3, $4, $5)
 		`, cartID, meta.ProductID, totalPieces, meta.OfferedUnitPrice, messageID)
-	case nil:
+		return
+	}
+	if errFindItem == nil {
 		_, _ = db.Pool.Exec(ctx, `
 			UPDATE catalog.cart_items
 			SET quantity = $1, custom_unit_price = $2, offer_message_id = $3

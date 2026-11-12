@@ -127,6 +127,8 @@ func (h *MobileHandler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 	`).Scan(&settings.ID, &settings.Address, &settings.Phone, &settings.Whatsapp, &settings.Email, &settings.ShowSinglePrice, &settings.ShowPricesToGuests, &settings.UpdatedAt)
 
 	release := h.loadMobileReleaseManifest()
+	isAuthed := h.hasVerifiedBootstrapCaller(ctx, r.Header.Get("Authorization"))
+	hidePrices := !isAuthed && !settings.ShowPricesToGuests
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"app_config": map[string]any{
@@ -143,8 +145,8 @@ func (h *MobileHandler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 			"apk_size_bytes":       release.FileSizeBytes,
 			"release_notes":        release.ReleaseNotes,
 			"ws_path":              "/api/v1/chat/ws",
-			"privacy_policy_url":   "https://mertervitrini.com.tr/policies/privacy_policy",
-			"terms_url":            "https://mertervitrini.com.tr/policies/terms_of_service",
+			"privacy_policy_url":   "https://mertervitrini.com.tr/tr/pages/gizlilik-politikasi",
+			"terms_url":            "https://mertervitrini.com.tr/tr/pages/kullanim-kosullari",
 			"account_deletion_url": "https://mertervitrini.com.tr/account-deletion",
 			"dual_role_enabled":    true,
 		},
@@ -153,9 +155,40 @@ func (h *MobileHandler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 		"exchange_rates":    fetchBootstrapExchangeRates(ctx),
 		"categories":        fetchBootstrapCategories(ctx),
 		"brands":            fetchBootstrapMaskedBrands(ctx),
-		"newest_products":   fetchBootstrapProducts(ctx, "ORDER BY p.created_at DESC LIMIT 12"),
-		"featured_products": fetchBootstrapProducts(ctx, "ORDER BY (p.discounted_price IS NOT NULL AND p.discounted_price > 0) DESC, p.stock DESC, p.created_at DESC LIMIT 12"),
+		"newest_products":   sanitizeMobileBootstrapProducts(fetchBootstrapProducts(ctx, "ORDER BY p.created_at DESC LIMIT 12"), hidePrices),
+		"featured_products": sanitizeMobileBootstrapProducts(fetchBootstrapProducts(ctx, "ORDER BY (p.discounted_price IS NOT NULL AND p.discounted_price > 0) DESC, p.stock DESC, p.created_at DESC LIMIT 12"), hidePrices),
 	})
+}
+
+func (h *MobileHandler) hasVerifiedBootstrapCaller(ctx context.Context, authHeader string) bool {
+	if h == nil || h.Tokens == nil || authHeader == "" {
+		return false
+	}
+	principal, err := h.Tokens.ResolvePrincipal(ctx, authHeader)
+	return err == nil && principal != nil && principal.UserID != ""
+}
+
+func sanitizeMobileBootstrapProducts(prods []*models.Product, hidePrices bool) []*models.Product {
+	for _, p := range prods {
+		if p == nil {
+			continue
+		}
+		p.BuyingPrice = nil
+		p.FeedID = nil
+		p.SourceProductID = ""
+		if hidePrices {
+			p.Price = 0
+			p.DiscountedPrice = nil
+			p.SinglePrice = nil
+			for _, v := range p.Variants {
+				if v != nil {
+					v.Price = 0
+					v.DiscountedPrice = nil
+				}
+			}
+		}
+	}
+	return prods
 }
 
 func fetchBootstrapLanguages(ctx context.Context) []*models.Language {

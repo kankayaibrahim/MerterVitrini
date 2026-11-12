@@ -2,13 +2,26 @@
 
 import React from "react";
 import { Users, Globe } from "lucide-react";
-import { ChatRoom, SupplierAgent } from "@/types/chat";
+import { ChatRoom, resolveChatLang, SupplierAgent } from "@/types/chat";
+import { pickLangText, SupportedLangCode } from "@/app/i18n";
+
+const AGENT_SELECTOR_HEADERS: Record<SupportedLangCode, (count: number) => string> = {
+  tr: (c) => `Tedarikçi Satış Temsilcileri (${c} Yetkili - Ayrı Sohbet):`,
+  en: (c) => `Supplier Sales Representatives (${c} Agents - Direct Chat):`,
+  ru: (c) => `Торговые представители поставщика (${c} спец. - отдельный чат):`,
+  ar: (c) => `ممثلو مبيعات المورد (${c} مسؤول - محادثة منفصلة):`,
+  de: (c) => `Vertriebsteam des Lieferanten (${c} Ansprechpartner - Einzelchat):`,
+  fr: (c) => `Conseillers commerciaux du fournisseur (${c} agents - chat dédié) :`,
+  pl: (c) => `Przedstawiciele handlowi dostawcy (${c} opiekunów - osobny czat):`,
+  bg: (c) => `Търговски представители на доставчика (${c} експерти - отделен чат):`,
+};
 
 interface ChatAgentSelectorProps {
   readonly brandAgents: readonly SupplierAgent[];
   readonly activeRoom: ChatRoom | null;
   readonly selectedAgentId: string;
   readonly onSelectAgent: (agent: SupplierAgent) => void;
+  readonly lang?: string;
 }
 
 export function ChatAgentSelector({
@@ -16,19 +29,20 @@ export function ChatAgentSelector({
   activeRoom,
   selectedAgentId,
   onSelectAgent,
+  lang,
 }: Readonly<ChatAgentSelectorProps>) {
   if (brandAgents.length === 0) {
     return null;
   }
 
+  const effectiveLang = resolveChatLang(lang);
+  const headerText = pickLangText(effectiveLang, AGENT_SELECTOR_HEADERS)(brandAgents.length);
+
   return (
     <div className="bg-slate-900/95 border-t border-slate-800 px-3.5 py-2.5">
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-purple-300 mb-2">
         <Users className="w-3.5 h-3.5" />
-        <span>
-          Tedarikçi Satış Temsilcileri ({brandAgents.length} Yetkili - Ayrı
-          Sohbet):
-        </span>
+        <span>{headerText}</span>
       </div>
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
         {brandAgents.map((agent) => {

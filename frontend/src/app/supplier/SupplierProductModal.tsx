@@ -247,7 +247,7 @@ export function detectAssortmentMode(seriesRatio: string, sizeCount: number): As
   if (weights.every((w) => w === 2)) {
     return "double";
   }
-  if (sizeCount >= 3 && weights[0] === 1 && weights[sizeCount - 1] === 1 && weights.some((w) => w === 2)) {
+  if (sizeCount >= 3 && weights[0] === 1 && weights[sizeCount - 1] === 1 && weights.includes(2)) {
     return "middle_double";
   }
   return "single";

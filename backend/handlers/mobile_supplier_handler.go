@@ -263,12 +263,19 @@ func (h *MobileHandler) QuickUpdateSupplierProduct(w http.ResponseWriter, r *htt
 }
 
 func distributeVariantStockProportionally(ctx context.Context, productID string, totalStock int) {
-	rows, err := db.Pool.Query(ctx, `SELECT id::text FROM catalog.product_variants WHERE product_id = $1 ORDER BY created_at ASC`, productID)
+	if db.Pool == nil {
+		return
+	}
+	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer tx.Rollback(ctx)
 
+	rows, err := tx.Query(ctx, `SELECT id::text FROM catalog.product_variants WHERE product_id = $1 ORDER BY created_at ASC`, productID)
+	if err != nil {
+		return
+	}
 	var varIDs []string
 	for rows.Next() {
 		var vid string
@@ -276,19 +283,34 @@ func distributeVariantStockProportionally(ctx context.Context, productID string,
 			varIDs = append(varIDs, vid)
 		}
 	}
+	rows.Close()
+
 	if len(varIDs) == 0 {
 		return
 	}
 
 	perVar := totalStock / len(varIDs)
 	remainder := totalStock % len(varIDs)
+	batch := &pgx.Batch{}
 	for i, vid := range varIDs {
 		st := perVar
 		if i == 0 {
 			st += remainder
 		}
-		_, _ = db.Pool.Exec(ctx, `UPDATE catalog.product_variants SET stock = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, st, vid)
+		batch.Queue(`UPDATE catalog.product_variants SET stock = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, st, vid)
 	}
+
+	br := tx.SendBatch(ctx, batch)
+	for range varIDs {
+		if _, execErr := br.Exec(); execErr != nil {
+			_ = br.Close()
+			return
+		}
+	}
+	if err := br.Close(); err != nil {
+		return
+	}
+	_ = tx.Commit(ctx)
 }
 
 func (h *MobileHandler) FindSupplierProductByBarcode(w http.ResponseWriter, r *http.Request) {
@@ -327,16 +349,18 @@ func (h *MobileHandler) FindSupplierProductByBarcode(w http.ResponseWriter, r *h
 
 func (h *MobileHandler) UploadChatImage(w http.ResponseWriter, r *http.Request) {
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-	guestCustID := strings.TrimSpace(r.Header.Get("X-Chat-Customer-Id"))
-	if authHeader == "" && guestCustID == "" {
-		httpx.Error(w, http.StatusUnauthorized, "Sohbet görseli yüklemek için oturum bilgisi gereklidir.")
+	if authHeader == "" || h == nil || h.Tokens == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Sohbet görseli yüklemek için geçerli oturum gereklidir.")
 		return
 	}
-	if authHeader != "" {
-		if _, err := h.Tokens.ResolvePrincipal(r.Context(), authHeader); err != nil && guestCustID == "" {
-			httpx.Error(w, http.StatusUnauthorized, err.Error())
-			return
+	principal, err := h.Tokens.ResolvePrincipal(r.Context(), authHeader)
+	if err != nil || principal == nil || principal.UserID == "" {
+		msg := errMsgUnauthorized
+		if err != nil {
+			msg = err.Error()
 		}
+		httpx.Error(w, http.StatusUnauthorized, msg)
+		return
 	}
 
 	if err := r.ParseMultipartForm(maxSingleImageBytes); err != nil {

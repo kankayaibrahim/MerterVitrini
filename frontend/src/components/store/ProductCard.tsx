@@ -3,7 +3,13 @@
 import React, { useState, useRef } from "react";
 import Image from "next/image";
 import { Product } from "@/types/store";
-import { getProductTitle, t } from "@/app/i18n";
+import {
+  buildLocalizedProductHref,
+  getProductTitle,
+  pickLangText,
+  SupportedLangCode,
+  t,
+} from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { Heart, ShoppingBag, Eye, ChevronLeft, ChevronRight, Lock } from "lucide-react";
@@ -19,35 +25,103 @@ interface ProductCardProps {
   readonly exchangeRates?: readonly ExchangeRate[];
 }
 
-const addToCartTranslations: Record<string, string> = {
-  tr: "Sepete Ekle",
-  en: "Add to Cart",
-  ar: "أضف إلى السلة",
-  ru: "В корзину",
-  pl: "Dodaj do koszyka",
-  bg: "Добави в количката",
-  de: "In den Warenkorb",
-  fr: "Ajouter au panier",
-};
-
-function getAddToCartText(lang: string): string {
-  return addToCartTranslations[lang] || addToCartTranslations.en;
+interface CardUiLabels {
+  addToCart: string;
+  colorsSuffix: string;
+  discountSuffix: string;
+  quickView: string;
+  addToFavorites: string;
+  imageLabel: string;
+  loginToSeePrice: string;
 }
+
+const CARD_UI_LABELS: Record<SupportedLangCode, CardUiLabels> = {
+  tr: {
+    addToCart: "Sepete Ekle",
+    colorsSuffix: "Renk",
+    discountSuffix: "İNDİRİM",
+    quickView: "Hızlı İncele",
+    addToFavorites: "Favorilerime Ekle",
+    imageLabel: "Görsel",
+    loginToSeePrice: "Üye Girişi Yap / Fiyat Gör",
+  },
+  en: {
+    addToCart: "Add to Cart",
+    colorsSuffix: "Colors",
+    discountSuffix: "OFF",
+    quickView: "Quick View",
+    addToFavorites: "Add to Favorites",
+    imageLabel: "Image",
+    loginToSeePrice: "Login to See Price",
+  },
+  ru: {
+    addToCart: "В корзину",
+    colorsSuffix: "Цветов",
+    discountSuffix: "СКИДКА",
+    quickView: "Быстрый просмотр",
+    addToFavorites: "В избранное",
+    imageLabel: "Фото",
+    loginToSeePrice: "Войдите, чтобы увидеть цену",
+  },
+  ar: {
+    addToCart: "أضف إلى السلة",
+    colorsSuffix: "ألوان",
+    discountSuffix: "خصم",
+    quickView: "معاينة سريعة",
+    addToFavorites: "أضف إلى المفضلة",
+    imageLabel: "صورة",
+    loginToSeePrice: "سجل الدخول لرؤية السعر",
+  },
+  de: {
+    addToCart: "In den Warenkorb",
+    colorsSuffix: "Farben",
+    discountSuffix: "RABATT",
+    quickView: "Schnellansicht",
+    addToFavorites: "Zu Favoriten hinzufügen",
+    imageLabel: "Bild",
+    loginToSeePrice: "Anmelden, um Preis zu sehen",
+  },
+  fr: {
+    addToCart: "Ajouter au panier",
+    colorsSuffix: "Couleurs",
+    discountSuffix: "REMISE",
+    quickView: "Aperçu rapide",
+    addToFavorites: "Ajouter aux favoris",
+    imageLabel: "Image",
+    loginToSeePrice: "Connectez-vous pour voir le prix",
+  },
+  pl: {
+    addToCart: "Dodaj do koszyka",
+    colorsSuffix: "Kolory",
+    discountSuffix: "RABAT",
+    quickView: "Szybki podgląd",
+    addToFavorites: "Dodaj do ulubionych",
+    imageLabel: "Zdjęcie",
+    loginToSeePrice: "Zaloguj się, aby zobaczyć cenę",
+  },
+  bg: {
+    addToCart: "Добави в количката",
+    colorsSuffix: "Цвята",
+    discountSuffix: "ОТСТЪПКА",
+    quickView: "Бърз преглед",
+    addToFavorites: "Добави в любими",
+    imageLabel: "Снимка",
+    loginToSeePrice: "Влезте, за да видите цената",
+  },
+};
 
 function getColorText(product: Product, lang: string): string {
   if (!product.color_variants || product.color_variants.length === 0) {
     return "";
   }
   const totalColors = product.color_variants.length;
-  if (lang === "tr") return `+${totalColors} Renk`;
-  if (lang === "ru") return `+${totalColors} Цветов`;
-  if (lang === "ar") return `+${totalColors} ألوان`;
-  return `+${totalColors} Colors`;
+  const suffix = pickLangText(lang, CARD_UI_LABELS).colorsSuffix;
+  return `+${totalColors} ${suffix}`;
 }
 
 function formatPackingRatio(ratio: string, lang: string): string {
   if (ratio.toUpperCase() === "STANDART") {
-    return lang === "tr" ? "STANDART" : "STANDARD";
+    return t("Standart", lang).toUpperCase();
   }
   return ratio.split(",").join(" - ");
 }
@@ -110,6 +184,56 @@ function getSortedProductImages(product: Product): string[] {
     : ["/placeholder.png"];
 }
 
+function ProductCardPriceBlock({
+  isAuthenticated,
+  hasDiscount,
+  origPrice,
+  discPrice,
+  price,
+  currency,
+  lang,
+}: Readonly<{
+  isAuthenticated: boolean;
+  hasDiscount: boolean;
+  origPrice: number;
+  discPrice: number;
+  price: string;
+  currency: string;
+  lang: string;
+}>) {
+  if (!isAuthenticated) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openStoreAuthModal("login");
+        }}
+        className="w-full py-1 px-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-colors"
+      >
+        <Lock className="w-3 h-3 shrink-0" />
+        <span className="truncate">{getShortMemberPriceLabel(lang)}</span>
+      </button>
+    );
+  }
+
+  if (hasDiscount) {
+    return (
+      <>
+        <span className="text-[11px] text-sonic-silver line-through font-normal">
+          {origPrice.toFixed(2)} {currency}
+        </span>
+        <span className="text-xs font-bold text-[#A30000]">
+          {discPrice.toFixed(2)} {currency}
+        </span>
+      </>
+    );
+  }
+
+  return <span className="text-xs font-bold text-eerie-black">{price}</span>;
+}
+
 export default function ProductCard({
   product,
   lang,
@@ -119,6 +243,8 @@ export default function ProductCard({
   exchangeRates,
 }: Readonly<ProductCardProps>) {
   const title = getProductTitle(product, lang);
+  const cardLabels = pickLangText(lang, CARD_UI_LABELS);
+  const productHref = buildLocalizedProductHref(product.slug || product.id, lang);
   const isFavorite = useWishlistStore((state) => state.wishlistIds.includes(product.id));
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
 
@@ -156,10 +282,8 @@ export default function ProductCard({
 
     if (isSwiping.current && Math.abs(deltaX) > 30 && displayImages.length > 1) {
       if (deltaX < 0) {
-        // Swiped left -> next image
         setActiveImgIndex((prev) => (prev + 1) % displayImages.length);
       } else {
-        // Swiped right -> previous image
         setActiveImgIndex((prev) => (prev - 1 + displayImages.length) % displayImages.length);
       }
     }
@@ -182,7 +306,7 @@ export default function ProductCard({
   const displayImages = getSortedProductImages(product);
   const units = getUnitsFromSeriesRatio(product.series_ratio);
   const colorText = getColorText(product, lang);
-  const btnText = getAddToCartText(lang);
+  const btnText = cardLabels.addToCart;
   const { hasDiscount, discountPct, origPrice, discPrice, price, currency } = calculateProductPricing(
     product,
     displayCurrency,
@@ -201,7 +325,7 @@ export default function ProductCard({
       >
         {/* Active Image Link */}
         <Link
-          href={`/product/${product.slug || product.id}`}
+          href={productHref}
           tabIndex={-1}
           aria-hidden="true"
           onClick={(e) => {
@@ -228,7 +352,7 @@ export default function ProductCard({
             {displayImages.map((imgUrl, idx) => (
               <Link
                 key={`zone-${product.id}-${imgUrl}`}
-                href={`/product/${product.slug || product.id}`}
+                href={productHref}
                 tabIndex={-1}
                 aria-hidden="true"
                 className="flex-grow h-full cursor-pointer block"
@@ -243,7 +367,7 @@ export default function ProductCard({
           <>
             <button
               type="button"
-              aria-label="Önceki Görsel"
+              aria-label={t("prev", lang)}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -255,7 +379,7 @@ export default function ProductCard({
             </button>
             <button
               type="button"
-              aria-label="Sonraki Görsel"
+              aria-label={t("next_image", lang)}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -275,7 +399,7 @@ export default function ProductCard({
               <button
                 key={`bar-${product.id}-${imgUrl}`}
                 type="button"
-                aria-label={`Görsel ${idx + 1}`}
+                aria-label={`${cardLabels.imageLabel} ${idx + 1}`}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -297,7 +421,7 @@ export default function ProductCard({
         {/* Discount Badge (Only for authenticated members) */}
         {isAuthenticated && hasDiscount && (
           <span className="absolute top-3 left-3 bg-[#A30000] text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10 pointer-events-none">
-            {discountPct}% {lang === "tr" ? "İNDİRİM" : "OFF"}
+            {discountPct}% {cardLabels.discountSuffix}
           </span>
         )}
 
@@ -330,7 +454,8 @@ export default function ProductCard({
               e.stopPropagation();
               onOpenModal(product.id);
             }}
-            title={lang === "tr" ? "Hızlı İncele" : "Quick View"}
+            title={cardLabels.quickView}
+            aria-label={cardLabels.quickView}
           >
             <Eye className="w-4 h-4" />
           </button>
@@ -342,7 +467,8 @@ export default function ProductCard({
                 : "bg-white border-black/10 text-onyx hover:bg-black hover:text-white hover:border-black"
               }`}
             onClick={toggleFavorite}
-            title={lang === "tr" ? "Favorilerime Ekle" : "Add to Favorites"}
+            title={cardLabels.addToFavorites}
+            aria-label={cardLabels.addToFavorites}
           >
             <Heart className={`w-4 h-4 ${isFavorite ? "fill-white" : ""}`} />
           </button>
@@ -352,11 +478,11 @@ export default function ProductCard({
       {/* 2. Visual Details Section */}
       <div className="p-3 flex flex-col gap-1 flex-grow">
         <span className="text-[10px] uppercase font-bold tracking-[1.5px] text-black block mb-0.5">
-          {product.brand_name || "Merter Manufacturer"}
+          {product.brand_name || t("merter_manufacturer", lang)}
         </span>
 
         <h3 className="text-xs font-normal text-onyx line-clamp-2 min-h-[34px] leading-relaxed transition-colors duration-150 group-hover:text-black">
-          <Link href={`/product/${product.slug || product.id}`} className="hover:underline text-inherit">
+          <Link href={productHref} className="hover:underline text-inherit">
             {title}
           </Link>
         </h3>
@@ -380,35 +506,15 @@ export default function ProductCard({
         </div>
 
         <div className="flex items-baseline justify-end gap-2 mt-auto pt-2 border-t border-cultured">
-          {isAuthenticated ? (
-            hasDiscount ? (
-              <>
-                <span className="text-[11px] text-sonic-silver line-through font-normal">
-                  {origPrice.toFixed(2)} {currency}
-                </span>
-                <span className="text-xs font-bold text-[#A30000]">
-                  {discPrice.toFixed(2)} {currency}
-                </span>
-              </>
-            ) : (
-              <span className="text-xs font-bold text-eerie-black">
-                {price}
-              </span>
-            )
-          ) : (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                openStoreAuthModal("login");
-              }}
-              className="w-full py-1 px-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-colors"
-            >
-              <Lock className="w-3 h-3 shrink-0" />
-              <span className="truncate">{getShortMemberPriceLabel(lang)}</span>
-            </button>
-          )}
+          <ProductCardPriceBlock
+            isAuthenticated={isAuthenticated}
+            hasDiscount={hasDiscount}
+            origPrice={origPrice}
+            discPrice={discPrice}
+            price={price}
+            currency={currency}
+            lang={lang}
+          />
         </div>
 
         <button
@@ -438,7 +544,7 @@ export default function ProductCard({
           ) : (
             <>
               <Lock className="w-3.5 h-3.5 shrink-0" />
-              <span>{lang === "tr" ? "Üye Girişi Yap / Fiyat Gör" : "Login to See Price"}</span>
+              <span>{cardLabels.loginToSeePrice}</span>
             </>
           )}
         </button>

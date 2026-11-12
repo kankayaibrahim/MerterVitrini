@@ -16,6 +16,7 @@ import (
 	"mertervitrini/backend/pkg/httpclient"
 	"mertervitrini/backend/pkg/httpx"
 	"mertervitrini/backend/pkg/safe"
+	"mertervitrini/backend/services"
 )
 
 type MobileLoginRequest struct {
@@ -186,7 +187,12 @@ func (h *MobileHandler) loginAsCustomer(ctx context.Context, w http.ResponseWrit
 		return
 	}
 
-	claims, err := decodeJWTClaims(accessToken)
+	var jwtSecret, kcPubKey string
+	if h.Cfg != nil {
+		jwtSecret = h.Cfg.JWTSecret
+		kcPubKey = h.Cfg.KeycloakPublicKey
+	}
+	claims, err := services.VerifyJWTWithKeys(accessToken, jwtSecret, kcPubKey)
 	if err != nil {
 		httpx.Error(w, http.StatusUnauthorized, "Oturum doğrulanamadı.")
 		return
@@ -273,12 +279,18 @@ func (h *MobileHandler) exchangeKeycloakRefreshToken(ctx context.Context, refres
 }
 
 func (h *MobileHandler) tryReissueSupplierToken(ctx context.Context, authHeader string) (string, bool) {
+	if h == nil || h.Tokens == nil {
+		return "", false
+	}
 	principal, err := h.Tokens.ResolvePrincipal(ctx, authHeader)
-	if err != nil || principal.Role != "supplier" || principal.Email == "" {
+	if err != nil || principal == nil || principal.Role != "supplier" || principal.UserID == "" || principal.Email == "" {
 		return "", false
 	}
 	u, _, brandActive, err := lookupSupplierUserByEmail(ctx, principal.Email)
 	if err != nil || !u.IsActive || !brandActive {
+		return "", false
+	}
+	if u.ID != principal.UserID && !strings.EqualFold(u.Email, principal.Email) {
 		return "", false
 	}
 	newTok := h.Tokens.IssueSupplierJWT(u)
@@ -314,12 +326,20 @@ func (h *MobileHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 // DeleteAccount implements Google Play Store mandatory in-app account deletion via OCP AccountDeletionRegistry.
 func (h *MobileHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.Tokens == nil {
+		httpx.Error(w, http.StatusUnauthorized, "Yetkilendirme servisi yapılandırılmamış.")
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
 	principal, err := h.Tokens.ResolvePrincipal(ctx, r.Header.Get("Authorization"))
-	if err != nil {
-		httpx.Error(w, http.StatusUnauthorized, err.Error())
+	if err != nil || principal == nil || principal.UserID == "" {
+		msg := "Geçersiz oturum anahtarı."
+		if err != nil {
+			msg = err.Error()
+		}
+		httpx.Error(w, http.StatusUnauthorized, msg)
 		return
 	}
 
@@ -364,13 +384,15 @@ func (h *MobileHandler) RegisterDevice(w http.ResponseWriter, r *http.Request) {
 
 	_, err = db.Pool.Exec(ctx, `
 		INSERT INTO identity.mobile_devices (
-			user_id, user_role, brand_id, device_token, platform, app_version, device_model, locale, is_active, last_seen_at
-		) VALUES ($1, $2, NULLIF($3, '')::uuid, $4, $5, $6, $7, $8, true, CURRENT_TIMESTAMP)
+			user_id, user_role, brand_id, fcm_token, device_token, platform, app_version, device_model, language_code, locale, is_active, last_seen_at
+		) VALUES ($1, $2, NULLIF($3, '')::uuid, $4, $4, $5, $6, $7, $8, $8, true, CURRENT_TIMESTAMP)
 		ON CONFLICT (user_id, user_role, device_token)
 		DO UPDATE SET
+			fcm_token = EXCLUDED.fcm_token,
 			platform = EXCLUDED.platform,
 			app_version = EXCLUDED.app_version,
 			device_model = EXCLUDED.device_model,
+			language_code = EXCLUDED.language_code,
 			locale = EXCLUDED.locale,
 			is_active = true,
 			last_seen_at = CURRENT_TIMESTAMP,

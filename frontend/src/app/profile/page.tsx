@@ -2,10 +2,16 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { User, Clipboard, Home, LogOut, Check, AlertCircle, AlertTriangle } from "lucide-react";
-import { t } from "@/app/i18n";
+import { getCategoryPrefix, t } from "@/app/i18n";
 import { Category, CartItem } from "@/types/store";
 import { apiFetch, showToast } from "@/app/utils";
+import {
+  SupportedSeoLang,
+  isSupportedSeoLang,
+  normalizeSeoLang,
+} from "@/utils/seoHelpers";
 
 // Centralized types & translations
 import { addressTranslations, orderTranslations } from "./components/translations";
@@ -22,6 +28,240 @@ import RefundModal, { RefundOrderItem } from "./components/RefundModal";
 // Reuse global storefront components
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
+import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+
+interface ProfilePageLocaleCopy {
+  readonly verifiedSuccess: string;
+  readonly verifiedAlready: string;
+  readonly verifiedExpired: string;
+  readonly verifiedInvalid: string;
+  readonly emailVerifiedBadge: string;
+  readonly emailUnverifiedBadge: string;
+  readonly roleAdmin: string;
+  readonly roleCustomer: string;
+  readonly resendFailed: string;
+  readonly alreadyVerifiedToast: string;
+  readonly verificationSentToast: string;
+  readonly genericError: string;
+  readonly ordersLoadFailed: string;
+  readonly fileDownloadFailed: string;
+  readonly orderCancelFailed: string;
+  readonly paymentNotifyFailed: string;
+  readonly refundRequestFailed: string;
+  readonly addressSaveFailed: string;
+  readonly addressDeleteFailed: string;
+  readonly migrationFailed: string;
+}
+
+const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
+  tr: {
+    verifiedSuccess:
+      "🎉 Tebrikler! E-posta adresiniz başarıyla doğrulandı. Artık Merter Vitrini üzerinde 'Doğrulanmış Müşteri' rozeti ile sipariş ve teklif verebilirsiniz.",
+    verifiedAlready: "E-posta adresiniz zaten daha önceden doğrulanmış durumdadır.",
+    verifiedExpired:
+      "Doğrulama bağlantısının 24 saatlik geçerlilik süresi dolmuş. Lütfen profilinizden yeni bir doğrulama bağlantısı talep ediniz.",
+    verifiedInvalid:
+      "Geçersiz veya bulunamayan doğrulama bağlantısı. Lütfen yeni bir doğrulama e-postası talep ediniz.",
+    emailVerifiedBadge: "E-Posta Doğrulandı",
+    emailUnverifiedBadge: "E-Posta Doğrulanmadı",
+    roleAdmin: "B2B Yönetici",
+    roleCustomer: "B2B Müşteri",
+    resendFailed: "Doğrulama e-postası gönderilemedi",
+    alreadyVerifiedToast: "E-posta zaten doğrulanmış durumdadır",
+    verificationSentToast:
+      "Doğrulama e-postası gönderildi! Lütfen gelen kutunuzu (ve spam klasörünü) kontrol edin.",
+    genericError: "Hata oluştu",
+    ordersLoadFailed: "Siparişler yüklenemedi",
+    fileDownloadFailed: "Dosya indirilemedi",
+    orderCancelFailed: "Sipariş iptal edilemedi",
+    paymentNotifyFailed: "Ödeme bildirimi iletilemedi",
+    refundRequestFailed: "İade talebi oluşturulamadı",
+    addressSaveFailed: "Adres kaydedilemedi",
+    addressDeleteFailed: "Adres silinemedi",
+    migrationFailed: "Taşıma işlemi başarısız oldu",
+  },
+  en: {
+    verifiedSuccess:
+      "🎉 Congratulations! Your email address has been verified. You now carry the 'Verified Buyer' badge on Merter Vitrini.",
+    verifiedAlready: "Your email address is already verified.",
+    verifiedExpired:
+      "This 24-hour verification link has expired. Please request a new verification email from your profile.",
+    verifiedInvalid:
+      "Invalid or unknown verification link. Please request a new verification email.",
+    emailVerifiedBadge: "Email Verified",
+    emailUnverifiedBadge: "Email Unverified",
+    roleAdmin: "B2B Admin",
+    roleCustomer: "B2B Buyer",
+    resendFailed: "Failed to send verification email",
+    alreadyVerifiedToast: "Email is already verified",
+    verificationSentToast:
+      "Verification email sent! Please check your inbox and spam folder.",
+    genericError: "An error occurred",
+    ordersLoadFailed: "Failed to load orders",
+    fileDownloadFailed: "Failed to download file",
+    orderCancelFailed: "Failed to cancel order",
+    paymentNotifyFailed: "Failed to submit payment notification",
+    refundRequestFailed: "Failed to create refund request",
+    addressSaveFailed: "Failed to save address",
+    addressDeleteFailed: "Failed to delete address",
+    migrationFailed: "Address migration failed",
+  },
+  ru: {
+    verifiedSuccess:
+      "🎉 Поздравляем! Ваш e-mail подтвержден. Теперь вы отмечены значком «Проверенный покупатель» на Merter Vitrini.",
+    verifiedAlready: "Ваш адрес электронной почты уже подтвержден.",
+    verifiedExpired:
+      "Срок действия ссылки (24 часа) истек. Пожалуйста, запросите новое письмо в профиле.",
+    verifiedInvalid:
+      "Недействительная ссылка подтверждения. Пожалуйста, запросите новое письмо.",
+    emailVerifiedBadge: "E-mail подтвержден",
+    emailUnverifiedBadge: "E-mail не подтвержден",
+    roleAdmin: "B2B Администратор",
+    roleCustomer: "B2B Покупатель",
+    resendFailed: "Не удалось отправить письмо подтверждения",
+    alreadyVerifiedToast: "E-mail уже подтвержден",
+    verificationSentToast:
+      "Письмо отправлено! Проверьте папку «Входящие» и «Спам».",
+    genericError: "Произошла ошибка",
+    ordersLoadFailed: "Не удалось загрузить заказы",
+    fileDownloadFailed: "Не удалось скачать файл",
+    orderCancelFailed: "Не удалось отменить заказ",
+    paymentNotifyFailed: "Не удалось отправить уведомление об оплате",
+    refundRequestFailed: "Не удалось создать заявку на возврат",
+    addressSaveFailed: "Не удалось сохранить адрес",
+    addressDeleteFailed: "Не удалось удалить адрес",
+    migrationFailed: "Не удалось перенести адреса",
+  },
+  ar: {
+    verifiedSuccess:
+      "🎉 تهانينا! تم تأكيد بريدك الإلكتروني بنجاح. يمكنك الآن الطلب بشارة «مشتري موثق» على Merter Vitrini.",
+    verifiedAlready: "بريدك الإلكتروني مؤكد مسبقاً.",
+    verifiedExpired:
+      "انتهت صلاحية رابط التأكيد (24 ساعة). يرجى طلب رابط تأكيد جديد من ملفك الشخصي.",
+    verifiedInvalid: "رابط التأكيد غير صالح. يرجى طلب رسالة تأكيد جديدة.",
+    emailVerifiedBadge: "البريد مؤكد",
+    emailUnverifiedBadge: "البريد غير مؤكد",
+    roleAdmin: "مسؤول B2B",
+    roleCustomer: "عميل B2B",
+    resendFailed: "تعذر إرسال رسالة التأكيد",
+    alreadyVerifiedToast: "البريد الإلكتروني مؤكد بالفعل",
+    verificationSentToast:
+      "تم إرسال رسالة التأكيد! يرجى التحقق من البريد الوارد والرسائل غير المرغوب فيها.",
+    genericError: "حدث خطأ",
+    ordersLoadFailed: "تعذر تحميل الطلبات",
+    fileDownloadFailed: "تعذر تنزيل الملف",
+    orderCancelFailed: "تعذر إلغاء الطلب",
+    paymentNotifyFailed: "تعذر إرسال إشعار الدفع",
+    refundRequestFailed: "تعذر إنشاء طلب الاسترجاع",
+    addressSaveFailed: "تعذر حفظ العنوان",
+    addressDeleteFailed: "تعذر حذف العنوان",
+    migrationFailed: "فشل نقل العناوين",
+  },
+  de: {
+    verifiedSuccess:
+      "🎉 Herzlichen Glückwunsch! Ihre E-Mail-Adresse wurde bestätigt. Sie tragen nun das Abzeichen „Verifizierter Einkäufer“.",
+    verifiedAlready: "Ihre E-Mail-Adresse wurde bereits bestätigt.",
+    verifiedExpired:
+      "Der 24-Stunden-Bestätigungslink ist abgelaufen. Bitte fordern Sie im Profil einen neuen Link an.",
+    verifiedInvalid:
+      "Ungültiger Bestätigungslink. Bitte fordern Sie eine neue E-Mail an.",
+    emailVerifiedBadge: "E-Mail bestätigt",
+    emailUnverifiedBadge: "E-Mail unbestätigt",
+    roleAdmin: "B2B-Admin",
+    roleCustomer: "B2B-Kunde",
+    resendFailed: "Bestätigungs-E-Mail konnte nicht gesendet werden",
+    alreadyVerifiedToast: "E-Mail ist bereits bestätigt",
+    verificationSentToast:
+      "Bestätigungs-E-Mail gesendet! Bitte prüfen Sie Posteingang und Spam-Ordner.",
+    genericError: "Ein Fehler ist aufgetreten",
+    ordersLoadFailed: "Bestellungen konnten nicht geladen werden",
+    fileDownloadFailed: "Datei konnte nicht heruntergeladen werden",
+    orderCancelFailed: "Bestellung konnte nicht storniert werden",
+    paymentNotifyFailed: "Zahlungsmeldung konnte nicht gesendet werden",
+    refundRequestFailed: "Rücksendeanfrage konnte nicht erstellt werden",
+    addressSaveFailed: "Adresse konnte nicht gespeichert werden",
+    addressDeleteFailed: "Adresse konnte nicht gelöscht werden",
+    migrationFailed: "Adressmigration fehlgeschlagen",
+  },
+  fr: {
+    verifiedSuccess:
+      "🎉 Félicitations ! Votre adresse e-mail est vérifiée. Vous disposez désormais du badge « Acheteur vérifié ».",
+    verifiedAlready: "Votre adresse e-mail est déjà vérifiée.",
+    verifiedExpired:
+      "Ce lien de validation (24h) a expiré. Veuillez demander un nouveau lien depuis votre profil.",
+    verifiedInvalid:
+      "Lien de validation invalide. Veuillez demander un nouvel e-mail.",
+    emailVerifiedBadge: "E-mail vérifié",
+    emailUnverifiedBadge: "E-mail non vérifié",
+    roleAdmin: "Admin B2B",
+    roleCustomer: "Client B2B",
+    resendFailed: "Échec de l'envoi de l'e-mail de vérification",
+    alreadyVerifiedToast: "L'adresse e-mail est déjà vérifiée",
+    verificationSentToast:
+      "E-mail de vérification envoyé ! Vérifiez votre boîte de réception et vos spams.",
+    genericError: "Une erreur est survenue",
+    ordersLoadFailed: "Impossible de charger les commandes",
+    fileDownloadFailed: "Impossible de télécharger le fichier",
+    orderCancelFailed: "Impossible d'annuler la commande",
+    paymentNotifyFailed: "Impossible d'envoyer l'avis de paiement",
+    refundRequestFailed: "Impossible de créer la demande de retour",
+    addressSaveFailed: "Impossible d'enregistrer l'adresse",
+    addressDeleteFailed: "Impossible de supprimer l'adresse",
+    migrationFailed: "Échec de la migration des adresses",
+  },
+  pl: {
+    verifiedSuccess:
+      "🎉 Gratulacje! Twój adres e-mail został zweryfikowany. Posiadasz teraz oznaczenie „Zweryfikowany kupiec”.",
+    verifiedAlready: "Twój adres e-mail jest już zweryfikowany.",
+    verifiedExpired:
+      "Link weryfikacyjny (24h) wygasł. Poproś o nowy link w ustawieniach profilu.",
+    verifiedInvalid:
+      "Nieprawidłowy link weryfikacyjny. Wyślij nową wiadomość weryfikacyjną.",
+    emailVerifiedBadge: "E-mail zweryfikowany",
+    emailUnverifiedBadge: "E-mail niezweryfikowany",
+    roleAdmin: "Administrator B2B",
+    roleCustomer: "Klient B2B",
+    resendFailed: "Nie udało się wysłać wiadomości weryfikacyjnej",
+    alreadyVerifiedToast: "E-mail jest już zweryfikowany",
+    verificationSentToast:
+      "Wiadomość weryfikacyjna wysłana! Sprawdź skrzynkę odbiorczą oraz folder spam.",
+    genericError: "Wystąpił błąd",
+    ordersLoadFailed: "Nie udało się załadować zamówień",
+    fileDownloadFailed: "Nie udało się pobrać pliku",
+    orderCancelFailed: "Nie udało się anulować zamówienia",
+    paymentNotifyFailed: "Nie udało się wysłać powiadomienia o płatności",
+    refundRequestFailed: "Nie udało się utworzyć zgłoszenia zwrotu",
+    addressSaveFailed: "Nie udało się zapisać adresu",
+    addressDeleteFailed: "Nie udało się usunąć adresu",
+    migrationFailed: "Migracja adresów nie powiodła się",
+  },
+  bg: {
+    verifiedSuccess:
+      "🎉 Поздравления! Имейл адресът ви е потвърден. Вече притежавате значка „Потвърден купувач“ в Merter Vitrini.",
+    verifiedAlready: "Вашият имейл адрес вече е потвърден.",
+    verifiedExpired:
+      "24-часовата валидност на линка е изтекла. Моля, заявете нов линк от профила си.",
+    verifiedInvalid:
+      "Невалиден линк за потвърждение. Моля, заявете нов имейл за потвърждение.",
+    emailVerifiedBadge: "Имейлът е потвърден",
+    emailUnverifiedBadge: "Имейлът не е потвърден",
+    roleAdmin: "B2B Администратор",
+    roleCustomer: "B2B Клиент",
+    resendFailed: "Неуспешно изпращане на имейл за потвърждение",
+    alreadyVerifiedToast: "Имейлът вече е потвърден",
+    verificationSentToast:
+      "Имейлът за потвърждение е изпратен! Проверете входящата поща и спам папката.",
+    genericError: "Възникна грешка",
+    ordersLoadFailed: "Неуспешно зареждане на поръчките",
+    fileDownloadFailed: "Неуспешно изтегляне на файла",
+    orderCancelFailed: "Неуспешно анулиране на поръчката",
+    paymentNotifyFailed: "Неуспешно изпращане на известие за плащане",
+    refundRequestFailed: "Неуспешно създаване на заявка за връщане",
+    addressSaveFailed: "Неуспешно запазване на адреса",
+    addressDeleteFailed: "Неуспешно изтриване на адреса",
+    migrationFailed: "Прехвърлянето на адресите бе неуспешно",
+  },
+};
 
 interface AuthUser {
   readonly id?: string;
@@ -68,7 +308,14 @@ function validateAddressPhone(
 
 function getInitialLang(): string {
   if (typeof window !== "undefined") {
-    return localStorage.getItem("preferred_lang") || "tr";
+    const queryLang = new URLSearchParams(window.location.search).get("lang");
+    if (isSupportedSeoLang(queryLang)) {
+      return queryLang;
+    }
+    const stored = localStorage.getItem("preferred_lang");
+    if (isSupportedSeoLang(stored)) {
+      return stored;
+    }
   }
   return "tr";
 }
@@ -177,34 +424,38 @@ function getInitialVerificationFeedback(): VerificationFeedback | null {
   const verifiedParam = urlParams.get("verified");
   if (!verifiedParam) return null;
 
+  const activeCopy =
+    PROFILE_PAGE_COPY[normalizeSeoLang(getInitialLang(), "tr")];
+
   if (verifiedParam === "success") {
     return {
       type: "success",
-      message: "🎉 Tebrikler! E-posta adresiniz başarıyla doğrulandı. Artık Merter Vitrini üzerinde 'Doğrulanmış Müşteri' rozeti ile sipariş ve teklif verebilirsiniz.",
+      message: activeCopy.verifiedSuccess,
     };
   }
   if (verifiedParam === "already_verified") {
     return {
       type: "info",
-      message: "E-posta adresiniz zaten daha önceden doğrulanmış durumdadır.",
+      message: activeCopy.verifiedAlready,
     };
   }
   if (verifiedParam === "expired") {
     return {
       type: "warning",
-      message: "Doğrulama bağlantısının 24 saatlik geçerlilik süresi dolmuş. Lütfen profilinizden yeni bir doğrulama bağlantısı talep ediniz.",
+      message: activeCopy.verifiedExpired,
     };
   }
   if (verifiedParam === "invalid" || verifiedParam === "not_found") {
     return {
       type: "error",
-      message: "Geçersiz veya bulunamayan doğrulama bağlantısı. Lütfen yeni bir doğrulama e-postası talep ediniz.",
+      message: activeCopy.verifiedInvalid,
     };
   }
   return null;
 }
 
 export default function ProfilePage() {
+  const router = useRouter();
   // --- Storefront states ---
   const [lang, setLang] = useState<string>(getInitialLang);
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
@@ -212,6 +463,13 @@ export default function ProfilePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategoryId, setActiveCategoryId] = useState<string>("");
   const [cart] = useState<CartItem[]>(getInitialSavedCart);
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
+  const [policyModalType, setPolicyModalType] = useState<
+    "cancellation_and_return" | "terms_of_service" | "privacy_policy" | ""
+  >("");
+
+  const safeLang = normalizeSeoLang(lang, "tr");
+  const pageCopy = PROFILE_PAGE_COPY[safeLang];
 
   // --- Auth states ---
   const [user, setUser] = useState<AuthUser | null>(getInitialAuthUser);
@@ -338,6 +596,26 @@ export default function ProfilePage() {
     return orderTranslations[safeLang][key] || orderTranslations["tr"][key] || key;
   };
 
+  const handleLangChange = useCallback((nextLang: string) => {
+    const normalized = normalizeSeoLang(nextLang, "tr");
+    setLang(normalized);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("preferred_lang", normalized);
+      const urlParams = new URLSearchParams(window.location.search);
+      if (normalized === "tr") {
+        urlParams.delete("lang");
+      } else {
+        urlParams.set("lang", normalized);
+      }
+      const qs = urlParams.toString();
+      window.history.replaceState(
+        {},
+        document.title,
+        window.location.pathname + (qs ? `?${qs}` : "")
+      );
+    }
+  }, []);
+
   const handleLogout = useCallback(() => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("store_user_token");
@@ -350,6 +628,7 @@ export default function ProfilePage() {
   }, []);
 
   const fetchOrders = useCallback(async (authToken: string) => {
+    const activeCopy = PROFILE_PAGE_COPY[normalizeSeoLang(getInitialLang(), "tr")];
     try {
       const response = await fetch("/api/v1/store/orders", {
         headers: {
@@ -359,11 +638,11 @@ export default function ProfilePage() {
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Siparişler yüklenemedi");
+        throw new Error(data.error || activeCopy.ordersLoadFailed);
       }
       setOrders(data || []);
     } catch (err: unknown) {
-      setOrdersError((err as Error).message || "Siparişler yüklenemedi");
+      setOrdersError((err as Error).message || activeCopy.ordersLoadFailed);
     } finally {
       setLoadingOrders(false);
     }
@@ -462,7 +741,9 @@ export default function ProfilePage() {
       syncStoredEmailVerification(true);
     }
 
-    const cleanUrl = window.location.pathname + (urlParams.get("tab") ? `?tab=${urlParams.get("tab")}` : "");
+    urlParams.delete("verified");
+    const qs = urlParams.toString();
+    const cleanUrl = window.location.pathname + (qs ? `?${qs}` : "");
     window.history.replaceState({}, document.title, cleanUrl);
   }, []);
 
@@ -480,33 +761,33 @@ export default function ProfilePage() {
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Doğrulama e-postası gönderilemedi");
+        throw new Error(data.error || pageCopy.resendFailed);
       }
 
       if (data.already_verified) {
         setEmailVerified(true);
-        showToast(lang === "tr" ? "E-posta zaten doğrulanmış durumdadır" : "Email already verified");
+        showToast(pageCopy.alreadyVerifiedToast);
       } else {
         setResendCountdown(60);
-        showToast(
-          lang === "tr"
-            ? "Doğrulama e-postası gönderildi! Lütfen gelen kutunuzu (ve spam klasörünü) kontrol edin."
-            : "Verification email sent! Please check your inbox."
-        );
+        showToast(pageCopy.verificationSentToast);
       }
     } catch (err: unknown) {
-      showToast((err as Error).message || "Hata oluştu");
+      showToast((err as Error).message || pageCopy.genericError);
     } finally {
       setResendingVerification(false);
     }
-  }, [token, email, lang, resendingVerification, resendCountdown]);
+  }, [token, email, pageCopy, resendingVerification, resendCountdown]);
 
-  // Synchronize dynamic HTML lang attribute
+  // Synchronize dynamic HTML lang & dir attributes
   useEffect(() => {
     if (typeof window !== "undefined") {
-      document.documentElement.setAttribute("lang", lang);
+      document.documentElement.setAttribute("lang", safeLang);
+      document.documentElement.setAttribute(
+        "dir",
+        safeLang === "ar" ? "rtl" : "ltr"
+      );
     }
-  }, [lang]);
+  }, [safeLang]);
 
   // Load language, currency, cart & categories on mount
   useEffect(() => {
@@ -546,7 +827,7 @@ export default function ProfilePage() {
       });
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "Dosya indirilemedi");
+        throw new Error(errData.error || pageCopy.fileDownloadFailed);
       }
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
@@ -558,7 +839,7 @@ export default function ProfilePage() {
       a.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch (err: unknown) {
-      showToast("Hata: " + ((err as Error).message || "Dosya indirilemedi"));
+      showToast((err as Error).message || pageCopy.fileDownloadFailed);
     }
   };
 
@@ -574,12 +855,12 @@ export default function ProfilePage() {
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Sipariş iptal edilemedi");
+        throw new Error(data.error || pageCopy.orderCancelFailed);
       }
       showToast(getOrderT("order_cancelled"));
       if (token) void fetchOrders(token);
     } catch (err: unknown) {
-      showToast("Hata: " + ((err as Error).message || "Sipariş iptal edilemedi"));
+      showToast((err as Error).message || pageCopy.orderCancelFailed);
     }
   };
 
@@ -611,13 +892,13 @@ export default function ProfilePage() {
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Ödeme bildirimi iletilemedi");
+        throw new Error(data.error || pageCopy.paymentNotifyFailed);
       }
       showToast(getOrderT("payment_notification_submitted"));
       setIsPaymentModalOpen(false);
       if (token) void fetchOrders(token);
     } catch (err: unknown) {
-      showToast("Hata: " + ((err as Error).message || "Ödeme bildirimi iletilemedi"));
+      showToast((err as Error).message || pageCopy.paymentNotifyFailed);
     } finally {
       setSubmittingPayment(false);
     }
@@ -690,13 +971,13 @@ export default function ProfilePage() {
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "İade talebi oluşturulamadı");
+        throw new Error(data.error || pageCopy.refundRequestFailed);
       }
       showToast(getOrderT("refund_requested"));
       setIsRefundModalOpen(false);
       if (token) void fetchOrders(token);
     } catch (err: unknown) {
-      showToast("Hata: " + ((err as Error).message || "İade talebi oluşturulamadı"));
+      showToast((err as Error).message || pageCopy.refundRequestFailed);
     } finally {
       setSubmittingRefund(false);
     }
@@ -881,7 +1162,7 @@ export default function ProfilePage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Adres kaydedilirken bir hata oluştu");
+        throw new Error(data.error || pageCopy.addressSaveFailed);
       }
 
       setAddressSuccess(editingAddress ? getAddressT("address_update_success") : getAddressT("address_create_success"));
@@ -893,7 +1174,7 @@ export default function ProfilePage() {
       }, 1000);
 
     } catch (err: unknown) {
-      setAddressError((err as Error).message || "Adres kaydedilemedi");
+      setAddressError((err as Error).message || pageCopy.addressSaveFailed);
     } finally {
       setSavingAddress(false);
     }
@@ -916,12 +1197,12 @@ export default function ProfilePage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Adres silinemedi");
+        throw new Error(data.error || pageCopy.addressDeleteFailed);
       }
 
       if (token) void fetchAddresses(token);
     } catch (err: unknown) {
-      showToast((err as Error).message || "Adres silinemedi");
+      showToast((err as Error).message || pageCopy.addressDeleteFailed);
     }
   };
 
@@ -929,7 +1210,7 @@ export default function ProfilePage() {
     setIsMigrating(true);
     try {
       const trCountry = countries.find((c) => c.code === "TR");
-      if (!trCountry) throw new Error("Turkey location code not found in active catalog countries");
+      if (!trCountry) throw new Error(pageCopy.migrationFailed);
 
       if (billingAddress && billingAddress.trim() !== "") {
         const response = await fetch("/api/v1/store/profile/addresses", {
@@ -953,7 +1234,7 @@ export default function ProfilePage() {
         });
         if (!response.ok) {
           const resErr = await response.json();
-          throw new Error(resErr.error || "Fatura adresi taşınamadı");
+          throw new Error(resErr.error || pageCopy.migrationFailed);
         }
       }
 
@@ -978,7 +1259,7 @@ export default function ProfilePage() {
         });
         if (!response.ok) {
           const resErr = await response.json();
-          throw new Error(resErr.error || "Sevk adresi taşınamadı");
+          throw new Error(resErr.error || pageCopy.migrationFailed);
         }
       }
 
@@ -986,7 +1267,7 @@ export default function ProfilePage() {
       if (token) void fetchAddresses(token);
     } catch (e: unknown) {
       console.error(e);
-      setError((e as Error).message || "Taşıma işlemi başarısız oldu");
+      setError((e as Error).message || pageCopy.migrationFailed);
     } finally {
       setIsMigrating(false);
     }
@@ -1071,33 +1352,56 @@ export default function ProfilePage() {
   };
 
   const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
+  const handleOpenCart = (open: boolean) => {
+    if (open) {
+      router.push(`/${getCategoryPrefix(safeLang)}/cart`);
+    }
+  };
+  const handleOpenPolicy = (
+    type: "cancellation_and_return" | "terms_of_service" | "privacy_policy"
+  ) => {
+    setPolicyModalType(type);
+    setIsPolicyModalOpen(true);
+  };
 
   // --- Sub-loaders for unauthorised / loading UI ---
   if (loadingProfile) {
     return (
-      <div className="min-h-screen flex flex-col bg-[#fafafa]">
+      <div
+        dir={safeLang === "ar" ? "rtl" : "ltr"}
+        className="min-h-screen flex flex-col bg-[#fafafa]"
+      >
         <Header
-          lang={lang}
-          setLang={setLang}
+          lang={safeLang}
+          setLang={handleLangChange}
           isLangOpen={isLangOpen}
           setIsLangOpen={setIsLangOpen}
           totalPkgs={totalPkgs}
-          setIsCartOpen={() => { }}
+          setIsCartOpen={handleOpenCart}
           setSearchQuery={() => { }}
           setCurrentPage={() => { }}
           setActiveCategoryId={setActiveCategoryId}
           categories={categories}
           activeCategoryId={activeCategoryId}
           displayCurrency={displayCurrency}
-          onCurrencyChange={() => { }}
+          onCurrencyChange={setDisplayCurrency}
         />
         <main className="flex-grow flex flex-col items-center justify-center py-20 gap-3">
           <div className="spinner animate-spin w-8 h-8 border-4 border-salmon-pink border-t-transparent rounded-full" />
           <span className="text-xs font-bold text-sonic-silver select-none">
-            {t("loading_profile", lang)}
+            {t("loading_profile", safeLang)}
           </span>
         </main>
-        <Footer lang={lang} />
+        <Footer lang={safeLang} onOpenPolicy={handleOpenPolicy} />
+        <PolicyViewerModal
+          isOpen={isPolicyModalOpen}
+          onClose={() => {
+            setIsPolicyModalOpen(false);
+            setPolicyModalType("");
+          }}
+          policyType={policyModalType}
+          lang={safeLang}
+        />
       </div>
     );
   }
@@ -1105,70 +1409,85 @@ export default function ProfilePage() {
   // Unauthorized page state
   if (!user || !token) {
     return (
-      <div className="min-h-screen flex flex-col bg-[#fafafa]">
+      <div
+        dir={safeLang === "ar" ? "rtl" : "ltr"}
+        className="min-h-screen flex flex-col bg-[#fafafa]"
+      >
         <Header
-          lang={lang}
-          setLang={setLang}
+          lang={safeLang}
+          setLang={handleLangChange}
           isLangOpen={isLangOpen}
           setIsLangOpen={setIsLangOpen}
           totalPkgs={totalPkgs}
-          setIsCartOpen={() => { }}
+          setIsCartOpen={handleOpenCart}
           setSearchQuery={() => { }}
           setCurrentPage={() => { }}
           setActiveCategoryId={setActiveCategoryId}
           categories={categories}
           activeCategoryId={activeCategoryId}
           displayCurrency={displayCurrency}
-          onCurrencyChange={() => { }}
+          onCurrencyChange={setDisplayCurrency}
         />
         <main className="flex-grow flex flex-col items-center justify-center p-8 text-center select-none py-24">
           <span className="text-5xl mb-4">🔒</span>
           <h1 className="text-2xl font-extrabold text-eerie-black mb-3">
-            {t("auth_required", lang)}
+            {t("auth_required", safeLang)}
           </h1>
           <p className="text-sm font-semibold text-sonic-silver mb-8 max-w-md mx-auto leading-relaxed">
-            {t("auth_required_desc", lang)}
+            {t("auth_required_desc", safeLang)}
           </p>
           <Link
-            href="/"
+            href={`/${safeLang}`}
             className="px-8 py-3 bg-salmon-pink text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase hover:bg-eerie-black transition-all cursor-pointer shadow-md no-underline"
           >
-            {t("back_to_homepage", lang)}
+            {t("back_to_homepage", safeLang)}
           </Link>
         </main>
-        <Footer lang={lang} />
+        <Footer lang={safeLang} onOpenPolicy={handleOpenPolicy} />
+        <PolicyViewerModal
+          isOpen={isPolicyModalOpen}
+          onClose={() => {
+            setIsPolicyModalOpen(false);
+            setPolicyModalType("");
+          }}
+          policyType={policyModalType}
+          lang={safeLang}
+        />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#fbfbfb]">
+    <div
+      dir={safeLang === "ar" ? "rtl" : "ltr"}
+      className="min-h-screen flex flex-col bg-[#fbfbfb]"
+    >
       <Header
-        lang={lang}
-        setLang={setLang}
+        lang={safeLang}
+        setLang={handleLangChange}
         isLangOpen={isLangOpen}
         setIsLangOpen={setIsLangOpen}
         totalPkgs={totalPkgs}
-        setIsCartOpen={() => { }}
+        setIsCartOpen={handleOpenCart}
         setSearchQuery={() => { }}
         setCurrentPage={() => { }}
         setActiveCategoryId={setActiveCategoryId}
         categories={categories}
         activeCategoryId={activeCategoryId}
         displayCurrency={displayCurrency}
-        onCurrencyChange={() => { }}
+        onCurrencyChange={setDisplayCurrency}
       />
 
       <main className="flex-grow max-w-[1280px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 animate-in fade-in duration-300">
 
         {/* Navigation Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-[11px] font-bold text-sonic-silver mb-6 uppercase tracking-wider select-none">
-          <Link href="/" className="hover:text-salmon-pink flex items-center gap-1 transition-colors no-underline text-sonic-silver">
+          <Link href={`/${safeLang}`} className="hover:text-salmon-pink flex items-center gap-1 transition-colors no-underline text-sonic-silver">
             <Home className="w-3.5 h-3.5" />
-            <span>{t("home", lang)}</span>
+            <span>{t("home", safeLang)}</span>
           </Link>
           <span className="text-spanish-gray">/</span>
-          <span className="text-salmon-pink font-extrabold">{t("my_account", lang)}</span>
+          <span className="text-salmon-pink font-extrabold">{t("my_account", safeLang)}</span>
         </nav>
 
         {/* Verification Alert Banner */}
@@ -1207,17 +1526,17 @@ export default function ProfilePage() {
                 {firstName} {lastName}
               </h3>
               <span className="text-[11px] font-semibold text-sonic-silver tracking-wider uppercase bg-cultured px-2.5 py-1 rounded-full mt-2.5 border border-cultured">
-                B2B {user?.role === "admin" ? "Admin" : "Customer"}
+                {user?.role === "admin" ? pageCopy.roleAdmin : pageCopy.roleCustomer}
               </span>
               {emailVerified ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full mt-2 border border-emerald-200">
                   <Check className="w-3 h-3 text-emerald-600" />
-                  E-Posta Doğrulandı
+                  {pageCopy.emailVerifiedBadge}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full mt-2 border border-amber-200">
                   <AlertCircle className="w-3 h-3 text-amber-600" />
-                  E-Posta Doğrulanmadı
+                  {pageCopy.emailUnverifiedBadge}
                 </span>
               )}
 
@@ -1405,7 +1724,16 @@ export default function ProfilePage() {
         getAddressT={getAddressT}
       />
 
-      <Footer lang={lang} />
+      <Footer lang={safeLang} onOpenPolicy={handleOpenPolicy} />
+      <PolicyViewerModal
+        isOpen={isPolicyModalOpen}
+        onClose={() => {
+          setIsPolicyModalOpen(false);
+          setPolicyModalType("");
+        }}
+        policyType={policyModalType}
+        lang={safeLang}
+      />
     </div>
   );
 }

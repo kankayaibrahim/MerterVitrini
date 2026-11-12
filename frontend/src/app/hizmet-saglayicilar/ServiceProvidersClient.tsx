@@ -1,6 +1,14 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { useRouter } from "next/navigation";
 import {
   Truck,
   Camera,
@@ -18,10 +26,580 @@ import {
   Mail,
   AlertCircle,
 } from "lucide-react";
-import { Category } from "@/types/store";
+import { CartItem, Category } from "@/types/store";
+import { getCategoryPrefix } from "@/app/i18n";
 import { apiFetch } from "@/app/utils";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
+import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
+
+interface ServiceProvidersLocaleCopy {
+  readonly heroBadge: string;
+  readonly heroTitle: string;
+  readonly heroDesc: string;
+  readonly heroApplyBtn: string;
+  readonly searchLabel: string;
+  readonly searchPlaceholder: string;
+  readonly catAll: string;
+  readonly catCargo: string;
+  readonly catStudio: string;
+  readonly catLabel: string;
+  readonly catPattern: string;
+  readonly catCustoms: string;
+  readonly catTitleCargo: string;
+  readonly catTitleStudio: string;
+  readonly catTitleLabel: string;
+  readonly catTitlePattern: string;
+  readonly catTitleCustoms: string;
+  readonly catTitleFallback: string;
+  readonly sponsoredBadge: string;
+  readonly verifiedBadge: string;
+  readonly targetCountriesLabel: string;
+  readonly whatsappMessagePrefix: string;
+  readonly whatsappMessageBody: string;
+  readonly whatsappBtn: string;
+  readonly callBtn: string;
+  readonly emptyTitle: string;
+  readonly emptyDesc: string;
+  readonly emptyApplyBtn: string;
+  readonly verifyDefaultSuccess: string;
+  readonly verifyNetworkError: string;
+  readonly submittedTitle: string;
+  readonly submittedDescBeforeEmail: string;
+  readonly submittedDescBetween: string;
+  readonly submittedWindowLabel: string;
+  readonly submittedDescAfter: string;
+  readonly securityPolicyTitle: string;
+  readonly securityPolicyBody: string;
+  readonly gotItBtn: string;
+  readonly modalTitle: string;
+  readonly fieldCompanyPlaceholder: string;
+  readonly fieldContactPlaceholder: string;
+  readonly fieldEmailPlaceholder: string;
+  readonly fieldShortDescPlaceholder: string;
+  readonly fieldServicesPlaceholder: string;
+  readonly fieldCountriesPlaceholder: string;
+  readonly fieldPhonePlaceholder: string;
+  readonly fieldAddressPlaceholder: string;
+  readonly recaptchaNotice: string;
+  readonly submitBtn: string;
+  readonly submittingBtn: string;
+  readonly submitErrorFallback: string;
+}
+
+const SERVICE_PROVIDERS_COPY: Record<
+  SupportedSeoLang,
+  ServiceProvidersLocaleCopy
+> = {
+  tr: {
+    heroBadge: "MERTER B2B EKOSİSTEM & ÇÖZÜM ORTAKLARI REHBERİ",
+    heroTitle: "Sektörel Hizmet Sağlayıcılar Rehberi",
+    heroDesc:
+      "Toptan tekstil ticaretinizi hızlandıran doğrulanmış uluslararası kargo ve gümrükleme firmaları, mankenli katalog çekim stüdyoları, Private Label dokuma etiket/ambalaj üreticileri, dijital modelhaneler ve ihracat danışmanlarıyla doğrudan iletişime geçin.",
+    heroApplyBtn: "Hizmet Sağlayıcı Olarak Kaydol",
+    searchLabel: "Hizmet Sağlayıcı Ara",
+    searchPlaceholder: "Hizmet, ülke veya firma ara...",
+    catAll: "Tüm Hizmetler",
+    catCargo: "Kargo & Lojistik",
+    catStudio: "Fotoğraf & Prodüksiyon Stüdyosu",
+    catLabel: "Ambalaj & Dokuma Etiket",
+    catPattern: "Modelhane, Kalıp & Numune",
+    catCustoms: "Gümrük & İhracat Danışmanlığı",
+    catTitleCargo: "Uluslararası Kargo, Lojistik & Konsolidasyon",
+    catTitleStudio: "Mankenli Katalog, Lookbook & Video Stüdyosu",
+    catTitleLabel: "Dokuma Etiket, Karton Etiket & Lüks Ambalaj",
+    catTitlePattern: "Dijital Modelhane, Gerber/Lectra Kalıp & Numune",
+    catTitleCustoms: "Gümrük, EUR.1/ATR & Dış Ticaret Danışmanlığı",
+    catTitleFallback: "B2B Sektörel Hizmet Ortağı",
+    sponsoredBadge: "ÖNE ÇIKAN HİZMET ORTAĞI",
+    verifiedBadge: "Doğrulanmış Hizmet Sağlayıcı",
+    targetCountriesLabel: "Hizmet Bölgeleri / Ülkeler:",
+    whatsappMessagePrefix: "Merhaba",
+    whatsappMessageBody:
+      "Merter Vitrini Sektörel Hizmet Sağlayıcılar Rehberi üzerinden firmanızdan B2B hizmet teklifi almak istiyorum.",
+    whatsappBtn: "WhatsApp'tan Teklif Al",
+    callBtn: "Doğrudan Ara",
+    emptyTitle: "Henüz Kayıtlı Hizmet Sağlayıcı Bulunmuyor",
+    emptyDesc:
+      "Bu kategoride şu an listelenen bir hizmet sağlayıcı firma bulunmamaktadır. Kargo/lojistik, fotoğraf stüdyosu, dokuma etiket/ambalaj, modelhane veya ihracat danışmanlığı hizmeti veriyorsanız rehbere başvuru yapabilirsiniz.",
+    emptyApplyBtn: "Hizmet Sağlayıcı Olarak Başvur",
+    verifyDefaultSuccess: "E-posta doğrulama işlemi tamamlandı.",
+    verifyNetworkError: "Doğrulama sırasında bir bağlantı hatası oluştu.",
+    submittedTitle: "Doğrulama E-Postası Gönderildi!",
+    submittedDescBeforeEmail: "",
+    submittedDescBetween: " adresinize ",
+    submittedWindowLabel: "30 dakika",
+    submittedDescAfter:
+      " geçerli bir başvuru doğrulama bağlantısı gönderdik. E-postanızı doğruladığınızda başvurunuz yönetici onayına iletilecektir.",
+    securityPolicyTitle: "Güvenlik Politikası:",
+    securityPolicyBody:
+      "Tıpkı tedarikçi başvurularında olduğu gibi, 30 dakika içinde e-posta doğrulaması yapılmayan başvurular otomatik olarak silinir ve yönetici onayı olmadan rehberde yayınlanmaz.",
+    gotItBtn: "Tamam, Anladım",
+    modalTitle: "Sektörel Hizmet Sağlayıcı Rehber Başvurusu",
+    fieldCompanyPlaceholder: "Firma Unvanı (Örn: Merter Ekspres Kargo) *",
+    fieldContactPlaceholder: "Yetkili Adı Soyadı *",
+    fieldEmailPlaceholder: "Kurumsal E-Posta (Doğrulama İçin) *",
+    fieldShortDescPlaceholder: "Kısa Tanıtım Yazısı *",
+    fieldServicesPlaceholder:
+      "Sunulan Hizmetler (Virgülle ayırın: ETGB, Konsolidasyon vb.)",
+    fieldCountriesPlaceholder:
+      "Hizmet Verilen Ülkeler (Örn: Almanya, Rusya, BAE)",
+    fieldPhonePlaceholder: "Telefon / WhatsApp Numarası *",
+    fieldAddressPlaceholder: "Merter / İstanbul Açık Adres",
+    recaptchaNotice:
+      "Google reCAPTCHA v3 koruması, 30 dk e-posta doğrulaması ve yönetici onay mekanizmasıyla korunmaktadır.",
+    submitBtn: "BAŞVURU YAP & DOĞRULAMA KODU GÖNDER",
+    submittingBtn: "DOĞRULAMA GÖNDERİLİYOR...",
+    submitErrorFallback: "Başvurunuz gönderilirken bir hata oluştu.",
+  },
+  en: {
+    heroBadge: "MERTER B2B ECOSYSTEM & VERIFIED PARTNERS DIRECTORY",
+    heroTitle: "B2B Textile Service Providers Directory",
+    heroDesc:
+      "Connect directly with verified international cargo & consolidation forwarders, fashion lookbook photography studios, private-label woven label & packaging manufacturers, CAD pattern houses, and export customs consultants in Merter Istanbul.",
+    heroApplyBtn: "Register as a Service Partner",
+    searchLabel: "Search Service Providers",
+    searchPlaceholder: "Search by service, destination country, or company...",
+    catAll: "All Services",
+    catCargo: "Cargo & Logistics",
+    catStudio: "Photo & Lookbook Studio",
+    catLabel: "Woven Labels & Packaging",
+    catPattern: "Pattern Making & Sampling",
+    catCustoms: "Customs & Export Advisory",
+    catTitleCargo: "International Cargo, Freight & Multi-Supplier Consolidation",
+    catTitleStudio: "Model Catalog, E-Commerce Lookbook & Video Studio",
+    catTitleLabel: "Custom Woven Labels, Hangtags & Luxury Packaging",
+    catTitlePattern: "Digital Pattern Making (Gerber/Lectra) & Sampling",
+    catTitleCustoms: "Customs Clearance, EUR.1/ATR & Export Advisory",
+    catTitleFallback: "B2B Industry Service Partner",
+    sponsoredBadge: "FEATURED PARTNER",
+    verifiedBadge: "Verified Service Provider",
+    targetCountriesLabel: "Served Regions / Countries:",
+    whatsappMessagePrefix: "Hello",
+    whatsappMessageBody:
+      "I am reaching out via the Merter Vitrini B2B Service Providers Directory and would like to request a quote.",
+    whatsappBtn: "Get Quote on WhatsApp",
+    callBtn: "Call Directly",
+    emptyTitle: "No Service Providers Listed Yet",
+    emptyDesc:
+      "No service provider matches this filter right now. If your company provides international textile cargo, studio photography, custom labels/packaging, pattern making, or export consulting in Merter, apply to join the directory.",
+    emptyApplyBtn: "Apply as a Service Provider",
+    verifyDefaultSuccess: "Email verification completed successfully.",
+    verifyNetworkError: "A network error occurred during verification.",
+    submittedTitle: "Verification Email Sent!",
+    submittedDescBeforeEmail: "We sent an application verification link to ",
+    submittedDescBetween: " valid for ",
+    submittedWindowLabel: "30 minutes",
+    submittedDescAfter:
+      ". Once you verify your email, your application will be forwarded for admin review.",
+    securityPolicyTitle: "Security Policy:",
+    securityPolicyBody:
+      "Applications not verified via email within 30 minutes are automatically purged and are never published without admin verification.",
+    gotItBtn: "Got It",
+    modalTitle: "B2B Service Provider Directory Application",
+    fieldCompanyPlaceholder: "Company Name (e.g., Merter Express Cargo) *",
+    fieldContactPlaceholder: "Contact Person Full Name *",
+    fieldEmailPlaceholder: "Corporate Email (For Verification) *",
+    fieldShortDescPlaceholder: "Short Company Summary *",
+    fieldServicesPlaceholder:
+      "Services Offered (comma-separated: Consolidation, Air Cargo, EUR.1...)",
+    fieldCountriesPlaceholder:
+      "Served Countries (e.g., Germany, UK, USA, UAE)",
+    fieldPhonePlaceholder: "Phone / WhatsApp Number *",
+    fieldAddressPlaceholder: "Merter / Istanbul Street Address",
+    recaptchaNotice:
+      "Protected by Google reCAPTCHA v3, 30-minute email verification, and manual admin approval.",
+    submitBtn: "SUBMIT & SEND VERIFICATION LINK",
+    submittingBtn: "SENDING VERIFICATION...",
+    submitErrorFallback: "An error occurred while submitting your application.",
+  },
+  ru: {
+    heroBadge: "B2B ЭКОСИСТЕМА И ПРОВЕРЕННЫЕ ПАРТНЕРЫ МЕРТЕРА",
+    heroTitle: "Каталог отраслевых B2B партнеров и карго",
+    heroDesc:
+      "Свяжитесь напрямую с проверенными карго-компаниями и консолидаторами грузов из Турции, модельными фотостудиями, производителями тканых бирок/упаковки для Private Label, конструкторскими бюро и таможенными брокерами.",
+    heroApplyBtn: "Добавить компанию в каталог",
+    searchLabel: "Поиск поставщиков услуг",
+    searchPlaceholder: "Поиск по услуге, стране доставки или компании...",
+    catAll: "Все услуги",
+    catCargo: "Карго и логистика",
+    catStudio: "Фото и видеостудии",
+    catLabel: "Бирки и упаковка",
+    catPattern: "Лекала и образцы",
+    catCustoms: "Таможня и экспорт",
+    catTitleCargo: "Международное карго, логистика и консолидация грузов",
+    catTitleStudio: "Каталожная фотосъемка с моделями, Lookbook и видео",
+    catTitleLabel: "Тканые жаккардовые бирки, навесные ярлыки и упаковка",
+    catTitlePattern: "Цифровые лекала (Gerber/Lectra) и пошив образцов",
+    catTitleCustoms: "Таможенное оформление, сертификаты и ВЭД консалтинг",
+    catTitleFallback: "B2B сервисный партнер",
+    sponsoredBadge: "РЕКОМЕНДУЕМЫЙ ПАРТНЕР",
+    verifiedBadge: "Проверенный партнер",
+    targetCountriesLabel: "Страны и регионы работы:",
+    whatsappMessagePrefix: "Здравствуйте,",
+    whatsappMessageBody:
+      "Обращаюсь к вам через каталог B2B партнеров Merter Vitrini и хочу запросить расчет стоимости услуг.",
+    whatsappBtn: "Запросить в WhatsApp",
+    callBtn: "Позвонить напрямую",
+    emptyTitle: "В этой категории пока нет компаний",
+    emptyDesc:
+      "По выбранному фильтру пока нет зарегистрированных партнеров. Если вы предоставляете услуги карго, фотостудии, производства бирок, лекал или экспортного оформления в Мертере, подайте заявку.",
+    emptyApplyBtn: "Подать заявку как партнер",
+    verifyDefaultSuccess: "Подтверждение электронной почты завершено.",
+    verifyNetworkError: "Ошибка соединения при проверке токена.",
+    submittedTitle: "Письмо с подтверждением отправлено!",
+    submittedDescBeforeEmail: "На адрес ",
+    submittedDescBetween: " отправлена ссылка подтверждения со сроком действия ",
+    submittedWindowLabel: "30 минут",
+    submittedDescAfter:
+      ". После подтверждения e-mail заявка поступит на проверку модератору.",
+    securityPolicyTitle: "Политика безопасности:",
+    securityPolicyBody:
+      "Заявки без подтверждения e-mail в течение 30 минут автоматически удаляются и публикуются только после проверки администрацией.",
+    gotItBtn: "Понятно",
+    modalTitle: "Заявка на включение в каталог B2B услуг",
+    fieldCompanyPlaceholder: "Название компании (напр., Merter Express Cargo) *",
+    fieldContactPlaceholder: "Контактное лицо (Имя и Фамилия) *",
+    fieldEmailPlaceholder: "Корпоративный E-mail (для подтверждения) *",
+    fieldShortDescPlaceholder: "Краткое описание компании *",
+    fieldServicesPlaceholder:
+      "Услуги через запятую (Консолидация, Авто/Авиа карго и т.д.)",
+    fieldCountriesPlaceholder:
+      "Страны доставки (напр., Россия, Казахстан, ЕС)",
+    fieldPhonePlaceholder: "Телефон / WhatsApp *",
+    fieldAddressPlaceholder: "Адрес офиса / склада в Мертере (Стамбул)",
+    recaptchaNotice:
+      "Защищено Google reCAPTCHA v3, 30-минутным подтверждением e-mail и модерацией.",
+    submitBtn: "ОТПРАВИТЬ ЗАЯВКУ И КОД ПОДТВЕРЖДЕНИЯ",
+    submittingBtn: "ОТПРАВКА...",
+    submitErrorFallback: "Произошла ошибка при отправке заявки.",
+  },
+  ar: {
+    heroBadge: "دليل شركاء الأعمال والخدمات اللوجستية في مارتر",
+    heroTitle: "دليل مزودي الخدمات القطاعية لتجارة الجملة",
+    heroDesc:
+      "تواصل مباشرة مع شركات الشحن الدولي وتجميع البضائع المعتمدة، استوديوهات تصوير الكتالوجات والموديلات، مصانع الليبل المنسوج والتغليف (Private Label)، مكاتب الباترون الرقمي ومستشاري التصدير والجمارك في مارتر إسطنبول.",
+    heroApplyBtn: "سجّل كمزود خدمة معتمد",
+    searchLabel: "البحث عن مزود خدمة",
+    searchPlaceholder: "ابحث حسب الخدمة أو الدولة أو اسم الشركة...",
+    catAll: "جميع الخدمات",
+    catCargo: "الشحن والخدمات اللوجستية",
+    catStudio: "استوديوهات التصوير والإنتاج",
+    catLabel: "التغليف والليبل المنسوج",
+    catPattern: "الباترون والعينات",
+    catCustoms: "التخليص الجمركي والتصدير",
+    catTitleCargo: "الشحن الدولي والتجميع اللوجستي للبضائع",
+    catTitleStudio: "استوديو تصوير كتالوجات الأزياء والفيديو",
+    catTitleLabel: "تصنيع الليبل المنسوج وكروت الماركة والتغليف الفاخر",
+    catTitlePattern: "تصميم الباترون الرقمي (Gerber/Lectra) وتنفيذ العينات",
+    catTitleCustoms: "التخليص الجمركي وشهادات المنشأ واستشارات التصدير",
+    catTitleFallback: "شريك خدمات أعمال B2B",
+    sponsoredBadge: "شريك خدمة مميز",
+    verifiedBadge: "مزود خدمة موثق",
+    targetCountriesLabel: "مناطق ودول الخدمة:",
+    whatsappMessagePrefix: "مرحباً",
+    whatsappMessageBody:
+      "أتواصل معكم عبر دليل مزودي الخدمات في Merter Vitrini وأرغب في الحصول على عرض سعر لخدماتكم.",
+    whatsappBtn: "اطلب عرض سعر عبر واتساب",
+    callBtn: "اتصال مباشر",
+    emptyTitle: "لا يوجد مزودو خدمات مسجلون في هذا القسم حالياً",
+    emptyDesc:
+      "لا توجد شركات مدرجة ضمن هذا التصنيف حالياً. إذا كنتم تقدمون خدمات الشحن الدولي أو التصوير أو الليبل أو الباترون في مارتر، يمكنكم تقديم طلب انضمام للدليل.",
+    emptyApplyBtn: "تقديم طلب انضمام كمزود خدمة",
+    verifyDefaultSuccess: "تم تأكيد البريد الإلكتروني بنجاح.",
+    verifyNetworkError: "حدث خطأ في الاتصال أثناء التحقق.",
+    submittedTitle: "تم إرسال رسالة التأكيد!",
+    submittedDescBeforeEmail: "أرسلنا رابط تأكيد إلى ",
+    submittedDescBetween: " صالحاً لمدة ",
+    submittedWindowLabel: "30 دقيقة",
+    submittedDescAfter:
+      ". بعد تأكيد بريدك الإلكتروني سيُحال طلبك لمراجعة الإدارة.",
+    securityPolicyTitle: "سياسة الأمان:",
+    securityPolicyBody:
+      "تُحذف الطلبات التي لا يتم تأكيد بريدها الإلكتروني خلال 30 دقيقة تلقائياً ولا تُنشر إلا بعد موافقة الإدارة.",
+    gotItBtn: "حسناً، فهمت",
+    modalTitle: "طلب انضمام إلى دليل مزودي الخدمات القطاعية",
+    fieldCompanyPlaceholder: "الاسم التجاري للشركة (مثال: مارتر للشحن السريع) *",
+    fieldContactPlaceholder: "اسم الشخص المسؤول *",
+    fieldEmailPlaceholder: "البريد الإلكتروني الرسمي (للتأكيد) *",
+    fieldShortDescPlaceholder: "نبذة مختصرة عن خدمات الشركة *",
+    fieldServicesPlaceholder: "الخدمات المقدمة (مفصولة بفواصل: شحن جوي، تجميع...)",
+    fieldCountriesPlaceholder: "الدول المخدومة (مثال: السعودية، الإمارات، الكويت)",
+    fieldPhonePlaceholder: "رقم الهاتف / واتساب *",
+    fieldAddressPlaceholder: "العنوان التفصيلي في مارتر / إسطنبول",
+    recaptchaNotice:
+      "محمي بواسطة Google reCAPTCHA v3 وتأكيد البريد خلال 30 دقيقة وموافقة الإدارة.",
+    submitBtn: "إرسال الطلب ورابط التأكيد",
+    submittingBtn: "جاري الإرسال...",
+    submitErrorFallback: "حدث خطأ أثناء إرسال الطلب.",
+  },
+  de: {
+    heroBadge: "MERTER B2B-ÖKOSYSTEM & GEPRÜFTE PARTNER",
+    heroTitle: "Verzeichnis für Textil- & Exportdienstleister",
+    heroDesc:
+      "Kontaktieren Sie direkt geprüfte internationale Textilspeditionen, Mode- & Lookbook-Studios, Webetiketten- & Verpackungshersteller (Private Label), CAD-Schnittateliers sowie Zoll- und Exportberater in Merter Istanbul.",
+    heroApplyBtn: "Als Dienstleister eintragen",
+    searchLabel: "Dienstleister suchen",
+    searchPlaceholder: "Nach Dienstleistung, Zielland oder Firma suchen...",
+    catAll: "Alle Dienste",
+    catCargo: "Spedition & Logistik",
+    catStudio: "Foto- & Videostudio",
+    catLabel: "Webetiketten & Verpackung",
+    catPattern: "Schnittatelier & Muster",
+    catCustoms: "Zoll & Exportberatung",
+    catTitleCargo: "Internationale Textilspedition, Luft-/LKW-Fracht & Konsolidierung",
+    catTitleStudio: "Model-Katalogshooting, Lookbook & E-Commerce-Videostudio",
+    catTitleLabel: "Gewebte Etiketten, Hangtags & Private-Label-Verpackungen",
+    catTitlePattern: "Digitale Schnittkonstruktion (Gerber/Lectra) & Erstmuster",
+    catTitleCustoms: "Zollabwicklung, ATR/EUR.1 & Außenhandelsberatung",
+    catTitleFallback: "B2B Branchenpartner",
+    sponsoredBadge: "EMPFOHLENER PARTNER",
+    verifiedBadge: "Geprüfter Dienstleister",
+    targetCountriesLabel: "Zielländer / Regionen:",
+    whatsappMessagePrefix: "Guten Tag",
+    whatsappMessageBody:
+      "ich kontaktiere Sie über das Merter Vitrini B2B-Dienstleisterverzeichnis und bitte um ein unverbindliches Angebot.",
+    whatsappBtn: "Angebot per WhatsApp",
+    callBtn: "Direkt anrufen",
+    emptyTitle: "Noch keine Dienstleister in dieser Kategorie",
+    emptyDesc:
+      "Derzeit sind für diesen Filter keine Unternehmen gelistet. Wenn Sie Logistik-, Studio-, Etiketten-, Schnittmuster- oder Zollservices in Merter anbieten, bewerben Sie sich jetzt.",
+    emptyApplyBtn: "Als Dienstleister bewerben",
+    verifyDefaultSuccess: "E-Mail-Bestätigung erfolgreich abgeschlossen.",
+    verifyNetworkError: "Verbindungsfehler während der Bestätigung.",
+    submittedTitle: "Bestätigungs-E-Mail gesendet!",
+    submittedDescBeforeEmail: "Wir haben einen Bestätigungslink an ",
+    submittedDescBetween: " gesendet (gültig für ",
+    submittedWindowLabel: "30 Minuten",
+    submittedDescAfter:
+      "). Nach Ihrer Bestätigung wird der Eintrag von der Redaktion geprüft.",
+    securityPolicyTitle: "Sicherheitsrichtlinie:",
+    securityPolicyBody:
+      "Nicht innerhalb von 30 Minuten bestätigte Anträge werden automatisch gelöscht und erst nach Freigabe veröffentlicht.",
+    gotItBtn: "Verstanden",
+    modalTitle: "Aufnahmeantrag — B2B-Dienstleisterverzeichnis",
+    fieldCompanyPlaceholder: "Firmenname (z. B. Merter Express Spedition) *",
+    fieldContactPlaceholder: "Ansprechpartner Vor- & Nachname *",
+    fieldEmailPlaceholder: "Geschäfts-E-Mail (zur Bestätigung) *",
+    fieldShortDescPlaceholder: "Kurzbeschreibung Ihrer Leistungen *",
+    fieldServicesPlaceholder:
+      "Leistungen (kommagetrennt: Sammelgut, ATR, Luftfracht...)",
+    fieldCountriesPlaceholder: "Bediente Länder (z. B. Deutschland, Österreich, EU)",
+    fieldPhonePlaceholder: "Telefon / WhatsApp *",
+    fieldAddressPlaceholder: "Geschäftsadresse in Merter / Istanbul",
+    recaptchaNotice:
+      "Geschützt durch Google reCAPTCHA v3, 30-Minuten-E-Mail-Bestätigung und Admin-Prüfung.",
+    submitBtn: "ANTRAG SENDEN & E-MAIL BESTÄTIGEN",
+    submittingBtn: "WIRD GESENDET...",
+    submitErrorFallback: "Beim Senden Ihres Antrags ist ein Fehler aufgetreten.",
+  },
+  fr: {
+    heroBadge: "ÉCOSYSTÈME B2B MERTER & PARTENAIRES CERTIFIÉS",
+    heroTitle: "Annuaire des Prestataires B2B du Textile",
+    heroDesc:
+      "Contactez directement les transitaires cargo internationaux, studios photo lookbook avec mannequins, fabricants d'étiquettes tissées et d'emballages Private Label, bureaux de modélisme CAO et experts douane export à Merter Istanbul.",
+    heroApplyBtn: "S'inscrire comme prestataire",
+    searchLabel: "Rechercher un prestataire",
+    searchPlaceholder: "Rechercher un service, un pays ou une société...",
+    catAll: "Tous les services",
+    catCargo: "Cargo & Logistique",
+    catStudio: "Studio Photo & Vidéo",
+    catLabel: "Étiquettes & Packaging",
+    catPattern: "Modélisme & Prototypes",
+    catCustoms: "Douane & Conseil Export",
+    catTitleCargo: "Fret international, groupage multi-fournisseurs & logistique",
+    catTitleStudio: "Shooting catalogue mannequin, Lookbook & Studio vidéo",
+    catTitleLabel: "Étiquettes tissées, hangtags & emballages personnalisés",
+    catTitlePattern: "Bureau d'études CAO (Gerber/Lectra), patronage & prototypes",
+    catTitleCustoms: "Dédouanement, certificats EUR.1/ATR & conseil export",
+    catTitleFallback: "Partenaire B2B Textile",
+    sponsoredBadge: "PARTENAIRE MIS EN AVANT",
+    verifiedBadge: "Prestataire vérifié",
+    targetCountriesLabel: "Zones / Pays desservis :",
+    whatsappMessagePrefix: "Bonjour",
+    whatsappMessageBody:
+      "je vous contacte via l'annuaire des prestataires B2B Merter Vitrini pour demander un devis professionnel.",
+    whatsappBtn: "Devis sur WhatsApp",
+    callBtn: "Appeler directement",
+    emptyTitle: "Aucun prestataire référencé dans cette catégorie",
+    emptyDesc:
+      "Aucune entreprise ne correspond à ce filtre pour le moment. Vous proposez du fret textile, un studio photo, des étiquettes ou du modélisme à Merter ? Déposez votre candidature.",
+    emptyApplyBtn: "Postuler comme prestataire",
+    verifyDefaultSuccess: "Vérification de l'adresse e-mail effectuée.",
+    verifyNetworkError: "Erreur réseau lors de la vérification.",
+    submittedTitle: "E-mail de vérification envoyé !",
+    submittedDescBeforeEmail: "Un lien de validation a été envoyé à ",
+    submittedDescBetween: " (valable ",
+    submittedWindowLabel: "30 minutes",
+    submittedDescAfter:
+      "). Après validation, votre dossier sera transmis pour approbation.",
+    securityPolicyTitle: "Politique de sécurité :",
+    securityPolicyBody:
+      "Les demandes non confirmées sous 30 minutes sont supprimées automatiquement et soumises à validation manuelle.",
+    gotItBtn: "Compris",
+    modalTitle: "Candidature — Annuaire des Prestataires B2B",
+    fieldCompanyPlaceholder: "Raison sociale (ex. : Merter Express Cargo) *",
+    fieldContactPlaceholder: "Nom complet du responsable *",
+    fieldEmailPlaceholder: "E-mail professionnel (pour validation) *",
+    fieldShortDescPlaceholder: "Présentation courte de l'entreprise *",
+    fieldServicesPlaceholder:
+      "Services proposés (séparés par virgule : Groupage, EUR.1...)",
+    fieldCountriesPlaceholder:
+      "Pays desservis (ex. : France, Belgique, Afrique du Nord)",
+    fieldPhonePlaceholder: "Téléphone / WhatsApp *",
+    fieldAddressPlaceholder: "Adresse complète à Merter / Istanbul",
+    recaptchaNotice:
+      "Protégé par Google reCAPTCHA v3, validation e-mail sous 30 min et modération.",
+    submitBtn: "ENVOYER LA DEMANDE & LE LIEN DE VALIDATION",
+    submittingBtn: "ENVOI EN COURS...",
+    submitErrorFallback: "Une erreur est survenue lors de l'envoi de la demande.",
+  },
+  pl: {
+    heroBadge: "EKOSYSTEM B2B MERTER I ZWERYFIKOWANI PARTNERZY",
+    heroTitle: "Katalog Partnerów i Usług B2B Branży Tekstylnej",
+    heroDesc:
+      "Skontaktuj się bezpośrednio ze zweryfikowanymi firmami spedycyjnymi i cargo z Turcji, studiami fotografii modowej, producentami metek tkanych i opakowań Private Label, wzorcowniami CAD oraz agencjami celnymi w Merter Stambuł.",
+    heroApplyBtn: "Dołącz jako usługodawca",
+    searchLabel: "Szukaj usługodawcy",
+    searchPlaceholder: "Szukaj usługi, kraju dostawy lub firmy...",
+    catAll: "Wszystkie usługi",
+    catCargo: "Spedycja i Logistyka Cargo",
+    catStudio: "Studio Foto i Wideo",
+    catLabel: "Metki Tkane i Opakowania",
+    catPattern: "Konstrukcja Odzieży i Wzory",
+    catCustoms: "Agencje Celne i Eksport",
+    catTitleCargo: "Międzynarodowe cargo, spedycja i konsolidacja dostaw",
+    catTitleStudio: "Sesje katalogowe z modelkami, Lookbook i wideo e-commerce",
+    catTitleLabel: "Metki żakardowe, przywieszki kartonowe i opakowania",
+    catTitlePattern: "Konstrukcja i stopniowanie CAD (Gerber/Lectra) oraz odszycia",
+    catTitleCustoms: "Odprawa celna, świadectwa ATR/EUR.1 i doradztwo eksportowe",
+    catTitleFallback: "Partner Usługowy B2B",
+    sponsoredBadge: "WYRÓŻNIONY PARTNER",
+    verifiedBadge: "Zweryfikowany usługodawca",
+    targetCountriesLabel: "Obsługiwane kraje / regiony:",
+    whatsappMessagePrefix: "Dzień dobry",
+    whatsappMessageBody:
+      "kontaktuję się przez Katalog Usług B2B Merter Vitrini i proszę o wycenę współpracy.",
+    whatsappBtn: "Zapytaj na WhatsApp",
+    callBtn: "Zadzwoń bezpośrednio",
+    emptyTitle: "Brak zarejestrowanych usługodawców w tej kategorii",
+    emptyDesc:
+      "Obecnie brak firm spełniających wybrane kryteria. Jeśli świadczysz usługi cargo, fotografii modowej, produkcji metek lub odpraw celnych w Merter, zgłoś swoją firmę.",
+    emptyApplyBtn: "Zgłoś firmę do katalogu",
+    verifyDefaultSuccess: "Weryfikacja adresu e-mail zakończona pomyślnie.",
+    verifyNetworkError: "Błąd połączenia podczas weryfikacji.",
+    submittedTitle: "Wysłano e-mail weryfikacyjny!",
+    submittedDescBeforeEmail: "Wysłaliśmy link potwierdzający na adres ",
+    submittedDescBetween: " ważny przez ",
+    submittedWindowLabel: "30 minut",
+    submittedDescAfter:
+      ". Po potwierdzeniu e-maila zgłoszenie trafi do akceptacji administratora.",
+    securityPolicyTitle: "Polityka bezpieczeństwa:",
+    securityPolicyBody:
+      "Zgłoszenia niepotwierdzone w ciągu 30 minut są automatycznie usuwane i wymagają zatwierdzenia przez zespół.",
+    gotItBtn: "Rozumiem",
+    modalTitle: "Zgłoszenie do Katalogu Usługodawców B2B",
+    fieldCompanyPlaceholder: "Nazwa firmy (np. Merter Express Cargo) *",
+    fieldContactPlaceholder: "Imię i nazwisko osoby kontaktowej *",
+    fieldEmailPlaceholder: "Firmowy adres e-mail (do weryfikacji) *",
+    fieldShortDescPlaceholder: "Krótki opis działalności *",
+    fieldServicesPlaceholder:
+      "Zakres usług (po przecinku: Konsolidacja, ATR, Transport...)",
+    fieldCountriesPlaceholder: "Obsługiwane kraje (np. Polska, Niemcy, UE)",
+    fieldPhonePlaceholder: "Telefon / WhatsApp *",
+    fieldAddressPlaceholder: "Adres biura / magazynu w Merter (Stambuł)",
+    recaptchaNotice:
+      "Chronione przez Google reCAPTCHA v3, 30-minutową weryfikację e-mail i moderację.",
+    submitBtn: "WYŚLIJ ZGŁOSZENIE I LINK WERYFIKACYJNY",
+    submittingBtn: "WYSYŁANIE...",
+    submitErrorFallback: "Wystąpił błąd podczas wysyłania zgłoszenia.",
+  },
+  bg: {
+    heroBadge: "B2B ЕКОСИСТЕМА И ПРОВЕРЕНИ ПАРТНЬОРИ В МЕРТЕР",
+    heroTitle: "Каталог на B2B доставчици на текстилни и карго услуги",
+    heroDesc:
+      "Свържете се директно с проверени международни карго и спедиторски фирми, модни фотостудиа с модели, производители на тъкани етикети и опаковки Private Label, конструктори на кройки и митнически консултанти в Мертер Истанбул.",
+    heroApplyBtn: "Регистрация като доставчик на услуги",
+    searchLabel: "Търсене на доставчик на услуги",
+    searchPlaceholder: "Търсене по услуга, държава или фирма...",
+    catAll: "Всички услуги",
+    catCargo: "Карго и логистика",
+    catStudio: "Фото и видео студио",
+    catLabel: "Етикети и опаковки",
+    catPattern: "Кройки и мостри",
+    catCustoms: "Митница и износ",
+    catTitleCargo: "Международно карго, спедиция и консолидация на пратки",
+    catTitleStudio: "Каталожна фотосесия с модели, Lookbook и видео продукция",
+    catTitleLabel: "Тъкани етикети, картонени етикети и брандирани опаковки",
+    catTitlePattern: "Дигитално конструиране (Gerber/Lectra) и мострено шиене",
+    catTitleCustoms: "Митническо представителство, EUR.1/ATR и експортни консултации",
+    catTitleFallback: "B2B секторен партньор",
+    sponsoredBadge: "ПРЕПОРЪЧАН ПАРТНЬОР",
+    verifiedBadge: "Проверен доставчик на услуги",
+    targetCountriesLabel: "Обслужвани държави / региони:",
+    whatsappMessagePrefix: "Здравейте",
+    whatsappMessageBody:
+      "свързвам се с вас чрез каталога за B2B услуги на Merter Vitrini и бих искал оферта за вашите услуги.",
+    whatsappBtn: "Поискай оферта в WhatsApp",
+    callBtn: "Директно обаждане",
+    emptyTitle: "Все още няма регистрирани фирми в тази категория",
+    emptyDesc:
+      "В момента няма публикувани доставчици по този филтър. Ако предлагате карго транспорт, фотостудио, етикети, кройки или митнически услуги в Мертер, кандидатствайте тук.",
+    emptyApplyBtn: "Кандидатствай като доставчик",
+    verifyDefaultSuccess: "Потвърждението на имейл адреса приключи успешно.",
+    verifyNetworkError: "Възникна мрежова грешка при проверката.",
+    submittedTitle: "Изпратен е имейл за потвърждение!",
+    submittedDescBeforeEmail: "Изпратихме линк за потвърждение до ",
+    submittedDescBetween: ", валиден за ",
+    submittedWindowLabel: "30 минути",
+    submittedDescAfter:
+      ". След като потвърдите имейла си, кандидатурата ще бъде разгледана от администратор.",
+    securityPolicyTitle: "Политика за сигурност:",
+    securityPolicyBody:
+      "Заявки без потвърден имейл до 30 минути се изтриват автоматично и не се публикуват без одобрение.",
+    gotItBtn: "Разбрах",
+    modalTitle: "Кандидатура за каталога на B2B услуги",
+    fieldCompanyPlaceholder: "Име на фирмата (напр. Merter Express Cargo) *",
+    fieldContactPlaceholder: "Име и фамилия на лице за контакт *",
+    fieldEmailPlaceholder: "Фирмен имейл (за потвърждение) *",
+    fieldShortDescPlaceholder: "Кратко представяне на дейността *",
+    fieldServicesPlaceholder:
+      "Предлагани услуги (разделени със запетая: Консолидация, ATR...)",
+    fieldCountriesPlaceholder:
+      "Обслужвани държави (напр. България, Румъния, ЕС)",
+    fieldPhonePlaceholder: "Телефон / WhatsApp номер *",
+    fieldAddressPlaceholder: "Адрес на офис / склад в Мертер (Истанбул)",
+    recaptchaNotice:
+      "Защитено с Google reCAPTCHA v3, 30-минутно имейл потвърждение и одобрение от администратор.",
+    submitBtn: "ИЗПРАТИ КАНДИДАТУРА И ЛИНК ЗА ПОТВЪРЖДЕНИЕ",
+    submittingBtn: "ИЗПРАЩАНЕ...",
+    submitErrorFallback: "Възникна грешка при изпращане на кандидатурата.",
+  },
+};
+
+function subscribeCartStore(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener("cart-updated", onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener("cart-updated", onStoreChange);
+  };
+}
+
+function getCartPkgsSnapshot(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = localStorage.getItem("merter_b2b_cart");
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw) as CartItem[];
+    if (!Array.isArray(parsed)) return 0;
+    return parsed.reduce((sum, item) => sum + (Number(item.packages_qty) || 0), 0);
+  } catch {
+    return 0;
+  }
+}
 
 interface GrecaptchaInstance {
   ready: (callback: () => void) => void;
@@ -79,22 +657,25 @@ export interface ServiceProviderItem {
   >;
 }
 
-const SERVICE_CATEGORIES = [
-  { id: "all", label: "Tüm Hizmetler", icon: Sparkles },
-  { id: "kargo_lojistik", label: "Kargo & Lojistik", icon: Truck },
-  { id: "fotograf_studyo", label: "Fotoğraf & Prodüksiyon Stüdyosu", icon: Camera },
-  { id: "ambalaj_etiket", label: "Ambalaj & Dokuma Etiket", icon: Tag },
-  { id: "modelist_kalip", label: "Modelhane, Kalıp & Numune", icon: Scissors },
-  { id: "ihracat_danismanlik", label: "Gümrük & İhracat Danışmanlığı", icon: Globe },
-] as const;
-
-const CATEGORY_TITLES: Record<string, string> = {
-  kargo_lojistik: "Uluslararası Kargo, Lojistik & Konsolidasyon",
-  fotograf_studyo: "Mankenli Katalog, Lookbook & Video Stüdyosu",
-  ambalaj_etiket: "Dokuma Etiket, Karton Etiket & Lüks Ambalaj",
-  modelist_kalip: "Dijital Modelhane, Gerber/Lectra Kalıp & Numune",
-  ihracat_danismanlik: "Gümrük, EUR.1/ATR & Dış Ticaret Danışmanlığı",
-};
+function resolveCategoryTitle(
+  serviceCategory: string,
+  copy: ServiceProvidersLocaleCopy
+): string {
+  switch (serviceCategory) {
+    case "kargo_lojistik":
+      return copy.catTitleCargo;
+    case "fotograf_studyo":
+      return copy.catTitleStudio;
+    case "ambalaj_etiket":
+      return copy.catTitleLabel;
+    case "modelist_kalip":
+      return copy.catTitlePattern;
+    case "ihracat_danismanlik":
+      return copy.catTitleCustoms;
+    default:
+      return copy.catTitleFallback;
+  }
+}
 
 function normalizeWaPhone(raw?: string): string {
   if (!raw) return "";
@@ -127,19 +708,24 @@ function parseServiceTags(raw?: string): string[] {
 function ServiceProviderBadges({
   isSponsored,
   isVerified,
-}: Readonly<{ isSponsored: boolean; isVerified: boolean }>) {
+  copy,
+}: Readonly<{
+  isSponsored: boolean;
+  isVerified: boolean;
+  copy: ServiceProvidersLocaleCopy;
+}>) {
   return (
     <div className="flex items-center gap-2 flex-wrap mb-1">
       {isSponsored && (
         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-extrabold uppercase tracking-wider">
           <Sparkles size={11} />
-          <span>ÖNE ÇIKAN HİZMET ORTAĞI</span>
+          <span>{copy.sponsoredBadge}</span>
         </span>
       )}
       {isVerified && (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
           <ShieldCheck size={11} />
-          <span>Doğrulanmış Hizmet Sağlayıcı</span>
+          <span>{copy.verifiedBadge}</span>
         </span>
       )}
     </div>
@@ -150,14 +736,20 @@ function ServiceProviderContactMeta({
   targetCountries,
   address,
   phone,
-}: Readonly<{ targetCountries: string; address: string; phone: string }>) {
+  targetCountriesLabel,
+}: Readonly<{
+  targetCountries: string;
+  address: string;
+  phone: string;
+  targetCountriesLabel: string;
+}>) {
   return (
     <div className="pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-600">
       {targetCountries && (
         <div className="flex items-center gap-1.5">
           <Globe size={13} className="text-sky-600 shrink-0" />
           <span>
-            <strong>Hizmet Bölgeleri / Ülkeler:</strong> {targetCountries}
+            <strong>{targetCountriesLabel}</strong> {targetCountries}
           </span>
         </div>
       )}
@@ -185,9 +777,13 @@ function ServiceProviderContactMeta({
 function ServiceProviderCard({
   item,
   lang,
-}: Readonly<{ item: ServiceProviderItem; lang: string }>) {
-  const catLabel =
-    CATEGORY_TITLES[item.service_category] || "B2B Sektörel Hizmet Ortağı";
+  copy,
+}: Readonly<{
+  item: ServiceProviderItem;
+  lang: string;
+  copy: ServiceProvidersLocaleCopy;
+}>) {
+  const catLabel = resolveCategoryTitle(item.service_category, copy);
   const trMap = item.translations?.[lang];
   const shortDesc = trMap?.short_description || item.short_description;
   const serviceTags = parseServiceTags(
@@ -195,7 +791,7 @@ function ServiceProviderCard({
   );
 
   const waDigits = normalizeWaPhone(item.whatsapp_phone || item.phone);
-  const waMsg = `Merhaba *${item.company_name}*,\nMerter Vitrini Sektörel Hizmet Sağlayıcılar Rehberi üzerinden firmanızdan B2B hizmet teklifi almak istiyorum.`;
+  const waMsg = `${copy.whatsappMessagePrefix} *${item.company_name}*,\n${copy.whatsappMessageBody}`;
   const waHref = waDigits
     ? `https://wa.me/${waDigits}?text=${encodeURIComponent(waMsg)}`
     : "";
@@ -214,6 +810,7 @@ function ServiceProviderCard({
             <ServiceProviderBadges
               isSponsored={item.is_sponsored}
               isVerified={item.is_verified}
+              copy={copy}
             />
             <h2 className="text-base font-extrabold text-slate-900">
               {item.company_name}
@@ -241,6 +838,7 @@ function ServiceProviderCard({
           targetCountries={item.target_countries}
           address={item.address}
           phone={item.phone}
+          targetCountriesLabel={copy.targetCountriesLabel}
         />
       </div>
 
@@ -254,7 +852,7 @@ function ServiceProviderCard({
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold no-underline transition-colors"
           >
             <MessageCircle size={14} />
-            <span>WhatsApp&apos;tan Teklif Al</span>
+            <span>{copy.whatsappBtn}</span>
           </a>
         )}
         {item.phone && (
@@ -264,7 +862,7 @@ function ServiceProviderCard({
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
           >
             <Phone size={14} />
-            <span>Doğrudan Ara</span>
+            <span>{copy.callBtn}</span>
           </a>
         )}
       </div>
@@ -276,11 +874,13 @@ function ServiceProvidersDirectoryContent({
   loading,
   items,
   lang,
+  copy,
   onOpenApply,
 }: Readonly<{
   loading: boolean;
   items: readonly ServiceProviderItem[];
   lang: string;
+  copy: ServiceProvidersLocaleCopy;
   onOpenApply: () => void;
 }>) {
   if (loading) {
@@ -304,10 +904,10 @@ function ServiceProvidersDirectoryContent({
         </div>
         <div className="space-y-1.5 max-w-lg mx-auto">
           <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
-            Henüz Kayıtlı Hizmet Sağlayıcı Bulunmuyor
+            {copy.emptyTitle}
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            Bu kategoride şu an listelenen bir hizmet sağlayıcı firma bulunmamaktadır. Kargo/lojistik, fotoğraf stüdyosu, dokuma etiket/ambalaj, modelhane veya ihracat danışmanlığı hizmeti veriyorsanız rehbere başvuru yapabilirsiniz.
+            {copy.emptyDesc}
           </p>
         </div>
         <button
@@ -316,7 +916,7 @@ function ServiceProvidersDirectoryContent({
           className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold uppercase tracking-wider cursor-pointer border-none shadow-xs"
         >
           <Plus size={15} />
-          <span>Hizmet Sağlayıcı Olarak Başvur</span>
+          <span>{copy.emptyApplyBtn}</span>
         </button>
       </div>
     );
@@ -325,7 +925,12 @@ function ServiceProvidersDirectoryContent({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {items.map((item) => (
-        <ServiceProviderCard key={item.id} item={item} lang={lang} />
+        <ServiceProviderCard
+          key={item.id}
+          item={item}
+          lang={lang}
+          copy={copy}
+        />
       ))}
     </div>
   );
@@ -345,7 +950,8 @@ async function safeParseJson<T>(res: Response): Promise<T> {
 }
 
 async function verifyServiceProviderToken(
-  verifyToken: string
+  verifyToken: string,
+  copy: ServiceProvidersLocaleCopy
 ): Promise<VerifyBannerState> {
   try {
     const res = await fetch(
@@ -354,15 +960,12 @@ async function verifyServiceProviderToken(
     const data = await safeParseJson<{ message?: string; error?: string }>(res);
     return {
       type: res.ok ? "success" : "error",
-      message:
-        data.message ||
-        data.error ||
-        "E-posta doğrulama işlemi tamamlandı.",
+      message: data.message || data.error || copy.verifyDefaultSuccess,
     };
   } catch {
     return {
       type: "error",
-      message: "Doğrulama sırasında bir bağlantı hatası oluştu.",
+      message: copy.verifyNetworkError,
     };
   }
 }
@@ -402,32 +1005,37 @@ function ServiceProviderVerifyAlert({
 
 function ServiceProviderSubmittedNotice({
   submittedEmail,
+  copy,
   onClose,
-}: Readonly<{ submittedEmail: string; onClose: () => void }>) {
+}: Readonly<{
+  submittedEmail: string;
+  copy: ServiceProvidersLocaleCopy;
+  onClose: () => void;
+}>) {
   return (
     <div className="py-4 text-center space-y-3">
       <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto">
         <Mail size={30} />
       </div>
       <h4 className="text-base font-black text-slate-900">
-        Doğrulama E-Postası Gönderildi!
+        {copy.submittedTitle}
       </h4>
       <p className="text-xs text-slate-600 leading-relaxed">
-        <strong>{submittedEmail}</strong> adresinize <strong>30 dakika</strong>{" "}
-        geçerli bir başvuru doğrulama bağlantısı gönderdik. E-postanızı
-        doğruladığınızda başvurunuz yönetici onayına iletilecektir.
+        {copy.submittedDescBeforeEmail}
+        <strong>{submittedEmail}</strong>
+        {copy.submittedDescBetween}
+        <strong>{copy.submittedWindowLabel}</strong>
+        {copy.submittedDescAfter}
       </p>
       <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-left text-[11px] text-amber-900 leading-relaxed font-medium">
-        ⚠️ <strong>Güvenlik Politikası:</strong> Tıpkı tedarikçi başvurularında
-        olduğu gibi, 30 dakika içinde e-posta doğrulaması yapılmayan başvurular
-        otomatik olarak silinir ve yönetici onayı olmadan rehberde yayınlanmaz.
+        ⚠️ <strong>{copy.securityPolicyTitle}</strong> {copy.securityPolicyBody}
       </div>
       <button
         type="button"
         onClick={onClose}
         className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold cursor-pointer border-none shadow-xs"
       >
-        Tamam, Anladım
+        {copy.gotItBtn}
       </button>
     </div>
   );
@@ -435,12 +1043,14 @@ function ServiceProviderSubmittedNotice({
 
 interface ServiceProviderApplyModalProps {
   readonly isOpen: boolean;
+  readonly copy: ServiceProvidersLocaleCopy;
   readonly onClose: () => void;
   readonly onSuccess: () => void;
 }
 
 function ServiceProviderApplyModal({
   isOpen,
+  copy,
   onClose,
   onSuccess,
 }: ServiceProviderApplyModalProps) {
@@ -494,9 +1104,7 @@ function ServiceProviderApplyModal({
       });
       const data = await safeParseJson<{ error?: string }>(res);
       if (!res.ok) {
-        setSubmitError(
-          data.error || "Başvurunuz gönderilirken bir hata oluştu."
-        );
+        setSubmitError(data.error || copy.submitErrorFallback);
         return;
       }
       setSubmittedEmail(targetEmail);
@@ -515,16 +1123,14 @@ function ServiceProviderApplyModal({
     }
   };
 
-  const submitLabel = submitting
-    ? "DOĞRULAMA GÖNDERİLİYOR..."
-    : "BAŞVURU YAP & DOĞRULAMA KODU GÖNDER";
+  const submitLabel = submitting ? copy.submittingBtn : copy.submitBtn;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-extrabold text-slate-900">
-            Sektörel Hizmet Sağlayıcı Rehber Başvurusu
+            {copy.modalTitle}
           </h3>
           <button
             type="button"
@@ -538,6 +1144,7 @@ function ServiceProviderApplyModal({
         {submittedOk ? (
           <ServiceProviderSubmittedNotice
             submittedEmail={submittedEmail}
+            copy={copy}
             onClose={handleClose}
           />
         ) : (
@@ -551,7 +1158,7 @@ function ServiceProviderApplyModal({
 
             <div>
               <label htmlFor="sp-company-name" className="sr-only">
-                Firma Unvanı
+                {copy.fieldCompanyPlaceholder}
               </label>
               <input
                 id="sp-company-name"
@@ -559,7 +1166,7 @@ function ServiceProviderApplyModal({
                 required
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Firma Unvanı (Örn: Merter Ekspres Kargo) *"
+                placeholder={copy.fieldCompanyPlaceholder}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
               />
             </div>
@@ -567,7 +1174,7 @@ function ServiceProviderApplyModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label htmlFor="sp-contact-name" className="sr-only">
-                  Yetkili Adı Soyadı
+                  {copy.fieldContactPlaceholder}
                 </label>
                 <input
                   id="sp-contact-name"
@@ -575,13 +1182,13 @@ function ServiceProviderApplyModal({
                   required
                   value={contactName}
                   onChange={(e) => setContactName(e.target.value)}
-                  placeholder="Yetkili Adı Soyadı *"
+                  placeholder={copy.fieldContactPlaceholder}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
                 />
               </div>
               <div>
                 <label htmlFor="sp-email" className="sr-only">
-                  Kurumsal E-Posta Adresi
+                  {copy.fieldEmailPlaceholder}
                 </label>
                 <input
                   id="sp-email"
@@ -589,7 +1196,7 @@ function ServiceProviderApplyModal({
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Kurumsal E-Posta (Doğrulama İçin) *"
+                  placeholder={copy.fieldEmailPlaceholder}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
                 />
               </div>
@@ -597,7 +1204,7 @@ function ServiceProviderApplyModal({
 
             <div>
               <label htmlFor="sp-category" className="sr-only">
-                Hizmet Kategorisi
+                {copy.catAll}
               </label>
               <select
                 id="sp-category"
@@ -605,25 +1212,17 @@ function ServiceProviderApplyModal({
                 onChange={(e) => setServiceCat(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold bg-white"
               >
-                <option value="kargo_lojistik">Kargo &amp; Lojistik</option>
-                <option value="fotograf_studyo">
-                  Fotoğraf &amp; Prodüksiyon Stüdyosu
-                </option>
-                <option value="ambalaj_etiket">
-                  Ambalaj &amp; Dokuma Etiket
-                </option>
-                <option value="modelist_kalip">
-                  Modelhane, Kalıp &amp; Numune
-                </option>
-                <option value="ihracat_danismanlik">
-                  Gümrük &amp; İhracat Danışmanlığı
-                </option>
+                <option value="kargo_lojistik">{copy.catCargo}</option>
+                <option value="fotograf_studyo">{copy.catStudio}</option>
+                <option value="ambalaj_etiket">{copy.catLabel}</option>
+                <option value="modelist_kalip">{copy.catPattern}</option>
+                <option value="ihracat_danismanlik">{copy.catCustoms}</option>
               </select>
             </div>
 
             <div>
               <label htmlFor="sp-short-desc" className="sr-only">
-                Kısa Tanıtım Yazısı
+                {copy.fieldShortDescPlaceholder}
               </label>
               <input
                 id="sp-short-desc"
@@ -631,35 +1230,35 @@ function ServiceProviderApplyModal({
                 required
                 value={shortDesc}
                 onChange={(e) => setShortDesc(e.target.value)}
-                placeholder="Kısa Tanıtım Yazısı *"
+                placeholder={copy.fieldShortDescPlaceholder}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
               />
             </div>
 
             <div>
               <label htmlFor="sp-services-offered" className="sr-only">
-                Sunulan Hizmetler
+                {copy.fieldServicesPlaceholder}
               </label>
               <input
                 id="sp-services-offered"
                 type="text"
                 value={servicesOffered}
                 onChange={(e) => setServicesOffered(e.target.value)}
-                placeholder="Sunulan Hizmetler (Virgülle ayırın: ETGB, Konsolidasyon vb.)"
+                placeholder={copy.fieldServicesPlaceholder}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
               />
             </div>
 
             <div>
               <label htmlFor="sp-target-countries" className="sr-only">
-                Hizmet Verilen Ülkeler
+                {copy.fieldCountriesPlaceholder}
               </label>
               <input
                 id="sp-target-countries"
                 type="text"
                 value={targetCountries}
                 onChange={(e) => setTargetCountries(e.target.value)}
-                placeholder="Hizmet Verilen Ülkeler (Örn: Almanya, Rusya, BAE)"
+                placeholder={copy.fieldCountriesPlaceholder}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
               />
             </div>
@@ -667,7 +1266,7 @@ function ServiceProviderApplyModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label htmlFor="sp-phone" className="sr-only">
-                  Telefon / WhatsApp Numarası
+                  {copy.fieldPhonePlaceholder}
                 </label>
                 <input
                   id="sp-phone"
@@ -675,20 +1274,20 @@ function ServiceProviderApplyModal({
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Telefon / WhatsApp Numarası *"
+                  placeholder={copy.fieldPhonePlaceholder}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
                 />
               </div>
               <div>
                 <label htmlFor="sp-address" className="sr-only">
-                  Merter / İstanbul Açık Adres
+                  {copy.fieldAddressPlaceholder}
                 </label>
                 <input
                   id="sp-address"
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Merter / İstanbul Açık Adres"
+                  placeholder={copy.fieldAddressPlaceholder}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold"
                 />
               </div>
@@ -696,10 +1295,7 @@ function ServiceProviderApplyModal({
 
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 font-medium">
               <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
-              <span>
-                Google reCAPTCHA v3 koruması, 30 dk e-posta doğrulaması ve
-                yönetici onay mekanizmasıyla korunmaktadır.
-              </span>
+              <span>{copy.recaptchaNotice}</span>
             </div>
 
             <button
@@ -716,19 +1312,58 @@ function ServiceProviderApplyModal({
   );
 }
 
-export default function ServiceProvidersClient() {
-  const [lang, setLang] = useState<string>("tr");
+interface ServiceProvidersClientProps {
+  readonly initialLang?: SupportedSeoLang;
+  readonly initialItems?: readonly ServiceProviderItem[];
+  readonly initialCategories?: readonly Category[];
+}
+
+export default function ServiceProvidersClient({
+  initialLang = "tr",
+  initialItems = [],
+  initialCategories = [],
+}: ServiceProvidersClientProps) {
+  const router = useRouter();
+  const totalPkgs = useSyncExternalStore(
+    subscribeCartStore,
+    getCartPkgsSnapshot,
+    () => 0
+  );
+
+  const [lang, setLang] = useState<string>(initialLang);
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
   const [displayCurrency, setDisplayCurrency] = useState<string>("TRY");
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Category[]>([
+    ...initialCategories,
+  ]);
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [items, setItems] = useState<ServiceProviderItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [items, setItems] = useState<ServiceProviderItem[]>([...initialItems]);
+  const [loading, setLoading] = useState<boolean>(initialItems.length === 0);
   const [showApplyModal, setShowApplyModal] = useState<boolean>(false);
   const [verifyBanner, setVerifyBanner] = useState<VerifyBannerState | null>(
     null
+  );
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
+  const [policyModalType, setPolicyModalType] = useState<
+    "cancellation_and_return" | "terms_of_service" | "privacy_policy" | ""
+  >("");
+
+  const safeLang = normalizeSeoLang(lang, "tr");
+  const copy = SERVICE_PROVIDERS_COPY[safeLang];
+  const hasSkippedFirstPrefetchedLoad = useRef<boolean>(false);
+
+  const serviceCategories = useMemo(
+    () => [
+      { id: "all", label: copy.catAll, icon: Sparkles },
+      { id: "kargo_lojistik", label: copy.catCargo, icon: Truck },
+      { id: "fotograf_studyo", label: copy.catStudio, icon: Camera },
+      { id: "ambalaj_etiket", label: copy.catLabel, icon: Tag },
+      { id: "modelist_kalip", label: copy.catPattern, icon: Scissors },
+      { id: "ihracat_danismanlik", label: copy.catCustoms, icon: Globe },
+    ],
+    [copy]
   );
 
   useEffect(() => {
@@ -737,12 +1372,12 @@ export default function ServiceProvidersClient() {
     if (!script) {
       script = document.createElement("script");
       script.id = scriptId;
-      script.src = `https://www.google.com/recaptcha/api.js?render=${DEFAULT_RECAPTCHA_SITE_KEY}&hl=${lang}`;
+      script.src = `https://www.google.com/recaptcha/api.js?render=${DEFAULT_RECAPTCHA_SITE_KEY}&hl=${safeLang}`;
       script.async = true;
       script.defer = true;
       document.head.appendChild(script);
     }
-  }, [lang]);
+  }, [safeLang]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -750,11 +1385,15 @@ export default function ServiceProvidersClient() {
     const verifyToken = params.get("verify_token");
     if (!verifyToken) return;
 
-    void verifyServiceProviderToken(verifyToken).then((bannerState) => {
+    void verifyServiceProviderToken(verifyToken, copy).then((bannerState) => {
       setVerifyBanner(bannerState);
-      window.history.replaceState({}, "", "/hizmet-saglayicilar");
+      const cleanPath =
+        safeLang === "tr"
+          ? "/hizmet-saglayicilar"
+          : `/hizmet-saglayicilar?lang=${safeLang}`;
+      window.history.replaceState({}, "", cleanPath);
     });
-  }, []);
+  }, [copy, safeLang]);
 
   const loadProviders = useCallback(async () => {
     setLoading(true);
@@ -774,27 +1413,53 @@ export default function ServiceProvidersClient() {
   }, [selectedCategory, searchQuery]);
 
   useEffect(() => {
-    void apiFetch<Category[]>("/categories").then((c) => {
-      if (c) setCategories(c);
-    });
-  }, []);
+    if (initialCategories.length === 0) {
+      void apiFetch<Category[]>("/categories").then((c) => {
+        if (c) setCategories(c);
+      });
+    }
+  }, [initialCategories.length]);
 
   useEffect(() => {
+    if (
+      !hasSkippedFirstPrefetchedLoad.current &&
+      initialItems.length > 0 &&
+      selectedCategory === "all" &&
+      searchQuery === ""
+    ) {
+      hasSkippedFirstPrefetchedLoad.current = true;
+      return;
+    }
     const timer = setTimeout(() => {
       void loadProviders();
     }, 0);
     return () => clearTimeout(timer);
-  }, [loadProviders]);
+  }, [loadProviders, initialItems.length, selectedCategory, searchQuery]);
+
+  const handleLangChange = (nextLang: string) => {
+    const normalized = normalizeSeoLang(nextLang, "tr");
+    setLang(normalized);
+    router.push(
+      normalized === "tr"
+        ? "/hizmet-saglayicilar"
+        : `/hizmet-saglayicilar?lang=${normalized}`
+    );
+  };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div
+      dir={safeLang === "ar" ? "rtl" : "ltr"}
+      className="min-h-screen flex flex-col bg-slate-50"
+    >
       <Header
-        lang={lang}
-        setLang={setLang}
+        lang={safeLang}
+        setLang={handleLangChange}
         isLangOpen={isLangOpen}
         setIsLangOpen={setIsLangOpen}
-        totalPkgs={0}
-        setIsCartOpen={() => undefined}
+        totalPkgs={totalPkgs}
+        setIsCartOpen={(open) => {
+          if (open) router.push(`/${getCategoryPrefix(safeLang)}/cart`);
+        }}
         setCurrentPage={() => undefined}
         categories={categories}
         activeCategoryId=""
@@ -813,13 +1478,13 @@ export default function ServiceProvidersClient() {
           <div className="space-y-2.5 max-w-2xl">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-100/80 border border-sky-200 text-sky-800 text-xs font-extrabold uppercase tracking-wider">
               <Sparkles size={13} className="text-sky-600" />
-              <span>MERTER B2B EKOSİSTEM &amp; ÇÖZÜM ORTAKLARI REHBERİ</span>
+              <span>{copy.heroBadge}</span>
             </span>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-              Sektörel Hizmet Sağlayıcılar Rehberi
+              {copy.heroTitle}
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              Toptan tekstil ticaretinizi hızlandıran doğrulanmış uluslararası kargo ve gümrükleme firmaları, mankenli katalog çekim stüdyoları, Private Label dokuma etiket/ambalaj üreticileri, dijital modelhaneler ve ihracat danışmanlarıyla doğrudan iletişime geçin.
+              {copy.heroDesc}
             </p>
           </div>
 
@@ -829,14 +1494,14 @@ export default function ServiceProvidersClient() {
             className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold uppercase tracking-wider shrink-0 cursor-pointer border-none shadow-xs transition-colors"
           >
             <Plus size={16} />
-            <span>Hizmet Sağlayıcı Olarak Kaydol</span>
+            <span>{copy.heroApplyBtn}</span>
           </button>
         </div>
 
         {/* Category Filter Tabs & Search */}
         <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xs">
           <div className="flex flex-wrap gap-2">
-            {SERVICE_CATEGORIES.map((cat) => {
+            {serviceCategories.map((cat) => {
               const Icon = cat.icon;
               const active = selectedCategory === cat.id;
               const btnCls = active
@@ -858,7 +1523,7 @@ export default function ServiceProvidersClient() {
 
           <div className="relative min-w-[260px]">
             <label htmlFor="sp-search-input" className="sr-only">
-              Hizmet Sağlayıcı Ara
+              {copy.searchLabel}
             </label>
             <Search
               size={15}
@@ -869,7 +1534,7 @@ export default function ServiceProvidersClient() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Hizmet, ülke veya firma ara..."
+              placeholder={copy.searchPlaceholder}
               className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:border-sky-600"
             />
           </div>
@@ -879,18 +1544,36 @@ export default function ServiceProvidersClient() {
         <ServiceProvidersDirectoryContent
           loading={loading}
           items={items}
-          lang={lang}
+          lang={safeLang}
+          copy={copy}
           onOpenApply={() => setShowApplyModal(true)}
         />
       </main>
 
       <ServiceProviderApplyModal
         isOpen={showApplyModal}
+        copy={copy}
         onClose={() => setShowApplyModal(false)}
         onSuccess={() => void loadProviders()}
       />
 
-      <Footer lang={lang} />
+      <Footer
+        lang={safeLang}
+        onOpenPolicy={(type) => {
+          setPolicyModalType(type);
+          setIsPolicyModalOpen(true);
+        }}
+      />
+
+      <PolicyViewerModal
+        isOpen={isPolicyModalOpen}
+        onClose={() => {
+          setIsPolicyModalOpen(false);
+          setPolicyModalType("");
+        }}
+        policyType={policyModalType}
+        lang={safeLang}
+      />
     </div>
   );
 }

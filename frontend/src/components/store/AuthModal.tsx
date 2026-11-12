@@ -2,9 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { X, Lock, Mail, User, Phone, Check, AlertCircle, Building2 } from "lucide-react";
-import { t } from "@/app/i18n";
+import { X, Lock, Mail, User, Phone, Check, AlertCircle, Building2, Info } from "lucide-react";
+import { getCategoryPrefix, t } from "@/app/i18n";
 import { getOrSetVisitorId } from "@/components/analytics/AnalyticsTracker";
+
+const REMEMBERED_EMAIL_KEY = "merter_remembered_email";
+
+function readRememberedEmail(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return localStorage.getItem(REMEMBERED_EMAIL_KEY) || "";
+}
 
 interface AuthModalProps {
   readonly isOpen: boolean;
@@ -15,14 +24,16 @@ interface AuthModalProps {
 
 export default function AuthModal({ isOpen, onClose, lang, initialMode = "login" }: Readonly<AuthModalProps>) {
   const [mode, setMode] = useState<"login" | "register">(initialMode);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => readRememberedEmail());
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [websiteHp, setWebsiteHp] = useState("");
-  
+  const [rememberMe, setRememberMe] = useState<boolean>(() => Boolean(readRememberedEmail()));
+  const [showForgotHelp, setShowForgotHelp] = useState<boolean>(false);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -86,10 +97,13 @@ interface GrecaptchaInstance {
   if (isOpen !== prevOpenState.isOpen || initialMode !== prevOpenState.initialMode) {
     setPrevOpenState({ isOpen, initialMode });
     if (isOpen) {
+      const remembered = initialMode === "login" ? readRememberedEmail() : "";
       setMode(initialMode);
       setError(null);
       setSuccess(null);
-      setEmail("");
+      setShowForgotHelp(false);
+      setEmail(remembered);
+      setRememberMe(Boolean(remembered));
       setPassword("");
       setConfirmPassword("");
       setFirstName("");
@@ -152,9 +166,14 @@ interface GrecaptchaInstance {
       // Save to localStorage
       localStorage.setItem("store_user_token", data.token);
       localStorage.setItem("store_user_info", JSON.stringify(data.user));
+      if (rememberMe && email.trim()) {
+        localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim());
+      } else {
+        localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+      }
 
       setSuccess(t("login_success_redirecting", lang));
-      
+
       // Dispatch custom event to let other components know
       window.dispatchEvent(new Event("auth-change"));
 
@@ -178,13 +197,13 @@ interface GrecaptchaInstance {
     }
 
     if (!phone.trim()) {
-      setError(t("phone_required_error", lang) || "Cep telefonu numarası zorunludur.");
+      setError(t("phone_required_error", lang));
       return;
     }
 
     const cleanPhone = phone.replace(/\D/g, "");
     if (cleanPhone.length < 7 || cleanPhone.length > 15) {
-      setError(t("phone_invalid_error", lang) || "Lütfen geçerli bir cep telefonu numarası giriniz (en az 7 haneli).");
+      setError(t("phone_invalid_error", lang));
       return;
     }
 
@@ -238,9 +257,9 @@ interface GrecaptchaInstance {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Translucent overlay */}
-      <button 
+      <button
         type="button"
-        aria-label="Kapat"
+        aria-label={t("close_modal", lang)}
         tabIndex={-1}
         className="fixed inset-0 bg-eerie-black/40 backdrop-blur-md transition-opacity duration-300 cursor-default"
         onClick={onClose}
@@ -248,41 +267,47 @@ interface GrecaptchaInstance {
 
       {/* Modal Card */}
       <div className="relative w-full max-w-md bg-white/90 backdrop-blur-2xl border border-cultured rounded-2xl shadow-2xl overflow-hidden z-10 transition-all duration-300 scale-100 animate-in fade-in zoom-in-95 duration-200">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between border-b border-cultured px-6 py-4 bg-white/50">
           <div className="flex gap-4">
             <button
+              type="button"
               onClick={() => {
                 setMode("login");
                 setError(null);
                 setSuccess(null);
+                setShowForgotHelp(false);
               }}
               className={`text-sm font-extrabold tracking-wider uppercase transition-colors border-none bg-transparent cursor-pointer relative pb-1 ${
-                mode === "login" 
-                  ? "text-salmon-pink after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-salmon-pink" 
+                mode === "login"
+                  ? "text-salmon-pink after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-salmon-pink"
                   : "text-sonic-silver hover:text-eerie-black"
               }`}
             >
               {t("login_title", lang)}
             </button>
             <button
+              type="button"
               onClick={() => {
                 setMode("register");
                 setError(null);
                 setSuccess(null);
+                setShowForgotHelp(false);
               }}
               className={`text-sm font-extrabold tracking-wider uppercase transition-colors border-none bg-transparent cursor-pointer relative pb-1 ${
-                mode === "register" 
-                  ? "text-salmon-pink after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-salmon-pink" 
+                mode === "register"
+                  ? "text-salmon-pink after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-salmon-pink"
                   : "text-sonic-silver hover:text-eerie-black"
               }`}
             >
               {t("register_title", lang)}
             </button>
           </div>
-          <button 
+          <button
+            type="button"
             onClick={onClose}
+            aria-label={t("close_modal", lang)}
             className="p-1 hover:bg-cultured rounded-full text-sonic-silver hover:text-eerie-black transition-colors cursor-pointer border-none bg-transparent"
           >
             <X className="w-5 h-5" />
@@ -333,7 +358,7 @@ interface GrecaptchaInstance {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-cultured border border-cultured rounded-xl text-xs sm:text-sm font-semibold text-onyx placeholder-spanish-gray focus:outline-none focus:border-salmon-pink focus:bg-white transition-all duration-200"
-                    placeholder="ornek@email.com"
+                    placeholder={t("email_placeholder", lang)}
                   />
                 </div>
               </div>
@@ -359,19 +384,49 @@ interface GrecaptchaInstance {
 
               <div className="flex items-center justify-between text-xs font-bold text-sonic-silver">
                 <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" className="rounded text-salmon-pink focus:ring-salmon-pink" />
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded text-salmon-pink focus:ring-salmon-pink"
+                  />
                   <span>{t("remember_me", lang)}</span>
                 </label>
-                <button 
+                <button
                   type="button"
-                  onClick={() => {
-                    alert(t("forgot_password_contact_support", lang) || "Şifre sıfırlama için lütfen destek ekibimizle iletişime geçiniz.");
-                  }}
+                  onClick={() => setShowForgotHelp((prev) => !prev)}
                   className="hover:text-salmon-pink transition-colors bg-transparent border-none p-0 cursor-pointer text-xs font-bold text-sonic-silver"
                 >
                   {t("forgot_password", lang)}
                 </button>
               </div>
+
+              {showForgotHelp && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-950 flex flex-col gap-2">
+                  <div className="flex items-start gap-2">
+                    <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="font-semibold leading-relaxed">
+                      {t("forgot_password_guide", lang)}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between pl-6 pt-1">
+                    <Link
+                      href={`/${getCategoryPrefix(lang)}/contact`}
+                      onClick={onClose}
+                      className="text-xs font-extrabold text-salmon-pink hover:text-eerie-black underline transition-colors"
+                    >
+                      {t("forgot_password_contact_support", lang)}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotHelp(false)}
+                      className="text-[11px] font-bold text-amber-800 hover:text-amber-950 bg-transparent border-none p-0 cursor-pointer"
+                    >
+                      {t("close", lang)}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <button
                 type="submit"
@@ -561,10 +616,10 @@ interface GrecaptchaInstance {
                   <input type="checkbox" required className="rounded text-salmon-pink focus:ring-salmon-pink mt-0.5" />
                   <span>
                     {t("terms_accept_1", lang)}{" "}
-                    <a 
-                      href={`/${lang}/pages/kullanici-sozlesmesi`} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
+                    <a
+                      href={`/${getCategoryPrefix(lang)}/pages/kullanici-sozlesmesi`}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-salmon-pink underline hover:text-eerie-black transition-colors"
                     >
                       {t("terms_accept_2", lang)}

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { AlertTriangle } from "lucide-react";
+import { pickLangText, SupportedLangCode, t } from "@/app/i18n";
 
 interface ConfirmModalProps {
   readonly lang: string;
@@ -12,7 +13,7 @@ interface ConfirmModalProps {
   readonly cancelText?: string;
 }
 
-const buttonTranslations: Record<string, { cancel: string; confirm: string }> = {
+const buttonTranslations: Record<SupportedLangCode, { cancel: string; confirm: string }> = {
   tr: { cancel: "Vazgeç", confirm: "Evet, Kaldır" },
   en: { cancel: "Cancel", confirm: "Yes, Remove" },
   pl: { cancel: "Anuluj", confirm: "Tak, usuń" },
@@ -31,18 +32,18 @@ export default function ConfirmModal({
   confirmText,
   cancelText,
 }: Readonly<ConfirmModalProps>) {
-  const trans = buttonTranslations[lang] || buttonTranslations.en;
-  
+  const trans = pickLangText(lang, buttonTranslations);
+
   const finalCancelText = cancelText || trans.cancel;
   const finalConfirmText = confirmText || trans.confirm;
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-      <button 
+      <button
         type="button"
-        aria-label="Kapat"
+        aria-label={t("close_modal", lang)}
         tabIndex={-1}
-        className="fixed inset-0 bg-transparent border-none cursor-default" 
+        className="fixed inset-0 bg-transparent border-none cursor-default"
         onClick={onCancel}
       />
       <div className="bg-white border border-cultured rounded-[15px] max-w-sm w-full p-6 text-center flex flex-col items-center gap-5 shadow-premium relative z-10 animate-in fade-in zoom-in-95 duration-200 select-none">

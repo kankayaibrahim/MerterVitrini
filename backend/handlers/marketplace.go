@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -333,23 +334,34 @@ func scanSupplierSubOrders(rows pgx.Rows) []models.SupplierSubOrder {
 }
 
 func preloadSupplierSubOrderItems(ctx context.Context, orders []models.SupplierSubOrder) {
+	if len(orders) == 0 || db.Pool == nil {
+		return
+	}
+	subOrderIDs := make([]string, len(orders))
+	indexByID := make(map[string]int, len(orders))
 	for idx := range orders {
-		itemRows, err := db.Pool.Query(ctx, `
-			SELECT id, sub_order_id, product_id, product_name, product_sku, quantity, price_at_purchase, total_price, image_url, series_ratio
-			FROM catalog.supplier_sub_order_items
-			WHERE sub_order_id = $1
-			ORDER BY created_at ASC
-		`, orders[idx].ID)
-		if err != nil {
-			continue
-		}
-		for itemRows.Next() {
-			var it models.SupplierSubOrderItem
-			if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.ImageURL, &it.SeriesRatio); err == nil {
-				orders[idx].Items = append(orders[idx].Items, it)
+		subOrderIDs[idx] = orders[idx].ID
+		indexByID[orders[idx].ID] = idx
+	}
+
+	itemRows, err := db.Pool.Query(ctx, `
+		SELECT id, sub_order_id, product_id, product_name, product_sku, quantity, price_at_purchase, total_price, image_url, series_ratio
+		FROM catalog.supplier_sub_order_items
+		WHERE sub_order_id = ANY($1)
+		ORDER BY created_at ASC
+	`, subOrderIDs)
+	if err != nil {
+		return
+	}
+	defer itemRows.Close()
+
+	for itemRows.Next() {
+		var it models.SupplierSubOrderItem
+		if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.ImageURL, &it.SeriesRatio); err == nil {
+			if pos, exists := indexByID[it.SubOrderID]; exists {
+				orders[pos].Items = append(orders[pos].Items, it)
 			}
 		}
-		itemRows.Close()
 	}
 }
 
@@ -1139,11 +1151,19 @@ type FeedRootXML struct {
 	Products    []FeedProductXML `xml:"products>product"`
 }
 
+func writeFeedXMLError(w http.ResponseWriter, status int, msg string) {
+	var buf bytes.Buffer
+	_ = xml.EscapeText(&buf, []byte(msg))
+	w.Header().Set(headerContentType, mimeApplicationXMLUTF8)
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(xml.Header + "<error>" + buf.String() + "</error>"))
+}
+
 // ExportB2BXmlFeed streams XML feed for external B2B partners
 func (h *MarketplaceHandler) ExportB2BXmlFeed(w http.ResponseWriter, r *http.Request) {
 	marginRate, err := validateFeedAPIKey(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?><error>%s</error>`, err.Error()), http.StatusUnauthorized)
+		writeFeedXMLError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 
@@ -1153,7 +1173,15 @@ func (h *MarketplaceHandler) ExportB2BXmlFeed(w http.ResponseWriter, r *http.Req
 			p.id, p.custom_sku, p.title, coalesce(p.description, ''),
 			coalesce(NULLIF(b.brand_name, ''), b.alias_code, 'Merter Vitrini') as brand_alias,
 			coalesce(c.title, 'Tekstil') as cat_name,
-			p.price, p.currency, p.stock, coalesce(p.series_ratio, '1'), coalesce(p.packing_ratio, '1')
+			p.price, p.currency, p.stock, coalesce(p.series_ratio, '1'), coalesce(p.packing_ratio, '1'),
+			COALESCE((
+				SELECT array_agg(
+					CASE WHEN pi.image_url LIKE 'http%' THEN pi.image_url ELSE 'https://mertervitrini.com.tr' || pi.image_url END
+					ORDER BY pi.is_cover DESC, pi.sort_order ASC
+				)
+				FROM catalog.product_images pi
+				WHERE pi.product_id = p.id
+			), ARRAY[]::text[])
 		FROM catalog.products p
 		LEFT JOIN catalog.brands b ON b.id = p.brand_id
 		LEFT JOIN catalog.categories c ON c.id = p.category_id
@@ -1162,7 +1190,7 @@ func (h *MarketplaceHandler) ExportB2BXmlFeed(w http.ResponseWriter, r *http.Req
 		LIMIT 2000
 	`)
 	if err != nil {
-		http.Error(w, `<?xml version="1.0" encoding="UTF-8"?><error>Katalog alınamadı</error>`, http.StatusInternalServerError)
+		writeFeedXMLError(w, http.StatusInternalServerError, "Katalog alınamadı")
 		return
 	}
 	defer rows.Close()
@@ -1173,7 +1201,7 @@ func (h *MarketplaceHandler) ExportB2BXmlFeed(w http.ResponseWriter, r *http.Req
 		var rawPrice float64
 		if err := rows.Scan(
 			&p.ID, &p.SKU, &p.Title, &p.Description, &p.Brand, &p.Category,
-			&rawPrice, &p.Currency, &p.Stock, &p.SeriesRatio, &p.PackingRatio,
+			&rawPrice, &p.Currency, &p.Stock, &p.SeriesRatio, &p.PackingRatio, &p.Images,
 		); err == nil {
 			p.Price = math.Round(rawPrice*marginRate*100) / 100
 			feedProducts = append(feedProducts, p)
@@ -1197,7 +1225,7 @@ func (h *MarketplaceHandler) ExportB2BXmlFeed(w http.ResponseWriter, r *http.Req
 func (h *MarketplaceHandler) ExportB2BJsonFeed(w http.ResponseWriter, r *http.Request) {
 	marginRate, err := validateFeedAPIKey(r)
 	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err.Error()), http.StatusUnauthorized)
+		writeSupplierJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
 		return
 	}
 

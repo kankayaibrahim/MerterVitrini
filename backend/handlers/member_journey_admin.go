@@ -240,20 +240,20 @@ func (h *CustomersHandler) GetCustomerJourney(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	events, sessionCount, acqSource, primaryDevice := loadTrackedMemberEvents(ctx, profile)
-	events = mergeHistoricalMilestones(ctx, profile, events)
+	bundle := loadTrackedMemberEvents(ctx, profile)
+	bundle.events = mergeHistoricalMilestones(ctx, profile, bundle.events)
 
-	sort.SliceStable(events, func(i, j int) bool {
-		return events[i].sortTime.After(events[j].sortTime)
+	sort.SliceStable(bundle.events, func(i, j int) bool {
+		return bundle.events[i].sortTime.After(bundle.events[j].sortTime)
 	})
-	if len(events) > 300 {
-		events = events[:300]
+	if len(bundle.events) > 300 {
+		bundle.events = bundle.events[:300]
 	}
 
-	viewedProducts := buildViewedProductsSummary(ctx, profile, events)
-	readPages, topCategories := buildReadContentAndCategories(events)
-	kpis := computeMemberJourneyKPIs(ctx, profile, events, viewedProducts, readPages, sessionCount, acqSource, primaryDevice)
-	funnel := buildJourneyFunnelSteps(profile, events, viewedProducts, readPages, kpis)
+	viewedProducts := buildViewedProductsSummary(ctx, profile, bundle.events)
+	readPages, topCategories := buildReadContentAndCategories(bundle.events)
+	kpis := computeMemberJourneyKPIs(ctx, profile, bundle, viewedProducts, readPages)
+	funnel := buildJourneyFunnelSteps(profile, bundle.events, viewedProducts, readPages, kpis)
 
 	resp := MemberJourneyDetailResponse{
 		Customer:       profile,
@@ -262,7 +262,7 @@ func (h *CustomersHandler) GetCustomerJourney(w http.ResponseWriter, r *http.Req
 		ViewedProducts: viewedProducts,
 		ReadPages:      readPages,
 		TopCategories:  topCategories,
-		Timeline:       events,
+		Timeline:       bundle.events,
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
@@ -295,7 +295,14 @@ func loadCustomerJourneyProfile(ctx context.Context, customerID string) (MemberJ
 	return p, true
 }
 
-func loadTrackedMemberEvents(ctx context.Context, profile MemberJourneyCustomerProfile) ([]MemberTimelineEvent, int, string, string) {
+type trackedEventsBundle struct {
+	events        []MemberTimelineEvent
+	sessionCount  int
+	acqSource     string
+	primaryDevice string
+}
+
+func loadTrackedMemberEvents(ctx context.Context, profile MemberJourneyCustomerProfile) trackedEventsBundle {
 	rows, err := db.Pool.Query(ctx, `
 		SELECT
 			id::text,
@@ -323,7 +330,11 @@ func loadTrackedMemberEvents(ctx context.Context, profile MemberJourneyCustomerP
 		LIMIT 300
 	`, profile.ID)
 	if err != nil {
-		return []MemberTimelineEvent{}, 0, directReferrerLabel, "desktop"
+		return trackedEventsBundle{
+			events:        []MemberTimelineEvent{},
+			acqSource:     directReferrerLabel,
+			primaryDevice: "desktop",
+		}
 	}
 	defer rows.Close()
 
@@ -345,24 +356,43 @@ func loadTrackedMemberEvents(ctx context.Context, profile MemberJourneyCustomerP
 		); scanErr != nil {
 			continue
 		}
-		if sessionID != "" {
-			sessions[sessionID] = true
-		}
-		if ev.DeviceType != "" {
-			deviceCounts[ev.DeviceType]++
-		}
-		if len(rawMeta) > 0 {
-			_ = json.Unmarshal(rawMeta, &ev.Metadata)
-			if ref, ok := ev.Metadata["referrer_host"].(string); ok && ref != "" && ref != directReferrerLabel {
-				acqSource = ref
-			}
-		}
+		recordTrackedEventStats(sessionID, ev.DeviceType, sessions, deviceCounts)
+		acqSource = extractEventReferrerHost(rawMeta, &ev, acqSource)
 		ev.IsPreSignup = createdAt.Before(profile.createdAtTime.Add(-2 * time.Second))
 		ev.CreatedAt = createdAt.Format(time.RFC3339)
 		ev.sortTime = createdAt
 		events = append(events, ev)
 	}
 
+	return trackedEventsBundle{
+		events:        events,
+		sessionCount:  len(sessions),
+		acqSource:     acqSource,
+		primaryDevice: mostFrequentDevice(deviceCounts),
+	}
+}
+
+func recordTrackedEventStats(sessionID string, deviceType string, sessions map[string]bool, deviceCounts map[string]int) {
+	if sessionID != "" {
+		sessions[sessionID] = true
+	}
+	if deviceType != "" {
+		deviceCounts[deviceType]++
+	}
+}
+
+func extractEventReferrerHost(rawMeta []byte, ev *MemberTimelineEvent, fallback string) string {
+	if len(rawMeta) == 0 {
+		return fallback
+	}
+	_ = json.Unmarshal(rawMeta, &ev.Metadata)
+	if ref, ok := ev.Metadata["referrer_host"].(string); ok && ref != "" && ref != directReferrerLabel {
+		return ref
+	}
+	return fallback
+}
+
+func mostFrequentDevice(deviceCounts map[string]int) string {
 	primaryDev := "desktop"
 	maxDevCount := 0
 	for dev, cnt := range deviceCounts {
@@ -371,7 +401,7 @@ func loadTrackedMemberEvents(ctx context.Context, profile MemberJourneyCustomerP
 			primaryDev = dev
 		}
 	}
-	return events, len(sessions), acqSource, primaryDev
+	return primaryDev
 }
 
 func mergeHistoricalMilestones(ctx context.Context, profile MemberJourneyCustomerProfile, events []MemberTimelineEvent) []MemberTimelineEvent {
@@ -781,23 +811,20 @@ func buildReadContentAndCategories(events []MemberTimelineEvent) ([]ReadContentS
 func computeMemberJourneyKPIs(
 	ctx context.Context,
 	profile MemberJourneyCustomerProfile,
-	events []MemberTimelineEvent,
+	bundle trackedEventsBundle,
 	viewedProducts []ViewedProductSummary,
 	readPages []ReadContentSummary,
-	sessionCount int,
-	acqSource string,
-	primaryDevice string,
 ) MemberJourneyKPIs {
 	kpis := MemberJourneyKPIs{
-		TotalSessions:      maxInt(sessionCount, 1),
-		TotalEvents:        len(events),
+		TotalSessions:      maxInt(bundle.sessionCount, 1),
+		TotalEvents:        len(bundle.events),
 		UniqueProducts:     len(viewedProducts),
 		CorporatePagesRead: len(readPages),
-		AcquisitionSource:  acqSource,
-		PrimaryDevice:      primaryDevice,
+		AcquisitionSource:  bundle.acqSource,
+		PrimaryDevice:      bundle.primaryDevice,
 	}
 
-	for _, ev := range events {
+	for _, ev := range bundle.events {
 		kpis.TotalTimeSpentSec += ev.DurationSec
 		switch ev.EventCategory {
 		case "navigation", "content":
@@ -821,14 +848,22 @@ func computeMemberJourneyKPIs(
 			COALESCE((SELECT SUM(ii.quantity * ii.price) FROM catalog.store_inquiry_items ii INNER JOIN catalog.store_inquiries si ON ii.inquiry_id = si.id WHERE LOWER(si.email) = LOWER($2)), 0)
 	`, profile.ID, profile.Email).Scan(&kpis.OrdersCount, &kpis.OrdersTotalAmount)
 
-	if len(events) > 0 {
-		newest := events[0].CreatedAt
-		oldest := events[len(events)-1].CreatedAt
+	if len(bundle.events) > 0 {
+		newest := bundle.events[0].CreatedAt
+		oldest := bundle.events[len(bundle.events)-1].CreatedAt
 		kpis.LastActiveAt = &newest
 		kpis.FirstSeenAt = &oldest
-		kpis.IsOnline = time.Since(events[0].sortTime) <= 15*time.Minute
+		kpis.IsOnline = time.Since(bundle.events[0].sortTime) <= 15*time.Minute
 	}
 	return kpis
+}
+
+type funnelMilestones struct {
+	firstVisitAt *string
+	contentAt    *string
+	productAt    *string
+	engageAt     *string
+	orderAt      *string
 }
 
 func buildJourneyFunnelSteps(
@@ -838,34 +873,15 @@ func buildJourneyFunnelSteps(
 	readPages []ReadContentSummary,
 	kpis MemberJourneyKPIs,
 ) []JourneyFunnelStep {
-	var firstVisitAt, contentAt, productAt, engageAt, orderAt *string
-	for i := len(events) - 1; i >= 0; i-- {
-		ev := events[i]
-		ts := ev.CreatedAt
-		if firstVisitAt == nil {
-			firstVisitAt = &ts
-		}
-		if contentAt == nil && (ev.EventCategory == "content" || ev.EventType == "category_view") {
-			contentAt = &ts
-		}
-		if productAt == nil && (ev.EventType == "product_view" || ev.EventType == "brand_view") {
-			productAt = &ts
-		}
-		if engageAt == nil && (ev.EventType == "cart_add" || ev.EventCategory == "engagement") {
-			engageAt = &ts
-		}
-		if orderAt == nil && (ev.EventType == "order_create" || ev.EventType == "inquiry_submit") {
-			orderAt = &ts
-		}
-	}
-
+	milestones := collectFunnelMilestones(events)
 	regTs := profile.CreatedAt
+
 	return []JourneyFunnelStep{
 		{
 			StepKey:   "first_visit",
 			Label:     "1. İlk Site Ziyareti",
-			Completed: firstVisitAt != nil,
-			ReachedAt: firstVisitAt,
+			Completed: milestones.firstVisitAt != nil,
+			ReachedAt: milestones.firstVisitAt,
 			Detail:    kpis.AcquisitionSource,
 		},
 		{
@@ -879,31 +895,67 @@ func buildJourneyFunnelSteps(
 			StepKey:   "content_exploration",
 			Label:     "3. Sayfa & Kurumsal Okuma",
 			Completed: len(readPages) > 0 || kpis.TotalPagesRead > 0,
-			ReachedAt: contentAt,
+			ReachedAt: milestones.contentAt,
 			Detail:    fmt.Sprintf("%d sayfa / içerik okudu", maxInt(len(readPages), kpis.TotalPagesRead)),
 		},
 		{
 			StepKey:   "product_discovery",
 			Label:     "4. Ürün & Vitrin İnceleme",
-			Completed: len(viewedProducts) > 0 || productAt != nil,
-			ReachedAt: productAt,
+			Completed: len(viewedProducts) > 0 || milestones.productAt != nil,
+			ReachedAt: milestones.productAt,
 			Detail:    fmt.Sprintf("%d farklı ürün (%d görüntüleme)", len(viewedProducts), kpis.TotalProductViews),
 		},
 		{
 			StepKey:   "cart_or_contact",
 			Label:     "5. Sepet / Üretici İletişimi",
 			Completed: kpis.CartAdditions > 0 || kpis.SupplierContacts > 0,
-			ReachedAt: engageAt,
+			ReachedAt: milestones.engageAt,
 			Detail:    fmt.Sprintf("%d sepet • %d iletişim", kpis.CartAdditions, kpis.SupplierContacts),
 		},
 		{
 			StepKey:   "b2b_order",
 			Label:     "6. Toptan Sipariş / Talep",
 			Completed: kpis.OrdersCount > 0,
-			ReachedAt: orderAt,
+			ReachedAt: milestones.orderAt,
 			Detail:    fmt.Sprintf("%d sipariş / talep", kpis.OrdersCount),
 		},
 	}
+}
+
+func collectFunnelMilestones(events []MemberTimelineEvent) funnelMilestones {
+	var m funnelMilestones
+	for i := len(events) - 1; i >= 0; i-- {
+		ev := events[i]
+		recordMilestoneIfEmpty(&m.firstVisitAt, ev.CreatedAt, true)
+		recordMilestoneIfEmpty(&m.contentAt, ev.CreatedAt, isContentMilestone(ev))
+		recordMilestoneIfEmpty(&m.productAt, ev.CreatedAt, isProductMilestone(ev))
+		recordMilestoneIfEmpty(&m.engageAt, ev.CreatedAt, isEngagementMilestone(ev))
+		recordMilestoneIfEmpty(&m.orderAt, ev.CreatedAt, isOrderMilestone(ev))
+	}
+	return m
+}
+
+func recordMilestoneIfEmpty(target **string, ts string, matched bool) {
+	if *target == nil && matched {
+		val := ts
+		*target = &val
+	}
+}
+
+func isContentMilestone(ev MemberTimelineEvent) bool {
+	return ev.EventCategory == "content" || ev.EventType == "category_view"
+}
+
+func isProductMilestone(ev MemberTimelineEvent) bool {
+	return ev.EventType == "product_view" || ev.EventType == "brand_view"
+}
+
+func isEngagementMilestone(ev MemberTimelineEvent) bool {
+	return ev.EventType == "cart_add" || ev.EventCategory == "engagement"
+}
+
+func isOrderMilestone(ev MemberTimelineEvent) bool {
+	return ev.EventType == "order_create" || ev.EventType == "inquiry_submit"
 }
 
 func maxInt(a, b int) int {

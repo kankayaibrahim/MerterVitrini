@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { 
   Building2, 
   Send, 
@@ -60,36 +61,57 @@ interface SupplierApplicationSectionProps {
 
 interface SuccessViewProps {
   readonly t: SupplierPageTranslations;
+  readonly lang: string;
   readonly onReset: () => void;
   readonly submittedEmail?: string;
 }
 
-function SupplierSuccessView({ t, onReset, submittedEmail }: Readonly<SuccessViewProps>) {
+function renderVerificationDescription(template: string, submittedEmail?: string): React.ReactNode {
+  if (!submittedEmail) {
+    return template.replace("{email}", "").replace(/\s{2,}/g, " ").trim();
+  }
+  const parts = template.split("{email}");
+  if (parts.length === 2) {
+    return (
+      <>
+        {parts[0]}
+        <strong>{submittedEmail}</strong>
+        {parts[1]}
+      </>
+    );
+  }
+  return template;
+}
+
+function SupplierSuccessView({ t, lang, onReset, submittedEmail }: Readonly<SuccessViewProps>) {
+  const homeHref = lang === "tr" ? "/tr" : `/${lang}`;
   return (
     <div className="py-12 px-4 text-center max-w-md mx-auto">
       <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 mx-auto mb-5">
         <Mail size={36} />
       </div>
-      <h3 className="text-xl font-black text-zinc-950">Doğrulama E-Postası Gönderildi!</h3>
+      <h3 className="text-xl font-black text-zinc-950">{t.verify_email_sent_title}</h3>
       <p className="text-xs sm:text-sm text-zinc-600 mt-2.5 leading-relaxed">
-        {submittedEmail ? (
-          <>
-            <strong>{submittedEmail}</strong> adresinize 30 dakika geçerli bir başvuru doğrulama bağlantısı ilettik.
-          </>
-        ) : (
-          "E-posta adresinize 30 dakika geçerli bir başvuru doğrulama bağlantısı ilettik."
-        )}
+        {renderVerificationDescription(t.verify_email_sent_desc, submittedEmail)}
       </p>
       <div className="mt-4 p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl text-left text-xs text-amber-900 leading-relaxed">
-        ⚠️ <strong>Önemli:</strong> Güvenlik politikamız gereğince 30 dakika içinde doğrulanmayan başvurular otomatik olarak silinmektedir. Lütfen gelen kutunuzu (ve gerekiyorsa spam klasörünü) kontrol ediniz.
+        ⚠️ {t.verify_email_security_note}
       </div>
-      <button
-        type="button"
-        onClick={onReset}
-        className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
-      >
-        {t.submit_another}
-      </button>
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={onReset}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+        >
+          {t.submit_another}
+        </button>
+        <Link
+          href={homeHref}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-800 text-xs font-bold transition-all"
+        >
+          {t.back_to_home}
+        </Link>
+      </div>
     </div>
   );
 }
@@ -174,7 +196,7 @@ export default function SupplierApplicationSection({
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(email.trim())) {
-      setError(t.error_invalid_email || "Lütfen geçerli bir e-posta adresi giriniz.");
+      setError(t.error_invalid_email);
       return;
     }
 
@@ -236,7 +258,7 @@ export default function SupplierApplicationSection({
         {/* Content Box */}
         <div className="bg-white border border-zinc-200/90 rounded-3xl p-6 sm:p-10 shadow-sm">
           {submitted ? (
-            <SupplierSuccessView t={t} onReset={handleReset} submittedEmail={email} />
+            <SupplierSuccessView t={t} lang={lang} onReset={handleReset} submittedEmail={email} />
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
@@ -336,7 +358,7 @@ export default function SupplierApplicationSection({
                     }}
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all cursor-pointer"
                   >
-                    <option value="">{t.city_placeholder || "İl Seçiniz"}</option>
+                    <option value="">{t.city_placeholder}</option>
                     {TURKEY_PROVINCES.map((p) => (
                       <option key={p.code} value={p.name}>
                         {p.name}
@@ -349,7 +371,7 @@ export default function SupplierApplicationSection({
                 <div>
                   <label htmlFor="supp_district" className="block text-xs font-bold text-zinc-700 mb-1.5 flex items-center gap-1.5">
                     <MapPin size={13} className="text-zinc-600" />
-                    <span>{t.district_label || "Bulunduğunuz İlçe"}</span>
+                    <span>{t.district_label}</span>
                     <span className="text-red-500">*</span>
                   </label>
                   <select
@@ -361,7 +383,7 @@ export default function SupplierApplicationSection({
                     className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="">
-                      {!city ? "Önce İl Seçiniz" : (t.district_placeholder || "İlçe Seçiniz")}
+                      {city ? t.district_placeholder : t.select_city_first}
                     </option>
                     {availableDistricts.map((d) => (
                       <option key={d} value={d}>

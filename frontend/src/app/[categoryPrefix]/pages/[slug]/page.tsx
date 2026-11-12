@@ -1,9 +1,19 @@
 import React from "react";
 import { Metadata } from "next";
-import { apiFetch } from "@/app/utils";
-import { Category } from "@/types/store";
 import PagesClient from "./PagesClient";
 import { t as translate } from "@/app/i18n";
+import {
+  SITE_ORIGIN,
+  SUPPORTED_SEO_LANGS,
+  OG_LOCALE_BY_LANG,
+  GLOBAL_B2B_SEO_MATRIX,
+  SupportedSeoLang,
+  normalizeSeoLang,
+  buildPrefixedAlternates,
+  safeJsonLd,
+  ssrStoreFetch,
+  fetchSsrCategories,
+} from "@/utils/seoHelpers";
 
 interface PageProps {
   readonly params: Promise<{
@@ -38,158 +48,177 @@ export interface Language {
   sortOrder: number;
 }
 
-// Fetch active languages from database with static fallback
+const FALLBACK_LANGUAGES: Language[] = [
+  { code: "tr", label: "Türkçe", flag: "🇹🇷", categoryPrefix: "tr", isActive: true, sortOrder: 0 },
+  { code: "en", label: "English", flag: "🇬🇧", categoryPrefix: "en", isActive: true, sortOrder: 1 },
+  { code: "pl", label: "Polski", flag: "🇵🇱", categoryPrefix: "pl", isActive: true, sortOrder: 2 },
+  { code: "bg", label: "Български", flag: "🇧🇬", categoryPrefix: "bg", isActive: true, sortOrder: 3 },
+  { code: "ar", label: "العربية", flag: "🇸🇦", categoryPrefix: "ar", dir: "rtl", isActive: true, sortOrder: 4 },
+  { code: "ru", label: "Русский", flag: "🇷🇺", categoryPrefix: "ru", isActive: true, sortOrder: 5 },
+  { code: "de", label: "Deutsch", flag: "🇩🇪", categoryPrefix: "de", isActive: true, sortOrder: 6 },
+  { code: "fr", label: "Français", flag: "🇫🇷", categoryPrefix: "fr", isActive: true, sortOrder: 7 },
+];
+
 async function fetchLanguages(): Promise<Language[]> {
-  try {
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/languages?t=" + Date.now());
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        return data.map((l: Language) => {
-          let code = l.code;
-          if (code.startsWith("en_")) code = "en";
-          else if (code.startsWith("tr_")) code = "tr";
-          else if (code.startsWith("pl_")) code = "pl";
-          else if (code.startsWith("bg_")) code = "bg";
-          else if (code.startsWith("de_")) code = "de";
-          else if (code.startsWith("fr_")) code = "fr";
-          else if (code.startsWith("ru_")) code = "ru";
-          else if (code.startsWith("ar_")) code = "ar";
-          return { ...l, code };
-        });
-      }
-    }
-  } catch (err) {
-    console.error("[SEO] Failed to fetch active languages, using fallback:", err);
+  const data = await ssrStoreFetch<Language[]>("/languages", 3600);
+  if (!Array.isArray(data) || data.length === 0) {
+    return FALLBACK_LANGUAGES;
   }
-  
-  return [
-    { code: "tr", label: "Türkçe", flag: "🇹🇷", categoryPrefix: "tr", isActive: true, sortOrder: 0 },
-    { code: "en", label: "English", flag: "🇬🇧", categoryPrefix: "en", isActive: true, sortOrder: 1 },
-    { code: "pl", label: "Polski", flag: "🇵🇱", categoryPrefix: "pl", isActive: true, sortOrder: 2 },
-    { code: "bg", label: "Български", flag: "🇧🇬", categoryPrefix: "bg", isActive: true, sortOrder: 3 },
-    { code: "ar", label: "العربية", flag: "🇸🇦", categoryPrefix: "ar", dir: "rtl", isActive: true, sortOrder: 4 },
-    { code: "ru", label: "Русский", flag: "🇷🇺", categoryPrefix: "ru", isActive: true, sortOrder: 5 },
-    { code: "de", label: "Deutsch", flag: "🇩🇪", categoryPrefix: "de", isActive: true, sortOrder: 6 },
-    { code: "fr", label: "Français", flag: "🇫🇷", categoryPrefix: "fr", isActive: true, sortOrder: 7 },
-  ];
+  return data.map((item) => ({
+    ...item,
+    code: normalizeSeoLang(item.code, "en"),
+  }));
 }
 
-// Generate static params at compilation time for active dynamic CMS pages
+function resolvePageLang(
+  activeLangs: readonly Language[],
+  categoryPrefix: string
+): SupportedSeoLang {
+  const matched = activeLangs.find((l) => l.categoryPrefix === categoryPrefix);
+  return normalizeSeoLang(matched?.code || categoryPrefix, "en");
+}
+
 export async function generateStaticParams() {
   if (process.env.NEXT_BUILD_SSR === "true") return [];
-  try {
-    const activeLangs = await fetchLanguages();
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/pages?t=" + Date.now());
-    if (response.ok) {
-      const pages = await response.json();
-      if (Array.isArray(pages) && pages.length > 0) {
-        const params: { categoryPrefix: string; slug: string }[] = [];
-        
-        // Find unique prefixes (e.g., "tr", "en", "pl", "bg", "ar", "ru", "de", "fr")
-        const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
-        
-        uniquePrefixes.forEach((prefix) => {
-          pages.forEach((page: Page) => {
-            if (page.slug) {
-              params.push({
-                categoryPrefix: prefix,
-                slug: String(page.slug),
-              });
-            }
-          });
-        });
-        
-        return params;
+  const [activeLangs, pages] = await Promise.all([
+    fetchLanguages(),
+    ssrStoreFetch<Page[]>("/pages", 3600),
+  ]);
+
+  if (Array.isArray(pages) && pages.length > 0) {
+    const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
+    const params: { categoryPrefix: string; slug: string }[] = [];
+    for (const prefix of uniquePrefixes) {
+      for (const page of pages) {
+        if (page.slug) {
+          params.push({ categoryPrefix: prefix, slug: String(page.slug) });
+        }
       }
     }
-  } catch (err) {
-    console.error("[SEO] Dynamic pages generateStaticParams failed, using fallback:", err);
+    return params;
   }
-  
-  // Return fallback pages (e.g. seeded "hakkimizda" for all fallback prefixes)
-  const prefixes = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
-  const fallbackParams: { categoryPrefix: string; slug: string }[] = [];
-  prefixes.forEach((prefix) => {
-    fallbackParams.push({
-      categoryPrefix: prefix,
-      slug: "hakkimizda",
-    });
-  });
-  return fallbackParams;
+
+  return SUPPORTED_SEO_LANGS.map((prefix) => ({
+    categoryPrefix: prefix,
+    slug: "hakkimizda",
+  }));
 }
 
-// Generate dynamic SEO metadata on the server side using prefix and slug
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix, slug } = await params;
-  
-  const activeLangs = await fetchLanguages();
-  const prefixToLangMap = new Map<string, string>();
-  activeLangs.forEach((l) => {
-    if (!prefixToLangMap.has(l.categoryPrefix) || l.code === "tr" || l.code === "en") {
-      prefixToLangMap.set(l.categoryPrefix, l.code);
-    }
-  });
-  
-  const lang = prefixToLangMap.get(categoryPrefix) || "en";
-  const page = await apiFetch<Page>(`/pages/${slug}`);
-  
+  const [activeLangs, page] = await Promise.all([
+    fetchLanguages(),
+    ssrStoreFetch<Page>(`/pages/${encodeURIComponent(slug)}`, 300),
+  ]);
+
+  const lang = resolvePageLang(activeLangs, categoryPrefix);
+
   if (!page) {
     return {
       title: translate("seo_page_not_found", lang),
       description: translate("seo_page_not_found_desc", lang),
+      robots: { index: false, follow: true },
     };
   }
 
-  // Find translation or fall back to any available
-  const t = page.translations[lang] || page.translations["tr"] || page.translations["en"] || Object.values(page.translations)[0];
-  
-  const title = t?.meta_title || t?.title || "Merter Vitrini";
-  const desc = t?.meta_description || translate("seo_fallback_desc", lang);
-  
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/pages/${slug}/`;
-  
-  // Build Hreflang alternates
-  const alternatesLanguages = Object.fromEntries(
-    activeLangs
-      .filter((l) => l.code !== "__proto__" && l.code !== "constructor")
-      .map((l) => [l.code, `https://mertervitrini.com.tr/${l.categoryPrefix}/pages/${slug}/`])
-  );
+  const trans =
+    page.translations[lang] ||
+    page.translations["en"] ||
+    page.translations["tr"] ||
+    Object.values(page.translations)[0];
+
+  const title = trans?.meta_title || trans?.title || "Merter Vitrini B2B";
+  const desc = trans?.meta_description || translate("seo_fallback_desc", lang);
+  const alternates = buildPrefixedAlternates(`pages/${slug}`, lang);
 
   return {
-    title: `${title} | Merter Vitrini`,
+    title: `${title} | Merter Vitrini B2B`,
     description: desc,
-    alternates: {
-      canonical: canonicalUrl,
-      languages: alternatesLanguages,
-    },
+    keywords: GLOBAL_B2B_SEO_MATRIX[lang].keywords,
+    alternates,
     openGraph: {
-      title: `${title} | Merter Vitrini`,
+      title: `${title} | Merter Vitrini B2B`,
       description: desc,
-      url: canonicalUrl,
-      siteName: "Merter Vitrini",
+      url: alternates.canonical,
+      siteName: "Merter Vitrini B2B",
+      locale: OG_LOCALE_BY_LANG[lang],
       type: "website",
-    }
+      images: [{ url: `${SITE_ORIGIN}/og-image.jpg`, width: 1200, height: 630, alt: title }],
+    },
   };
 }
 
 export default async function CMSPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix, slug } = await params;
-  
-  // Parallel fetches on the server side
-  const activeLangs = await fetchLanguages();
-  const categoriesData = await apiFetch<Category[]>("/categories");
-  const pageData = await apiFetch<Page>(`/pages/${slug}`);
-  
-  const categories = categoriesData || [];
-  
+
+  const [activeLangs, categories, pageData] = await Promise.all([
+    fetchLanguages(),
+    fetchSsrCategories(),
+    ssrStoreFetch<Page>(`/pages/${encodeURIComponent(slug)}`, 300),
+  ]);
+
+  const lang = resolvePageLang(activeLangs, categoryPrefix);
+  const seoCopy = GLOBAL_B2B_SEO_MATRIX[lang];
+  const trans = pageData
+    ? pageData.translations[lang] ||
+      pageData.translations["en"] ||
+      pageData.translations["tr"] ||
+      Object.values(pageData.translations)[0]
+    : null;
+
+  const canonicalUrl = `${SITE_ORIGIN}/${lang}/pages/${slug}`;
+  const pageTitle = trans?.title || "Merter Vitrini B2B";
+  const pageDesc = trans?.meta_description || seoCopy.portalDescription;
+
+  const pageJsonLd = pageData
+    ? {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebPage",
+            "@id": `${canonicalUrl}#webpage`,
+            url: canonicalUrl,
+            name: pageTitle,
+            description: pageDesc,
+            inLanguage: lang,
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": `${canonicalUrl}#breadcrumb`,
+            itemListElement: [
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: seoCopy.homeLabel,
+                item: `${SITE_ORIGIN}/${lang}`,
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: pageTitle,
+                item: canonicalUrl,
+              },
+            ],
+          },
+        ],
+      }
+    : null;
+
   return (
-    <PagesClient 
-      categoryPrefix={categoryPrefix}
-      slug={slug}
-      page={pageData}
-      categories={categories}
-      activeLangs={activeLangs}
-    />
+    <>
+      {pageJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(pageJsonLd) }}
+        />
+      )}
+      <PagesClient
+        categoryPrefix={categoryPrefix}
+        slug={slug}
+        page={pageData}
+        categories={categories}
+        activeLangs={activeLangs}
+      />
+    </>
   );
 }

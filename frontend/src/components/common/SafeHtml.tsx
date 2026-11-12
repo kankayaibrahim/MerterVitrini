@@ -111,32 +111,72 @@ export function convertMarkdownToHtml(raw: string): string {
   return parseMarkdownLines(raw.split(/\r?\n/));
 }
 
+const BLOCKED_CONTAINER_TAGS_REGEX =
+  /<\s*(script|iframe|object|embed|form|applet|style|svg|math)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi;
+const BLOCKED_STANDALONE_TAGS_REGEX =
+  /<\s*\/?\s*(script|iframe|object|embed|form|applet|meta|base|link|input|button|textarea|select)\b[^>]*>/gi;
+const INLINE_EVENT_ATTR_REGEX =
+  /\s+on[a-z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+const SRCDOC_ATTR_REGEX =
+  /\s+srcdoc\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
+const DANGEROUS_URI_ATTR_REGEX =
+  /\s+(href|src|xlink:href|action|formaction)\s*=\s*(?:"\s*(?:javascript|vbscript|data\s*:\s*text\/html)[^"]*"|'\s*(?:javascript|vbscript|data\s*:\s*text\/html)[^']*'|(?:\s*(?:javascript|vbscript|data\s*:\s*text\/html)[^\s>]*))/gi;
+
+/**
+ * Deterministic server-safe HTML sanitizer used synchronously for SSR and initial
+ * hydration before DOMPurify upgrades sanitization on the client.
+ */
+export function stripDangerousHtml(rawHtml: string): string {
+  if (!rawHtml) return "";
+  let cleaned = rawHtml;
+  let previous = "";
+  while (cleaned !== previous) {
+    previous = cleaned;
+    cleaned = cleaned
+      .replace(BLOCKED_CONTAINER_TAGS_REGEX, "")
+      .replace(BLOCKED_STANDALONE_TAGS_REGEX, "")
+      .replace(INLINE_EVENT_ATTR_REGEX, "")
+      .replace(SRCDOC_ATTR_REGEX, "")
+      .replace(DANGEROUS_URI_ATTR_REGEX, ' $1="#"');
+  }
+  return cleaned;
+}
+
 /**
  * SafeHtml sanitizes HTML and Markdown strings safely across SSR and client.
- * On server-side rendering, it serves formatted semantic HTML directly for full SEO indexing.
- * On client-side, it sanitizes using dompurify to guard against XSS without jsdom overhead.
+ * On server-side rendering and initial hydration, it synchronously strips all dangerous
+ * tags, event handlers, and script URIs while preserving semantic SEO HTML.
+ * On client-side, it upgrades sanitization using DOMPurify.
  */
 export function SafeHtml({ html, className, as: Component = "div" }: Readonly<SafeHtmlProps>) {
   const processedHtml = useMemo(() => convertMarkdownToHtml(html), [html]);
-  const [sanitized, setSanitized] = useState(processedHtml);
+  const serverSafeHtml = useMemo(() => stripDangerousHtml(processedHtml), [processedHtml]);
+  const [purified, setPurified] = useState<{ source: string; output: string } | null>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && processedHtml) {
-      void import("dompurify")
-        .then((mod) => {
-          const DOMPurify = mod.default || mod;
-          setSanitized(
-            DOMPurify.sanitize(processedHtml, {
-              USE_PROFILES: { html: true },
-              ADD_ATTR: ["target", "rel", "class"],
-            })
-          );
-        })
-        .catch((err) => {
-          console.error("DOMPurify load error:", err);
-        });
+    if (typeof window === "undefined" || !processedHtml) {
+      return;
     }
+    let cancelled = false;
+    void import("dompurify")
+      .then((mod) => {
+        if (cancelled) return;
+        const DOMPurify = mod.default || mod;
+        const cleanOutput = DOMPurify.sanitize(processedHtml, {
+          USE_PROFILES: { html: true },
+          ADD_ATTR: ["target", "rel", "class"],
+        });
+        setPurified({ source: processedHtml, output: cleanOutput });
+      })
+      .catch((err) => {
+        console.error("DOMPurify load error:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [processedHtml]);
+
+  const sanitized = purified?.source === processedHtml ? purified.output : serverSafeHtml;
 
   return <Component className={className} dangerouslySetInnerHTML={{ __html: sanitized }} />;
 }

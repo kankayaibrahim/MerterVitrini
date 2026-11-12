@@ -11,11 +11,19 @@ import (
 	"mertervitrini/backend/db"
 )
 
+const errMsgInvalidPayload = "invalid payload"
+
 var sponsoredSchemaOnce sync.Once
 
 func ensureSponsoredAndNewsletterSchema(ctx context.Context) {
 	sponsoredSchemaOnce.Do(func() {
 		ddl := `
+		ALTER TABLE catalog.brands
+			ADD COLUMN IF NOT EXISTS city VARCHAR(100) NOT NULL DEFAULT 'İstanbul',
+			ADD COLUMN IF NOT EXISTS district VARCHAR(100) NOT NULL DEFAULT 'Merter',
+			ADD COLUMN IF NOT EXISTS short_description TEXT NOT NULL DEFAULT '',
+			ADD COLUMN IF NOT EXISTS cover_image_url TEXT NOT NULL DEFAULT '';
+
 		CREATE TABLE IF NOT EXISTS catalog.sponsored_slots (
 			id UUID PRIMARY KEY DEFAULT uuidv7(),
 			placement VARCHAR(64) NOT NULL DEFAULT 'home_featured_suppliers',
@@ -83,7 +91,7 @@ func ensureSponsoredAndNewsletterSchema(ctx context.Context) {
 			'home_featured_suppliers',
 			b.id,
 			'',
-			b.name,
+			b.brand_name,
 			COALESCE(NULLIF(b.short_description, ''), 'Merter Doğrulanmış Toptan & İhracat Üreticisi — Doğrudan Fabrika Fiyatı'),
 			'ÖNE ÇIKAN ÜRETİCİ',
 			COALESCE(NULLIF(b.cover_image_url, ''), '/banners/collection_kadin.webp?v=2'),
@@ -91,19 +99,19 @@ func ensureSponsoredAndNewsletterSchema(ctx context.Context) {
 			'/ureticiler/' || COALESCE(NULLIF(b.slug, ''), b.id::text),
 			jsonb_build_object(
 				'en', jsonb_build_object(
-					'title', b.name,
+					'title', b.brand_name,
 					'subtitle', 'Verified Merter Wholesale & Export Manufacturer — Direct Factory Price',
 					'badge_text', 'FEATURED MANUFACTURER',
 					'cta_text', 'View Showroom'
 				),
 				'ru', jsonb_build_object(
-					'title', b.name,
+					'title', b.brand_name,
 					'subtitle', 'Проверенный производитель Мертер — Прямые фабричные цены',
 					'badge_text', 'РЕКОМЕНДУЕМЫЙ ПРОИЗВОДИТЕЛЬ',
 					'cta_text', 'Открыть витрину'
 				),
 				'ar', jsonb_build_object(
-					'title', b.name,
+					'title', b.brand_name,
 					'subtitle', 'مصنع جملة معتمد في مارتر — أسعار المصنع مباشرة',
 					'badge_text', 'مصنع مميز',
 					'cta_text', 'عرض صالة العرض'
@@ -117,7 +125,7 @@ func ensureSponsoredAndNewsletterSchema(ctx context.Context) {
 		FROM catalog.brands b
 		WHERE b.is_active = true
 		  AND NOT EXISTS (SELECT 1 FROM catalog.sponsored_slots LIMIT 1)
-		ORDER BY b.name ASC
+		ORDER BY b.brand_name ASC
 		LIMIT 3;
 
 		INSERT INTO catalog.sponsored_slots (
@@ -128,7 +136,7 @@ func ensureSponsoredAndNewsletterSchema(ctx context.Context) {
 			'category_sponsor',
 			b.id,
 			'kadin-giyim',
-			b.name || ' — Yeni Sezon Toptan Kadın Koleksiyonu',
+			b.brand_name || ' — Yeni Sezon Toptan Kadın Koleksiyonu',
 			'Seri asortili paketler, Private Label & Fason üretim imkanı ve %0 komisyonla doğrudan üreticiden sipariş',
 			'KATEGORİ SPONSORU',
 			'/banners/hero_women_collection.webp?v=2',
@@ -136,19 +144,19 @@ func ensureSponsoredAndNewsletterSchema(ctx context.Context) {
 			'/ureticiler/' || COALESCE(NULLIF(b.slug, ''), b.id::text),
 			jsonb_build_object(
 				'en', jsonb_build_object(
-					'title', b.name || ' — New Season Wholesale Women Collection',
+					'title', b.brand_name || ' — New Season Wholesale Women Collection',
 					'subtitle', 'Full size-run packs, Private Label & Contract manufacturing directly from the factory',
 					'badge_text', 'CATEGORY SPONSOR',
 					'cta_text', 'Explore Collection'
 				),
 				'ru', jsonb_build_object(
-					'title', b.name || ' — Новая оптовая женская коллекция',
+					'title', b.brand_name || ' — Новая оптовая женская коллекция',
 					'subtitle', 'Серийные пакеты, производство Private Label и прямые поставки с фабрики',
 					'badge_text', 'СПОНСОР КАТЕГОРИИ',
 					'cta_text', 'Смотреть коллекцию'
 				),
 				'ar', jsonb_build_object(
-					'title', b.name || ' — تشكيلة الموسم الجديد للملابس النسائية بالجملة',
+					'title', b.brand_name || ' — تشكيلة الموسم الجديد للملابس النسائية بالجملة',
 					'subtitle', 'باقات سيريه كاملة، تصنيع علامة خاصة وطلب مباشر من المصنع بدون عمولة',
 					'badge_text', 'راعي القسم',
 					'cta_text', 'استكشف التشكيلة'
@@ -162,7 +170,7 @@ func ensureSponsoredAndNewsletterSchema(ctx context.Context) {
 		FROM catalog.brands b
 		WHERE b.is_active = true
 		  AND NOT EXISTS (SELECT 1 FROM catalog.sponsored_slots WHERE placement = 'category_sponsor')
-		ORDER BY b.name ASC
+		ORDER BY b.brand_name ASC
 		LIMIT 1;
 		`
 		_, _ = db.Pool.Exec(ctx, seedSQL)
@@ -243,7 +251,7 @@ func (h *MarketplaceHandler) ListPublicSponsoredSlots(w http.ResponseWriter, r *
 			s.id::text,
 			s.placement,
 			s.brand_id::text,
-			COALESCE(b.name, '') AS brand_name,
+			COALESCE(b.brand_name, '') AS brand_name,
 			COALESCE(NULLIF(b.slug, ''), b.id::text, '') AS brand_slug,
 			COALESCE(b.is_verified, true) AS brand_verified,
 			COALESCE(b.company_type, 'uretici_toptanci') AS company_type,
@@ -361,7 +369,7 @@ func (h *MarketplaceHandler) TrackSponsoredSlotClick(w http.ResponseWriter, r *h
 
 	if brandID != nil && *brandID != "" {
 		_, _ = db.Pool.Exec(ctx, `
-			INSERT INTO analytics.brand_events (brand_id, event_type, visitor_country_code, source_page)
+			INSERT INTO analytics.brand_events (brand_id, event_type, country_code, referrer_host)
 			VALUES ($1::uuid, 'profile_view', 'TR', 'sponsored_slot')
 		`, *brandID)
 	}
@@ -443,7 +451,7 @@ func (h *MarketplaceHandler) ListAdminSponsoredSlots(w http.ResponseWriter, r *h
 			s.id::text,
 			s.placement,
 			s.brand_id::text,
-			COALESCE(b.name, '') AS brand_name,
+			COALESCE(b.brand_name, '') AS brand_name,
 			COALESCE(NULLIF(b.slug, ''), b.id::text, '') AS brand_slug,
 			COALESCE(b.is_verified, true) AS brand_verified,
 			COALESCE(b.company_type, 'uretici_toptanci') AS company_type,
@@ -471,6 +479,7 @@ func (h *MarketplaceHandler) ListAdminSponsoredSlots(w http.ResponseWriter, r *h
 		FROM catalog.sponsored_slots s
 		LEFT JOIN catalog.brands b ON b.id = s.brand_id
 		ORDER BY s.priority ASC, s.created_at DESC
+		LIMIT 500
 	`)
 	if err != nil {
 		writeMarketplaceJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -542,7 +551,7 @@ func (h *MarketplaceHandler) CreateAdminSponsoredSlot(w http.ResponseWriter, r *
 		Notes        string  `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
+		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": errMsgInvalidPayload})
 		return
 	}
 
@@ -620,7 +629,7 @@ func (h *MarketplaceHandler) UpdateAdminSponsoredSlot(w http.ResponseWriter, r *
 		Fee      *float64 `json:"fee_amount"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
+		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": errMsgInvalidPayload})
 		return
 	}
 
@@ -684,7 +693,7 @@ func (h *MarketplaceHandler) GetAdminNewsletterOverview(w http.ResponseWriter, r
 	campRows, campErr := db.Pool.Query(ctx, `
 		SELECT
 			c.id::text, c.subject, c.target_lang, c.content_summary,
-			c.sponsor_brand_id::text, COALESCE(b.name, '') AS sponsor_name,
+			c.sponsor_brand_id::text, COALESCE(b.brand_name, '') AS sponsor_name,
 			c.recipient_count, c.status, c.sent_at
 		FROM catalog.newsletter_campaigns c
 		LEFT JOIN catalog.brands b ON b.id = c.sponsor_brand_id
@@ -733,7 +742,7 @@ func (h *MarketplaceHandler) CreateAdminNewsletterCampaign(w http.ResponseWriter
 		SponsorBrandID string `json:"sponsor_brand_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
+		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": errMsgInvalidPayload})
 		return
 	}
 

@@ -81,15 +81,16 @@ type ExecutiveDashboardStats struct {
 	PendingApplications []DashboardApplicationSummary `json:"pending_applications"`
 }
 
-// GetDashboardStats aggregates all executive KPIs for the admin dashboard
+// GetDashboardStats aggregates all executive KPIs for the admin dashboard.
 func (h *AdminDashboardHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		http.Error(w, errJSONMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
+	ensureAnalyticsSchema(ctx)
 
 	stats := ExecutiveDashboardStats{
 		ExchangeRates:       []DashboardExchangeRate{},
@@ -104,40 +105,74 @@ func (h *AdminDashboardHandler) GetDashboardStats(w http.ResponseWriter, r *http
 	h.loadRecentOrders(ctx, &stats)
 	h.loadPendingApplications(ctx, &stats)
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set(headerContentType, "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(stats)
 }
 
 func (h *AdminDashboardHandler) loadFinancials(ctx context.Context, stats *ExecutiveDashboardStats) {
 	finQuery := `
-		SELECT 
+		WITH latest_rates AS (
+			SELECT DISTINCT ON (UPPER(currency_code))
+				UPPER(currency_code) AS code,
+				buying_rate
+			FROM catalog.exchange_rates
+			ORDER BY UPPER(currency_code), publication_date DESC
+		),
+		orders_norm AS (
+			SELECT
+				o.order_status,
+				CASE
+					WHEN UPPER(COALESCE(o.order_status, '')) = 'CANCELLED' THEN 0::numeric
+					WHEN UPPER(COALESCE(o.currency, 'TRY')) NOT IN ('TRY', 'TL', '') THEN
+						o.total_amount * COALESCE((SELECT lr.buying_rate FROM latest_rates lr WHERE lr.code = UPPER(o.currency)), 1.0)
+					WHEN EXISTS (SELECT 1 FROM catalog.order_items oi WHERE oi.order_id = o.id) THEN
+						COALESCE((
+							SELECT SUM(
+								oi.price_at_purchase * oi.quantity * CASE
+									WHEN UPPER(COALESCE(p.currency, 'TRY')) IN ('TRY', 'TL', '') THEN 1.0
+									ELSE COALESCE((SELECT lr2.buying_rate FROM latest_rates lr2 WHERE lr2.code = UPPER(p.currency)), 1.0)
+								END
+							)
+							FROM catalog.order_items oi
+							LEFT JOIN catalog.products p ON p.id = oi.product_id
+							WHERE oi.order_id = o.id
+						), o.total_amount)
+					ELSE o.total_amount
+				END AS try_revenue
+			FROM catalog.orders o
+		)
+		SELECT
 			COUNT(*),
-			COALESCE(SUM(total_amount), 0),
-			COUNT(*) FILTER (WHERE order_status = 'PENDING'),
+			COALESCE(SUM(try_revenue)::float8, 0),
+			COUNT(*) FILTER (WHERE order_status IN ('PENDING', 'PENDING_PAYMENT')),
 			COUNT(*) FILTER (WHERE order_status = 'APPROVED'),
-			COUNT(*) FILTER (WHERE order_status = 'SHIPPED')
-		FROM catalog.orders
+			COUNT(*) FILTER (WHERE order_status = 'SHIPPED'),
+			COUNT(*) FILTER (WHERE UPPER(COALESCE(order_status, '')) <> 'CANCELLED')
+		FROM orders_norm
 	`
+	var nonCancelledOrders int
 	_ = db.Pool.QueryRow(ctx, finQuery).Scan(
 		&stats.Financials.TotalOrders,
 		&stats.Financials.TotalRevenue,
 		&stats.Financials.PendingOrders,
 		&stats.Financials.ApprovedOrders,
 		&stats.Financials.ShippedOrders,
+		&nonCancelledOrders,
 	)
-	if stats.Financials.TotalOrders > 0 {
-		stats.Financials.AvgOrderValue = stats.Financials.TotalRevenue / float64(stats.Financials.TotalOrders)
+	stats.Financials.TotalRevenue = round2(stats.Financials.TotalRevenue)
+	if nonCancelledOrders > 0 {
+		stats.Financials.AvgOrderValue = round2(stats.Financials.TotalRevenue / float64(nonCancelledOrders))
 	}
 }
 
 func (h *AdminDashboardHandler) loadCatalogAndApps(ctx context.Context, stats *ExecutiveDashboardStats) {
 	_ = db.Pool.QueryRow(ctx, `
-		SELECT COUNT(*), COALESCE(SUM(total_stock), 0)
+		SELECT COUNT(*), COALESCE(SUM(stock), 0)
 		FROM catalog.products
 		WHERE is_active = true
 	`).Scan(&stats.Catalog.ActiveProducts, &stats.Catalog.TotalStockUnits)
 
-	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.brands`).Scan(&stats.Catalog.ActiveBrands)
+	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.brands WHERE is_active = true`).Scan(&stats.Catalog.ActiveBrands)
 
 	_ = db.Pool.QueryRow(ctx, `
 		SELECT COUNT(*) 
@@ -148,16 +183,21 @@ func (h *AdminDashboardHandler) loadCatalogAndApps(ctx context.Context, stats *E
 
 func (h *AdminDashboardHandler) loadTraffic(ctx context.Context, stats *ExecutiveDashboardStats) {
 	_ = db.Pool.QueryRow(ctx, `
-		SELECT COUNT(DISTINCT session_id) 
-		FROM analytics.page_views 
-		WHERE created_at >= NOW() - INTERVAL '15 minutes'
-	`).Scan(&stats.Traffic.LiveVisitors15m)
-
-	_ = db.Pool.QueryRow(ctx, `
-		SELECT COUNT(DISTINCT session_id), COUNT(*) 
-		FROM analytics.page_views 
-		WHERE created_at >= CURRENT_DATE
-	`).Scan(&stats.Traffic.TodayVisitors, &stats.Traffic.TodayPageViews)
+		SELECT
+			COALESCE(COUNT(DISTINCT CASE WHEN created_at >= NOW() - INTERVAL '15 minutes' THEN visitor_id END), 0),
+			COALESCE(COUNT(DISTINCT CASE WHEN (created_at AT TIME ZONE 'Europe/Istanbul')::date = (NOW() AT TIME ZONE 'Europe/Istanbul')::date THEN visitor_id END), 0),
+			COALESCE(COUNT(CASE WHEN (created_at AT TIME ZONE 'Europe/Istanbul')::date = (NOW() AT TIME ZONE 'Europe/Istanbul')::date THEN 1 END), 0)
+		FROM analytics.page_views
+		WHERE COALESCE(is_bot, false) = false
+		  AND created_at >= LEAST(
+		      NOW() - INTERVAL '15 minutes',
+		      (DATE_TRUNC('day', NOW() AT TIME ZONE 'Europe/Istanbul') AT TIME ZONE 'Europe/Istanbul')
+		  )
+	`).Scan(
+		&stats.Traffic.LiveVisitors15m,
+		&stats.Traffic.TodayVisitors,
+		&stats.Traffic.TodayPageViews,
+	)
 }
 
 func (h *AdminDashboardHandler) loadExchangeRates(ctx context.Context, stats *ExecutiveDashboardStats) {
@@ -188,10 +228,20 @@ func (h *AdminDashboardHandler) loadRecentOrders(ctx context.Context, stats *Exe
 		SELECT 
 			o.id,
 			o.order_number,
-			COALESCE(TRIM(CONCAT(u.first_name, ' ', u.last_name)), 'B2B Müşterisi') as customer_name,
-			COALESCE(u.email, '') as customer_email,
+			COALESCE(NULLIF(TRIM(o.customer_name), ''), NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), 'B2B Müşterisi') AS customer_name,
+			COALESCE(NULLIF(o.customer_email, ''), COALESCE(u.email, '')) AS customer_email,
 			o.total_amount,
-			'TRY' as currency,
+			COALESCE(
+				NULLIF(UPPER(o.currency), 'TRY'),
+				(
+					SELECT UPPER(p.currency)
+					FROM catalog.order_items oi
+					JOIN catalog.products p ON p.id = oi.product_id
+					WHERE oi.order_id = o.id AND p.currency IS NOT NULL AND p.currency <> ''
+					LIMIT 1
+				),
+				'TRY'
+			) AS currency,
 			o.payment_method,
 			o.order_status,
 			o.created_at
@@ -233,8 +283,8 @@ func (h *AdminDashboardHandler) loadPendingApplications(ctx context.Context, sta
 			contact_name,
 			email,
 			phone,
-			COALESCE(city, '') as city,
-			COALESCE(category, '') as category,
+			COALESCE(city, '') AS city,
+			COALESCE(category, '') AS category,
 			status,
 			created_at
 		FROM catalog.supplier_applications

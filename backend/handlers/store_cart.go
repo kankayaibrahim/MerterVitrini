@@ -217,41 +217,12 @@ func (h *CartHandler) AddToCart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Insert or update cart item
+	// Insert or update cart item atomically via idx_cart_items_cart_product_uq
 	_, err = tx.Exec(ctx, `
 		INSERT INTO catalog.cart_items (cart_id, product_id, quantity)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (cart_id, product_id) DO UPDATE SET quantity = catalog.cart_items.quantity + EXCLUDED.quantity
 	`, cartID, req.ProductID, req.Quantity)
-	
-	// Wait! We don't have a unique constraint on (cart_id, product_id) in the migration DDL.
-	// Let's modify the self-provisioning script or add a check/delete/insert to be safe.
-	// Actually, we can check if it exists:
-	if err != nil {
-		// If the constraint does not exist, ON CONFLICT will fail.
-		// Let's do it manually instead of ON CONFLICT to avoid constraint assumptions!
-		var existingID string
-		var existingQty int
-		findErr := tx.QueryRow(ctx, `
-			SELECT id, quantity FROM catalog.cart_items WHERE cart_id = $1 AND product_id = $2
-		`, cartID, req.ProductID).Scan(&existingID, &existingQty)
-		
-		switch findErr {
-		case pgx.ErrNoRows:
-			_, err = tx.Exec(ctx, `
-				INSERT INTO catalog.cart_items (cart_id, product_id, quantity)
-				VALUES ($1, $2, $3)
-			`, cartID, req.ProductID, req.Quantity)
-		case nil:
-			_, err = tx.Exec(ctx, `
-				UPDATE catalog.cart_items
-				SET quantity = $1
-				WHERE id = $2
-			`, existingQty + req.Quantity, existingID)
-		default:
-			err = findErr
-		}
-	}
 
 	if err != nil {
 		log.Printf("[STORE CART ERROR] Failed to add item to cart: %v", err)
@@ -301,10 +272,12 @@ func (h *CartHandler) UpdateCartItem(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Update item only if it belongs to user's cart
+	// Update item only if it belongs to user's cart; reset negotiated custom_unit_price if quantity is reduced
 	res, err := db.Pool.Exec(ctx, `
 		UPDATE catalog.cart_items
-		SET quantity = $1
+		SET custom_unit_price = CASE WHEN custom_unit_price IS NOT NULL AND $1 < quantity THEN NULL ELSE custom_unit_price END,
+		    offer_message_id   = CASE WHEN custom_unit_price IS NOT NULL AND $1 < quantity THEN NULL ELSE offer_message_id END,
+		    quantity          = $1
 		WHERE id = $2 AND cart_id IN (SELECT id FROM catalog.carts WHERE user_id = $3)
 	`, req.Quantity, itemID, userID)
 

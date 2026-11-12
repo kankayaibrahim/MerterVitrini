@@ -1,6 +1,18 @@
 import React from "react";
-import { Metadata } from "next";
+import type { Metadata } from "next";
 import StorefrontLayout from "@/components/store/StorefrontLayout";
+import { getProductTitle } from "@/app/i18n";
+import {
+  buildPrefixedAlternates,
+  fetchSsrCategories,
+  fetchSsrProducts,
+  GLOBAL_B2B_SEO_MATRIX,
+  normalizeSeoLang,
+  OG_LOCALE_BY_LANG,
+  safeJsonLd,
+  SITE_ORIGIN,
+  SUPPORTED_SEO_LANGS,
+} from "@/utils/seoHelpers";
 
 interface PageProps {
   readonly params: Promise<{
@@ -8,96 +20,123 @@ interface PageProps {
   }>;
 }
 
-// Generate static routes for all active language prefixes at compile time
 export function generateStaticParams() {
-  return [
-    { categoryPrefix: "tr" },
-    { categoryPrefix: "en" },
-    { categoryPrefix: "pl" },
-    { categoryPrefix: "bg" },
-    { categoryPrefix: "ar" },
-    { categoryPrefix: "ru" },
-    { categoryPrefix: "de" },
-    { categoryPrefix: "fr" }
-  ];
+  return SUPPORTED_SEO_LANGS.map((categoryPrefix) => ({ categoryPrefix }));
 }
 
-// Generate localized SEO metadata for each language prefix for the All Products page
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
-
-  const titles: Record<string, string> = {
-    tr: "Toptan Giyim Kataloğu | Merter Vitrini B2B",
-    en: "Wholesale Clothing Catalog | Merter Vitrini B2B",
-    pl: "Hurtownia Odzieży Katalog | Merter Vitrini B2B",
-    bg: "Каталог за Дрехи на Едро | Merter Vitrini B2B",
-    ar: "كتالوج الملابس بالجملة | مرتر فيتريني B2B",
-    ru: "Каталог Оптовой Одежды | Merter Vitrini B2B",
-    de: "Großhandel Bekleidungskatalog | Merter Vitrini B2B",
-    fr: "Catalogue de Vêtements en Gros | Merter Vitrini B2B"
-  };
-
-  const descs: Record<string, string> = {
-    tr: "Merter'in en seçkin üreticilerinin ihraç fazlası ve yeni sezon toptan hazır giyim koleksiyonlarını en uygun fiyatlarla inceleyin.",
-    en: "Browse surplus and new season wholesale apparel collections from Istanbul Merter's leading manufacturers.",
-    pl: "Przeglądaj hurtowe kolekcje odzieży damskiej i męskiej od wiodących producentów ze Stambułu w najlepszych cenach.",
-    bg: "Разгледайте колекциите от дрехи на едро от водещи производители в Истанбул Мертер на най-добри цени.",
-    ar: "تصفح مجموعات ملابس الجملة للموسم الجديد من كبار المصنعين في مرتر اسطنبول بأفضل الأسعار.",
-    ru: "Просматривайте коллекции оптовой одежды нового сезона от ведущих стамбульских производителей из Мертера.",
-    de: "Durchsuchen Sie Großhandelskollektionen für Damen- und Herrenmode von führenden Herstellern aus Istanbul Merter.",
-    fr: "Découvrez les collections de prêt-à-porter en gros de saison des meilleurs fabricants d'Istanbul Merter."
-  };
-
-  const title = titles[categoryPrefix] || titles.en;
-  const desc = descs[categoryPrefix] || descs.en;
-
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/tum-urunler`;
-  const languagesList = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
-  const alternatesLanguages = Object.fromEntries(
-    languagesList
-      .filter((code) => code !== "__proto__" && code !== "constructor")
-      .map((code) => [code, `https://mertervitrini.com.tr/${code}/tum-urunler`])
-  );
+  const lang = normalizeSeoLang(categoryPrefix, "tr");
+  const copy = GLOBAL_B2B_SEO_MATRIX[lang];
+  const alternates = buildPrefixedAlternates("tum-urunler", lang);
 
   return {
-    title: `${title}`,
-    description: desc,
-    alternates: {
-      canonical: canonicalUrl,
-      languages: alternatesLanguages,
-    },
+    title: copy.allProductsTitle,
+    description: copy.allProductsDescription,
+    keywords: copy.keywords,
+    alternates,
     openGraph: {
-      title: `${title}`,
-      description: desc,
-      url: canonicalUrl,
-      siteName: "Merter Vitrini",
-      locale: categoryPrefix === "tr" ? "tr_TR" : "en_US",
+      title: copy.allProductsTitle,
+      description: copy.allProductsDescription,
+      url: alternates.canonical,
+      siteName: "Merter Vitrini B2B",
+      locale: OG_LOCALE_BY_LANG[lang],
       type: "website",
-    }
+      images: [
+        {
+          url: `${SITE_ORIGIN}/og-image.jpg`,
+          width: 1200,
+          height: 630,
+          alt: copy.allProductsTitle,
+        },
+      ],
+    },
   };
 }
 
-export default async function LocalizedTumUrunlerPage({ params }: Readonly<PageProps>) {
+export default async function LocalizedTumUrunlerPage({
+  params,
+}: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
+  const lang = normalizeSeoLang(categoryPrefix, "tr");
+  const copy = GLOBAL_B2B_SEO_MATRIX[lang];
+  const alternates = buildPrefixedAlternates("tum-urunler", lang);
 
-  // Map categoryPrefix to defaultLang
-  const prefixToLangMap: Record<string, string> = {
-    tr: "tr",
-    en: "en",
-    pl: "pl",
-    bg: "bg",
-    ar: "ar",
-    ru: "ru",
-    de: "de",
-    fr: "fr"
+  const [categories, productsPayload] = await Promise.all([
+    fetchSsrCategories(),
+    fetchSsrProducts("?limit=24&offset=0&sort_by=newest", 180),
+  ]);
+
+  const itemListElements = productsPayload.products
+    .slice(0, 24)
+    .map((prod, idx) => {
+      const prodUrl =
+        lang === "tr"
+          ? `${SITE_ORIGIN}/product/${prod.slug || prod.id}`
+          : `${SITE_ORIGIN}/product/${prod.slug || prod.id}?lang=${lang}`;
+      return {
+        "@type": "ListItem",
+        position: idx + 1,
+        url: prodUrl,
+        name: getProductTitle(prod, lang),
+      };
+    });
+
+  const catalogJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        name: copy.allProductsTitle,
+        url: alternates.canonical,
+        description: copy.allProductsDescription,
+        inLanguage: lang,
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: copy.homeLabel,
+            item: `${SITE_ORIGIN}/${lang}`,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: copy.allProductsLabel,
+            item: alternates.canonical,
+          },
+        ],
+      },
+      ...(itemListElements.length > 0
+        ? [
+            {
+              "@type": "ItemList",
+              name: copy.allProductsTitle,
+              numberOfItems: productsPayload.total,
+              itemListElement: itemListElements,
+            },
+          ]
+        : []),
+    ],
   };
 
-  const defaultLang = prefixToLangMap[categoryPrefix] || "tr";
-
   return (
-    <StorefrontLayout 
-      mode="catalog" 
-      defaultLang={defaultLang} 
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(catalogJsonLd) }}
+      />
+      <StorefrontLayout
+        mode="catalog"
+        defaultLang={lang}
+        preFetchedCategories={categories}
+        initialProducts={productsPayload.products}
+        initialTotalProducts={productsPayload.total}
+      />
+    </>
   );
 }

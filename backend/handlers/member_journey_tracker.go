@@ -108,23 +108,73 @@ type MemberActivityInput struct {
 	IPAddress     string
 }
 
-// TrackMemberEventRequest is sent by storefront/mobile clients for rich actions (cart_add, page_dwell, etc.).
+// TrackMemberEventRequest is sent by storefront/mobile clients for rich actions (cart_add, page_dwell, search_click, etc.).
 type TrackMemberEventRequest struct {
-	VisitorID     string         `json:"visitor_id"`
-	SessionID     string         `json:"session_id"`
-	AuthToken     string         `json:"auth_token,omitempty"`
-	EventType     string         `json:"event_type"`
-	EventCategory string         `json:"event_category,omitempty"`
-	Title         string         `json:"title,omitempty"`
-	Subtitle      string         `json:"subtitle,omitempty"`
-	URLPath       string         `json:"url_path,omitempty"`
-	EntityType    string         `json:"entity_type,omitempty"`
-	EntityID      string         `json:"entity_id,omitempty"`
-	ImageURL      string         `json:"image_url,omitempty"`
-	DurationSec   int            `json:"duration_sec,omitempty"`
-	ScreenWidth   int            `json:"screen_width,omitempty"`
-	Language      string         `json:"language,omitempty"`
-	Metadata      map[string]any `json:"metadata,omitempty"`
+	VisitorID        string         `json:"visitor_id"`
+	SessionID        string         `json:"session_id"`
+	AuthToken        string         `json:"auth_token,omitempty"`
+	EventType        string         `json:"event_type"`
+	EventCategory    string         `json:"event_category,omitempty"`
+	Title            string         `json:"title,omitempty"`
+	Subtitle         string         `json:"subtitle,omitempty"`
+	URLPath          string         `json:"url_path,omitempty"`
+	EntityType       string         `json:"entity_type,omitempty"`
+	EntityID         string         `json:"entity_id,omitempty"`
+	ImageURL         string         `json:"image_url,omitempty"`
+	DurationSec      int            `json:"duration_sec,omitempty"`
+	ScrollDepthPct   int            `json:"scroll_depth_pct,omitempty"`
+	LCPMs            int            `json:"lcp_ms,omitempty"`
+	CLSScore         float64        `json:"cls_score,omitempty"`
+	INPMs            int            `json:"inp_ms,omitempty"`
+	TTFBMs           int            `json:"ttfb_ms,omitempty"`
+	ScreenWidth      int            `json:"screen_width,omitempty"`
+	Language         string         `json:"language,omitempty"`
+	QueryText        string         `json:"query_text,omitempty"`
+	CategorySlug     string         `json:"category_slug,omitempty"`
+	ResultsCount     int            `json:"results_count,omitempty"`
+	HasFilters       bool           `json:"has_filters,omitempty"`
+	ClickedProductID string         `json:"clicked_product_id,omitempty"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
+}
+
+// TrackSearchEventRequest represents a dedicated search result or search click payload.
+type TrackSearchEventRequest struct {
+	VisitorID        string `json:"visitor_id"`
+	SessionID        string `json:"session_id"`
+	AuthToken        string `json:"auth_token,omitempty"`
+	EventType        string `json:"event_type,omitempty"` // "search_result" or "search_click"
+	QueryText        string `json:"query_text"`
+	Language         string `json:"language,omitempty"`
+	CountryCode      string `json:"country_code,omitempty"`
+	CategorySlug     string `json:"category_slug,omitempty"`
+	ResultsCount     int    `json:"results_count,omitempty"`
+	HasFilters       bool   `json:"has_filters,omitempty"`
+	ClickedProductID string `json:"clicked_product_id,omitempty"`
+}
+
+type dwellUpdateInput struct {
+	VisitorID      string
+	UserID         string
+	URLPath        string
+	DurationSec    int
+	ScrollDepthPct int
+	LCPMs          int
+	CLSScore       float64
+	INPMs          int
+	TTFBMs         int
+}
+
+type searchLogEntry struct {
+	VisitorID        string
+	SessionID        string
+	UserID           string
+	QueryText        string
+	LanguageCode     string
+	CountryCode      string
+	CategorySlug     string
+	ResultsCount     int
+	HasFilters       bool
+	ClickedProductID string
 }
 
 var supportedLangSegments = map[string]bool{
@@ -132,15 +182,22 @@ var supportedLangSegments = map[string]bool{
 	"de": true, "fr": true, "pl": true, "bg": true,
 }
 
+const (
+	labelAboutUsPage       = "Hakkımızda"
+	labelPrivacyPolicyPage = "Gizlilik Politikası"
+	eventTypeSearchClick   = "search_click"
+	eventTypeSearchResult  = "search_result"
+)
+
 var knownPageSlugLabels = map[string]string{
-	"hakkimizda":                "Hakkımızda",
-	"about":                     "Hakkımızda",
-	"about-us":                  "Hakkımızda",
+	"hakkimizda":                labelAboutUsPage,
+	"about":                     labelAboutUsPage,
+	"about-us":                  labelAboutUsPage,
 	"kurumsal":                  "Kurumsal Tanıtım",
 	"vizyon-misyon":             "Vizyon & Misyon",
 	"kvkk":                      "KVKK Aydınlatma Metni",
-	"gizlilik-politikasi":       "Gizlilik Politikası",
-	"privacy-policy":            "Gizlilik Politikası",
+	"gizlilik-politikasi":       labelPrivacyPolicyPage,
+	"privacy-policy":            labelPrivacyPolicyPage,
 	"kullanim-kosullari":        "Kullanım Koşulları",
 	"mesafeli-satis-sozlesmesi": "Mesafeli Satış Sözleşmesi",
 	"iade-degisim":              "İade & Değişim Koşulları",
@@ -176,7 +233,7 @@ func StitchVisitorToMember(ctx context.Context, userID, visitorID string) {
 	if db.Pool == nil || userID == "" || visitorID == "" {
 		return
 	}
-	ensureMemberActivitySchema(ctx)
+	ensureAnalyticsSchema(ctx)
 
 	_, _ = db.Pool.Exec(ctx, `
 		INSERT INTO analytics.user_visitor_links (user_id, visitor_id, first_linked_at, last_seen_at)
@@ -192,6 +249,12 @@ func StitchVisitorToMember(ctx context.Context, userID, visitorID string) {
 
 	_, _ = db.Pool.Exec(ctx, `
 		UPDATE analytics.member_events
+		SET user_id = $1
+		WHERE visitor_id = $2 AND (user_id IS NULL OR user_id = '')
+	`, userID, visitorID)
+
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE analytics.search_logs
 		SET user_id = $1
 		WHERE visitor_id = $2 AND (user_id IS NULL OR user_id = '')
 	`, userID, visitorID)
@@ -214,12 +277,18 @@ func lookupLinkedUserByVisitor(ctx context.Context, visitorID string) string {
 
 // RecordMemberActivityAsync enriches request metadata and writes a member activity event asynchronously.
 func RecordMemberActivityAsync(r *http.Request, input MemberActivityInput) {
+	if isSSRPrefetchRequest(r) {
+		return
+	}
 	var ua, ip, countryCode, visitorHeader string
 	if r != nil {
 		ua = r.UserAgent()
+		if isBot, _ := classifyVisitorBot(r, ua); isBot {
+			return
+		}
 		ip = getClientIP(r)
 		countryCode, _ = resolveVisitorCountryAndLang(r, input.CountryCode, "")
-		visitorHeader = strings.TrimSpace(r.Header.Get("X-Visitor-Id"))
+		visitorHeader = strings.TrimSpace(r.Header.Get(headerVisitorID))
 	}
 	if input.VisitorID == "" && visitorHeader != "" {
 		input.VisitorID = visitorHeader
@@ -318,7 +387,7 @@ func defaultCategoryForEventType(eventType string) string {
 		return "catalog"
 	case "whatsapp_click", "phone_click", "email_click", "website_click", "chat_start", "chat_message", "rfq_create":
 		return "engagement"
-	case "cart_add", "cart_remove", "cart_excel_export", "inquiry_submit", "order_create", "payment_notify":
+	case "cart_add", "cart_remove", "cart_excel_export", "inquiry_submit", "order_create", "payment_notify", "pack_calc", "price_unlock":
 		return "commerce"
 	default:
 		return "navigation"
@@ -610,88 +679,125 @@ func resolveStorePathActivity(ctx context.Context, rawPath, rawURL, pageTitle, r
 
 	segs := stripLangPrefixSegments(rawPath)
 	if len(segs) == 0 {
-		sub := ""
-		if referrerHost != "" && referrerHost != directReferrerLabel {
-			sub = "Kaynak: " + referrerHost
-		}
-		return resolvedPathActivity{
-			EventType:     "page_view",
-			EventCategory: "navigation",
-			Title:         "Ana Sayfa vitrininde gezindi",
-			Subtitle:      sub,
-			EntityType:    "page",
-			EntityID:      "home",
-		}
+		return buildHomePageActivity(referrerHost)
 	}
-
-	first := strings.ToLower(segs[0])
-	if first == "product" && len(segs) >= 2 {
-		if act, ok := resolveProductPathActivity(ctx, segs[1]); ok {
+	if len(segs) >= 2 {
+		if act, ok := resolveSegmentedStoreRoute(ctx, segs); ok {
 			return act
 		}
 	}
-	if first == "ureticiler" && len(segs) >= 2 {
-		isIntro := len(segs) >= 3 && strings.EqualFold(segs[2], "tanitim")
-		if act, ok := resolveBrandPathActivity(ctx, segs[1], isIntro); ok {
-			return act
+	if len(segs) == 1 {
+		if staticAct, ok := resolveStaticStoreRoute(segs[0]); ok {
+			return staticAct
 		}
-	}
-	if first == "pages" && len(segs) >= 2 {
-		return resolveCmsPagePathActivity(ctx, segs[1])
-	}
-	if first == "blog" && len(segs) >= 2 {
-		return resolveBlogPathActivity(ctx, segs[1])
-	}
-	if staticAct, ok := resolveStaticStoreRoute(first); ok && len(segs) == 1 {
-		return staticAct
 	}
 
 	return resolveCategoryPathActivity(ctx, segs, pageTitle)
 }
 
-// TrackMemberEvent handles POST /api/v1/store/member-events for rich storefront actions (cart_add, page_dwell, etc.).
+func buildHomePageActivity(referrerHost string) resolvedPathActivity {
+	sub := ""
+	if referrerHost != "" && referrerHost != directReferrerLabel {
+		sub = "Kaynak: " + referrerHost
+	}
+	return resolvedPathActivity{
+		EventType:     "page_view",
+		EventCategory: "navigation",
+		Title:         "Ana Sayfa vitrininde gezindi",
+		Subtitle:      sub,
+		EntityType:    "page",
+		EntityID:      "home",
+	}
+}
+
+func resolveSegmentedStoreRoute(ctx context.Context, segs []string) (resolvedPathActivity, bool) {
+	switch strings.ToLower(segs[0]) {
+	case "product":
+		return resolveProductPathActivity(ctx, segs[1])
+	case "ureticiler":
+		isIntro := len(segs) >= 3 && strings.EqualFold(segs[2], "tanitim")
+		return resolveBrandPathActivity(ctx, segs[1], isIntro)
+	case "pages":
+		return resolveCmsPagePathActivity(ctx, segs[1]), true
+	case "blog":
+		return resolveBlogPathActivity(ctx, segs[1]), true
+	default:
+		return resolvedPathActivity{}, false
+	}
+}
+
+func hasDwellOrVitalsPayload(req *TrackMemberEventRequest) bool {
+	return req.DurationSec > 0 ||
+		req.ScrollDepthPct > 0 ||
+		req.LCPMs > 0 ||
+		req.CLSScore > 0 ||
+		req.INPMs > 0 ||
+		req.TTFBMs > 0
+}
+
+// TrackMemberEvent handles POST /api/v1/store/member-events for rich storefront actions (cart_add, page_dwell, search_click, etc.).
 func (h *AnalyticsHandler) TrackMemberEvent(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Visitor-Id")
+	setAnalyticsCORSHeaders(w)
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
+	if isSSRPrefetchRequest(r) {
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		_, _ = w.Write([]byte(jsonIgnoredOK))
+		return
+	}
+	if isBot, _ := classifyVisitorBot(r, r.UserAgent()); isBot {
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		_, _ = w.Write([]byte(jsonIgnoredOK))
+		return
+	}
+
 	var req TrackMemberEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"invalid json"}`, http.StatusBadRequest)
+		http.Error(w, errJSONInvalidJSON, http.StatusBadRequest)
 		return
 	}
 
 	userID := resolveAuthenticatedMemberID(r, req.AuthToken)
 	ip := getClientIP(r)
-	visitorID := strings.TrimSpace(req.VisitorID)
-	if visitorID == "" {
-		visitorID = hashIP(ip)
-	}
+	visitorID := firstNonEmptyStr(req.VisitorID, r.Header.Get(headerVisitorID), hashIP(ip))
 	sessionID := firstNonEmptyStr(req.SessionID, visitorID)
-	deviceType, browser, osName := parseDeviceAndBrowser(r.UserAgent(), req.ScreenWidth)
-	countryCode, _ := resolveVisitorCountryAndLang(r, "", req.Language)
+	countryCode, langCode := resolveVisitorCountryAndLang(r, "", req.Language)
 
-	// Special lightweight dwell update when user leaves a page
-	if req.EventType == "page_dwell" {
-		if req.DurationSec > 0 && req.URLPath != "" {
-			safe.Go("Update Page Dwell Duration", func() {
-				updateLatestPageDwell(visitorID, userID, req.URLPath, req.DurationSec)
+	if req.EventType == "page_dwell" || req.EventType == "web_vitals" {
+		if req.URLPath != "" && hasDwellOrVitalsPayload(&req) {
+			in := dwellUpdateInput{
+				VisitorID:      visitorID,
+				UserID:         userID,
+				URLPath:        req.URLPath,
+				DurationSec:    req.DurationSec,
+				ScrollDepthPct: req.ScrollDepthPct,
+				LCPMs:          req.LCPMs,
+				CLSScore:       req.CLSScore,
+				INPMs:          req.INPMs,
+				TTFBMs:         req.TTFBMs,
+			}
+			safe.Go("Update Page Dwell & Web Vitals", func() {
+				updateLatestPageDwell(in)
 			})
 		}
 		w.Header().Set(headerContentType, mimeApplicationJSON)
-		_, _ = w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(jsonOK))
 		return
 	}
 
-	title := strings.TrimSpace(req.Title)
-	if title == "" {
-		title = fallbackEventTitle(req.EventType, req.Subtitle)
+	if req.EventType == eventTypeSearchResult || req.EventType == eventTypeSearchClick {
+		dispatchMemberSearchEvent(&req, visitorID, sessionID, userID, langCode, countryCode)
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		_, _ = w.Write([]byte(jsonOK))
+		return
 	}
+
+	deviceType, browser, osName := parseDeviceAndBrowser(r.UserAgent(), req.ScreenWidth)
+	title := firstNonEmptyStr(req.Title, fallbackEventTitle(req.EventType, req.Subtitle))
 
 	RecordMemberActivityAsync(r, MemberActivityInput{
 		UserID:        userID,
@@ -715,49 +821,305 @@ func (h *AnalyticsHandler) TrackMemberEvent(w http.ResponseWriter, r *http.Reque
 	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
-	_, _ = w.Write([]byte(`{"ok":true}`))
+	_, _ = w.Write([]byte(jsonOK))
 }
 
-func updateLatestPageDwell(visitorID, userID, urlPath string, durationSec int) {
-	if db.Pool == nil || durationSec <= 0 {
+func extractMetaStr(meta map[string]any, key string) string {
+	if meta == nil {
+		return ""
+	}
+	if raw, ok := meta[key]; ok {
+		if s, okStr := raw.(string); okStr {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
+func dispatchMemberSearchEvent(req *TrackMemberEventRequest, visitorID, sessionID, userID, langCode, countryCode string) {
+	queryText := firstNonEmptyStr(req.QueryText, extractMetaStr(req.Metadata, "query"), req.Subtitle)
+	clickedProd := firstNonEmptyStr(req.ClickedProductID, extractMetaStr(req.Metadata, "product_id"), req.EntityID)
+	catSlug := firstNonEmptyStr(req.CategorySlug, extractMetaStr(req.Metadata, "category_slug"))
+
+	entry := searchLogEntry{
+		VisitorID:        visitorID,
+		SessionID:        sessionID,
+		UserID:           userID,
+		QueryText:        queryText,
+		LanguageCode:     langCode,
+		CountryCode:      countryCode,
+		CategorySlug:     catSlug,
+		ResultsCount:     req.ResultsCount,
+		HasFilters:       req.HasFilters,
+		ClickedProductID: clickedProd,
+	}
+
+	if req.EventType == eventTypeSearchClick {
+		safe.Go("Persist Search Click", func() {
+			persistSearchClick(entry)
+		})
 		return
 	}
-	if durationSec > 3600 {
-		durationSec = 3600
+	safe.Go("Persist Search Log", func() {
+		persistSearchLogEntry(entry)
+	})
+}
+
+// TrackSearchClick handles POST /api/v1/store/search-events for storefront search result & click telemetry.
+func (h *AnalyticsHandler) TrackSearchClick(w http.ResponseWriter, r *http.Request) {
+	setAnalyticsCORSHeaders(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, errJSONMethodNotAllowed, http.StatusMethodNotAllowed)
+		return
+	}
+	if isSSRPrefetchRequest(r) {
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		_, _ = w.Write([]byte(jsonIgnoredOK))
+		return
+	}
+	if isBot, _ := classifyVisitorBot(r, r.UserAgent()); isBot {
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		_, _ = w.Write([]byte(jsonIgnoredOK))
+		return
+	}
+
+	var req TrackSearchEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, errJSONInvalidJSON, http.StatusBadRequest)
+		return
+	}
+
+	ip := getClientIP(r)
+	userID := resolveAuthenticatedMemberID(r, req.AuthToken)
+	visitorID := firstNonEmptyStr(req.VisitorID, r.Header.Get(headerVisitorID), hashIP(ip))
+	sessionID := firstNonEmptyStr(req.SessionID, visitorID)
+	countryCode, langCode := resolveVisitorCountryAndLang(r, req.CountryCode, req.Language)
+
+	entry := searchLogEntry{
+		VisitorID:        visitorID,
+		SessionID:        sessionID,
+		UserID:           userID,
+		QueryText:        req.QueryText,
+		LanguageCode:     langCode,
+		CountryCode:      countryCode,
+		CategorySlug:     req.CategorySlug,
+		ResultsCount:     req.ResultsCount,
+		HasFilters:       req.HasFilters,
+		ClickedProductID: req.ClickedProductID,
+	}
+
+	if req.EventType == eventTypeSearchClick || strings.TrimSpace(req.ClickedProductID) != "" {
+		safe.Go("Persist Search Click Endpoint", func() {
+			persistSearchClick(entry)
+		})
+	} else {
+		safe.Go("Persist Search Result Endpoint", func() {
+			persistSearchLogEntry(entry)
+		})
+	}
+
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	_, _ = w.Write([]byte(jsonOK))
+}
+
+func normalizeSearchQuery(raw string) string {
+	fields := strings.Fields(strings.ToLower(strings.TrimSpace(raw)))
+	return truncateStr(strings.Join(fields, " "), 250)
+}
+
+func recordStoreSearchLogAsync(r *http.Request, entry searchLogEntry) {
+	if isSSRPrefetchRequest(r) {
+		return
+	}
+	if r != nil {
+		if isBot, _ := classifyVisitorBot(r, r.UserAgent()); isBot {
+			return
+		}
+		if entry.VisitorID == "" {
+			entry.VisitorID = firstNonEmptyStr(r.Header.Get(headerVisitorID), hashIP(getClientIP(r)))
+		}
+		if entry.SessionID == "" {
+			entry.SessionID = entry.VisitorID
+		}
+		if entry.UserID == "" {
+			entry.UserID = resolveAuthenticatedMemberID(r, "")
+		}
+		country, lang := resolveVisitorCountryAndLang(r, entry.CountryCode, entry.LanguageCode)
+		entry.CountryCode = country
+		entry.LanguageCode = lang
+	}
+
+	safe.Go("Record Storefront Search Log", func() {
+		persistSearchLogEntry(entry)
+	})
+}
+
+func persistSearchLogEntry(entry searchLogEntry) {
+	if db.Pool == nil {
+		return
+	}
+	norm := normalizeSearchQuery(entry.QueryText)
+	if len(norm) < 2 {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	ensureAnalyticsSchema(ctx)
+
+	effectiveUserID := entry.UserID
+	if effectiveUserID == "" && entry.VisitorID != "" {
+		effectiveUserID = lookupLinkedUserByVisitor(ctx, entry.VisitorID)
+	}
+
+	var recentDuplicate bool
+	_ = db.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM analytics.search_logs
+			WHERE visitor_id = $1 AND normalized_query = $2
+			  AND created_at >= NOW() - INTERVAL '5 seconds'
+		)
+	`, truncateStr(entry.VisitorID, 64), norm).Scan(&recentDuplicate)
+	if recentDuplicate {
+		return
+	}
+
+	resultsCount := entry.ResultsCount
+	if resultsCount < 0 {
+		resultsCount = 0
+	}
+
+	_, _ = db.Pool.Exec(ctx, `
+		INSERT INTO analytics.search_logs (
+			visitor_id, session_id, user_id, query_text, normalized_query,
+			language_code, country_code, category_slug, results_count, has_filters, clicked_product_id
+		) VALUES (
+			$1, $2, NULLIF($3, ''), $4, $5,
+			$6, $7, $8, $9, $10, NULLIF($11, '')
+		)
+	`,
+		truncateStr(entry.VisitorID, 64),
+		truncateStr(entry.SessionID, 64),
+		truncateStr(effectiveUserID, 128),
+		truncateStr(entry.QueryText, 250),
+		norm,
+		firstNonEmptyStr(truncateStr(entry.LanguageCode, 10), defaultLangTR),
+		truncateStr(entry.CountryCode, 10),
+		truncateStr(entry.CategorySlug, 160),
+		resultsCount,
+		entry.HasFilters,
+		truncateStr(entry.ClickedProductID, 64),
+	)
+}
+
+func persistSearchClick(entry searchLogEntry) {
+	clickedID := truncateStr(entry.ClickedProductID, 64)
+	if db.Pool == nil || clickedID == "" {
+		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	ensureMemberActivitySchema(ctx)
+	ensureAnalyticsSchema(ctx)
 
-	if userID != "" && visitorID != "" {
-		StitchVisitorToMember(ctx, userID, visitorID)
+	norm := normalizeSearchQuery(entry.QueryText)
+	visitorID := truncateStr(entry.VisitorID, 64)
+	sessionID := truncateStr(entry.SessionID, 64)
+
+	tag, err := db.Pool.Exec(ctx, `
+		UPDATE analytics.search_logs
+		SET clicked_product_id = $1
+		WHERE id = (
+			SELECT id FROM analytics.search_logs
+			WHERE (visitor_id = $2 OR ($3 <> '' AND session_id = $3))
+			  AND ($4 = '' OR normalized_query = $4)
+			  AND created_at >= NOW() - INTERVAL '30 minutes'
+			ORDER BY created_at DESC
+			LIMIT 1
+		)
+	`, clickedID, visitorID, sessionID, norm)
+	if err == nil && tag.RowsAffected() > 0 {
+		return
+	}
+	if norm != "" {
+		persistSearchLogEntry(entry)
+	}
+}
+
+func clampIntRange(val, minVal, maxVal int) int {
+	if val < minVal {
+		return minVal
+	}
+	if val > maxVal {
+		return maxVal
+	}
+	return val
+}
+
+func clampFloatRange(val, minVal, maxVal float64) float64 {
+	if val < minVal {
+		return minVal
+	}
+	if val > maxVal {
+		return maxVal
+	}
+	return val
+}
+
+func updateLatestPageDwell(in dwellUpdateInput) {
+	if db.Pool == nil || strings.TrimSpace(in.URLPath) == "" {
+		return
+	}
+	durationSec := clampIntRange(in.DurationSec, 0, 3600)
+	scrollPct := clampIntRange(in.ScrollDepthPct, 0, 100)
+	lcpMs := clampIntRange(in.LCPMs, 0, 60000)
+	inpMs := clampIntRange(in.INPMs, 0, 60000)
+	ttfbMs := clampIntRange(in.TTFBMs, 0, 60000)
+	clsScore := clampFloatRange(in.CLSScore, 0, 10)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	ensureAnalyticsSchema(ctx)
+
+	if in.UserID != "" && in.VisitorID != "" {
+		StitchVisitorToMember(ctx, in.UserID, in.VisitorID)
+	}
+
+	if durationSec > 0 {
+		_, _ = db.Pool.Exec(ctx, `
+			UPDATE analytics.member_events
+			SET duration_sec = GREATEST(duration_sec, $1)
+			WHERE id = (
+				SELECT id FROM analytics.member_events
+				WHERE (visitor_id = $2 OR ($3 <> '' AND user_id = $3))
+				  AND url_path = $4
+				  AND created_at >= NOW() - INTERVAL '2 hours'
+				ORDER BY created_at DESC
+				LIMIT 1
+			)
+		`, durationSec, in.VisitorID, in.UserID, in.URLPath)
 	}
 
 	_, _ = db.Pool.Exec(ctx, `
-		UPDATE analytics.member_events
-		SET duration_sec = GREATEST(duration_sec, $1)
-		WHERE id = (
-			SELECT id FROM analytics.member_events
-			WHERE (visitor_id = $2 OR ($3 <> '' AND user_id = $3))
-			  AND url_path = $4
-			  AND created_at >= NOW() - INTERVAL '2 hours'
-			ORDER BY created_at DESC
-			LIMIT 1
-		)
-	`, durationSec, visitorID, userID, urlPath)
-
-	_, _ = db.Pool.Exec(ctx, `
 		UPDATE analytics.page_views
-		SET duration_sec = GREATEST(duration_sec, $1)
+		SET duration_sec = GREATEST(duration_sec, $1),
+		    scroll_depth_pct = GREATEST(scroll_depth_pct, $2::smallint),
+		    lcp_ms = CASE WHEN $3 > 0 THEN $3 ELSE lcp_ms END,
+		    cls_score = CASE WHEN $4 > 0 THEN $4 ELSE cls_score END,
+		    inp_ms = CASE WHEN $5 > 0 THEN $5 ELSE inp_ms END,
+		    ttfb_ms = CASE WHEN $6 > 0 THEN $6 ELSE ttfb_ms END
 		WHERE id = (
 			SELECT id FROM analytics.page_views
-			WHERE (visitor_id = $2 OR ($3 <> '' AND user_id = $3))
-			  AND path = $4
+			WHERE (visitor_id = $7 OR ($8 <> '' AND user_id = $8))
+			  AND path = $9
 			  AND created_at >= NOW() - INTERVAL '2 hours'
 			ORDER BY created_at DESC
 			LIMIT 1
 		)
-	`, durationSec, visitorID, userID, urlPath)
+	`, durationSec, scrollPct, lcpMs, clsScore, inpMs, ttfbMs, in.VisitorID, in.UserID, in.URLPath)
 }
 
 func fallbackEventTitle(eventType, subtitle string) string {
@@ -775,6 +1137,10 @@ func fallbackEventTitle(eventType, subtitle string) string {
 		return "Tedarikçi WhatsApp iletişimine tıkladı"
 	case "phone_click":
 		return "Tedarikçi telefon numarasına tıkladı"
+	case "pack_calc":
+		return "Toptan seri / paket maliyet hesaplayıcısını kullandı"
+	case "price_unlock":
+		return "Toptan üye fiyat kilidini açmak için giriş modalını açtı"
 	default:
 		return "Mağaza etkileşimi gerçekleştirdi"
 	}

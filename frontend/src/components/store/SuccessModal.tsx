@@ -17,11 +17,11 @@ export default function SuccessModal({
 }: Readonly<SuccessModalProps>) {
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <button 
+      <button
         type="button"
-        aria-label="Kapat"
+        aria-label={t("close_modal", lang)}
         tabIndex={-1}
-        className="fixed inset-0 bg-transparent border-none cursor-default" 
+        className="fixed inset-0 bg-transparent border-none cursor-default"
         onClick={onClose}
       />
       <div className="bg-white border border-cultured rounded-[15px] max-w-md w-full p-8 text-center flex flex-col items-center gap-6 shadow-premium relative z-10 animate-in fade-in zoom-in-95 duration-200 select-none">

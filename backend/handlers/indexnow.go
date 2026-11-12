@@ -3,12 +3,23 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"os"
+	"runtime"
 	"strings"
 
 	"mertervitrini/backend/pkg/httpclient"
 	"mertervitrini/backend/pkg/safe"
+)
+
+const (
+	indexNowHost        = "mertervitrini.com.tr"
+	indexNowKey         = "638d6e3eb8a743ec900269823f24ffe6"
+	indexNowKeyLocation = "https://mertervitrini.com.tr/638d6e3eb8a743ec900269823f24ffe6.txt"
+	indexNowEndpoint    = "https://api.indexnow.org/IndexNow"
 )
 
 type IndexNowHandler struct{}
@@ -24,17 +35,52 @@ type IndexNowRequest struct {
 	URLList     []string `json:"urlList"`
 }
 
-// NotifyIndexNow sends a background POST request to IndexNow API
+func isIndexNowLocalOrDev() bool {
+	if strings.TrimSpace(os.Getenv("ENABLE_INDEXNOW")) == "1" {
+		return false
+	}
+	if strings.TrimSpace(os.Getenv("DISABLE_INDEXNOW")) == "1" || runtime.GOOS == "windows" {
+		return true
+	}
+	for _, envKey := range []string{"APP_ENV", "GO_ENV", "ENV"} {
+		val := strings.ToLower(strings.TrimSpace(os.Getenv(envKey)))
+		if val == "dev" || val == "development" || val == "local" || val == "test" {
+			return true
+		}
+	}
+	siteEnv := strings.ToLower(strings.TrimSpace(os.Getenv("SITE_URL")))
+	return strings.Contains(siteEnv, "localhost") || strings.Contains(siteEnv, "127.0.0.1")
+}
+
+// NotifyIndexNowProductSlug proactively notifies Bing & Yandex IndexNow for a newly created/updated product slug and its primary localized URLs.
+func NotifyIndexNowProductSlug(slug string) {
+	cleanSlug := strings.Trim(strings.TrimSpace(slug), "/")
+	if cleanSlug == "" || isIndexNowLocalOrDev() {
+		return
+	}
+	escaped := url.PathEscape(cleanSlug)
+	baseProductURL := fmt.Sprintf("%s/product/%s", siteBaseURL, escaped)
+	urls := []string{
+		baseProductURL,
+		baseProductURL + "?lang=en",
+		baseProductURL + "?lang=ru",
+		baseProductURL + "?lang=ar",
+	}
+	NotifyIndexNow(urls)
+}
+
+// NotifyIndexNow sends a background POST request to IndexNow API.
 func NotifyIndexNow(urls []string) {
 	if len(urls) == 0 {
 		return
 	}
 
-	// Clean and validate urls list
 	var cleanUrls []string
+	seen := make(map[string]bool, len(urls))
 	for _, u := range urls {
 		u = strings.TrimSpace(u)
-		if u != "" && (strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")) {
+		if u != "" && (strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")) && !seen[u] {
+			seen[u] = true
 			cleanUrls = append(cleanUrls, u)
 		}
 	}
@@ -45,9 +91,9 @@ func NotifyIndexNow(urls []string) {
 
 	safe.Go("IndexNow URL Submission", func() {
 		reqBody := IndexNowRequest{
-			Host:        "mertervitrini.com.tr",
-			Key:         "638d6e3eb8a743ec900269823f24ffe6",
-			KeyLocation: "https://mertervitrini.com.tr/638d6e3eb8a743ec900269823f24ffe6.txt",
+			Host:        indexNowHost,
+			Key:         indexNowKey,
+			KeyLocation: indexNowKeyLocation,
 			URLList:     cleanUrls,
 		}
 
@@ -57,7 +103,7 @@ func NotifyIndexNow(urls []string) {
 			return
 		}
 
-		resp, err := httpclient.DefaultPooledClient.Post("https://api.indexnow.org/IndexNow", "application/json; charset=utf-8", bytes.NewBuffer(jsonData))
+		resp, err := httpclient.DefaultPooledClient.Post(indexNowEndpoint, "application/json; charset=utf-8", bytes.NewBuffer(jsonData))
 		if err != nil {
 			log.Printf("[IndexNow Error] POST request failed: %v", err)
 			return
@@ -72,10 +118,10 @@ func NotifyIndexNow(urls []string) {
 	})
 }
 
-// SubmitManual URLs triggers IndexNow for custom paths submitted from Admin Panel
+// SubmitManual triggers IndexNow for custom paths submitted from Admin Panel.
 func (h *IndexNowHandler) SubmitManual(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		http.Error(w, errJSONMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -93,10 +139,8 @@ func (h *IndexNowHandler) SubmitManual(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Trigger notifications
 	NotifyIndexNow(req.URLs)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status":"success","message":"URL'ler IndexNow kuyruğuna alındı ve gönderiliyor."}`))
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	_, _ = w.Write([]byte(`{"status":"success","message":"URL'ler IndexNow kuyruğuna alındı ve gönderiliyor."}`))
 }
-

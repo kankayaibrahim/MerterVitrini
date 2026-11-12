@@ -8,6 +8,30 @@ import { t, getCategoryPrefix, getCategoryTitle } from "@/app/i18n";
 import { ExchangeRate } from "@/app/utils";
 import ProductCard from "@/components/store/ProductCard";
 import { PortalSponsoredSuppliersSection } from "@/components/store/SponsoredShowcaseSection";
+import GlobalB2BSeoKnowledgeSection from "@/components/seo/GlobalB2BSeoKnowledgeSection";
+import { GLOBAL_B2B_SEO_MATRIX, normalizeSeoLang } from "@/utils/seoHelpers";
+
+const PREV_SLIDE_LABELS: Record<string, string> = {
+  tr: "Önceki Slayt",
+  en: "Previous Slide",
+  ru: "Предыдущий слайд",
+  ar: "الشريحة السابقة",
+  de: "Vorherige Folie",
+  fr: "Diapositive précédente",
+  pl: "Poprzedni slajd",
+  bg: "Предишен слайд",
+};
+
+const NEXT_SLIDE_LABELS: Record<string, string> = {
+  tr: "Sonraki Slayt",
+  en: "Next Slide",
+  ru: "Следующий слайд",
+  ar: "الشريحة التالية",
+  de: "Nächste Folie",
+  fr: "Diapositive suivante",
+  pl: "Następny slajd",
+  bg: "Следващ слайд",
+};
 
 interface PortalViewProps {
   readonly lang: string;
@@ -67,7 +91,7 @@ export default function PortalView({
       subtitle: t("portal_slide1_subtitle", lang),
       desc: t("portal_slide1_desc", lang),
       ctaText: t("portal_slide1_cta", lang),
-      ctaUrl: `/${getCategoryPrefix(lang)}/kadin-giyim/`,
+      ctaUrl: `/${getCategoryPrefix(lang)}/kadin-giyim`,
       type: "link",
       positionClass: "object-[35%_top]"
     },
@@ -78,7 +102,7 @@ export default function PortalView({
       subtitle: t("portal_slide2_subtitle", lang),
       desc: t("portal_slide2_desc", lang),
       ctaText: t("portal_slide2_cta", lang),
-      ctaUrl: `/${getCategoryPrefix(lang)}/erkek-giyim/`,
+      ctaUrl: `/${getCategoryPrefix(lang)}/erkek-giyim`,
       type: "link",
       positionClass: "object-[center_top]"
     },
@@ -138,17 +162,22 @@ export default function PortalView({
     img.src = fallback;
   };
 
+  const safeLang = normalizeSeoLang(lang, "en");
+  const seoCopy = GLOBAL_B2B_SEO_MATRIX[safeLang];
+  const prevSlideLabel = PREV_SLIDE_LABELS[safeLang] || PREV_SLIDE_LABELS.en;
+  const nextSlideLabel = NEXT_SLIDE_LABELS[safeLang] || NEXT_SLIDE_LABELS.en;
+
   return (
     <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
       
       {/* A. PREMIUM AUTO-SLIDING HERO CAROUSEL */}
-      <div className="w-full relative rounded-none overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9.5] md:aspect-[21/9] lg:aspect-[21/8.5] min-h-[260px] xs:min-h-[320px] sm:min-h-[400px] bg-[#fafafa] select-none mb-10 group">
+      <div className="w-full relative rounded-none overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9.5] md:aspect-[21/9] lg:aspect-[21/8.5] min-h-[260px] xs:min-h-[320px] sm:min-h-[400px] bg-[#fafafa] select-none mb-8 group">
         
         {/* Left Arrow Button */}
         <button 
           onClick={handlePrevSlide}
           className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-14 bg-black/15 hover:bg-black/35 text-white flex items-center justify-center cursor-pointer transition-all duration-300 z-20 border-none select-none opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-          aria-label={lang === "tr" ? "Önceki Slayt" : "Previous Slide"}
+          aria-label={prevSlideLabel}
         >
           <ChevronLeft className="w-6 h-6" />
         </button>
@@ -157,7 +186,7 @@ export default function PortalView({
         <button 
           onClick={handleNextSlide}
           className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-14 bg-black/15 hover:bg-black/35 text-white flex items-center justify-center cursor-pointer transition-all duration-300 z-20 border-none select-none opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-          aria-label={lang === "tr" ? "Sonraki Slayt" : "Next Slide"}
+          aria-label={nextSlideLabel}
         >
           <ChevronRight className="w-6 h-6" />
         </button>
@@ -240,7 +269,7 @@ export default function PortalView({
             <button 
               key={slide.id}
               onClick={() => setActiveSlide(slide.id)} 
-              aria-label={lang === "tr" ? `Slayt ${slide.id + 1}` : `Slide ${slide.id + 1}`}
+              aria-label={`Slide ${slide.id + 1}`}
               className="w-12 h-12 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
             >
               <span className={`w-6 h-0.5 transition-all ${activeSlide === slide.id ? "bg-black" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
@@ -248,6 +277,16 @@ export default function PortalView({
           ))}
         </div>
       </div>
+
+      {/* A.5 SEMANTIC B2B HERO HEADING (H1) FOR GLOBAL SEARCH ENGINES & BUYERS */}
+      <section className="mb-10 bg-[#F8F6F2] border border-cultured px-5 py-6 sm:px-8 sm:py-7 text-center">
+        <h1 className="font-serif font-bold text-lg sm:text-2xl md:text-[26px] text-eerie-black tracking-tight leading-snug max-w-4xl mx-auto">
+          {seoCopy.portalH1}
+        </h1>
+        <p className="mt-2 text-xs sm:text-sm text-sonic-silver leading-relaxed max-w-3xl mx-auto">
+          {seoCopy.portalLead}
+        </p>
+      </section>
 
       {/* B. CATEGORY NAVIGATORS (Luxury editorial clean text badges) */}
       <div className="mb-12 select-none border-t border-b border-cultured py-6">
@@ -259,7 +298,7 @@ export default function PortalView({
           ) : (
             categories.map((cat) => {
               const prefix = getCategoryPrefix(lang);
-              const url = `/${prefix}/${cat.slug || cat.id}/`;
+              const url = `/${prefix}/${cat.slug || cat.id}`;
               return (
                 <a 
                   key={cat.id} 
@@ -288,7 +327,7 @@ export default function PortalView({
           
           {/* Card 1: Kadın Giyim */}
           <a 
-            href={`/${getCategoryPrefix(lang)}/kadin-giyim/`}
+            href={`/${getCategoryPrefix(lang)}/kadin-giyim`}
             className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">
@@ -310,7 +349,7 @@ export default function PortalView({
 
           {/* Card 2: Erkek Giyim */}
           <a 
-            href={`/${getCategoryPrefix(lang)}/erkek-giyim/`}
+            href={`/${getCategoryPrefix(lang)}/erkek-giyim`}
             className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">
@@ -414,25 +453,25 @@ export default function PortalView({
         </h4>
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 max-w-2xl mx-auto px-4">
           <a
-            href={`/${getCategoryPrefix(lang)}/kadin-giyim/elbise-abiye/elbise/`}
+            href={`/${getCategoryPrefix(lang)}/kadin-giyim/elbise-abiye/elbise`}
             className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
           >
             {t("portal_popular_searches_link1", lang)}
           </a>
           <a
-            href={`/${getCategoryPrefix(lang)}/kadin-giyim/elbise-abiye/elbise/jaguar-elbise/`}
+            href={`/${getCategoryPrefix(lang)}/kadin-giyim/elbise-abiye/elbise/jaguar-elbise`}
             className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
           >
             {t("portal_popular_searches_link2", lang)}
           </a>
           <a
-            href={`/${getCategoryPrefix(lang)}/kadin-giyim/ust-giyim/bustiyer/`}
+            href={`/${getCategoryPrefix(lang)}/kadin-giyim/ust-giyim/bustiyer`}
             className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
           >
             {t("portal_popular_searches_link3", lang)}
           </a>
           <a
-            href={`/${getCategoryPrefix(lang)}/erkek-giyim/`}
+            href={`/${getCategoryPrefix(lang)}/erkek-giyim`}
             className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
           >
             {t("portal_popular_searches_link4", lang)}
@@ -452,6 +491,9 @@ export default function PortalView({
           {t("portal_examine_all_products", lang)}
         </a>
       </div>
+
+      {/* F. GLOBAL B2B WHOLESALE SOURCING GUIDE & FAQ KNOWLEDGE SECTION */}
+      <GlobalB2BSeoKnowledgeSection lang={lang} />
 
     </main>
   );

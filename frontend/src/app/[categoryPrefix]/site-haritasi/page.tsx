@@ -1,9 +1,15 @@
 import React from "react";
-import { Metadata } from "next";
-import { apiFetch } from "@/app/utils";
-import { Category } from "@/types/store";
+import type { Metadata } from "next";
 import SitemapClient from "./SitemapClient";
-import { BlogPost, Language } from "../blog/page";
+import type { BlogPost, Language } from "../blog/page";
+import {
+  buildPrefixedAlternates,
+  fetchSsrCategories,
+  normalizeSeoLang,
+  OG_LOCALE_BY_LANG,
+  ssrStoreFetch,
+  SUPPORTED_SEO_LANGS,
+} from "@/utils/seoHelpers";
 
 interface PageProps {
   readonly params: Promise<{
@@ -11,124 +17,91 @@ interface PageProps {
   }>;
 }
 
-// Fetch active languages from database with static fallback
+const FALLBACK_LANGUAGES: Language[] = [
+  { code: "tr", label: "Türkçe", flag: "🇹🇷", categoryPrefix: "tr", isActive: true, sortOrder: 0 },
+  { code: "en", label: "English", flag: "🇬🇧", categoryPrefix: "en", isActive: true, sortOrder: 1 },
+  { code: "pl", label: "Polski", flag: "🇵🇱", categoryPrefix: "pl", isActive: true, sortOrder: 2 },
+  { code: "bg", label: "Български", flag: "🇧🇬", categoryPrefix: "bg", isActive: true, sortOrder: 3 },
+  { code: "ar", label: "العربية", flag: "🇸🇦", categoryPrefix: "ar", dir: "rtl", isActive: true, sortOrder: 4 },
+  { code: "ru", label: "Русский", flag: "🇷🇺", categoryPrefix: "ru", isActive: true, sortOrder: 5 },
+  { code: "de", label: "Deutsch", flag: "🇩🇪", categoryPrefix: "de", isActive: true, sortOrder: 6 },
+  { code: "fr", label: "Français", flag: "🇫🇷", categoryPrefix: "fr", isActive: true, sortOrder: 7 },
+];
+
 async function fetchLanguages(): Promise<Language[]> {
-  try {
-    const response = await fetch("https://mertervitrini.com.tr/api/v1/store/languages?t=" + Date.now());
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        return data.map((l: Language) => {
-          let code = l.code;
-          if (code.startsWith("en_")) code = "en";
-          else if (code.startsWith("tr_")) code = "tr";
-          else if (code.startsWith("pl_")) code = "pl";
-          else if (code.startsWith("bg_")) code = "bg";
-          else if (code.startsWith("de_")) code = "de";
-          else if (code.startsWith("fr_")) code = "fr";
-          else if (code.startsWith("ru_")) code = "ru";
-          else if (code.startsWith("ar_")) code = "ar";
-          return { ...l, code };
-        });
-      }
-    }
-  } catch (err) {
-    console.error("[SEO] Failed to fetch active languages, using fallback:", err);
+  const data = await ssrStoreFetch<Language[]>("/languages", 3600);
+  if (!Array.isArray(data) || data.length === 0) {
+    return FALLBACK_LANGUAGES;
   }
-  
-  return [
-    { code: "tr", label: "Türkçe", flag: "🇹🇷", categoryPrefix: "tr", isActive: true, sortOrder: 0 },
-    { code: "en", label: "English", flag: "🇬🇧", categoryPrefix: "en", isActive: true, sortOrder: 1 },
-    { code: "pl", label: "Polski", flag: "🇵🇱", categoryPrefix: "pl", isActive: true, sortOrder: 2 },
-    { code: "bg", label: "Български", flag: "🇧🇬", categoryPrefix: "bg", isActive: true, sortOrder: 3 },
-    { code: "ar", label: "العربية", flag: "🇸🇦", categoryPrefix: "ar", dir: "rtl", isActive: true, sortOrder: 4 },
-    { code: "ru", label: "Русский", flag: "🇷🇺", categoryPrefix: "ru", isActive: true, sortOrder: 5 },
-    { code: "de", label: "Deutsch", flag: "🇩🇪", categoryPrefix: "de", isActive: true, sortOrder: 6 },
-    { code: "fr", label: "Français", flag: "🇫🇷", categoryPrefix: "fr", isActive: true, sortOrder: 7 },
-  ];
+  return data.map((l) => ({
+    ...l,
+    code: normalizeSeoLang(l.code, "tr"),
+  }));
 }
 
-// Generate static routes for all active language prefixes
 export function generateStaticParams() {
-  return [
-    { categoryPrefix: "tr" },
-    { categoryPrefix: "en" },
-    { categoryPrefix: "pl" },
-    { categoryPrefix: "bg" },
-    { categoryPrefix: "ar" },
-    { categoryPrefix: "ru" },
-    { categoryPrefix: "de" },
-    { categoryPrefix: "fr" }
-  ];
+  return SUPPORTED_SEO_LANGS.map((categoryPrefix) => ({ categoryPrefix }));
 }
 
-// Generate metadata
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+const SITEMAP_TITLES: Record<string, string> = {
+  tr: "Site Haritası",
+  en: "Sitemap",
+  pl: "Mapa Strony",
+  bg: "Карта на Сайта",
+  ar: "خريطة الموقع",
+  ru: "Карта Сайта",
+  de: "Sitemap",
+  fr: "Plan du Site",
+};
+
+const SITEMAP_DESCS: Record<string, string> = {
+  tr: "Merter Vitrini B2B toptan hazır giyim platformumuzun tüm kategori, blog ve kurumsal sayfalarının güncel listesi.",
+  en: "Complete hierarchy and list of categories, sourcing blogs, and corporate content of our B2B wholesale clothing platform.",
+  pl: "Pełna hierarchia i lista kategorii, blogów zaopatrzeniowych i treści korporacyjnych naszej platformy hurtowej B2B.",
+  bg: "Пълна йерархия и списък с категории, блогове за доставка и корпоративно съдържание на нашата B2B платформа за облекло на едро.",
+  ar: "التسلسل الهرمي الكامل وقائمة الفئات ومدونات المصادر ومحتوى الشركات لمنصة ملابس الجملة B2B الخاصة بنا.",
+  ru: "Полная иерархия и список категорий, блогов о закупках и корпоративного контента нашей оптовой платформы B2B.",
+  de: "Vollständige Hierarchie und Liste der Kategorien, Einkaufs-Blogs und Unternehmensinhalte unserer B2B-Großhandelsplattform.",
+  fr: "Hiérarchie et liste complète des catégories, blogs d'approvisionnement et contenus d'entreprise de notre plateforme de vente en gros B2B.",
+};
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
-  
-  const titles: Record<string, string> = {
-    tr: "Site Haritası",
-    en: "Sitemap",
-    pl: "Mapa Strony",
-    bg: "Карта на Сайта",
-    ar: "خريطة الموقع",
-    ru: "Карта Сайта",
-    de: "Sitemap",
-    fr: "Plan du Site"
-  };
-
-  const descs: Record<string, string> = {
-    tr: "Merter Vitrini B2B toptan hazır giyim platformumuzun tüm kategori, blog ve kurumsal sayfalarının güncel listesi.",
-    en: "Complete hierarchy and list of categories, sourcing blogs, and corporate content of our B2B wholesale clothing platform.",
-    pl: "Pełna hierarchia i lista kategorii, blogów zaopatrzeniowych i treści korporacyjnych naszej platformy hurtowej B2B.",
-    bg: "Пълна йерархия и списък с категории, блогове за доставка и корпоративно съдържание на нашата B2B платформа за облекло на едро.",
-    ar: "التسلسل الهرمي الكامل وقائمة الفئات ومدونات المصادر ومحتوى الشركات لمنصة ملابس الجملة B2B الخاصة بنا.",
-    ru: "Полная иерархия и список категорий, блогов о закупках и корпоративного контента нашей оптовой платформы B2B.",
-    de: "Vollständige Hierarchie und Liste der Kategorien, Einkaufs-Blogs und Unternehmensinhalte unserer B2B-Großhandelsplattform.",
-    fr: "Hiérarchie et liste complète des catégories, blogs d'approvisionnement et contenus d'entreprise de notre plateforme de vente en gros B2B."
-  };
-
-  const title = titles[categoryPrefix] || titles.en;
-  const desc = descs[categoryPrefix] || descs.en;
-  
-  const canonicalUrl = `https://mertervitrini.com.tr/${categoryPrefix}/site-haritasi`;
-  const languagesList = ["tr", "en", "pl", "bg", "ar", "ru", "de", "fr"];
-  const alternatesLanguages = Object.fromEntries(
-    languagesList
-      .filter((code) => code !== "__proto__" && code !== "constructor")
-      .map((code) => [code, `https://mertervitrini.com.tr/${code}/site-haritasi`])
-  );
+  const lang = normalizeSeoLang(categoryPrefix, "en");
+  const title = SITEMAP_TITLES[lang] || SITEMAP_TITLES.en;
+  const desc = SITEMAP_DESCS[lang] || SITEMAP_DESCS.en;
+  const alternates = buildPrefixedAlternates("site-haritasi", lang);
 
   return {
     title: `${title} | Merter Vitrini`,
     description: desc,
-    alternates: {
-      canonical: canonicalUrl,
-      languages: alternatesLanguages,
-    },
+    alternates,
     openGraph: {
       title: `${title} | Merter Vitrini`,
       description: desc,
-      url: canonicalUrl,
-      siteName: "Merter Vitrini",
+      url: alternates.canonical,
+      siteName: "Merter Vitrini B2B",
+      locale: OG_LOCALE_BY_LANG[lang],
       type: "website",
-    }
+    },
   };
 }
 
 export default async function SitemapPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
-  
-  // Parallel fetches on the server side
-  const activeLangs = await fetchLanguages();
-  const categoriesData = await apiFetch<Category[]>("/categories");
-  const blogPostsData = await apiFetch<BlogPost[]>("/blog");
-  
-  const categories = categoriesData || [];
-  const blogPosts = blogPostsData || [];
-  
+
+  const [activeLangs, categories, blogPostsData] = await Promise.all([
+    fetchLanguages(),
+    fetchSsrCategories(),
+    ssrStoreFetch<BlogPost[]>("/blog", 600),
+  ]);
+
+  const blogPosts = Array.isArray(blogPostsData) ? blogPostsData : [];
+
   return (
-    <SitemapClient 
+    <SitemapClient
       categoryPrefix={categoryPrefix}
       categories={categories}
       blogPosts={blogPosts}

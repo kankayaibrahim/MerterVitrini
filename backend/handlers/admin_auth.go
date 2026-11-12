@@ -14,6 +14,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"mertervitrini/backend/config"
+	"mertervitrini/backend/middleware"
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/httpclient"
 )
@@ -45,61 +46,17 @@ type KeycloakCallbackRequest struct {
 	RedirectURI string `json:"redirect_uri"`
 }
 
-func matchUserRole(r any) (models.UserRole, bool) {
-	roleStr := strings.ToLower(fmt.Sprintf("%v", r))
-	switch models.UserRole(roleStr) {
-	case models.RoleSuperAdmin, models.RoleAdmin, models.RoleEditor, models.RoleSalesManager, models.RoleWarehouse:
-		return models.UserRole(roleStr), true
-	default:
-		return "", false
-	}
-}
-
-func extractRealmRole(claims jwt.MapClaims, currentRole models.UserRole) models.UserRole {
-	realmAccess, ok := claims["realm_access"].(map[string]any)
-	if !ok {
-		return currentRole
-	}
-	roles, ok := realmAccess["roles"].([]any)
-	if !ok {
-		return currentRole
-	}
-	for _, r := range roles {
-		if matched, ok := matchUserRole(r); ok {
-			currentRole = matched
-		}
-	}
-	return currentRole
-}
-
-func extractResourceAccessRole(claims jwt.MapClaims, currentRole models.UserRole) models.UserRole {
-	resourceAccess, ok := claims["resource_access"].(map[string]any)
-	if !ok {
-		return currentRole
-	}
-	for _, clientData := range resourceAccess {
-		clientMap, ok := clientData.(map[string]any)
-		if !ok {
-			continue
-		}
-		roles, ok := clientMap["roles"].([]any)
-		if !ok {
-			continue
-		}
-		for _, r := range roles {
-			if matched, ok := matchUserRole(r); ok {
-				currentRole = matched
-			}
-		}
-	}
-	return currentRole
-}
-
 func extractUserRole(claims jwt.MapClaims) models.UserRole {
-	role := models.RoleAdmin
-	role = extractRealmRole(claims, role)
-	role = extractResourceAccessRole(claims, role)
-	return role
+	return middleware.ExtractVerifiedUserRole(claims)
+}
+
+func isAdminStaffRole(role models.UserRole) bool {
+	switch role {
+	case models.RoleSuperAdmin, models.RoleAdmin, models.RoleEditor, models.RoleSalesManager, models.RoleWarehouse:
+		return true
+	default:
+		return false
+	}
 }
 
 func extractUserMetadata(claims jwt.MapClaims) (userID, firstName, lastName, email string) {
@@ -212,22 +169,21 @@ func (h *AdminAuthHandler) KeycloakCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	parser := jwt.NewParser()
-	token, _, err := parser.ParseUnverified(accessToken, jwt.MapClaims{})
+	claims, err := middleware.VerifyJWTClaims(accessToken, h.Cfg.JWTSecret, h.Cfg.KeycloakPublicKey)
 	if err != nil {
-		log.Printf("[KEYCLOAK ERROR] JWT claim parse failure: %v", err)
-		http.Error(w, `{"error":"Failed to unpack user session claims"}`, http.StatusInternalServerError)
-		return
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		http.Error(w, `{"error":"Session profile claims are missing"}`, http.StatusInternalServerError)
+		log.Printf("[KEYCLOAK ERROR] JWT cryptographic verification failure: %v", err)
+		http.Error(w, `{"error":"Failed to verify user session token"}`, http.StatusUnauthorized)
 		return
 	}
 
 	userID, firstName, lastName, email := extractUserMetadata(claims)
 	role := extractUserRole(claims)
+	resolvedRole, blocked := middleware.ResolveUserRoleFromDB(ctx, userID, email, role)
+	if blocked || !isAdminStaffRole(resolvedRole) {
+		http.Error(w, `{"error":"Forbidden: Admin privileges required"}`, http.StatusForbidden)
+		return
+	}
+	role = resolvedRole
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(models.AuthResponse{

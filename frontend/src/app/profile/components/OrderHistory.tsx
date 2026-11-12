@@ -1,7 +1,35 @@
 import React from "react";
 import Image from "next/image";
-import { Clipboard, AlertCircle, ChevronUp, ChevronDown, Download, CreditCard, RotateCcw, XCircle } from "lucide-react";
+import {
+  Clipboard,
+  AlertCircle,
+  ChevronUp,
+  ChevronDown,
+  Download,
+  CreditCard,
+  RotateCcw,
+  XCircle,
+} from "lucide-react";
 import { getResizedImageUrl } from "@/app/utils";
+import {
+  INTL_LOCALE_BY_LANG,
+  SupportedSeoLang,
+  normalizeSeoLang,
+} from "@/utils/seoHelpers";
+
+const ORDER_EXTRA_COPY: Record<
+  SupportedSeoLang,
+  { readonly itemsHeader: string; readonly loadingLabel: string }
+> = {
+  tr: { itemsHeader: "Ürünler", loadingLabel: "Yükleniyor..." },
+  en: { itemsHeader: "Ordered Items", loadingLabel: "Loading..." },
+  ru: { itemsHeader: "Товары в заказе", loadingLabel: "Загрузка..." },
+  ar: { itemsHeader: "المنتجات المطلوبة", loadingLabel: "جاري التحميل..." },
+  de: { itemsHeader: "Bestellte Artikel", loadingLabel: "Wird geladen..." },
+  fr: { itemsHeader: "Articles commandés", loadingLabel: "Chargement..." },
+  pl: { itemsHeader: "Zamówione produkty", loadingLabel: "Ładowanie..." },
+  bg: { itemsHeader: "Поръчани продукти", loadingLabel: "Зареждане..." },
+};
 
 export interface OrderItem {
   readonly id: string;
@@ -28,7 +56,9 @@ interface OrderHistoryProps {
   readonly loadingOrders: boolean;
   readonly ordersError: string | null;
   readonly expandedOrders: Readonly<Record<string, boolean>>;
-  readonly setExpandedOrders: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  readonly setExpandedOrders: React.Dispatch<
+    React.SetStateAction<Record<string, boolean>>
+  >;
   readonly lang: string;
   readonly getOrderT: (key: string) => string;
   readonly handleDownloadFile: (url: string, filename: string) => void;
@@ -56,15 +86,24 @@ function getOrderStatusBadgeClass(status: string): string {
 
 interface OrderItemRowProps {
   readonly item: OrderItem;
-  readonly lang: string;
+  readonly locale: string;
   readonly getOrderT: (key: string) => string;
 }
 
-function OrderItemRow({ item, lang, getOrderT }: Readonly<OrderItemRowProps>) {
+function OrderItemRow({
+  item,
+  locale,
+  getOrderT,
+}: Readonly<OrderItemRowProps>) {
   const coverImg = getResizedImageUrl(item.image_url_at_purchase, 80, 106);
-  const locale = lang === "tr" ? "tr-TR" : "en-US";
-  const formattedUnitPrice = new Intl.NumberFormat(locale, { style: "currency", currency: "TRY" }).format(item.price_at_purchase);
-  const formattedTotalPrice = new Intl.NumberFormat(locale, { style: "currency", currency: "TRY" }).format(item.price_at_purchase * item.quantity);
+  const formattedUnitPrice = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "TRY",
+  }).format(item.price_at_purchase);
+  const formattedTotalPrice = new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "TRY",
+  }).format(item.price_at_purchase * item.quantity);
 
   return (
     <div className="flex items-center gap-4 text-xs font-bold">
@@ -99,7 +138,7 @@ interface OrderCardProps {
   readonly order: UserOrder;
   readonly isExpanded: boolean;
   readonly onToggleExpand: () => void;
-  readonly lang: string;
+  readonly safeLang: SupportedSeoLang;
   readonly getOrderT: (key: string) => string;
   readonly handleDownloadFile: (url: string, filename: string) => void;
   readonly openPaymentModal: (order: UserOrder) => void;
@@ -111,14 +150,15 @@ function OrderCard({
   order,
   isExpanded,
   onToggleExpand,
-  lang,
+  safeLang,
   getOrderT,
   handleDownloadFile,
   openPaymentModal,
   openRefundModal,
   handleCancelOrder,
 }: Readonly<OrderCardProps>) {
-  const locale = lang === "tr" ? "tr-TR" : "en-US";
+  const locale = INTL_LOCALE_BY_LANG[safeLang];
+  const extraCopy = ORDER_EXTRA_COPY[safeLang];
   const formattedDate = new Date(order.created_at).toLocaleDateString(locale, {
     year: "numeric",
     month: "long",
@@ -138,7 +178,9 @@ function OrderCard({
             <div className="text-[10px] uppercase text-spanish-gray tracking-wider mb-0.5">
               {getOrderT("order_number")}
             </div>
-            <div className="text-eerie-black font-extrabold">{order.order_number}</div>
+            <div className="text-eerie-black font-extrabold">
+              {order.order_number}
+            </div>
           </div>
           <div>
             <div className="text-[10px] uppercase text-spanish-gray tracking-wider mb-0.5">
@@ -150,12 +192,18 @@ function OrderCard({
             <div className="text-[10px] uppercase text-spanish-gray tracking-wider mb-0.5">
               {getOrderT("total_amount")}
             </div>
-            <div className="text-salmon-pink font-extrabold">{formattedTotal}</div>
+            <div className="text-salmon-pink font-extrabold">
+              {formattedTotal}
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-3 self-end sm:self-center">
-          <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${getOrderStatusBadgeClass(order.order_status)}`}>
+          <span
+            className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${getOrderStatusBadgeClass(
+              order.order_status
+            )}`}
+          >
             {getOrderT(`status_${order.order_status.toLowerCase()}`)}
           </span>
 
@@ -164,7 +212,11 @@ function OrderCard({
             onClick={onToggleExpand}
             className="p-1.5 hover:bg-cultured rounded-lg transition-colors border border-cultured bg-white cursor-pointer text-sonic-silver hover:text-salmon-pink flex items-center justify-center"
           >
-            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            {isExpanded ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
           </button>
         </div>
       </div>
@@ -175,11 +227,16 @@ function OrderCard({
           <div className="flex flex-col gap-6">
             <div>
               <h4 className="text-[10px] font-extrabold uppercase text-sonic-silver tracking-wider border-b border-cultured pb-2 mb-4">
-                Ürünler
+                {extraCopy.itemsHeader}
               </h4>
               <div className="flex flex-col gap-4">
                 {(order.items || []).map((item) => (
-                  <OrderItemRow key={item.id} item={item} lang={lang} getOrderT={getOrderT} />
+                  <OrderItemRow
+                    key={item.id}
+                    item={item}
+                    locale={locale}
+                    getOrderT={getOrderT}
+                  />
                 ))}
               </div>
             </div>
@@ -206,7 +263,12 @@ function OrderCard({
             <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-cultured mt-2">
               <button
                 type="button"
-                onClick={() => handleDownloadFile(`/api/v1/store/orders/${order.id}/excel`, `fatura-${order.order_number}.xls`)}
+                onClick={() =>
+                  handleDownloadFile(
+                    `/api/v1/store/orders/${order.id}/excel`,
+                    `fatura-${order.order_number}.xls`
+                  )
+                }
                 className="px-4 py-2 bg-cultured hover:bg-[#e2e8f0] text-eerie-black hover:text-salmon-pink rounded-lg font-extrabold text-[10px] uppercase tracking-[0.5px] border border-cultured transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -215,7 +277,12 @@ function OrderCard({
 
               <button
                 type="button"
-                onClick={() => handleDownloadFile(`/api/v1/store/orders/${order.id}/images`, `gorseller-${order.order_number}.zip`)}
+                onClick={() =>
+                  handleDownloadFile(
+                    `/api/v1/store/orders/${order.id}/images`,
+                    `gorseller-${order.order_number}.zip`
+                  )
+                }
                 className="px-4 py-2 bg-cultured hover:bg-[#e2e8f0] text-eerie-black hover:text-salmon-pink rounded-lg font-extrabold text-[10px] uppercase tracking-[0.5px] border border-cultured transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -233,7 +300,8 @@ function OrderCard({
                 </button>
               )}
 
-              {(order.order_status === "APPROVED" || order.order_status === "COMPLETED") && (
+              {(order.order_status === "APPROVED" ||
+                order.order_status === "COMPLETED") && (
                 <button
                   type="button"
                   onClick={() => openRefundModal(order)}
@@ -244,7 +312,8 @@ function OrderCard({
                 </button>
               )}
 
-              {(order.order_status === "PENDING_PAYMENT" || order.order_status === "APPROVED") && (
+              {(order.order_status === "PENDING_PAYMENT" ||
+                order.order_status === "APPROVED") && (
                 <button
                   type="button"
                   onClick={() => handleCancelOrder(order.id)}
@@ -275,13 +344,16 @@ export default function OrderHistory({
   openRefundModal,
   handleCancelOrder,
 }: Readonly<OrderHistoryProps>) {
+  const safeLang = normalizeSeoLang(lang, "tr");
+  const extraCopy = ORDER_EXTRA_COPY[safeLang];
+
   const renderOrdersContent = () => {
     if (loadingOrders) {
       return (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <div className="spinner animate-spin w-8 h-8 border-4 border-salmon-pink border-t-transparent rounded-full" />
           <span className="text-xs font-bold text-sonic-silver select-none">
-            Yükleniyor...
+            {extraCopy.loadingLabel}
           </span>
         </div>
       );
@@ -314,8 +386,13 @@ export default function OrderHistory({
             key={order.id}
             order={order}
             isExpanded={!!expandedOrders[order.id]}
-            onToggleExpand={() => setExpandedOrders((prev) => ({ ...prev, [order.id]: !prev[order.id] }))}
-            lang={lang}
+            onToggleExpand={() =>
+              setExpandedOrders((prev) => ({
+                ...prev,
+                [order.id]: !prev[order.id],
+              }))
+            }
+            safeLang={safeLang}
             getOrderT={getOrderT}
             handleDownloadFile={handleDownloadFile}
             openPaymentModal={openPaymentModal}
