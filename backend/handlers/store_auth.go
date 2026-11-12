@@ -70,6 +70,7 @@ type RegisterRequest struct {
 	Email        string `json:"email"`
 	Password     string `json:"password"`
 	Phone        string `json:"phone"`
+	VisitorID    string `json:"visitor_id,omitempty"`
 	CaptchaToken string `json:"captcha_token"`
 	WebsiteHP    string `json:"website_hp"`
 }
@@ -77,6 +78,7 @@ type RegisterRequest struct {
 type LoginRequest struct {
 	Email        string `json:"email"`
 	Password     string `json:"password"`
+	VisitorID    string `json:"visitor_id,omitempty"`
 	CaptchaToken string `json:"captcha_token"`
 	WebsiteHP    string `json:"website_hp"`
 }
@@ -449,6 +451,17 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	meta := mailer.ExtractClientMeta(r)
 	mailer.SendCustomerRegisteredNotification(h.Cfg, req.FirstName, req.LastName, req.Email, req.Phone, meta)
 
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        keycloakUserID,
+		VisitorID:     req.VisitorID,
+		EventType:     "register",
+		EventCategory: "auth",
+		Title:         "Üye oldu (B2B müşteri kaydı tamamlandı)",
+		Subtitle:      fmt.Sprintf("%s %s • %s", req.FirstName, req.LastName, req.Email),
+		EntityType:    "user",
+		EntityID:      keycloakUserID,
+	})
+
 	if verificationToken != "" {
 		safe.Go("Send Customer Email Verification", func() {
 			mailer.SendCustomerEmailVerification(h.Cfg, req.FirstName, req.Email, verificationToken)
@@ -546,6 +559,16 @@ func (h *StoreAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	ip := getClientIP(r)
 	safe.Go("Record Login History Login", func() {
 		recordLoginHistory(context.Background(), user.ID, ip)
+	})
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        user.ID,
+		VisitorID:     req.VisitorID,
+		EventType:     "login",
+		EventCategory: "auth",
+		Title:         "Web mağazasından oturum açtı",
+		Subtitle:      "IP: " + ip,
+		EntityType:    "user",
+		EntityID:      user.ID,
 	})
 
 	json.NewEncoder(w).Encode(AuthResponse{
@@ -840,6 +863,15 @@ func (h *StoreAuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request)
 	safe.Go("Keycloak Async Profile Sync", func() {
 		h.asyncSyncKeycloakProfile(userID, req.FirstName, req.LastName, req.Phone)
 	})
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userID,
+		EventType:     "profile_update",
+		EventCategory: "auth",
+		Title:         "Profil ve hesap tercihlerini güncelledi",
+		URLPath:       "/profile",
+		EntityType:    "user",
+		EntityID:      userID,
+	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Write([]byte(`{"success":true,"message":"Profiliniz başarıyla güncellendi."}`))
@@ -942,6 +974,15 @@ func (h *StoreAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(AuthResponse{
 		Token: accessToken,
 		User:  userInfo,
+	})
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userInfo.ID,
+		VisitorID:     strings.TrimSpace(r.URL.Query().Get("visitor_id")),
+		EventType:     "login",
+		EventCategory: "auth",
+		Title:         "Google hesabı ile oturum açtı",
+		EntityType:    "user",
+		EntityID:      userInfo.ID,
 	})
 }
 
@@ -1220,6 +1261,16 @@ func (h *StoreAuthHandler) CreateAddress(w http.ResponseWriter, r *http.Request)
 		"success": true,
 		"id":      newID,
 		"message": "Adres başarıyla oluşturuldu.",
+	})
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userID,
+		EventType:     "address_update",
+		EventCategory: "auth",
+		Title:         fmt.Sprintf("“%s” başlıklı yeni adres tanımladı", req.Title),
+		Subtitle:      req.AddressLine,
+		URLPath:       "/profile",
+		EntityType:    "address",
+		EntityID:      newID,
 	})
 }
 
@@ -1665,6 +1716,15 @@ func (h *StoreAuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer timeoutCancel()
 		h.setKeycloakEmailVerified(timeoutCtx, userID)
+	})
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userID,
+		EventType:     "email_verified",
+		EventCategory: "auth",
+		Title:         "E-posta adresini doğruladı",
+		Subtitle:      email,
+		EntityType:    "user",
+		EntityID:      userID,
 	})
 
 	http.Redirect(w, r, frontendURL+"?verified=success", http.StatusSeeOther)

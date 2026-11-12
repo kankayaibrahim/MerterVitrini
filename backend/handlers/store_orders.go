@@ -400,6 +400,26 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	var firstImg string
+	if len(items) > 0 {
+		firstImg = items[0].ImageUrl
+	}
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userID,
+		EventType:     "order_create",
+		EventCategory: "commerce",
+		Title:         fmt.Sprintf("#%s numaralı B2B siparişi oluşturdu", orderNumber),
+		Subtitle:      fmt.Sprintf("%d kalem ürün • Toplam: %.2f TL", len(items), totalAmount),
+		EntityType:    "order",
+		EntityID:      orderID,
+		ImageURL:      firstImg,
+		Metadata: map[string]any{
+			"order_number": orderNumber,
+			"total_amount": totalAmount,
+			"items_count":  len(items),
+		},
+	})
+
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{

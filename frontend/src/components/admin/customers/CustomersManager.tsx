@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { User, ShieldAlert, ShieldCheck, Search, Loader2, RefreshCw, Info, X, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { User, ShieldAlert, ShieldCheck, Search, Loader2, RefreshCw, Info, X, Trash2, Compass } from "lucide-react";
+import CustomerJourneyPanel from "./CustomerJourneyPanel";
 
 interface CustomersManagerProps {
   readonly apiUrl: string;
@@ -75,6 +77,7 @@ interface CustomersTableProps {
   readonly error: string | null;
   readonly customers: readonly Customer[];
   readonly updating: boolean;
+  readonly onOpenJourney: (customer: Customer) => void;
   readonly onOpenDetails: (customer: Customer) => void;
   readonly onToggleBlock: (customer: Customer) => void;
   readonly onOpenDelete: (customer: Customer) => void;
@@ -85,6 +88,7 @@ function CustomersTable({
   error,
   customers,
   updating,
+  onOpenJourney,
   onOpenDetails,
   onToggleBlock,
   onOpenDelete,
@@ -172,6 +176,14 @@ function CustomersTable({
                 <div className="flex justify-end items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => onOpenJourney(c)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+                  >
+                    <Compass size={14} />
+                    Yolculuk & Tarihçe
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => onOpenDetails(c)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
                   >
@@ -233,6 +245,9 @@ export default function CustomersManager({ apiUrl, token }: Readonly<CustomersMa
 
   // Detailed customer modal state
   const [detailedCustomer, setDetailedCustomer] = useState<Customer | null>(null);
+
+  // Journey map & timeline modal state
+  const [journeyCustomer, setJourneyCustomer] = useState<Customer | null>(null);
 
   // Delete modal state
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
@@ -410,15 +425,24 @@ export default function CustomersManager({ apiUrl, token }: Readonly<CustomersMa
             {LABELS.SUBTITLE}
           </p>
         </div>
-        <button
-          onClick={() => void fetchCustomers(true)}
-          disabled={loading || refreshing}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 rounded-xl transition-all cursor-pointer bg-white"
-          type="button"
-        >
-          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-          {LABELS.REFRESH}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin/member-journeys"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-xs font-bold text-white rounded-xl transition-all shadow-sm"
+          >
+            <Compass size={14} />
+            Üye Yolculuk Haritası Merkezi
+          </Link>
+          <button
+            onClick={() => void fetchCustomers(true)}
+            disabled={loading || refreshing}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 rounded-xl transition-all cursor-pointer bg-white"
+            type="button"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+            {LABELS.REFRESH}
+          </button>
+        </div>
       </div>
 
       {/* Filter and Table Card */}
@@ -454,6 +478,7 @@ export default function CustomersManager({ apiUrl, token }: Readonly<CustomersMa
           error={error}
           customers={customers}
           updating={updating}
+          onOpenJourney={(c) => setJourneyCustomer(c)}
           onOpenDetails={(c) => setDetailedCustomer(c)}
           onToggleBlock={handleToggleBlock}
           onOpenDelete={(c) => setDeletingCustomer(c)}
@@ -726,6 +751,51 @@ export default function CustomersManager({ apiUrl, token }: Readonly<CustomersMa
               >
                 Kapat
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Journey Map & Activity Timeline Modal */}
+      {journeyCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <button
+            type="button"
+            aria-label="Kapat"
+            tabIndex={-1}
+            className="fixed inset-0 bg-zinc-950/50 backdrop-blur-sm border-none cursor-default"
+            onClick={() => setJourneyCustomer(null)}
+          />
+          <div className="relative w-full max-w-6xl bg-slate-50 border border-zinc-200 rounded-3xl shadow-2xl overflow-hidden z-10 max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-zinc-200 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <Compass size={18} className="text-violet-600" />
+                <span className="text-sm font-extrabold text-zinc-950">
+                  {journeyCustomer.first_name} {journeyCustomer.last_name} — Üye Yolculuk Haritası & Tarihçesi
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/admin/member-journeys?customer_id=${encodeURIComponent(journeyCustomer.id)}`}
+                  className="px-3 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold transition-colors"
+                >
+                  Tam Ekran Aç
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setJourneyCustomer(null)}
+                  className="p-1.5 rounded-xl hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1">
+              <CustomerJourneyPanel
+                customerId={journeyCustomer.id}
+                apiUrl={apiUrl}
+                token={token}
+              />
             </div>
           </div>
         </div>

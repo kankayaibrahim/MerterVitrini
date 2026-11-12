@@ -192,6 +192,8 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 	mux.HandleFunc("GET /api/v1/store/pages", h.StoreCatalog.ListPages)
 	mux.HandleFunc("POST /api/v1/store/track", h.Analytics.TrackPageView)
 	mux.HandleFunc("OPTIONS /api/v1/store/track", h.Analytics.TrackPageView)
+	mux.HandleFunc("POST /api/v1/store/member-events", h.Analytics.TrackMemberEvent)
+	mux.HandleFunc("OPTIONS /api/v1/store/member-events", h.Analytics.TrackMemberEvent)
 	mux.HandleFunc("POST /api/v1/store/brand-events", h.Analytics.TrackBrandEvent)
 	mux.HandleFunc("OPTIONS /api/v1/store/brand-events", h.Analytics.TrackBrandEvent)
 	mux.HandleFunc("GET /api/v1/store/blog", h.StoreCatalog.ListBlogPosts)
@@ -332,8 +334,10 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("GET /api/v1/cron/logs", protect(h.Cron.GetLogs))
 
 	mux.Handle("GET /api/v1/customers", protect(h.Customers.ListCustomers))
+	mux.Handle("GET /api/v1/customers/{id}/journey", protect(h.Customers.GetCustomerJourney))
 	mux.Handle("PUT /api/v1/customers/{id}/block", protect(h.Customers.ToggleBlockCustomer))
 	mux.Handle("DELETE /api/v1/customers/{id}", protect(h.Customers.DeleteCustomer))
+	mux.Handle("GET /api/v1/admin/member-journeys", protect(h.Customers.ListMemberJourneys))
 	mux.Handle("GET /api/v1/admin/analytics/stats", protect(h.Analytics.GetAnalyticsStats))
 	mux.Handle("GET /api/v1/admin/dashboard/stats", protect(h.AdminDashboard.GetDashboardStats))
 

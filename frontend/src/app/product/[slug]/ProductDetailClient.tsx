@@ -7,6 +7,7 @@ import { Product, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getProductDescription, getProductAttributes, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, parseProductSeriesBreakdown, apiFetch, convertPrice, ExchangeRate, showToast as triggerToast } from "@/app/utils";
 import { useIsStoreMemberLoggedIn, openStoreAuthModal } from "@/app/storeAuth";
+import { trackMemberEvent } from "@/components/analytics/AnalyticsTracker";
 
 // Reuse the premium Tailwind storefront components
 import Header from "@/components/store/Header";
@@ -275,6 +276,16 @@ export default function ProductDetailClient({ product }: Readonly<ProductDetailC
         localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
       }
       return updated;
+    });
+
+    trackMemberEvent({
+      event_type: "cart_add",
+      event_category: "commerce",
+      title: `“${title}” ürününden ${pkgQty} seri sepete ekledi`,
+      subtitle: `SKU: ${newItem.custom_sku || "-"} • ${pkgQty * unitsPerPkg} Adet`,
+      entity_type: "product",
+      entity_id: product.id,
+      image_url: coverImg,
     });
 
     setIsCartOpen(true);

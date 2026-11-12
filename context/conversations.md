@@ -2149,3 +2149,40 @@
   3. **Canlı Ortam ve Otomatik Şema/Seed Doğrulaması:**
      - `https://mertervitrini.com.tr/api/v1/health` -> `HTTP 200` (`{"status":"healthy","database":"connected","service":"unified-backend"}`), vitrin (`/`) -> `HTTP 200`, yönetim paneli (`/admin`) -> `HTTP 200`, tedarikçi girişi (`/supplier/login`) -> `HTTP 200` doğrulandı.
      - Canlı `GET /api/v1/supplier/attributes` uç noktası çağrılarak `merterdevdb` veritabanında `catalog.size_definitions` (**54 seçmeli beden tanımı**), `catalog.series_templates` (**12 hazır toptan seri şablonu**) ve `catalog.products.series_stock` (`DEFAULT 100`) şemasının idempotent olarak otomatik oluşturulduğu ve `HTTP 200` ile döndüğü teyit edildi.
+
+
+
+### [2026-11-12 03:36:30] - Oturum #118 (Üye Yolculuk Haritası & Kronolojik Aktivite Tarihçesi Sistemi - Kayıt Öncesi Gezinti Birleştirme, Sayfa/Ürün/İçerik Okuma Süreleri & Admin Panel)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"üye olanları takip etmek istiyorum bir haritası gibi üye oldu şu sayfalarda gezdi şunu yaptı bunu yaptı işte şu ürünlere göz attı hakkımızdayı okudu gibi şeyler bir tarihçe istiyorum anlayacağın bunu yapabilir misin"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Veritabanı & Otomatik Şema Kurulumu (`PostgreSQL` + `Go Backend`):**
+     - [`database/0030_add_member_activity_journey.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0030_add_member_activity_journey.sql) ve idempotent otomatik şema başlatıcı [`ensureMemberActivitySchema`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/member_journey_tracker.go#L19-L87) eklendi:
+       - `analytics.page_views` tablosuna `user_id`, `page_title` ve `duration_sec` (sayfada kalma süresi) eklendi.
+       - `analytics.user_visitor_links` tablosu ile tarayıcıdaki anonim `visitor_id` (`mv_vid`) kimliği, kullanıcı üye olduğu veya giriş yaptığı anda `user_id` ile birleştirilerek (`StitchVisitorToMember`) **üyelik öncesinde gezdiği sayfalar ve baktığı ürünlerin bile** üyenin kişisel tarihçesine otomatik bağlanması sağlandı.
+       - `analytics.member_events` tablosu ile tüm üye hareketleri (`register`, `login`, `email_verified`, `cms_read`, `blog_read`, `faq_read`, `contact_view`, `product_view`, `brand_view`, `category_view`, `search_query`, `cart_add`, `whatsapp_click`, `phone_click`, `chat_start`, `rfq_create`, `inquiry_submit`, `order_create`, `wishlist_add`) tek bir kronolojik defterde toplandı.
+  2. **Akıllı URL Çözümleyici & Sunucu Aktivite Kancaları (`backend/`):**
+     - [`member_journey_tracker.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/member_journey_tracker.go): `resolveStorePathActivity` ile ziyaret edilen her URL otomatik olarak veritabanından zenginleştirildi (`/tr/pages/hakkimizda` -> *"Hakkımızda sayfasını okudu"*, `/product/...` -> *"ürününe göz attı"* + ürün görseli/SKU/üretici adı, `/ureticiler/...` -> *"üretici vitrinini inceledi"*, `/blog/...` -> *"blog yazısını okudu"*, kategori ve arama sorguları).
+     - [`member_journey_admin.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/member_journey_admin.go): `GET /api/v1/admin/member-journeys` ve `GET /api/v1/customers/{id}/journey` uç noktaları oluşturuldu; geçmiş veritabanı kayıtları (`identity.users`, `user_login_history`, `orders`, `store_inquiries`, `chat_rooms`, `buyer_rfqs`) ile canlı aktivite akışı tek zaman çizelgesinde birleştirildi.
+     - [`store_auth.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_auth.go), [`mobile_auth_handler.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_auth_handler.go), [`mobile_engagement_handler.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_engagement_handler.go), [`store_orders.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_orders.go), [`store_inquiry.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_inquiry.go), [`analytics.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/analytics.go), [`brand_analytics.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/brand_analytics.go) ve [`router.go`](file:///c:/Projects/mertervitrini.com.tr/backend/router.go) entegre edildi.
+  3. **Vitrin Telemetrisi & Yönetim Paneli Görsel Haritası (`frontend/`):**
+     - [`AnalyticsTracker.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/analytics/AnalyticsTracker.tsx), [`AuthModal.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/AuthModal.tsx), [`google-callback/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/google-callback/page.tsx), [`ProductDetailClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/ProductDetailClient.tsx) ve [`utils.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/utils.ts): Sayfada kalma süresi (`page_dwell`), sepete seri ekleme (`cart_add`), tedarikçi WhatsApp/telefon tıklamaları ve kayıt/giriş `visitor_id` eşleştirmesi bağlandı.
+     - [`CustomerJourneyPanel.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomerJourneyPanel.tsx), [`MemberJourneyExplorer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/MemberJourneyExplorer.tsx), [`admin/member-journeys/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/admin/member-journeys/page.tsx), [`CustomersManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomersManager.tsx) ve [`adminNavigation.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/config/adminNavigation.ts): Admin sol menüsüne **"Üye Yolculuk Haritası"** sayfası ve Müşteriler tablosundaki her satıra **"Yolculuk & Tarihçe"** butonu eklendi (6 aşamalı görsel yaşam döngüsü haritası, fotoğraflı incelenen ürünler listesi, okunan kurumsal sayfalar ve gün bazlı filtrelenebilir kronolojik tarihçe).
+  4. **Doğrulama:**
+     - `go vet ./...`, Windows & Linux AMD64 Go binary derlemesi, `npx tsc --noEmit` ve `npm run lint` kontrolleri sıfır hata/uyarı ile geçti; değişiklikler çalışma ağacında bırakıldı.
+
+
+
+### [2026-11-12 04:05:30] - Oturum #119 (Üye Yolculuk Haritası & Aktivite Tarihçesi Yerel Commit, Canlı AlmaLinux Dağıtımı ve Uçtan Uca Doğrulama)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"onaylıyorum"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Yerel Git Commit İşlemi (Conventional Commits):**
+     - Üye Yolculuk Haritası ve Aktivite Tarihçesi sistemine ait 22 dosya yerel depoda commit'lendi (`feat: add member journey map, pre-signup visitor stitching, dwell tracking, and chronological activity timeline in admin panel` — uzak depoya `push` yapılmadı).
+  2. **Canlı Üretim Sunucusuna Dağıtım (`213.202.255.80`):**
+     - `python scripts\unified_deployer.py -p unified -c all -a all --remote-build` komutuyla:
+       - **Go Backend (`merter-backend.service`, Port `8080`):** Linux AMD64 (`41.89 MB`) olarak derlenip canlı sunucuya aktarıldı ve servis yeniden başlatıldı.
+       - **Next.js SSR Frontend (`merter-frontend.service`, Port `3000`):** Kaynak dosyalar aktarıldı, doğrudan sunucuda `npm install + npm run build` (`remote-build`) ile derlendi ve `merter-frontend` + `nginx` servisleri yeniden başlatıldı (toplam süre: `229.82 sn`).
+  3. **Canlı Ortam Uçtan Uca (E2E) Doğrulaması:**
+     - `https://mertervitrini.com.tr/api/v1/health`, `/`, `/admin` ve `/admin/member-journeys` uç noktaları `HTTP 200` olarak doğrulandı.
+     - Canlı ortamda `Test Müşteri` ile `POST /api/v1/store/track` (`/tr/pages/hakkimizda`) ve `POST /api/v1/store/member-events` (`page_dwell: 25 sn`) simüle edildi; ardından Admin yetkisiyle `GET /api/v1/admin/member-journeys` (**36 üye**) ve `GET /api/v1/customers/{id}/journey` çağrılarak `analytics.member_events` ve `analytics.user_visitor_links` şemalarının canlı `merterdevdb` üzerinde otomatik kurulduğu ve *"`Hakkımızda` sayfasını okudu (`25 sn`)"* kaydının anında zaman çizelgesine düştüğü teyit edildi.

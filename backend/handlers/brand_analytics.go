@@ -54,6 +54,7 @@ type TrackBrandEventRequest struct {
 	ProductID   string `json:"product_id,omitempty"`
 	EventType   string `json:"event_type"`
 	VisitorID   string `json:"visitor_id,omitempty"`
+	AuthToken   string `json:"auth_token,omitempty"`
 	CountryCode string `json:"country_code,omitempty"`
 	Language    string `json:"language,omitempty"`
 }
@@ -243,7 +244,7 @@ func insertBrandEventRecord(p brandEventRecordParams) {
 func (h *AnalyticsHandler) TrackBrandEvent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", headerContentType)
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Visitor-Id")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -271,6 +272,7 @@ func (h *AnalyticsHandler) TrackBrandEvent(w http.ResponseWriter, r *http.Reques
 	if visitorID == "" {
 		visitorID = hashIP(getClientIP(r))
 	}
+	userID := resolveAuthenticatedMemberID(r, req.AuthToken)
 	countryCode, langCode := resolveVisitorCountryAndLang(r, req.CountryCode, req.Language)
 	deviceType, _, _ := parseDeviceAndBrowser(r.UserAgent(), 0)
 	refHost := parseReferrerHost(r.Referer())
@@ -286,8 +288,59 @@ func (h *AnalyticsHandler) TrackBrandEvent(w http.ResponseWriter, r *http.Reques
 		RefHost:     refHost,
 	})
 
+	if eventType != "product_view" && eventType != "profile_view" {
+		recordBrandContactMemberEvent(r, userID, visitorID, brandID, strings.TrimSpace(req.ProductID), eventType)
+	}
+
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Write([]byte(`{"ok":true}`))
+}
+
+func recordBrandContactMemberEvent(r *http.Request, userID, visitorID, brandID, productID, eventType string) {
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userID,
+		VisitorID:     visitorID,
+		EventType:     eventType,
+		EventCategory: "engagement",
+		Title:         brandInteractionLabel(brandID, productID, eventType),
+		EntityType:    "brand",
+		EntityID:      brandID,
+		Metadata: map[string]any{
+			"brand_id":   brandID,
+			"product_id": productID,
+		},
+	})
+}
+
+func brandInteractionLabel(brandID, productID, eventType string) string {
+	brandName := "Üretici Firma"
+	prodTitle := ""
+	if db.Pool != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = db.Pool.QueryRow(ctx, `SELECT brand_name FROM catalog.brands WHERE id::text = $1 LIMIT 1`, brandID).Scan(&brandName)
+		if productID != "" {
+			_ = db.Pool.QueryRow(ctx, `SELECT title FROM catalog.products WHERE id::text = $1 LIMIT 1`, productID).Scan(&prodTitle)
+		}
+	}
+	target := "“" + brandName + "”"
+	if prodTitle != "" {
+		target += " (" + prodTitle + ")"
+	}
+	switch eventType {
+	case "whatsapp_click":
+		return target + " için WhatsApp iletişimine tıkladı"
+	case "phone_click":
+		return target + " telefon numarasına tıkladı"
+	case "email_click":
+		return target + " e-posta iletişimine tıkladı"
+	case "website_click":
+		return target + " web sitesi bağlantısına tıkladı"
+	case "chat_start":
+		return target + " ile canlı sohbet penceresini açtı"
+	default:
+		return target + " ile iletişime geçti"
+	}
 }
 
 func resolveSupplierAnalyticsPeriod(raw string) (time.Time, string) {

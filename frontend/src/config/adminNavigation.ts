@@ -19,6 +19,7 @@ import {
   BarChart3,
   FileText,
   Sparkles,
+  Compass,
   LucideIcon
 } from "lucide-react";
 
@@ -156,6 +157,15 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
         href: "/admin/customers",
         icon: Users,
         description: "Kurumsal B2B müşteri hesapları ve onay talepleri"
+      },
+      {
+        id: "member-journeys",
+        title: "Üye Yolculuk Haritası",
+        href: "/admin/member-journeys",
+        icon: Compass,
+        badge: "Canlı",
+        badgeColor: "violet",
+        description: "Üyelerin gezdiği sayfalar, okuduğu içerikler ve incelediği ürünlerin tarihçesi"
       },
       {
         id: "rfq",

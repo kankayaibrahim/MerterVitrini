@@ -23,6 +23,11 @@ type AnalyticsHandler struct {
 
 // NewAnalyticsHandler creates a new AnalyticsHandler.
 func NewAnalyticsHandler(cfg *config.Config) *AnalyticsHandler {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		ensureMemberActivitySchema(ctx)
+	}()
 	return &AnalyticsHandler{cfg: cfg}
 }
 
@@ -30,6 +35,8 @@ func NewAnalyticsHandler(cfg *config.Config) *AnalyticsHandler {
 type TrackPageViewRequest struct {
 	VisitorID    string `json:"visitor_id"`
 	SessionID    string `json:"session_id"`
+	AuthToken    string `json:"auth_token,omitempty"`
+	PageTitle    string `json:"page_title,omitempty"`
 	URL          string `json:"url"`
 	Path         string `json:"path"`
 	Referrer     string `json:"referrer"`
@@ -39,8 +46,10 @@ type TrackPageViewRequest struct {
 }
 
 type pageViewRecord struct {
+	userID       string
 	visitorID    string
 	sessionID    string
+	pageTitle    string
 	url          string
 	path         string
 	referrer     string
@@ -52,6 +61,8 @@ type pageViewRecord struct {
 	browser      string
 	os           string
 	language     string
+	countryCode  string
+	ipAddress    string
 	ipHash       string
 	screenWidth  int
 	screenHeight int
@@ -116,7 +127,7 @@ type AnalyticsStatsResponse struct {
 func (h *AnalyticsHandler) TrackPageView(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", headerContentType)
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Visitor-Id")
 
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -135,6 +146,7 @@ func (h *AnalyticsHandler) TrackPageView(w http.ResponseWriter, r *http.Request)
 	}
 
 	if strings.HasPrefix(path, "/admin") ||
+		strings.HasPrefix(path, "/supplier") ||
 		strings.HasPrefix(path, "/api") ||
 		strings.HasPrefix(path, "/_next") ||
 		strings.Contains(path, "favicon.ico") {
@@ -145,6 +157,7 @@ func (h *AnalyticsHandler) TrackPageView(w http.ResponseWriter, r *http.Request)
 
 	ip := getClientIP(r)
 	ipHash := hashIP(ip)
+	userID := resolveAuthenticatedMemberID(r, req.AuthToken)
 
 	visitorID := strings.TrimSpace(req.VisitorID)
 	if visitorID == "" {
@@ -160,6 +173,7 @@ func (h *AnalyticsHandler) TrackPageView(w http.ResponseWriter, r *http.Request)
 	deviceType, browser, os := parseDeviceAndBrowser(ua, req.ScreenWidth)
 	refHost := parseReferrerHost(req.Referrer)
 	utmSource, utmMedium, utmCampaign := parseUTM(req.URL)
+	countryCode, _ := resolveVisitorCountryAndLang(r, "", req.Language)
 
 	lang := strings.ToLower(strings.TrimSpace(req.Language))
 	if lang == "" || len(lang) > 10 {
@@ -171,8 +185,10 @@ func (h *AnalyticsHandler) TrackPageView(w http.ResponseWriter, r *http.Request)
 	}
 
 	rec := pageViewRecord{
+		userID:       userID,
 		visitorID:    visitorID,
 		sessionID:    sessionID,
+		pageTitle:    truncateStr(req.PageTitle, 300),
 		url:          req.URL,
 		path:         path,
 		referrer:     req.Referrer,
@@ -184,6 +200,8 @@ func (h *AnalyticsHandler) TrackPageView(w http.ResponseWriter, r *http.Request)
 		browser:      browser,
 		os:           os,
 		language:     lang,
+		countryCode:  countryCode,
+		ipAddress:    ip,
 		ipHash:       ipHash,
 		screenWidth:  req.ScreenWidth,
 		screenHeight: req.ScreenHeight,
@@ -199,20 +217,57 @@ func insertPageView(rec pageViewRecord) {
 	if db.Pool == nil {
 		return
 	}
-	query := `
-		INSERT INTO analytics.page_views (
-			visitor_id, session_id, url, path, referrer, referrer_host,
-			utm_source, utm_medium, utm_campaign, device_type, browser, os,
-			language, screen_width, screen_height, ip_hash
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-	`
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	ensureMemberActivitySchema(ctx)
+
+	effectiveUserID := rec.userID
+	if effectiveUserID != "" && rec.visitorID != "" {
+		StitchVisitorToMember(ctx, effectiveUserID, rec.visitorID)
+	} else if effectiveUserID == "" && rec.visitorID != "" {
+		effectiveUserID = lookupLinkedUserByVisitor(ctx, rec.visitorID)
+	}
+
+	query := `
+		INSERT INTO analytics.page_views (
+			user_id, visitor_id, session_id, page_title, url, path, referrer, referrer_host,
+			utm_source, utm_medium, utm_campaign, device_type, browser, os,
+			language, screen_width, screen_height, ip_hash
+		) VALUES (NULLIF($1, ''), $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+	`
 	_, _ = db.Pool.Exec(ctx, query,
-		rec.visitorID, rec.sessionID, rec.url, rec.path, rec.referrer, rec.referrerHost,
+		effectiveUserID, rec.visitorID, rec.sessionID, rec.pageTitle, rec.url, rec.path, rec.referrer, rec.referrerHost,
 		rec.utmSource, rec.utmMedium, rec.utmCampaign, rec.deviceType, rec.browser, rec.os,
 		rec.language, rec.screenWidth, rec.screenHeight, rec.ipHash,
 	)
+
+	resolved := resolveStorePathActivity(ctx, rec.path, rec.url, rec.pageTitle, rec.referrerHost)
+	meta := map[string]any{}
+	if rec.referrerHost != "" {
+		meta["referrer_host"] = rec.referrerHost
+	}
+	if rec.utmSource != "" {
+		meta["utm_source"] = rec.utmSource
+	}
+	persistMemberActivity(ctx, MemberActivityInput{
+		UserID:        effectiveUserID,
+		VisitorID:     rec.visitorID,
+		SessionID:     rec.sessionID,
+		EventType:     resolved.EventType,
+		EventCategory: resolved.EventCategory,
+		Title:         resolved.Title,
+		Subtitle:      resolved.Subtitle,
+		URLPath:       rec.path,
+		EntityType:    resolved.EntityType,
+		EntityID:      resolved.EntityID,
+		ImageURL:      resolved.ImageURL,
+		Metadata:      meta,
+		DeviceType:    rec.deviceType,
+		Browser:       rec.browser,
+		OS:            rec.os,
+		CountryCode:   rec.countryCode,
+		IPAddress:     rec.ipAddress,
+	})
 }
 
 func resolveSinceTime(period string) (time.Time, string) {

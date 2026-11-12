@@ -9,6 +9,7 @@ import Footer from "@/components/store/Footer";
 import { Category, CartItem } from "@/types/store";
 import { apiFetch } from "@/app/utils";
 import { t } from "@/app/i18n";
+import { getOrSetVisitorId } from "@/components/analytics/AnalyticsTracker";
 
 interface CallbackUserInfo {
   id?: string;
@@ -88,8 +89,9 @@ function GoogleCallbackHandler() {
       try {
         const origin = window.location.origin;
         const redirectUri = `${origin}/google-callback/`;
+        const vid = getOrSetVisitorId();
         
-        const response = await fetch(`/api/v1/store/auth/google-callback?code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(redirectUri)}`, {
+        const response = await fetch(`/api/v1/store/auth/google-callback?code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(redirectUri)}&visitor_id=${encodeURIComponent(vid)}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",

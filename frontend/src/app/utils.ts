@@ -149,13 +149,21 @@ export function trackBrandEvent(
 ): void {
   if (typeof window === "undefined" || !brandId || !eventType) return;
   const lang = localStorage.getItem("preferred_lang") || "tr";
+  const visitorId = localStorage.getItem("mv_vid") || "";
+  const authToken = localStorage.getItem("store_user_token") || "";
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
   fetch("/api/v1/store/brand-events", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({
       brand_id: brandId,
       product_id: productId || "",
       event_type: eventType,
+      visitor_id: visitorId,
+      auth_token: authToken,
       language: lang,
     }),
     keepalive: true,

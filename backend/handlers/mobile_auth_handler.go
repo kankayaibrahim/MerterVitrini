@@ -207,6 +207,16 @@ func (h *MobileHandler) loginAsCustomer(ctx context.Context, w http.ResponseWrit
 	safe.Go("Mobile Login History", func() {
 		recordLoginHistory(context.Background(), userInfo.ID, ip)
 	})
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userInfo.ID,
+		EventType:     "login",
+		EventCategory: "auth",
+		Title:         "Mobil uygulamadan oturum açtı",
+		Subtitle:      "IP: " + ip,
+		DeviceType:    "mobile_app",
+		EntityType:    "user",
+		EntityID:      userInfo.ID,
+	})
 
 	var hasSupplierAccount bool
 	_ = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM catalog.supplier_users WHERE lower(email) = $1 AND is_active = true)", email).Scan(&hasSupplierAccount)

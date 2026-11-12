@@ -153,6 +153,16 @@ func (h *MobileHandler) AddWishlistItem(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        userID,
+		EventType:     "wishlist_add",
+		EventCategory: "catalog",
+		Title:         "Bir ürünü favorilerine ekledi",
+		DeviceType:    "mobile_app",
+		EntityType:    "product",
+		EntityID:      productID,
+	})
+
 	httpx.JSON(w, http.StatusCreated, map[string]bool{"success": true})
 }
 

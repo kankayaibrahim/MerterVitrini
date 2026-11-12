@@ -252,6 +252,25 @@ func (h *InquiryHandler) SubmitInquiry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	inquiryUserID := resolveAuthenticatedMemberID(r, "")
+	if inquiryUserID == "" && req.Email != "" {
+		_ = db.Pool.QueryRow(ctx, `SELECT id FROM identity.users WHERE LOWER(email) = LOWER($1) LIMIT 1`, req.Email).Scan(&inquiryUserID)
+	}
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		UserID:        inquiryUserID,
+		EventType:     "inquiry_submit",
+		EventCategory: "commerce",
+		Title:         fmt.Sprintf("Toptan sipariş / teklif talebi gönderdi (%d kalem)", len(req.Items)),
+		Subtitle:      fmt.Sprintf("Toplam: %.2f TL • %s", totalPrice, req.FullName),
+		EntityType:    "inquiry",
+		EntityID:      inquiryID,
+		Metadata: map[string]any{
+			"order_number": orderNumber,
+			"total_price":  totalPrice,
+			"items_count":  len(req.Items),
+		},
+	})
+
 	var whatsAppURL string
 	if len(supplierOrders) > 0 && supplierOrders[0].WhatsappURL != "" {
 		whatsAppURL = supplierOrders[0].WhatsappURL

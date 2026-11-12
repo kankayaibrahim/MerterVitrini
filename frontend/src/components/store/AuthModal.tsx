@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { X, Lock, Mail, User, Phone, Check, AlertCircle, Building2 } from "lucide-react";
 import { t } from "@/app/i18n";
+import { getOrSetVisitorId } from "@/components/analytics/AnalyticsTracker";
 
 interface AuthModalProps {
   readonly isOpen: boolean;
@@ -133,7 +134,13 @@ interface GrecaptchaInstance {
       const response = await fetch("/api/v1/store/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, captcha_token: captchaToken, website_hp: websiteHp }),
+        body: JSON.stringify({
+          email,
+          password,
+          visitor_id: getOrSetVisitorId(),
+          captcha_token: captchaToken,
+          website_hp: websiteHp,
+        }),
       });
 
       const data = await response.json();
@@ -195,6 +202,7 @@ interface GrecaptchaInstance {
           email,
           phone,
           password,
+          visitor_id: getOrSetVisitorId(),
           captcha_token: captchaToken,
           website_hp: websiteHp,
         }),
