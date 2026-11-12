@@ -2,7 +2,7 @@
 
 /* ==============================================================================
    MERTER VITRINI B2B - MINIMAL KURUMSAL AÇIK TEMA (CLEAN WHITE / SLATE)
-   Keycloak 26 Quarkus Authentication Theme
+   Corporate Identity & Access Management Theme
    ============================================================================== */
 
 :root {
@@ -104,47 +104,83 @@ html, body {
   font-size: 15px;
   letter-spacing: 0.05em;
   color: var(--mv-text-main);
-  text-transform: uppercase;
 }
 
 .mv-brand-subtitle {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: #d97706;
 }
 
 /* Language Selector */
 .mv-lang-selector {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: flex-end;
+  gap: 0.3rem;
   background: #ffffff;
-  padding: 0.25rem 0.5rem;
-  border-radius: 9999px;
+  padding: 0.3rem 0.45rem;
+  border-radius: 16px;
   border: 1px solid var(--mv-border);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .mv-lang-btn {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--mv-text-muted);
   text-decoration: none;
-  padding: 0.25rem 0.5rem;
+  padding: 0.22rem 0.48rem;
   border-radius: 9999px;
   transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.mv-lang-code {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.32rem;
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.mv-lang-name {
+  font-size: 11.5px;
+  font-weight: 600;
 }
 
 .mv-lang-btn:hover {
   color: var(--mv-text-main);
-  background: #f1f5f9;
+  background: #f8fafc;
 }
 
 .mv-lang-btn.active {
   background: var(--mv-primary);
   color: #ffffff;
+}
+
+.mv-lang-btn.active .mv-lang-code {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fbbf24;
+}
+
+@media (max-width: 768px) {
+  .mv-lang-name {
+    display: none;
+  }
+  .mv-lang-btn {
+    padding: 0.22rem 0.35rem;
+  }
 }
 
 /* Card Container */

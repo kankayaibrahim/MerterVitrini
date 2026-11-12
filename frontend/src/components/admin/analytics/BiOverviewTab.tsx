@@ -24,6 +24,8 @@ import {
   TopItemCount,
   formatCurrencyTry,
   formatDurationSec,
+  translateDeviceShortTr,
+  translateReferrerHostTr,
 } from "./biTypes";
 
 type TrendMetricKey = "visitors" | "product_views" | "cart_adds" | "leads";
@@ -91,7 +93,7 @@ function ExecutiveKpiCard({
   return (
     <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between gap-3 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all">
       <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+        <span className="min-h-[2.25rem] flex items-start text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
           {title}
         </span>
         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${iconTone}`}>
@@ -289,10 +291,26 @@ function DailyTimeSeriesChart({ series }: { readonly series: BiDailySeriesPoint[
 function LiveStreamAndReferrers({
   recentEvents,
   topReferrers,
+  totalUniqueVisitors,
 }: {
   readonly recentEvents: RecentActivityEvent[];
   readonly topReferrers: TopItemCount[];
+  readonly totalUniqueVisitors: number;
 }) {
+  const normalizedReferrers = useMemo(() => {
+    const sorted = [...topReferrers].sort(
+      (a, b) => b.visitors - a.visitors || b.views - a.views
+    );
+    const sumVisitors = sorted.reduce((acc, item) => acc + Math.max(0, item.visitors), 0);
+    const denominator = Math.max(totalUniqueVisitors, sumVisitors, 1);
+
+    return sorted.slice(0, 6).map((ref) => ({
+      ...ref,
+      displayLabel: translateReferrerHostTr(ref.name),
+      visitorPct: ref.visitors > 0 ? Math.min(100, (ref.visitors / denominator) * 100) : 0,
+    }));
+  }, [topReferrers, totalUniqueVisitors]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Top Referrers Snapshot */}
@@ -305,31 +323,31 @@ function LiveStreamAndReferrers({
             <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
               Öne Çıkan Yönlendirenler
             </h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Anlık trafik yönlendirme kaynakları</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Tekil ziyaretçi payına göre yönlendirme kaynakları</p>
           </div>
         </div>
 
         <div className="flex flex-col gap-2.5">
-          {topReferrers.slice(0, 6).map((ref) => (
+          {normalizedReferrers.map((ref) => (
             <div key={ref.name} className="flex flex-col gap-1 p-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[180px]">
-                  {ref.name}
+              <div className="flex items-center justify-between text-xs gap-2">
+                <span className="font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[180px]" title={ref.displayLabel}>
+                  {ref.displayLabel}
                 </span>
-                <span className="text-zinc-500 dark:text-zinc-400 font-semibold">
-                  {ref.visitors} tekil (%{ref.percentage.toFixed(1)})
+                <span className="text-zinc-500 dark:text-zinc-400 font-semibold whitespace-nowrap tabular-nums">
+                  {ref.visitors.toLocaleString("tr-TR")} tekil (%{ref.visitorPct.toFixed(1)})
                 </span>
               </div>
               <div className="w-full h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
                 <div
                   className="h-full bg-violet-600 rounded-full"
-                  style={{ width: `${Math.min(100, Math.max(4, ref.percentage))}%` }}
+                  style={{ width: `${Math.min(100, Math.max(4, ref.visitorPct))}%` }}
                 />
               </div>
             </div>
           ))}
 
-          {topReferrers.length === 0 && (
+          {normalizedReferrers.length === 0 && (
             <div className="py-8 text-center text-xs text-zinc-400">
               Henüz yönlendirme kaydı bulunmuyor.
             </div>
@@ -374,10 +392,10 @@ function LiveStreamAndReferrers({
                 </div>
                 <div className="flex items-center gap-3 text-zinc-400 text-[11px] shrink-0">
                   <span className="text-zinc-500 dark:text-zinc-400 hidden sm:inline truncate max-w-[140px]">
-                    {ev.referrer_host}
+                    {translateReferrerHostTr(ev.referrer_host)}
                   </span>
-                  <span className="capitalize px-2 py-0.5 rounded-md bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                    {ev.device_type}
+                  <span className="px-2 py-0.5 rounded-md bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                    {translateDeviceShortTr(ev.device_type)}
                   </span>
                   <span className="font-mono">{formattedTime}</span>
                 </div>
@@ -483,7 +501,7 @@ export default function BiOverviewTab({
 
         <div className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-zinc-200/80 dark:border-zinc-800 shadow-xs flex flex-col justify-between gap-3">
           <div className="flex items-start justify-between gap-2">
-            <span className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+            <span className="min-h-[2.25rem] flex items-start text-[11px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
               Hemen Çıkma Oranı (Bounce)
             </span>
             <div className="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
@@ -522,7 +540,11 @@ export default function BiOverviewTab({
       <DailyTimeSeriesChart series={dailySeries} />
 
       {/* Live Recent Stream + Referrer Snapshot */}
-      <LiveStreamAndReferrers recentEvents={recentEvents} topReferrers={topReferrers} />
+      <LiveStreamAndReferrers
+        recentEvents={recentEvents}
+        topReferrers={topReferrers}
+        totalUniqueVisitors={overview.unique_visitors}
+      />
     </div>
   );
 }

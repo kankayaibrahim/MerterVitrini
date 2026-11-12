@@ -717,13 +717,13 @@ function ServiceProviderBadges({
   return (
     <div className="flex items-center gap-2 flex-wrap mb-1">
       {isSponsored && (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-amber-500 text-white text-[10px] font-extrabold uppercase tracking-wider">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-[#FAF7F2] border border-[#D8C7A6] text-[#6E542E] text-[10px] font-extrabold uppercase tracking-wider">
           <Sparkles size={11} />
           <span>{copy.sponsoredBadge}</span>
         </span>
       )}
       {isVerified && (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-[#15803D] border border-emerald-200 text-[10px] font-bold">
           <ShieldCheck size={11} />
           <span>{copy.verifiedBadge}</span>
         </span>
@@ -747,7 +747,7 @@ function ServiceProviderContactMeta({
     <div className="pt-3 border-t border-slate-100 space-y-1.5 text-xs text-slate-600">
       {targetCountries && (
         <div className="flex items-center gap-1.5">
-          <Globe size={13} className="text-sky-600 shrink-0" />
+          <Globe size={13} className="text-[#8C6D3F] shrink-0" />
           <span>
             <strong>{targetCountriesLabel}</strong> {targetCountries}
           </span>
@@ -764,7 +764,7 @@ function ServiceProviderContactMeta({
           <Phone size={13} className="text-slate-400 shrink-0" />
           <a
             href={`tel:${phone}`}
-            className="font-bold text-slate-800 hover:text-amber-600 no-underline"
+            className="font-bold text-[#1C1C1C] hover:underline no-underline"
           >
             {phone}
           </a>
@@ -797,12 +797,12 @@ function ServiceProviderCard({
     : "";
 
   const borderCls = item.is_sponsored
-    ? "border-amber-400/90 ring-1 ring-amber-400/30"
-    : "border-slate-200/90";
+    ? "border-[#D8C7A6] bg-[#FAF7F2]/40"
+    : "border-[#E5E0D8] bg-white";
 
   return (
     <div
-      className={`bg-white rounded-2xl border ${borderCls} shadow-xs hover:shadow-md transition-all p-6 flex flex-col justify-between gap-4`}
+      className={`rounded-lg border ${borderCls} shadow-xs hover:shadow-md transition-all p-6 flex flex-col justify-between gap-4`}
     >
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -812,21 +812,21 @@ function ServiceProviderCard({
               isVerified={item.is_verified}
               copy={copy}
             />
-            <h2 className="text-base font-extrabold text-slate-900">
+            <h2 className="text-base font-extrabold text-[#1C1C1C]">
               {item.company_name}
             </h2>
-            <p className="text-xs font-bold text-amber-700 mt-0.5">{catLabel}</p>
+            <p className="text-xs font-bold text-[#6E542E] mt-0.5">{catLabel}</p>
           </div>
         </div>
 
-        <p className="text-xs text-slate-600 leading-relaxed">{shortDesc}</p>
+        <p className="text-xs text-[#525252] leading-relaxed">{shortDesc}</p>
 
         {serviceTags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {serviceTags.map((tag) => (
               <span
                 key={tag}
-                className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-800 text-[11px] font-semibold"
+                className="px-2.5 py-1 rounded-md bg-[#F8F6F2] border border-[#E5E0D8] text-[#1C1C1C] text-[11px] font-semibold"
               >
                 ✓ {tag}
               </span>
@@ -849,7 +849,7 @@ function ServiceProviderCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => recordProviderClick(item.id)}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold no-underline transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-extrabold no-underline transition-colors"
           >
             <MessageCircle size={14} />
             <span>{copy.whatsappBtn}</span>
@@ -859,7 +859,7 @@ function ServiceProviderCard({
           <a
             href={`tel:${item.phone}`}
             onClick={() => recordProviderClick(item.id)}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
           >
             <Phone size={14} />
             <span>{copy.callBtn}</span>
@@ -889,7 +889,7 @@ function ServiceProvidersDirectoryContent({
         {[1, 2, 3, 4].map((n) => (
           <div
             key={n}
-            className="h-56 rounded-2xl bg-white border border-slate-200 animate-pulse p-6"
+            className="h-56 rounded-lg bg-white border border-[#E5E0D8] animate-pulse p-6"
           />
         ))}
       </div>
@@ -898,22 +898,22 @@ function ServiceProvidersDirectoryContent({
 
   if (items.length === 0) {
     return (
-      <div className="bg-white rounded-3xl border border-slate-200 p-10 sm:p-14 text-center space-y-4 shadow-xs">
-        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+      <div className="bg-white rounded-lg border border-[#E5E0D8] p-10 sm:p-14 text-center space-y-4 shadow-xs">
+        <div className="w-14 h-14 rounded-lg bg-[#F8F6F2] border border-[#E5E0D8] text-[#8C6D3F] flex items-center justify-center mx-auto">
           <Sparkles size={26} />
         </div>
         <div className="space-y-1.5 max-w-lg mx-auto">
-          <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
+          <h2 className="text-base sm:text-lg font-extrabold text-[#1C1C1C]">
             {copy.emptyTitle}
           </h2>
-          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+          <p className="text-xs sm:text-sm text-[#525252] leading-relaxed">
             {copy.emptyDesc}
           </p>
         </div>
         <button
           type="button"
           onClick={onOpenApply}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold uppercase tracking-wider cursor-pointer border-none shadow-xs"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold uppercase tracking-wider cursor-pointer border-none shadow-xs"
         >
           <Plus size={15} />
           <span>{copy.emptyApplyBtn}</span>
@@ -1033,7 +1033,7 @@ function ServiceProviderSubmittedNotice({
       <button
         type="button"
         onClick={onClose}
-        className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold cursor-pointer border-none shadow-xs"
+        className="w-full py-2.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold cursor-pointer border-none shadow-xs"
       >
         {copy.gotItBtn}
       </button>
@@ -1293,15 +1293,15 @@ function ServiceProviderApplyModal({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 font-medium">
-              <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
+            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-[#F8F6F2] border border-[#E5E0D8] text-[11px] text-[#525252] font-medium">
+              <ShieldCheck size={15} className="text-[#15803D] shrink-0" />
               <span>{copy.recaptchaNotice}</span>
             </div>
 
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold uppercase tracking-wider cursor-pointer border-none shadow-xs"
+              className="w-full py-3 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold uppercase tracking-wider cursor-pointer border-none shadow-xs"
             >
               {submitLabel}
             </button>
@@ -1474,16 +1474,16 @@ export default function ServiceProvidersClient({
         />
 
         {/* Hero Banner */}
-        <div className="bg-gradient-to-br from-sky-50/90 via-white to-amber-50/60 border border-sky-200/80 text-slate-900 rounded-3xl p-6 sm:p-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6 shadow-xs">
+        <div className="bg-[#F8F6F2] border border-[#E5E0D8] text-[#1C1C1C] rounded-lg p-6 sm:p-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6 shadow-xs">
           <div className="space-y-2.5 max-w-2xl">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-100/80 border border-sky-200 text-sky-800 text-xs font-extrabold uppercase tracking-wider">
-              <Sparkles size={13} className="text-sky-600" />
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#E5E0D8] text-[#6E542E] text-xs font-extrabold uppercase tracking-wider">
+              <Sparkles size={13} className="text-[#8C6D3F]" />
               <span>{copy.heroBadge}</span>
             </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1C1C1C]">
               {copy.heroTitle}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#525252] leading-relaxed">
               {copy.heroDesc}
             </p>
           </div>
@@ -1491,7 +1491,7 @@ export default function ServiceProvidersClient({
           <button
             type="button"
             onClick={() => setShowApplyModal(true)}
-            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold uppercase tracking-wider shrink-0 cursor-pointer border-none shadow-xs transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold uppercase tracking-wider shrink-0 cursor-pointer border-none shadow-xs transition-colors"
           >
             <Plus size={16} />
             <span>{copy.heroApplyBtn}</span>
@@ -1499,20 +1499,20 @@ export default function ServiceProvidersClient({
         </div>
 
         {/* Category Filter Tabs & Search */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xs">
+        <div className="bg-white rounded-lg border border-[#E5E0D8] p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xs">
           <div className="flex flex-wrap gap-2">
             {serviceCategories.map((cat) => {
               const Icon = cat.icon;
               const active = selectedCategory === cat.id;
               const btnCls = active
-                ? "bg-sky-600 text-white shadow-xs"
-                : "bg-slate-50/80 hover:bg-sky-50/70 text-slate-700 hover:text-sky-800 border border-slate-200";
+                ? "bg-[#1C1C1C] text-white border border-[#1C1C1C] shadow-xs"
+                : "bg-white hover:bg-[#F8F6F2] text-[#525252] hover:text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C]";
               return (
                 <button
                   key={cat.id}
                   type="button"
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${btnCls}`}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md text-xs font-bold cursor-pointer transition-colors ${btnCls}`}
                 >
                   <Icon size={14} />
                   <span>{cat.label}</span>
@@ -1527,7 +1527,7 @@ export default function ServiceProvidersClient({
             </label>
             <Search
               size={15}
-              className="text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"
+              className="text-slate-400 absolute start-3 top-1/2 -translate-y-1/2"
             />
             <input
               id="sp-search-input"
@@ -1535,7 +1535,7 @@ export default function ServiceProvidersClient({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={copy.searchPlaceholder}
-              className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:border-sky-600"
+              className="w-full ps-9 pe-3 py-2 rounded-md border border-[#D6D1C7] text-xs font-semibold focus:outline-none focus:border-[#1C1C1C]"
             />
           </div>
         </div>

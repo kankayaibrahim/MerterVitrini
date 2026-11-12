@@ -69,23 +69,23 @@ export default function Header({
   return (
     <>
       {/* Header Settings Bar */}
-      <header className="sticky top-0 z-40 w-full glass-panel border-b border-zinc-200/60 bg-white/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-40 w-full glass-panel border-b border-slate-200/90 bg-white/95 backdrop-blur-md px-6 py-4 flex items-center justify-between text-[#0F172A]">
         <div className="flex items-center gap-3">
           {onMenuToggle && (
             <button 
               onClick={onMenuToggle}
-              className="lg:hidden p-2 rounded-xl border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 shadow-sm transition-all mr-1 shrink-0 cursor-pointer"
+              className="lg:hidden p-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-sm transition-all mr-1 shrink-0 cursor-pointer"
               type="button"
             >
               <Menu size={18} />
             </button>
           )}
-          <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center text-white shadow-md shadow-violet-500/20 font-bold text-lg shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-[#0F172A] border border-[#8C6D3F]/40 flex items-center justify-center text-[#F3E2C7] shadow-md shadow-slate-900/15 font-bold text-lg shrink-0">
             {LABELS.logoText}
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900">{LABELS.title}</h1>
-            <p className="text-xs font-medium text-zinc-500">{LABELS.subtitle}</p>
+            <h1 className="text-xl font-bold tracking-tight text-[#0F172A]">{LABELS.title}</h1>
+            <p className="text-xs font-medium text-slate-600">{LABELS.subtitle}</p>
           </div>
         </div>
 
@@ -96,7 +96,7 @@ export default function Header({
             target="_blank"
             rel="noopener noreferrer"
             title={LABELS.viewSite}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 hover:text-violet-600 text-zinc-700 shadow-sm text-xs font-bold transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-[#0F172A] shadow-sm text-xs font-bold transition-all cursor-pointer whitespace-nowrap"
           >
             <Globe size={16} />
             <span className="hidden md:inline">{LABELS.viewSite}</span>

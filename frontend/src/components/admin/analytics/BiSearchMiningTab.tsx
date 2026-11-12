@@ -13,8 +13,9 @@ import {
 import {
   BiSearchMining,
   formatRelativeTimeTr,
-  getCountryFlagEmoji,
+  getCountryLabelTr,
 } from "./biTypes";
+import CountryFlagBadge from "./CountryFlagBadge";
 
 export interface BiSearchMiningTabProps {
   readonly searchMining: BiSearchMining;
@@ -168,11 +169,15 @@ export default function BiSearchMiningTab({ searchMining }: BiSearchMiningTabPro
                     &ldquo;{item.query}&rdquo;
                   </div>
                   <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
-                    <span>
-                      {getCountryFlagEmoji(item.top_country)} {item.top_country}
+                    <span className="inline-flex items-center gap-1.5 font-medium text-zinc-700">
+                      <CountryFlagBadge
+                        countryCode={item.top_country}
+                        title={getCountryLabelTr(item.top_country)}
+                      />
+                      <span>{getCountryLabelTr(item.top_country)}</span>
                     </span>
                     <span>•</span>
-                    <span className="uppercase font-mono">{item.top_lang}</span>
+                    <span className="uppercase font-mono">Dil: {item.top_lang}</span>
                     <span>•</span>
                     <span>Son: {formatRelativeTimeTr(item.last_searched_at)}</span>
                   </div>
@@ -250,8 +255,17 @@ export default function BiSearchMiningTab({ searchMining }: BiSearchMiningTabPro
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right whitespace-nowrap font-semibold text-zinc-700 dark:text-zinc-300">
-                      {getCountryFlagEmoji(row.top_country)} {row.top_country} •{" "}
-                      <span className="font-mono uppercase">{row.top_lang}</span>
+                      <span className="inline-flex items-center justify-end gap-1.5">
+                        <CountryFlagBadge
+                          countryCode={row.top_country}
+                          title={getCountryLabelTr(row.top_country)}
+                        />
+                        <span>{getCountryLabelTr(row.top_country)}</span>
+                        <span className="text-zinc-400">•</span>
+                        <span className="font-mono uppercase text-[11px] px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700">
+                          {row.top_lang}
+                        </span>
+                      </span>
                     </td>
                   </tr>
                 ))}

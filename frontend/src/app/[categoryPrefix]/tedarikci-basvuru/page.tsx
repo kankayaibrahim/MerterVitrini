@@ -2,6 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import SupplierApplicationClient from "./SupplierApplicationClient";
 import { SUPPLIER_TRANSLATIONS } from "./translations";
+import { stripBrandTitleSuffix } from "@/utils/seoHelpers";
 
 interface PageProps {
   readonly params: Promise<{
@@ -32,7 +33,7 @@ export async function generateMetadata({ params }: Readonly<PageProps>): Promise
   });
 
   return {
-    title: t.meta_title,
+    title: stripBrandTitleSuffix(t.meta_title),
     description: t.meta_desc,
     alternates: {
       canonical: canonicalUrl,

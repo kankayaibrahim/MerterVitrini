@@ -20,6 +20,7 @@ import { getValidStoreUser, StoreUser } from "@/app/storeAuth";
 import AuthModal from "./AuthModal";
 import WishlistDrawer from "./WishlistDrawer";
 import { useWishlistStore } from "@/store/useWishlistStore";
+import { formatAsciiSafeUpper } from "@/utils/formatters";
 
 const getFlagUrl = (code: string): string => {
   const mapping: Record<string, string> = {
@@ -102,9 +103,9 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     verifyNow: "Verify",
   },
   ru: {
-    manufacturers: "ПРОИЗВОДИТЕЛИ",
-    buyingLeads: "ЗАПРОСЫ ЗАКУПОК (RFQ)",
-    b2bServices: "ЛОГИСТИКА И УСЛУГИ",
+    manufacturers: "ФАБРИКИ",
+    buyingLeads: "ЗАЯВКИ (RFQ)",
+    b2bServices: "УСЛУГИ B2B",
     androidApp: "ANDROID APK",
     officialAndroidApp: "Официальное Android-приложение",
     getApk: "СКАЧАТЬ APK",
@@ -151,7 +152,7 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
   },
   fr: {
     manufacturers: "FABRICANTS",
-    buyingLeads: "APPELS D'OFFRES (RFQ)",
+    buyingLeads: "APPELS RFQ",
     b2bServices: "SERVICES B2B",
     androidApp: "APP ANDROID",
     officialAndroidApp: "Application Android Officielle",
@@ -167,9 +168,9 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
   },
   pl: {
     manufacturers: "PRODUCENCI",
-    buyingLeads: "ZAPYTANIA OFERTOWE (RFQ)",
+    buyingLeads: "ZAPYTANIA RFQ",
     b2bServices: "USŁUGI B2B",
-    androidApp: "APLIKACJA ANDROID",
+    androidApp: "ANDROID APK",
     officialAndroidApp: "Oficjalna aplikacja Android",
     getApk: "POBIERZ APK",
     submitSearch: "Szukaj",
@@ -185,7 +186,7 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     manufacturers: "ПРОИЗВОДИТЕЛИ",
     buyingLeads: "ЗАПИТВАНИЯ (RFQ)",
     b2bServices: "B2B УСЛУГИ",
-    androidApp: "ANDROID ПРИЛОЖЕНИЕ",
+    androidApp: "ANDROID APK",
     officialAndroidApp: "Официално Android приложение",
     getApk: "ИЗТЕГЛИ APK",
     submitSearch: "Търсене",
@@ -361,28 +362,28 @@ function HeaderTopBar({
         <div className="flex items-center gap-2">
           <Link
             href={buildQueryLocalizedRouteHref("/ureticiler", lang)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] hover:border-[#1C1C1C] hover:bg-[#EFECE6] font-bold text-[11px] tracking-wider transition-colors whitespace-nowrap no-underline"
           >
-            <span>{ui.manufacturers}</span>
+            <span>{lang === "ar" ? ui.manufacturers : formatAsciiSafeUpper(ui.manufacturers)}</span>
           </Link>
           <Link
             href={buildQueryLocalizedRouteHref("/alim-talepleri", lang)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] hover:border-[#1C1C1C] hover:bg-[#EFECE6] font-bold text-[11px] tracking-wider transition-colors whitespace-nowrap no-underline"
           >
-            <span>{ui.buyingLeads}</span>
+            <span>{lang === "ar" ? ui.buyingLeads : formatAsciiSafeUpper(ui.buyingLeads)}</span>
           </Link>
           <Link
             href={buildQueryLocalizedRouteHref("/hizmet-saglayicilar", lang)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] hover:border-[#1C1C1C] hover:bg-[#EFECE6] font-bold text-[11px] tracking-wider transition-colors whitespace-nowrap no-underline"
           >
-            <span>{ui.b2bServices}</span>
+            <span>{lang === "ar" ? ui.b2bServices : formatAsciiSafeUpper(ui.b2bServices)}</span>
           </Link>
           <Link
             href={buildQueryLocalizedRouteHref("/mobil-uygulama", lang)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-violet-50 hover:bg-violet-100 text-violet-800 border border-violet-200 font-extrabold text-[11px] uppercase tracking-wider transition-colors no-underline"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] hover:border-[#1C1C1C] hover:bg-[#EFECE6] font-bold text-[11px] tracking-wider transition-colors whitespace-nowrap no-underline"
           >
-            <Smartphone className="w-3.5 h-3.5 text-violet-600 shrink-0" />
-            <span>{ui.androidApp}</span>
+            <Smartphone className="w-3.5 h-3.5 text-[#8C6D3F] shrink-0" />
+            <span>{lang === "ar" ? ui.androidApp : formatAsciiSafeUpper(ui.androidApp)}</span>
           </Link>
           {/* Language selector */}
           <div className="relative">
@@ -491,6 +492,98 @@ interface HeaderNavbarProps {
   readonly getCategoryPrefix: () => string;
 }
 
+interface MegaMenuDropdownProps {
+  readonly parentCategory: Category;
+  readonly categories: readonly Category[];
+  readonly activeCategoryId: string;
+  readonly lang: string;
+  readonly onNavigate: (url: string) => void;
+}
+
+function MegaMenuDropdown({
+  parentCategory,
+  categories,
+  activeCategoryId,
+  lang,
+  onNavigate,
+}: Readonly<MegaMenuDropdownProps>) {
+  const children = parentCategory.children || [];
+  const populatedSubs = children.filter((sub) => sub.children && sub.children.length > 0);
+  const childlessSubs = children.filter((sub) => !sub.children || sub.children.length === 0);
+  const totalCols = Math.min(4, Math.max(1, populatedSubs.length + (childlessSubs.length > 0 ? 1 : 0)));
+  const gridColClass =
+    totalCols === 1
+      ? "grid-cols-1 max-w-xs"
+      : totalCols === 2
+        ? "grid-cols-2 max-w-2xl"
+        : totalCols === 3
+          ? "grid-cols-3 max-w-4xl"
+          : "grid-cols-4 max-w-5xl";
+
+  return (
+    <div
+      className={`absolute left-1/2 -translate-x-1/2 top-full pt-4 z-50 w-[90vw] ${gridColClass} transition-all duration-300 opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 pointer-events-none group-hover:pointer-events-auto`}
+    >
+      <div className={`bg-white border border-[#E5E0D8] rounded-md shadow-lg p-8 grid ${gridColClass} gap-x-8 gap-y-6`}>
+        {populatedSubs.map((sub) => (
+          <div key={sub.id} className="flex flex-col">
+            <button
+              type="button"
+              onClick={() => onNavigate(getCategoryUrl(categories as Category[], sub, lang))}
+              className={`text-start font-extrabold text-[13px] tracking-wider uppercase mb-3 border-none bg-transparent cursor-pointer transition-colors ${
+                activeCategoryId === sub.slug || activeCategoryId === sub.id
+                  ? "text-salmon-pink"
+                  : "text-eerie-black hover:text-salmon-pink"
+              }`}
+            >
+              {getCategoryTitle(sub, lang)}
+            </button>
+            <div className="flex flex-col gap-2 border-s border-cultured ps-3">
+              {(sub.children || []).map((child) => (
+                <button
+                  key={child.id}
+                  type="button"
+                  onClick={() => onNavigate(getCategoryUrl(categories as Category[], child, lang))}
+                  className={`text-start text-xs font-semibold border-none bg-transparent cursor-pointer transition-colors duration-150 py-0.5 ${
+                    activeCategoryId === child.slug || activeCategoryId === child.id
+                      ? "text-salmon-pink font-bold"
+                      : "text-sonic-silver hover:text-salmon-pink"
+                  }`}
+                >
+                  {getCategoryTitle(child, lang)}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {childlessSubs.length > 0 && (
+          <div className="flex flex-col gap-2.5 border-s border-cultured ps-4">
+            {childlessSubs.map((sub) => (
+              <button
+                key={sub.id}
+                type="button"
+                onClick={() => onNavigate(getCategoryUrl(categories as Category[], sub, lang))}
+                className={`text-start font-bold text-[12.5px] tracking-wide uppercase py-0.5 border-none bg-transparent cursor-pointer transition-colors ${
+                  activeCategoryId === sub.slug || activeCategoryId === sub.id
+                    ? "text-salmon-pink"
+                    : "text-eerie-black hover:text-salmon-pink"
+                }`}
+              >
+                {getCategoryTitle(sub, lang)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function isAllProductsPathname(pathname: string): boolean {
+  return pathname === "/tum-urunler" || /^\/[a-z]{2}\/tum-urunler\/?$/.test(pathname);
+}
+
 function HeaderNavbar({
   lang,
   categories,
@@ -498,17 +591,27 @@ function HeaderNavbar({
   getCategoryPrefix,
 }: Readonly<HeaderNavbarProps>) {
   const router = useRouter();
+  const pathname = usePathname() || "/";
+  const [hoveredNavKey, setHoveredNavKey] = useState<string | null>(null);
+  const isAllProductsActive =
+    activeCategoryId === "" &&
+    isAllProductsPathname(pathname) &&
+    (hoveredNavKey === null || hoveredNavKey === "__all__");
 
   return (
-    <nav className="bg-white border-b border-cultured py-3 hidden md:block">
+    <nav
+      className="bg-white border-b border-cultured py-3 hidden md:block"
+      onMouseLeave={() => setHoveredNavKey(null)}
+    >
       <div className="max-w-[1720px] mx-auto px-4 flex items-center justify-center gap-8">
         <button
           type="button"
+          onMouseEnter={() => setHoveredNavKey("__all__")}
           onClick={() => {
             router.push(`/${getCategoryPrefix()}/tum-urunler`);
           }}
           className={`text-[13px] font-bold tracking-[0.5px] uppercase transition-colors border-none bg-transparent cursor-pointer relative after:absolute after:bottom-[-6px] after:left-0 after:right-0 after:h-[2px] after:bg-salmon-pink after:transition-all after:duration-200 ${
-            activeCategoryId === ""
+            isAllProductsActive
               ? "text-salmon-pink after:scale-x-100"
               : "text-onyx hover:text-salmon-pink after:scale-x-0 hover:after:scale-x-100"
           }`}
@@ -516,66 +619,42 @@ function HeaderNavbar({
           {t("all_products", lang)}
         </button>
 
-        {categories.map((cat) => (
-          <div key={cat.id} className="relative group py-2">
-            <button
-              type="button"
-              onClick={() => {
-                router.push(getCategoryUrl(categories as Category[], cat, lang));
-              }}
-              className={`text-[13px] font-bold tracking-[0.5px] uppercase transition-colors border-none bg-transparent cursor-pointer relative after:absolute after:bottom-[-6px] after:left-0 after:right-0 after:h-[2px] after:bg-salmon-pink after:transition-all after:duration-200 ${
-                activeCategoryId === cat.slug || activeCategoryId === cat.id
-                  ? "text-salmon-pink after:scale-x-100"
-                  : "text-onyx hover:text-salmon-pink after:scale-x-0 hover:after:scale-x-100"
-              }`}
+        {categories.map((cat) => {
+          const isCatActive =
+            (activeCategoryId === cat.slug || activeCategoryId === cat.id) &&
+            (hoveredNavKey === null || hoveredNavKey === cat.id);
+          return (
+            <div
+              key={cat.id}
+              className="relative group py-2"
+              onMouseEnter={() => setHoveredNavKey(cat.id)}
             >
-              {getCategoryTitle(cat, lang)}
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(getCategoryUrl(categories as Category[], cat, lang));
+                }}
+                className={`text-[13px] font-bold tracking-[0.5px] uppercase transition-colors border-none bg-transparent cursor-pointer relative after:absolute after:bottom-[-6px] after:left-0 after:right-0 after:h-[2px] after:bg-salmon-pink after:transition-all after:duration-200 ${
+                  isCatActive
+                    ? "text-salmon-pink after:scale-x-100"
+                    : "text-onyx hover:text-salmon-pink after:scale-x-0 hover:after:scale-x-100"
+                }`}
+              >
+                {getCategoryTitle(cat, lang)}
+              </button>
 
-            {cat.children && cat.children.length > 0 && (
-              <div className="absolute left-1/2 -translate-x-1/2 top-full pt-4 z-50 w-[90vw] max-w-5xl transition-all duration-300 opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 pointer-events-none group-hover:pointer-events-auto">
-                <div className="bg-white border border-cultured rounded-none shadow-lg p-8 grid grid-cols-4 gap-x-8 gap-y-6">
-                  {cat.children.map((sub) => (
-                    <div key={sub.id} className="flex flex-col">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          router.push(getCategoryUrl(categories as Category[], sub, lang));
-                        }}
-                        className={`text-left font-extrabold text-[13px] tracking-wider uppercase mb-3 border-none bg-transparent cursor-pointer transition-colors ${
-                          activeCategoryId === sub.slug || activeCategoryId === sub.id ? "text-salmon-pink" : "text-eerie-black hover:text-salmon-pink"
-                        }`}
-                      >
-                        {getCategoryTitle(sub, lang)}
-                      </button>
-
-                      {sub.children && sub.children.length > 0 && (
-                        <div className="flex flex-col gap-2 border-l border-cultured pl-3">
-                          {sub.children.map((child) => (
-                            <button
-                              key={child.id}
-                              type="button"
-                              onClick={() => {
-                                router.push(getCategoryUrl(categories as Category[], child, lang));
-                              }}
-                              className={`text-left text-xs font-semibold border-none bg-transparent cursor-pointer transition-colors duration-150 py-0.5 ${
-                                activeCategoryId === child.slug || activeCategoryId === child.id
-                                  ? "text-salmon-pink font-bold"
-                                  : "text-sonic-silver hover:text-salmon-pink"
-                              }`}
-                            >
-                              {getCategoryTitle(child, lang)}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+              {cat.children && cat.children.length > 0 && (
+                <MegaMenuDropdown
+                  parentCategory={cat}
+                  categories={categories}
+                  activeCategoryId={activeCategoryId}
+                  lang={lang}
+                  onNavigate={(url) => router.push(url)}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
     </nav>
   );
@@ -646,21 +725,6 @@ function MobileCategoryAccordion({
             )}
             <ChevronDown className="w-3 h-3 text-zinc-700 transition-transform duration-300 shrink-0" />
           </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            router.push(`/${getCategoryPrefix()}/tum-urunler`);
-            setIsMobileMenuOpen(false);
-          }}
-          className={`px-3 xs:px-4 py-2 rounded-xl text-xs font-extrabold transition-all border cursor-pointer select-none shrink-0 ${
-            activeCategoryId === ""
-              ? "bg-salmon-pink text-white border-salmon-pink shadow-sm"
-              : "bg-white text-onyx border-zinc-200/60 hover:bg-zinc-50"
-          }`}
-        >
-          {t("all_btn", lang)}
         </button>
       </div>
 
@@ -1009,7 +1073,7 @@ export default function Header({
           {/* Center Column: Logo */}
           <div className="sm:col-span-1 flex items-center justify-between sm:justify-center w-full">
             <Link
-              href="/"
+              href={lang && lang !== "en" ? `/${getCategoryPrefix()}` : "/"}
               className="flex flex-col no-underline group active:scale-[0.98] transition-transform duration-100 shrink-0 text-center sm:mx-auto"
             >
               <span className="font-serif font-extrabold text-[20px] sm:text-[30px] tracking-[2px] uppercase text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
@@ -1123,7 +1187,7 @@ export default function Header({
                 aria-label={ui.myWishlist}
               >
                 <Heart className="w-[19px] h-[19px]" />
-                <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
+                <span className="absolute -top-1.5 -end-1 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
                   {wishlistCount}
                 </span>
               </button>
@@ -1212,7 +1276,7 @@ export default function Header({
                 aria-label={ui.myCart}
               >
                 <ShoppingBag className="w-[19px] h-[19px]" />
-                <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
+                <span className="absolute -top-1.5 -end-1 bg-salmon-pink text-white rounded-full w-[14px] h-[14px] flex items-center justify-center font-extrabold text-[8px] leading-none shadow-sm">
                   {totalPkgs}
                 </span>
               </button>
@@ -1330,7 +1394,7 @@ export default function Header({
               aria-label={ui.myWishlist}
             >
               <Heart className="w-[20px] h-[20px]" />
-              <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">
+              <span className="absolute -top-1.5 -end-1 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">
                 {wishlistCount}
               </span>
             </button>
@@ -1343,7 +1407,7 @@ export default function Header({
               aria-label={ui.myCart}
             >
               <ShoppingBag className="w-[20px] h-[20px]" />
-              <span className="absolute -top-1.5 -right-1.5 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">
+              <span className="absolute -top-1.5 -end-1 bg-salmon-pink text-white rounded-full w-[15px] h-[15px] flex items-center justify-center font-extrabold text-[8.5px] leading-none shadow-sm">
                 {totalPkgs}
               </span>
             </button>

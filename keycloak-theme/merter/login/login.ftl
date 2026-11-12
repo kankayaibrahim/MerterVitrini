@@ -109,8 +109,23 @@
         <#if realm.password && social?? && social.providers?has_content>
             <div style="margin-top: 1.5rem; border-top: 1px solid #e2e8f0; padding-top: 1.25rem;">
                 <#list social.providers as p>
-                    <a href="${p.loginUrl}" class="mv-btn-primary" style="background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; box-shadow: none; margin-bottom: 0.5rem;">
-                        <span>${p.displayName!} ile Giriş Yap</span>
+                    <#assign pAlias = (p.alias!'')?lower_case>
+                    <#assign pId = (p.providerId!'')?lower_case>
+                    <#assign pDisplay = (p.displayName!'')>
+                    <a id="social-${p.alias!p.providerId}" href="${p.loginUrl}" class="mv-btn-primary mv-btn-social" style="background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; box-shadow: none; margin-bottom: 0.5rem;">
+                        <#if pAlias == "google" || pId == "google" || pDisplay?lower_case?contains("google")>
+                            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0;">
+                                <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.26-.96 2.33-2.04 3.05l3.3 2.56c1.92-1.77 3.04-4.38 3.04-7.51 0-.72-.06-1.42-.19-2H12z"/>
+                                <path fill="#34A853" d="M12 22c2.75 0 5.06-.91 6.75-2.47l-3.3-2.56c-.91.61-2.08.98-3.45.98-2.65 0-4.9-1.79-5.7-4.2l-3.41 2.64C4.57 19.73 8.01 22 12 22z"/>
+                                <path fill="#4A90E2" d="M6.3 13.75A5.99 5.99 0 0 1 5.98 12c0-.61.11-1.2.32-1.75L2.89 7.61A9.98 9.98 0 0 0 2 12c0 1.61.39 3.14 1.08 4.39l3.22-2.64z"/>
+                                <path fill="#FBBC05" d="M12 6.05c1.5 0 2.84.52 3.9 1.53l2.92-2.92C17.05 3.02 14.75 2 12 2 8.01 2 4.57 4.27 2.89 7.61l3.41 2.64c.8-2.41 3.05-4.2 5.7-4.2z"/>
+                            </svg>
+                            <span>${msg("mvLoginWithGoogle")}</span>
+                        <#elseif pDisplay?contains("Giriş") || pDisplay?contains("Oturum Aç") || pDisplay?lower_case?contains("sign in") || pDisplay?lower_case?contains("login")>
+                            <span>${pDisplay}</span>
+                        <#else>
+                            <span>${msg("mvLoginWithProvider", pDisplay)}</span>
+                        </#if>
                     </a>
                 </#list>
             </div>

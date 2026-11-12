@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/pkg/mailer"
 )
@@ -135,8 +136,8 @@ func slugifyServiceProviderName(name string) string {
 	return fmt.Sprintf("%s-%d", res, time.Now().Unix()%10000)
 }
 
-func verifyServiceProviderReCaptcha(secret, token, action string) (bool, error) {
-	return verifyGoogleReCaptcha(secret, token, action)
+func verifyServiceProviderReCaptcha(cfg *config.Config, token, action string) (bool, error) {
+	return verifyPublicFormReCaptcha(cfg, token, action, true)
 }
 
 // ListPublicServiceProviders handles GET /api/v1/store/service-providers.
@@ -241,12 +242,9 @@ func (h *MarketplaceHandler) CreatePublicServiceProviderApplication(w http.Respo
 		return
 	}
 
-	if h.Cfg != nil && h.Cfg.ReCaptchaSecret != "" {
-		valid, err := verifyServiceProviderReCaptcha(h.Cfg.ReCaptchaSecret, req.ReCaptchaToken, "service_provider_apply")
-		if err != nil || !valid {
-			writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": "Güvenlik doğrulaması (Google reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."})
-			return
-		}
+	if valid, err := verifyServiceProviderReCaptcha(h.Cfg, req.ReCaptchaToken, "service_provider_apply"); err != nil || !valid {
+		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": "Güvenlik doğrulaması (Google reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."})
+		return
 	}
 
 	slug := slugifyServiceProviderName(req.CompanyName)

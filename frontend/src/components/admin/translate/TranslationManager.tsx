@@ -18,7 +18,7 @@ import {
 const LABELS = {
   TITLE: "Yapay Zeka Çeviri Yönetimi",
   DESCRIPTION: "İstanbul Merter Vitrini B2B e-ticaret sitenizdeki ürünleri, kategorileri ve özellikleri yerel Translate API proxy servisi ile paralel iş parçacıkları (threads) kullanarak saniyeler içinde otomatik olarak çevirebilirsiniz.",
-  REFRESH_DATA: "Verileri Yenile",
+  REFRESH_DATA: "Yenile",
   NO_LANGS: "Aktif dil kaydı bulunamadı.",
   DATA_TABLE: "Veri Tablosu",
   MATRIX_TITLE: "Eksik Çeviri Durum Matrisi",

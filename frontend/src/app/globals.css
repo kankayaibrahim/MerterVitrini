@@ -135,6 +135,17 @@ body {
 /* RTL Direction Fixes */
 [dir="rtl"] {
   text-align: right;
+  font-family: var(--font-arabic), var(--font-outfit), sans-serif;
+}
+
+[dir="rtl"],
+[dir="rtl"] * {
+  letter-spacing: 0 !important;
+}
+
+[dir="rtl"] .font-sans,
+[dir="rtl"] .font-serif {
+  font-family: var(--font-arabic), var(--font-outfit), sans-serif;
 }
 
 /* Hide Google reCAPTCHA v3 badge for clean UI */

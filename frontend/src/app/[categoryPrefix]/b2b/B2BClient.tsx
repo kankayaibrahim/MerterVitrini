@@ -20,7 +20,6 @@ import {
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
-import SafeHtml from "@/components/common/SafeHtml";
 import { CartItem, Category } from "@/types/store";
 import {
   SITE_ORIGIN,
@@ -28,6 +27,10 @@ import {
   normalizeSeoLang,
   safeJsonLd,
 } from "@/utils/seoHelpers";
+import {
+  sanitizePublicStoreAddress,
+  sanitizePublicStoreEmail,
+} from "@/utils/formatters";
 
 export interface StoreSettings {
   id: string;
@@ -204,15 +207,15 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
     stepsTitle: "Toptan Satın Alma Nasıl Çalışır?",
     stepsSubtitle:
       "4 basit adımda siparişinizi oluşturun ve mağazanızı yeni sezon koleksiyonlarla donatın.",
-    step1Title: "1. Kataloğu İnceleyin",
+    step1Title: "Kataloğu İnceleyin",
     step1Desc: "Binlerce hazır giyim modelini, kumaş ve renk seçeneklerini online inceleyin.",
-    step2Title: "2. Seri Paketlerini Belirleyin",
+    step2Title: "Seri Paketlerini Belirleyin",
     step2Desc:
       "İhtiyacınız olan asorti paketlerini sepete ekleyin veya toptan teklif listesi oluşturun.",
-    step3Title: "3. Kargo & Ödemeyi Onaylayın",
+    step3Title: "Kargo & Ödemeyi Onaylayın",
     step3Desc:
       "Satış temsilcimizle nakliye şeklini (kargo firması veya acente) ve ödeme tercihinizi netleştirin.",
-    step4Title: "4. Kapınıza Teslim Alın",
+    step4Title: "Kapınıza Teslim Alın",
     step4Desc:
       "Özenle paketlenen siparişiniz en kısa sürede kargoya verilsin veya acentenize ulaştırılsın.",
     formTitle: "Toptan Müşteri / Bayi Başvuru Formu",
@@ -286,13 +289,13 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
     stepsTitle: "How Wholesale Ordering Works",
     stepsSubtitle:
       "4 straightforward steps to stock your store with high-margin Istanbul fashion collections.",
-    step1Title: "1. Browse Online Catalog",
+    step1Title: "Browse Online Catalog",
     step1Desc: "Explore thousands of wholesale dresses, sets, and knitwear with live factory stock.",
-    step2Title: "2. Select Size-Run Packs",
+    step2Title: "Select Size-Run Packs",
     step2Desc: "Add assorted series packs to your cart or submit a custom wholesale RFQ.",
-    step3Title: "3. Confirm Freight & Payment",
+    step3Title: "Confirm Freight & Payment",
     step3Desc: "Finalize your cargo forwarder and payment method with your export manager.",
-    step4Title: "4. Fast Door-to-Door Dispatch",
+    step4Title: "Fast Door-to-Door Dispatch",
     step4Desc: "Consolidated parcels ship immediately with full commercial export documentation.",
     formTitle: "Wholesale Buyer Registration Form",
     formSubtitle:
@@ -364,13 +367,13 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
     processBadge: "Схема Работы",
     stepsTitle: "Как Оформить Оптовый Заказ",
     stepsSubtitle: "4 простых шага для закупки актуальных турецких коллекций напрямую с фабрик.",
-    step1Title: "1. Выберите Модели",
+    step1Title: "Выберите Модели",
     step1Desc: "Изучите онлайн-каталог платьев, костюмов и трикотажа с живыми остатками.",
-    step2Title: "2. Сформируйте Корзину",
+    step2Title: "Сформируйте Корзину",
     step2Desc: "Добавьте нужные размерные серии в корзину или отправьте заявку на расчет.",
-    step3Title: "3. Согласуйте Карго и Оплату",
+    step3Title: "Согласуйте Карго и Оплату",
     step3Desc: "Менеджер подтвердит наличие и передаст груз вашей карго-компании в Стамбуле.",
-    step4Title: "4. Получите Груз",
+    step4Title: "Получите Груз",
     step4Desc: "Консолидированная партия оперативно отправляется в ваш город с полным пакетом документов.",
     formTitle: "Анкета Оптового Покупателя",
     formSubtitle: "Оставьте контакты для получения оптового прайс-листа и условий сотрудничества.",
@@ -438,13 +441,13 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
     processBadge: "آلية العمل",
     stepsTitle: "كيف تبدأ الشراء بالجملة؟",
     stepsSubtitle: "4 خطوات سريعة لتزويد متجرك بأحدث تشكيلات الموضة التركية.",
-    step1Title: "1. تصفح الكتالوج",
+    step1Title: "تصفح الكتالوج",
     step1Desc: "استعرض آلاف الموديلات من الفساتين والأطقم وملابس المحجبات بتفاصيل الخامات.",
-    step2Title: "2. اختر باكتات السيري",
+    step2Title: "اختر باكتات السيري",
     step2Desc: "أضف الكميات المطلوبة إلى السلة أو أرسل طلب عرض سعر مخصص.",
-    step3Title: "3. تأكيد الشحن والدفع",
+    step3Title: "تأكيد الشحن والدفع",
     step3Desc: "نسّق مع مسؤول التصدير شركة الكارجو وطريقة الدفع المعتمدة.",
-    step4Title: "4. شحن سريع ومؤمّن",
+    step4Title: "شحن سريع ومؤمّن",
     step4Desc: "تُجمع طلباتك في شحنة موحدة وتُرسل فوراً مع كامل مستندات التصدير.",
     formTitle: "نموذج تسجيل تجار الجملة والبوتيكات",
     formSubtitle: "أرسل بياناتك للحصول على قوائم أسعار المصنع وخصومات الكميات.",
@@ -514,13 +517,13 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
     processBadge: "Ablauf & Prozess",
     stepsTitle: "So funktioniert der Großhandelseinkauf",
     stepsSubtitle: "In 4 klaren Schritten zu neuen Kollektionen direkt aus Istanbul.",
-    step1Title: "1. Katalog durchsuchen",
+    step1Title: "Katalog durchsuchen",
     step1Desc: "Tausende Kleider, Zweiteiler und Strickmodelle mit Echtzeit-Beständen prüfen.",
-    step2Title: "2. Serienpakete wählen",
+    step2Title: "Serienpakete wählen",
     step2Desc: "Gewünschte Packs in den Warenkorb legen oder eine Angebotsliste senden.",
-    step3Title: "3. Versand & Zahlung bestätigen",
+    step3Title: "Versand & Zahlung bestätigen",
     step3Desc: "Spedition, ATR-Exportdokumente und Zahlungsart mit Ihrem Berater abstimmen.",
-    step4Title: "4. Konsolidierte Lieferung",
+    step4Title: "Konsolidierte Lieferung",
     step4Desc: "Sorgfältig geprüfte Ware wird gebündelt und versichert an Ihre Adresse geliefert.",
     formTitle: "B2B-Händlerregistrierung & Anfrage",
     formSubtitle: "Fordern Sie unsere Großhandelspreisliste und Mengenrabatte für Ihr Geschäft an.",
@@ -591,13 +594,13 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
     processBadge: "Fonctionnement",
     stepsTitle: "Comment commander en gros ?",
     stepsSubtitle: "4 étapes simples pour renouveler vos collections depuis Istanbul.",
-    step1Title: "1. Parcourez le Catalogue",
+    step1Title: "Parcourez le Catalogue",
     step1Desc: "Découvrez des milliers de robes, ensembles et mailles avec stocks en direct.",
-    step2Title: "2. Sélectionnez vos Séries",
+    step2Title: "Sélectionnez vos Séries",
     step2Desc: "Ajoutez vos lots assortis au panier ou envoyez une demande de devis.",
-    step3Title: "3. Validez Transport & Paiement",
+    step3Title: "Validez Transport & Paiement",
     step3Desc: "Confirmez votre transitaire et votre mode de règlement avec votre conseiller.",
-    step4Title: "4. Expédition Groupée Rapide",
+    step4Title: "Expédition Groupée Rapide",
     step4Desc: "Vos colis consolidés partent immédiatement avec documents d'exportation EUR.1/ATR.",
     formTitle: "Formulaire d'Ouverture de Compte Grossiste",
     formSubtitle: "Recevez nos grilles tarifaires B2B et conditions de remises sur volume.",
@@ -668,13 +671,13 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
     processBadge: "Jak Działamy",
     stepsTitle: "Jak Złożyć Zamówienie Hurtowe?",
     stepsSubtitle: "4 proste kroki, aby zaopatrzyć Twój butik w najnowsze kolekcje z Turcji.",
-    step1Title: "1. Wybierz Modele z Katalogu",
+    step1Title: "Wybierz Modele z Katalogu",
     step1Desc: "Przeglądaj tysiące sukienek, kompletów i dzianin z aktualnym stanem magazynowym.",
-    step2Title: "2. Dodaj Pakiety do Koszyka",
+    step2Title: "Dodaj Pakiety do Koszyka",
     step2Desc: "Wybierz potrzebną liczbę serii lub wyślij listę zapytania ofertowego.",
-    step3Title: "3. Potwierdź Transport i Płatność",
+    step3Title: "Potwierdź Transport i Płatność",
     step3Desc: "Ustal szczegóły wysyłki i faktury eksportowej z opiekunem handlowym.",
-    step4Title: "4. Odbierz Skonsolidowaną Dostawę",
+    step4Title: "Odbierz Skonsolidowaną Dostawę",
     step4Desc: "Zamówienia od wielu fabryk łączymy w jedną przesyłkę dostarczaną prosto pod drzwi.",
     formTitle: "Formularz Rejestracji Klienta Hurtowego",
     formSubtitle: "Wypełnij formularz, aby otrzymać cennik hurtowy i rabaty ilościowe.",
@@ -745,13 +748,13 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
     processBadge: "Как Работим",
     stepsTitle: "Как да Поръчате на Едро?",
     stepsSubtitle: "4 лесни стъпки за зареждане на вашия магазин с нови турски колекции.",
-    step1Title: "1. Разгледайте Онлайн Каталога",
+    step1Title: "Разгледайте Онлайн Каталога",
     step1Desc: "Хиляди модели рокли, комплекти и плетива с актуална фабрична наличност.",
-    step2Title: "2. Изберете Размерни Серии",
+    step2Title: "Изберете Размерни Серии",
     step2Desc: "Добавете желаните пакети в количката или изпратете запитване за оферта.",
-    step3Title: "3. Потвърдете Карго и Плащане",
+    step3Title: "Потвърдете Карго и Плащане",
     step3Desc: "Уточнете превозвача и начина на плащане с вашия търговски представител.",
-    step4Title: "4. Бърза Консолидирана Доставка",
+    step4Title: "Бърза Консолидирана Доставка",
     step4Desc: "Вашите стоки от различни фабрики се обединяват и изпращат експресно до адреса ви.",
     formTitle: "Форма за Регистрация на Търговци на Едро",
     formSubtitle: "Попълнете формата, за да получите ценови листи на едро и отстъпки за обем.",
@@ -796,7 +799,6 @@ export default function B2BClient({
   categories,
   activeLangs,
   settings,
-  cmsPage,
 }: Readonly<B2BClientProps>) {
   const router = useRouter();
 
@@ -872,11 +874,6 @@ export default function B2BClient({
     );
   };
 
-  const cmsTranslation =
-    cmsPage?.translations?.[currentLang] ||
-    cmsPage?.translations?.en ||
-    cmsPage?.translations?.tr;
-
   const jsonLdData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -890,11 +887,11 @@ export default function B2BClient({
       url: SITE_ORIGIN,
       logo: `${SITE_ORIGIN}/og-image.jpg`,
       telephone: settings.phone,
-      email: settings.email,
+      email: sanitizePublicStoreEmail(settings.email),
       address: {
         "@type": "PostalAddress",
-        streetAddress: settings.address,
-        addressLocality: "Güngören",
+        streetAddress: sanitizePublicStoreAddress(settings.address),
+        addressLocality: "Merter, Güngören",
         addressRegion: "İstanbul",
         addressCountry: "TR",
       },
@@ -905,8 +902,8 @@ export default function B2BClient({
     {
       icon: (
         <Factory
-          size={26}
-          className="text-amber-700 group-hover:scale-110 transition-transform"
+          size={24}
+          className="text-[#8C6D3F] group-hover:scale-110 transition-transform"
         />
       ),
       title: texts.feature1Title,
@@ -915,8 +912,8 @@ export default function B2BClient({
     {
       icon: (
         <Box
-          size={26}
-          className="text-amber-700 group-hover:scale-110 transition-transform"
+          size={24}
+          className="text-[#8C6D3F] group-hover:scale-110 transition-transform"
         />
       ),
       title: texts.feature2Title,
@@ -925,8 +922,8 @@ export default function B2BClient({
     {
       icon: (
         <Truck
-          size={26}
-          className="text-amber-700 group-hover:scale-110 transition-transform"
+          size={24}
+          className="text-[#8C6D3F] group-hover:scale-110 transition-transform"
         />
       ),
       title: texts.feature3Title,
@@ -935,8 +932,8 @@ export default function B2BClient({
     {
       icon: (
         <CreditCard
-          size={26}
-          className="text-amber-700 group-hover:scale-110 transition-transform"
+          size={24}
+          className="text-[#8C6D3F] group-hover:scale-110 transition-transform"
         />
       ),
       title: texts.feature4Title,
@@ -945,8 +942,8 @@ export default function B2BClient({
     {
       icon: (
         <Tag
-          size={26}
-          className="text-amber-700 group-hover:scale-110 transition-transform"
+          size={24}
+          className="text-[#8C6D3F] group-hover:scale-110 transition-transform"
         />
       ),
       title: texts.feature5Title,
@@ -955,8 +952,8 @@ export default function B2BClient({
     {
       icon: (
         <Headset
-          size={26}
-          className="text-amber-700 group-hover:scale-110 transition-transform"
+          size={24}
+          className="text-[#8C6D3F] group-hover:scale-110 transition-transform"
         />
       ),
       title: texts.feature6Title,
@@ -966,7 +963,7 @@ export default function B2BClient({
 
   return (
     <div
-      className="min-h-screen flex flex-col bg-zinc-50/70 text-zinc-900 font-sans antialiased selection:bg-zinc-950 selection:text-white"
+      className="min-h-screen flex flex-col bg-zinc-50/70 text-[#1C1C1C] font-sans antialiased selection:bg-[#1C1C1C] selection:text-white"
       style={{ direction: currentLang === "ar" ? "rtl" : "ltr" }}
     >
       <script
@@ -992,39 +989,36 @@ export default function B2BClient({
         onCurrencyChange={handleCurrencyChange}
       />
 
-      <div className="w-full bg-white border-b border-zinc-200/60 py-3 px-6 md:px-12 text-xs text-zinc-500 font-medium">
+      <div className="w-full bg-white border-b border-[#E5E0D8] py-3 px-6 md:px-12 text-xs text-zinc-500 font-medium">
         <div className="max-w-[1440px] mx-auto flex items-center gap-2">
-          <a href={`/${categoryPrefix}`} className="hover:text-violet-600 transition-colors">
+          <a href={`/${categoryPrefix}`} className="hover:text-[#1C1C1C] transition-colors">
             {texts.breadcrumbHome}
           </a>
           <span className="text-zinc-300">/</span>
-          <span className="text-zinc-900 font-semibold">{texts.breadcrumbB2B}</span>
+          <span className="text-[#1C1C1C] font-semibold">{texts.breadcrumbB2B}</span>
         </div>
       </div>
 
-      <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-12 py-10 flex flex-col gap-14">
-        <section className="relative overflow-hidden rounded-3xl bg-white text-zinc-900 p-8 md:p-14 border border-zinc-200/80 shadow-sm">
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-zinc-100/80 blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 right-1/4 -mb-20 w-72 h-72 rounded-full bg-amber-50/50 blur-3xl pointer-events-none" />
-
+      <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-12 py-10 flex flex-col gap-12">
+        <section className="relative overflow-hidden rounded-lg bg-[#F8F6F2] text-[#1C1C1C] p-8 md:p-12 border border-[#E5E0D8] shadow-xs">
           <div className="relative z-10 max-w-3xl flex flex-col gap-4">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-800 text-[11px] font-bold w-fit tracking-wider uppercase">
-              <Sparkles size={14} className="text-zinc-600" />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#E5E0D8] text-[#6E542E] text-[11px] font-bold w-fit tracking-wider uppercase">
+              <Sparkles size={14} className="text-[#8C6D3F]" />
               {texts.heroBadge}
             </div>
 
-            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-zinc-950 leading-tight">
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-[#1C1C1C] leading-tight">
               {texts.heroTitle}
             </h1>
 
-            <p className="text-sm md:text-base text-zinc-600 leading-relaxed font-normal">
+            <p className="text-sm md:text-base text-[#525252] leading-relaxed font-normal">
               {texts.heroSubtitle}
             </p>
 
             <div className="flex flex-wrap gap-4 pt-3">
               <a
                 href={`/${categoryPrefix}/tum-urunler`}
-                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold shadow-md shadow-zinc-900/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-bold shadow-xs transition-colors"
               >
                 {texts.ctaBrowseCatalog}
                 <ArrowRight size={16} className="rtl:rotate-180" />
@@ -1033,7 +1027,7 @@ export default function B2BClient({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold shadow-md shadow-emerald-900/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="inline-flex items-center gap-2 px-7 py-3.5 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold shadow-xs transition-colors"
               >
                 <MessageSquare size={16} />
                 {texts.ctaWhatsapp}
@@ -1044,7 +1038,7 @@ export default function B2BClient({
 
         <section className="flex flex-col gap-6">
           <div className="flex flex-col gap-1.5">
-            <h2 className="text-2xl font-bold text-zinc-950 tracking-tight">
+            <h2 className="text-2xl font-bold text-[#1C1C1C] tracking-tight">
               {texts.whyTitle}
             </h2>
             <p className="text-xs text-zinc-500 font-medium">{texts.whySubtitle}</p>
@@ -1054,26 +1048,26 @@ export default function B2BClient({
             {features.map((f) => (
               <div
                 key={f.title}
-                className="bg-white rounded-2xl p-7 border border-zinc-200/80 shadow-sm flex flex-col gap-4 hover:shadow-md hover:border-zinc-300 transition-all group"
+                className="bg-white rounded-lg p-7 border border-[#E5E0D8] shadow-xs flex flex-col gap-4 hover:shadow-md hover:border-[#1C1C1C]/40 transition-all group"
               >
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all bg-amber-50/80 border border-amber-100/80 group-hover:bg-amber-100">
+                <div className="w-12 h-12 rounded-md flex items-center justify-center transition-colors bg-[#F8F6F2] border border-[#E5E0D8]">
                   {f.icon}
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <h3 className="text-base font-bold text-zinc-950">{f.title}</h3>
-                  <p className="text-xs text-zinc-600 leading-relaxed font-normal">{f.desc}</p>
+                  <h3 className="text-base font-bold text-[#1C1C1C]">{f.title}</h3>
+                  <p className="text-xs text-[#525252] leading-relaxed font-normal">{f.desc}</p>
                 </div>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="bg-white rounded-3xl p-8 md:p-12 border border-zinc-200/80 shadow-sm flex flex-col gap-8">
+        <section className="bg-white rounded-lg p-8 md:p-10 border border-[#E5E0D8] shadow-xs flex flex-col gap-8">
           <div>
-            <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest block mb-1">
+            <span className="text-xs font-bold text-[#8C6D3F] uppercase tracking-widest block mb-1">
               {texts.processBadge}
             </span>
-            <h2 className="text-2xl md:text-3xl font-bold text-zinc-950 tracking-tight">
+            <h2 className="text-2xl md:text-3xl font-bold text-[#1C1C1C] tracking-tight">
               {texts.stepsTitle}
             </h2>
             <p className="text-xs text-zinc-500 mt-1 font-medium">{texts.stepsSubtitle}</p>
@@ -1088,33 +1082,22 @@ export default function B2BClient({
             ].map((step) => (
               <div
                 key={step.no}
-                className="p-5 rounded-2xl bg-zinc-50 border border-zinc-100 flex flex-col gap-2"
+                className="p-5 rounded-lg bg-[#F8F6F2] border border-[#E5E0D8] flex flex-col gap-2"
               >
-                <span className="text-xs font-black text-zinc-950">{step.no}</span>
-                <h3 className="text-sm font-bold text-zinc-950">{step.title}</h3>
-                <p className="text-xs text-zinc-600 leading-relaxed">{step.desc}</p>
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-[#1C1C1C] text-white text-xs font-black">
+                  {step.no}
+                </span>
+                <h3 className="text-sm font-bold text-[#1C1C1C] mt-1">{step.title}</h3>
+                <p className="text-xs text-[#525252] leading-relaxed">{step.desc}</p>
               </div>
             ))}
           </div>
         </section>
 
-        {cmsTranslation?.content && (
-          <section className="bg-white rounded-3xl p-8 md:p-12 border border-zinc-200/80 shadow-sm flex flex-col gap-6">
-            <div className="border-b border-zinc-100 pb-4">
-              <h2 className="text-2xl md:text-3xl font-black text-zinc-950 tracking-tight">
-                {cmsTranslation.title || texts.cmsSectionTitle}
-              </h2>
-            </div>
-            <div className="prose prose-zinc max-w-none text-sm text-zinc-700 leading-relaxed">
-              <SafeHtml html={cmsTranslation.content} />
-            </div>
-          </section>
-        )}
-
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-8 bg-white rounded-3xl p-8 md:p-10 border border-zinc-200/80 shadow-sm flex flex-col gap-6">
+          <div className="lg:col-span-8 bg-white rounded-lg p-8 md:p-10 border border-[#E5E0D8] shadow-xs flex flex-col gap-6">
             <div>
-              <h2 className="text-2xl font-bold text-zinc-950 tracking-tight">
+              <h2 className="text-2xl font-bold text-[#1C1C1C] tracking-tight">
                 {texts.formTitle}
               </h2>
               <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed font-medium">
@@ -1123,8 +1106,8 @@ export default function B2BClient({
             </div>
 
             {isSubmitted ? (
-              <div className="p-8 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col items-center justify-center text-center gap-3">
-                <CheckCircle2 size={48} className="text-emerald-600" />
+              <div className="p-8 rounded-lg bg-emerald-50 border border-emerald-200 flex flex-col items-center justify-center text-center gap-3">
+                <CheckCircle2 size={48} className="text-[#15803D]" />
                 <h3 className="text-lg font-bold text-emerald-950">
                   {texts.formSuccessTitle}
                 </h3>
@@ -1134,7 +1117,7 @@ export default function B2BClient({
                 <button
                   type="button"
                   onClick={() => setIsSubmitted(false)}
-                  className="mt-2 text-xs font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+                  className="mt-2 text-xs font-bold text-[#15803D] hover:text-emerald-900 underline cursor-pointer"
                 >
                   {texts.formSendAnother}
                 </button>
@@ -1154,7 +1137,7 @@ export default function B2BClient({
                         setFormData((prev) => ({ ...prev, fullName: e.target.value }))
                       }
                       placeholder={texts.formFullNamePh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
 
@@ -1170,7 +1153,7 @@ export default function B2BClient({
                         setFormData((prev) => ({ ...prev, company: e.target.value }))
                       }
                       placeholder={texts.formCompanyPh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
                 </div>
@@ -1188,7 +1171,7 @@ export default function B2BClient({
                         setFormData((prev) => ({ ...prev, phone: e.target.value }))
                       }
                       placeholder={texts.formPhonePh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
 
@@ -1204,7 +1187,7 @@ export default function B2BClient({
                         setFormData((prev) => ({ ...prev, email: e.target.value }))
                       }
                       placeholder={texts.formEmailPh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
                 </div>
@@ -1222,7 +1205,7 @@ export default function B2BClient({
                         setFormData((prev) => ({ ...prev, country: e.target.value }))
                       }
                       placeholder={texts.formCountryPh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
 
@@ -1237,7 +1220,7 @@ export default function B2BClient({
                         setFormData((prev) => ({ ...prev, volume: e.target.value }))
                       }
                       placeholder={texts.formVolumePh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
                 </div>
@@ -1254,14 +1237,14 @@ export default function B2BClient({
                       setFormData((prev) => ({ ...prev, message: e.target.value }))
                     }
                     placeholder={texts.formMessagePh}
-                    className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10 transition-all leading-relaxed"
+                    className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors leading-relaxed"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="mt-2 inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-zinc-950 hover:bg-zinc-800 disabled:bg-zinc-400 text-white text-sm font-bold shadow-md shadow-zinc-900/10 active:scale-[0.98] transition-all cursor-pointer"
+                  className="mt-2 inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-md bg-[#1C1C1C] hover:bg-[#333333] disabled:bg-zinc-400 text-white text-sm font-bold shadow-xs transition-colors cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
@@ -1280,41 +1263,41 @@ export default function B2BClient({
           </div>
 
           <div className="lg:col-span-4 flex flex-col gap-6">
-            <div className="bg-white rounded-3xl p-7 border border-zinc-200/80 shadow-sm flex flex-col gap-4 text-zinc-900">
-              <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+            <div className="bg-[#F8F6F2] rounded-lg p-7 border border-[#E5E0D8] shadow-xs flex flex-col gap-4 text-[#1C1C1C]">
+              <span className="text-[11px] font-bold text-[#8C6D3F] uppercase tracking-wider">
                 {texts.fastLineBadge}
               </span>
-              <h3 className="text-xl font-bold text-zinc-950">{texts.fastLineTitle}</h3>
-              <p className="text-xs text-zinc-600 leading-relaxed font-normal">
+              <h3 className="text-xl font-bold text-[#1C1C1C]">{texts.fastLineTitle}</h3>
+              <p className="text-xs text-[#525252] leading-relaxed font-normal">
                 {texts.fastLineDesc}
               </p>
               <a
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold shadow-md shadow-emerald-900/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="mt-2 w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold shadow-xs transition-colors"
               >
                 <MessageSquare size={16} />
                 {texts.fastLineBtn}
               </a>
             </div>
 
-            <div className="bg-white rounded-3xl p-7 border border-zinc-200/80 shadow-sm flex flex-col gap-4 text-xs text-zinc-600">
-              <div className="font-bold text-zinc-950 flex items-center gap-2 text-sm">
-                <ShieldCheck size={18} className="text-emerald-600" />
+            <div className="bg-white rounded-lg p-7 border border-[#E5E0D8] shadow-xs flex flex-col gap-4 text-xs text-[#525252]">
+              <div className="font-bold text-[#1C1C1C] flex items-center gap-2 text-sm">
+                <ShieldCheck size={18} className="text-[#15803D]" />
                 {texts.assuranceTitle}
               </div>
               <ul className="space-y-2.5">
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 size={14} className="text-[#15803D] shrink-0 mt-0.5" />
                   <span>{texts.assurance1}</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 size={14} className="text-[#15803D] shrink-0 mt-0.5" />
                   <span>{texts.assurance2}</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 size={14} className="text-[#15803D] shrink-0 mt-0.5" />
                   <span>{texts.assurance3}</span>
                 </li>
               </ul>

@@ -24,6 +24,7 @@ import {
 import {
   AdminApiService,
   StoreSettingsDTO,
+  normalizeCanonicalAdminUrl,
 } from "@/services/admin-api.service";
 
 export type StoreSettingsData = StoreSettingsDTO;
@@ -144,7 +145,7 @@ export function AdminProvider({
   const handleLogout = useCallback(() => {
     if (typeof window !== "undefined") {
       const logoutUrl = sessionBootstrapService.buildKeycloakLogoutUrl(
-        `${window.location.origin}/admin`
+        normalizeCanonicalAdminUrl(`${window.location.origin}/admin`)
       );
       clearLocalSession();
       window.location.href = logoutUrl;
@@ -165,17 +166,25 @@ export function AdminProvider({
     };
   }, [apiUrl, token, clearLocalSession]);
 
-  const [theme, setTheme] = useState<"light" | "dark">(() =>
-    sessionBootstrapService.readSavedTheme()
-  );
+  const [theme, setThemeState] = useState<"light" | "dark">("light");
 
   useEffect(() => {
-    sessionBootstrapService.saveTheme(theme);
-  }, [sessionBootstrapService, theme]);
+    sessionBootstrapService.saveTheme("light");
+  }, [sessionBootstrapService]);
+
+  const setTheme = useCallback(
+    (nextTheme: "light" | "dark") => {
+      const forcedLight: "light" = nextTheme === "dark" ? "light" : "light";
+      setThemeState(forcedLight);
+      sessionBootstrapService.saveTheme(forcedLight);
+    },
+    [sessionBootstrapService]
+  );
 
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
-  }, []);
+    setThemeState("light");
+    sessionBootstrapService.saveTheme("light");
+  }, [sessionBootstrapService]);
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
@@ -234,7 +243,9 @@ export function AdminProvider({
       if (code) {
         setIsInitialized(false);
         try {
-          const redirectUri = `${window.location.origin}/admin`;
+          const redirectUri = normalizeCanonicalAdminUrl(
+            `${window.location.origin}/admin`
+          );
           const data = await sessionBootstrapService.exchangeKeycloakCode(
             code,
             redirectUri
@@ -492,6 +503,7 @@ export function AdminProvider({
       mobileSidebarOpen,
       toggleSidebar,
       theme,
+      setTheme,
       toggleTheme,
       feeds,
       syncHistory,

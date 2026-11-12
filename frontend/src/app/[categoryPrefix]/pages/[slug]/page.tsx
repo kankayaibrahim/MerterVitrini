@@ -9,6 +9,7 @@ import {
   GLOBAL_B2B_SEO_MATRIX,
   SupportedSeoLang,
   normalizeSeoLang,
+  stripBrandTitleSuffix,
   buildPrefixedAlternates,
   safeJsonLd,
   ssrStoreFetch,
@@ -115,7 +116,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!page) {
     return {
-      title: translate("seo_page_not_found", lang),
+      title: stripBrandTitleSuffix(translate("seo_page_not_found", lang)),
       description: translate("seo_page_not_found_desc", lang),
       robots: { index: false, follow: true },
     };
@@ -127,12 +128,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     page.translations["tr"] ||
     Object.values(page.translations)[0];
 
-  const title = trans?.meta_title || trans?.title || "Merter Vitrini B2B";
+  const title = stripBrandTitleSuffix(trans?.meta_title || trans?.title || "Merter Vitrini B2B");
   const desc = trans?.meta_description || translate("seo_fallback_desc", lang);
   const alternates = buildPrefixedAlternates(`pages/${slug}`, lang);
 
   return {
-    title: `${title} | Merter Vitrini B2B`,
+    title,
     description: desc,
     keywords: GLOBAL_B2B_SEO_MATRIX[lang].keywords,
     alternates,

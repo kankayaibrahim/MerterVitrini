@@ -992,14 +992,15 @@ func persistSearchLogEntry(entry searchLogEntry) {
 	if resultsCount < 0 {
 		resultsCount = 0
 	}
+	isZeroResult := resultsCount == 0
 
 	_, _ = db.Pool.Exec(ctx, `
 		INSERT INTO analytics.search_logs (
 			visitor_id, session_id, user_id, query_text, normalized_query,
-			language_code, country_code, category_slug, results_count, has_filters, clicked_product_id
+			language_code, country_code, category_slug, results_count, is_zero_result, has_filters, clicked_product_id
 		) VALUES (
 			$1, $2, NULLIF($3, ''), $4, $5,
-			$6, $7, $8, $9, $10, NULLIF($11, '')
+			$6, $7, $8, $9, $10, $11, NULLIF($12, '')
 		)
 	`,
 		truncateStr(entry.VisitorID, 64),
@@ -1011,6 +1012,7 @@ func persistSearchLogEntry(entry searchLogEntry) {
 		truncateStr(entry.CountryCode, 10),
 		truncateStr(entry.CategorySlug, 160),
 		resultsCount,
+		isZeroResult,
 		entry.HasFilters,
 		truncateStr(entry.ClickedProductID, 64),
 	)
@@ -1059,12 +1061,23 @@ func clampIntRange(val, minVal, maxVal int) int {
 	return val
 }
 
-func clampFloatRange(val, minVal, maxVal float64) float64 {
-	if val < minVal {
-		return minVal
+const (
+	maxValidLCPMs    = 30000
+	maxValidINPMs    = 5000
+	maxValidTTFBMs   = 15000
+	maxValidCLSScore = 5.0
+)
+
+func sanitizeVitalMs(val, maxAllowed int) int {
+	if val <= 0 || val > maxAllowed {
+		return 0
 	}
-	if val > maxVal {
-		return maxVal
+	return val
+}
+
+func sanitizeVitalFloat(val, maxAllowed float64) float64 {
+	if val <= 0 || val > maxAllowed {
+		return 0
 	}
 	return val
 }
@@ -1075,10 +1088,10 @@ func updateLatestPageDwell(in dwellUpdateInput) {
 	}
 	durationSec := clampIntRange(in.DurationSec, 0, 3600)
 	scrollPct := clampIntRange(in.ScrollDepthPct, 0, 100)
-	lcpMs := clampIntRange(in.LCPMs, 0, 60000)
-	inpMs := clampIntRange(in.INPMs, 0, 60000)
-	ttfbMs := clampIntRange(in.TTFBMs, 0, 60000)
-	clsScore := clampFloatRange(in.CLSScore, 0, 10)
+	lcpMs := sanitizeVitalMs(in.LCPMs, maxValidLCPMs)
+	inpMs := sanitizeVitalMs(in.INPMs, maxValidINPMs)
+	ttfbMs := sanitizeVitalMs(in.TTFBMs, maxValidTTFBMs)
+	clsScore := sanitizeVitalFloat(in.CLSScore, maxValidCLSScore)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()

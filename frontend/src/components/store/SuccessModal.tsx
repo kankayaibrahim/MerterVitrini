@@ -45,7 +45,7 @@ export default function SuccessModal({
           href={whatsappUrl} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="w-full py-3 bg-[#25d366] hover:bg-[#20ba5a] text-white rounded-[5px] font-bold text-sm tracking-[0.5px] uppercase text-center no-underline shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+          className="w-full py-3 bg-[#15803D] hover:bg-[#166534] text-white rounded-md font-bold text-sm tracking-[0.5px] uppercase text-center no-underline shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2"
         >
           💬 {t("success_whatsapp", lang)}
         </a>

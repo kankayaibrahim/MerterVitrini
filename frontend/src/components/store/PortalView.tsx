@@ -113,7 +113,7 @@ export default function PortalView({
       subtitle: t("portal_slide3_subtitle", lang),
       desc: t("portal_slide3_desc", lang),
       ctaText: t("portal_slide3_cta", lang),
-      ctaUrl: `/${getCategoryPrefix(lang)}/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`,
+      ctaUrl: `/${getCategoryPrefix(lang)}/tum-urunler?sort=newest`,
       type: "link",
       positionClass: "object-center"
     },
@@ -176,7 +176,7 @@ export default function PortalView({
         {/* Left Arrow Button */}
         <button 
           onClick={handlePrevSlide}
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-14 bg-black/15 hover:bg-black/35 text-white flex items-center justify-center cursor-pointer transition-all duration-300 z-20 border-none select-none opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+          className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 w-10 h-14 bg-black/25 hover:bg-black/45 text-white items-center justify-center cursor-pointer transition-all duration-300 z-20 border-none select-none opacity-0 group-hover:opacity-100"
           aria-label={prevSlideLabel}
         >
           <ChevronLeft className="w-6 h-6" />
@@ -185,7 +185,7 @@ export default function PortalView({
         {/* Right Arrow Button */}
         <button 
           onClick={handleNextSlide}
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-14 bg-black/15 hover:bg-black/35 text-white flex items-center justify-center cursor-pointer transition-all duration-300 z-20 border-none select-none opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+          className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 w-10 h-14 bg-black/25 hover:bg-black/45 text-white items-center justify-center cursor-pointer transition-all duration-300 z-20 border-none select-none opacity-0 group-hover:opacity-100"
           aria-label={nextSlideLabel}
         >
           <ChevronRight className="w-6 h-6" />
@@ -235,27 +235,23 @@ export default function PortalView({
                     </span>
                   </Link>
                 ) : (
-                  <div className="flex gap-4 mt-2">
-                    <a 
-                      href="https://play.google.com/store/apps"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                  <div className="flex flex-wrap gap-4 mt-2">
+                    <Link 
+                      href={safeLang === "tr" ? "/mobil-uygulama" : `/mobil-uygulama?lang=${safeLang}`}
                       className="inline-flex items-center pt-2.5 pb-2.5 no-underline transition-all duration-200 group"
                     >
-                      <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 group-hover:text-accent-gold group-hover:border-accent-gold transition-colors">
+                      <span lang="en" className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 group-hover:text-accent-gold group-hover:border-accent-gold transition-colors">
                         {t("portal_google_play", lang) || "GOOGLE PLAY"}
                       </span>
-                    </a>
-                    <a 
-                      href="https://apps.apple.com" 
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    </Link>
+                    <Link 
+                      href={safeLang === "tr" ? "/mobil-uygulama" : `/mobil-uygulama?lang=${safeLang}`}
                       className="inline-flex items-center pt-2.5 pb-2.5 no-underline transition-all duration-200 group"
                     >
-                      <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 group-hover:text-accent-gold group-hover:border-accent-gold transition-colors">
+                      <span lang="en" className="text-[10px] sm:text-xs font-bold uppercase tracking-[2px] text-black border-b border-black pb-1.5 group-hover:text-accent-gold group-hover:border-accent-gold transition-colors">
                         {t("portal_app_store", lang) || "APP STORE"}
                       </span>
-                    </a>
+                    </Link>
                   </div>
                 )}
               </div>
@@ -264,15 +260,16 @@ export default function PortalView({
         })}
 
         {/* Slide Indicators */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 z-20">
+        <div className="absolute bottom-3.5 left-1/2 -translate-x-1/2 bg-black/35 backdrop-blur-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 z-20">
           {slides.map((slide) => (
             <button 
               key={slide.id}
+              type="button"
               onClick={() => setActiveSlide(slide.id)} 
               aria-label={`Slide ${slide.id + 1}`}
-              className="w-12 h-12 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
+              className="p-1.5 flex items-center justify-center bg-transparent border-none cursor-pointer transition-all active:scale-95"
             >
-              <span className={`w-6 h-0.5 transition-all ${activeSlide === slide.id ? "bg-black" : "bg-spanish-gray/50 hover:bg-spanish-gray"}`} />
+              <span className={`h-1 rounded-full transition-all ${activeSlide === slide.id ? "w-6 bg-white" : "w-2.5 bg-white/45 hover:bg-white/75"}`} />
             </button>
           ))}
         </div>
@@ -371,7 +368,7 @@ export default function PortalView({
 
           {/* Card 3: İç Giyim */}
           <a 
-            href={`/${getCategoryPrefix(lang)}/tum-urunler?q=${lang === 'tr' ? 'tayt' : 'leggings'}`}
+            href={`/${getCategoryPrefix(lang)}/kadin-giyim`}
             className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">
@@ -393,7 +390,7 @@ export default function PortalView({
 
           {/* Card 4: Aksesuar */}
           <a 
-            href={`/${getCategoryPrefix(lang)}/tum-urunler?q=${lang === 'tr' ? 'aksesuar' : 'accessories'}`}
+            href={`/${getCategoryPrefix(lang)}/tum-urunler?sort=newest`}
             className="relative rounded-none overflow-hidden aspect-[16/10] border border-cultured cursor-pointer group shadow-none select-none no-underline"
           >
             <picture className="absolute inset-0 w-full h-full">

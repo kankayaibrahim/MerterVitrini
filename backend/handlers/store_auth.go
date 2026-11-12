@@ -283,6 +283,11 @@ func (h *StoreAuthHandler) performKeycloakLogin(ctx context.Context, email, pass
 	if err != nil {
 		return "", nil, err
 	}
+	if kcVerified, ok := claims["email_verified"].(bool); ok && kcVerified && !userInfo.EmailVerified {
+		if _, updErr := db.Pool.Exec(ctx, `UPDATE identity.users SET email_verified = true WHERE id = $1 OR lower(email) = lower($2)`, userID, emailClaim); updErr == nil {
+			userInfo.EmailVerified = true
+		}
+	}
 
 	return accessToken, userInfo, nil
 }
@@ -339,8 +344,8 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify reCAPTCHA v3
-	captchaValid, captchaErr := h.verifyReCaptchaV3(req.CaptchaToken, "register")
+	// Verify reCAPTCHA v3 when both site_key + secret_key are configured (or when client supplied a token)
+	captchaValid, captchaErr := verifyPublicFormReCaptcha(h.Cfg, req.CaptchaToken, "register", true)
 	if captchaErr != nil {
 		log.Printf("[AUTH ERROR] reCAPTCHA validation error: %v", captchaErr)
 		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, captchaErr.Error()), http.StatusBadRequest)
@@ -534,8 +539,8 @@ func (h *StoreAuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify reCAPTCHA v3
-	captchaValid, captchaErr := h.verifyReCaptchaV3(req.CaptchaToken, "login")
+	// On Login, IP rate-limiting + credential check protect the endpoint; verify reCAPTCHA only when token is supplied.
+	captchaValid, captchaErr := verifyPublicFormReCaptcha(h.Cfg, req.CaptchaToken, "login", false)
 	if captchaErr != nil {
 		log.Printf("[AUTH ERROR] reCAPTCHA validation error: %v", captchaErr)
 		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, captchaErr.Error()), http.StatusBadRequest)
@@ -672,13 +677,34 @@ func verifyGoogleReCaptcha(secret, token, action string) (bool, error) {
 	return result.Success, nil
 }
 
+// verifyPublicFormReCaptcha verifies Google reCAPTCHA tokens without deadlocking public forms when site_key is absent.
+// When token is non-empty and a secret key exists, it always verifies with Google.
+// When token is empty, it only rejects if enforceWhenPairConfigured is true AND both site_key + secret_key are configured.
+func verifyPublicFormReCaptcha(cfg *config.Config, token, action string, enforceWhenPairConfigured bool) (bool, error) {
+	trimmedToken := strings.TrimSpace(token)
+	if trimmedToken == "" {
+		if enforceWhenPairConfigured && cfg != nil && cfg.HasReCaptchaPair() {
+			return false, errors.New("Güvenlik doğrulaması (reCAPTCHA) gerekli.")
+		}
+		return true, nil
+	}
+	secret := ""
+	if cfg != nil {
+		secret = cfg.EffectiveReCaptchaSecret()
+	}
+	if secret == "" {
+		return true, nil
+	}
+	return verifyGoogleReCaptcha(secret, trimmedToken, action)
+}
+
 // verifyReCaptchaV3 validates Google reCAPTCHA token against Google siteverify API using FastClient with timeout.
 func (h *StoreAuthHandler) verifyReCaptchaV3(token string, action string) (bool, error) {
-	secret := ""
-	if h != nil && h.Cfg != nil {
-		secret = h.Cfg.ReCaptchaSecret
+	var cfg *config.Config
+	if h != nil {
+		cfg = h.Cfg
 	}
-	return verifyGoogleReCaptcha(secret, token, action)
+	return verifyPublicFormReCaptcha(cfg, token, action, true)
 }
 
 type UserProfile struct {

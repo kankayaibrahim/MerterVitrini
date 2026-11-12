@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   FileText,
   Globe,
@@ -422,8 +422,13 @@ export default function SupplierRfqPanel({
   const [items, setItems] = useState<SupplierBuyerRfqItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
   const loadSupplierRfqs = useCallback(async () => {
-    const token = getToken();
+    const token = getTokenRef.current();
     if (!token) return;
     setLoading(true);
     try {
@@ -439,7 +444,7 @@ export default function SupplierRfqPanel({
     } finally {
       setLoading(false);
     }
-  }, [getToken]);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -452,7 +457,7 @@ export default function SupplierRfqPanel({
     <div className="space-y-4">
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex items-center justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
             <FileText size={20} />
           </div>
           <div>
@@ -468,10 +473,12 @@ export default function SupplierRfqPanel({
         <button
           type="button"
           onClick={() => void loadSupplierRfqs()}
-          className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+          disabled={loading}
+          className="h-9 px-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-xs font-bold cursor-pointer shrink-0 disabled:opacity-50"
           title="Yenile"
         >
-          <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          <span>Yenile</span>
         </button>
       </div>
 

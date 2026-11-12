@@ -7,6 +7,7 @@ import {
   GLOBAL_B2B_SEO_MATRIX,
   SupportedSeoLang,
   normalizeSeoLang,
+  stripBrandTitleSuffix,
   buildQueryLangAlternates,
   safeJsonLd,
   ssrStoreFetch,
@@ -71,7 +72,7 @@ export async function generateMetadata({
   const displayName = brand?.name || decoded.toUpperCase();
   const canonicalSlug = encodeURIComponent(brand?.slug || decoded);
   const alternates = buildQueryLangAlternates(`/ureticiler/${canonicalSlug}/tanitim`, lang);
-  const title = buildEditorialTitle(displayName, lang);
+  const title = stripBrandTitleSuffix(buildEditorialTitle(displayName, lang));
   const description = buildEditorialDesc(displayName, lang);
 
   return {

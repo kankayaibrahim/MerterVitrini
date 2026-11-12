@@ -801,7 +801,21 @@ function GeographyModal(props: Readonly<GeographyModalProps>) {
 
 export default function GeographyManager({ apiUrl, token }: Readonly<GeographyManagerProps>) {
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState<TabType>("countries");
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (globalThis.window !== undefined) {
+      const requestedTab = new URLSearchParams(globalThis.window.location.search).get("tab");
+      if (
+        requestedTab === "groups" ||
+        requestedTab === "countries" ||
+        requestedTab === "states" ||
+        requestedTab === "currencies" ||
+        requestedTab === "languages"
+      ) {
+        return requestedTab;
+      }
+    }
+    return "countries";
+  });
   const [searchQuery, setSearchQuery] = useState("");
   
   // Data States

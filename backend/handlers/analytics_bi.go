@@ -84,6 +84,7 @@ type BIZeroResultSearchRow struct {
 // BISearchMining aggregates storefront search intelligence and zero-result demand gaps.
 type BISearchMining struct {
 	TotalSearches      int                     `json:"total_searches"`
+	ZeroResultCount    int                     `json:"zero_result_count"`
 	ZeroResultRatePct  float64                 `json:"zero_result_rate_pct"`
 	TopSearches        []BITopSearchRow        `json:"top_searches"`
 	ZeroResultSearches []BIZeroResultSearchRow `json:"zero_result_searches"`
@@ -755,6 +756,166 @@ func queryBIConversionFunnel(ctx context.Context, win biTimeWindow) []BIFunnelSt
 	return out
 }
 
+const biSearchEventsUnionCTE = `
+	WITH combined_searches AS (
+		SELECT
+			sl.query_text,
+			sl.normalized_query,
+			UPPER(COALESCE(NULLIF(sl.language_code, ''), 'TR')) AS lang_code,
+			CASE
+				WHEN UPPER(COALESCE(NULLIF(sl.country_code, ''), 'TR')) IN ('EU', 'EN', 'T1', 'XX', '--') THEN 'TR'
+				ELSE UPPER(COALESCE(NULLIF(sl.country_code, ''), 'TR'))
+			END AS country_code,
+			COALESCE(sl.results_count, 0) AS results_count,
+			(COALESCE(sl.results_count, 0) = 0 OR COALESCE(sl.is_zero_result, false) = true) AS is_zero,
+			sl.clicked_product_id,
+			sl.created_at
+		FROM analytics.search_logs sl
+		WHERE sl.created_at >= $1 AND sl.created_at < $2
+		UNION ALL
+		SELECT
+			me.entity_id AS query_text,
+			LOWER(BTRIM(me.entity_id)) AS normalized_query,
+			'TR' AS lang_code,
+			CASE
+				WHEN UPPER(COALESCE(NULLIF(me.country_code, ''), 'TR')) IN ('EU', 'EN', 'T1', 'XX', '--') THEN 'TR'
+				ELSE UPPER(COALESCE(NULLIF(me.country_code, ''), 'TR'))
+			END AS country_code,
+			cat_match.cnt AS results_count,
+			(cat_match.cnt = 0) AS is_zero,
+			NULL::varchar AS clicked_product_id,
+			me.created_at
+		FROM analytics.member_events me
+		CROSS JOIN LATERAL (
+			SELECT COALESCE(COUNT(*), 0)::int AS cnt
+			FROM catalog.mv_products p
+			WHERE p.is_active = true
+			  AND (
+				p.custom_sku ILIKE ('%' || BTRIM(me.entity_id) || '%')
+				OR p.brand_name ILIKE ('%' || BTRIM(me.entity_id) || '%')
+				OR COALESCE(p.names::text, '') ILIKE ('%' || BTRIM(me.entity_id) || '%')
+				OR COALESCE(p.descriptions::text, '') ILIKE ('%' || BTRIM(me.entity_id) || '%')
+			  )
+		) cat_match
+		WHERE me.event_type = 'search_query'
+		  AND me.entity_id IS NOT NULL AND BTRIM(me.entity_id) <> ''
+		  AND me.created_at >= $1 AND me.created_at < $2
+		  AND NOT EXISTS (
+			SELECT 1 FROM analytics.search_logs sl2
+			WHERE sl2.normalized_query = LOWER(BTRIM(me.entity_id))
+			  AND sl2.created_at BETWEEN me.created_at - INTERVAL '10 seconds' AND me.created_at + INTERVAL '10 seconds'
+		  )
+	)
+`
+
+const biUnifiedLeadsCTE = `
+	me_clicks AS (
+		SELECT visitor_id, NULLIF(user_id, '') AS user_id, '' AS email, country_code AS raw_country, created_at
+		FROM analytics.member_events
+		WHERE event_type IN ('whatsapp_click', 'phone_click', 'email_click', 'website_click')
+		  AND created_at >= $1 AND created_at < $2
+	),
+	be_clicks AS (
+		SELECT visitor_id, NULL::text AS user_id, '' AS email, country_code AS raw_country, created_at
+		FROM analytics.brand_events
+		WHERE event_type IN ('whatsapp_click', 'phone_click', 'email_click', 'website_click')
+		  AND created_at >= $1 AND created_at < $2
+	),
+	contact_clicks AS (
+		SELECT * FROM me_clicks
+		WHERE (SELECT COUNT(*) FROM me_clicks) >= (SELECT COUNT(*) FROM be_clicks)
+		UNION ALL
+		SELECT * FROM be_clicks
+		WHERE (SELECT COUNT(*) FROM me_clicks) < (SELECT COUNT(*) FROM be_clicks)
+	),
+	raw_leads AS (
+		SELECT visitor_id, user_id, email, raw_country, created_at FROM contact_clicks
+		UNION ALL
+		SELECT
+			NULL::text AS visitor_id,
+			NULLIF(cr.customer_id, '') AS user_id,
+			COALESCE(cr.customer_email, '') AS email,
+			'' AS raw_country,
+			cr.created_at
+		FROM catalog.chat_rooms cr
+		WHERE cr.created_at >= $1 AND cr.created_at < $2
+		UNION ALL
+		SELECT
+			me_inq.visitor_id,
+			me_inq.user_id,
+			COALESCE(si.email, '') AS email,
+			COALESCE(me_inq.country_code, '') AS raw_country,
+			si.created_at
+		FROM catalog.store_inquiries si
+		LEFT JOIN LATERAL (
+			SELECT visitor_id, NULLIF(user_id, '') AS user_id, country_code
+			FROM analytics.member_events
+			WHERE event_type = 'inquiry_submit' AND entity_id = si.id::text
+			ORDER BY created_at DESC LIMIT 1
+		) me_inq ON true
+		WHERE si.created_at >= $1 AND si.created_at < $2
+		UNION ALL
+		SELECT
+			me_rfq.visitor_id,
+			me_rfq.user_id,
+			COALESCE(r.buyer_email, '') AS email,
+			COALESCE(NULLIF(me_rfq.country_code, ''), COALESCE(r.buyer_country, '')) AS raw_country,
+			r.created_at
+		FROM catalog.buyer_rfqs r
+		LEFT JOIN LATERAL (
+			SELECT visitor_id, NULLIF(user_id, '') AS user_id, country_code
+			FROM analytics.member_events
+			WHERE event_type = 'rfq_create' AND entity_id = r.id::text
+			ORDER BY created_at DESC LIMIT 1
+		) me_rfq ON true
+		WHERE r.created_at >= $1 AND r.created_at < $2
+	),
+	resolved_leads AS (
+		SELECT
+			rl.created_at,
+			COALESCE(
+				NULLIF(rl.visitor_id, ''),
+				(SELECT l.visitor_id FROM analytics.user_visitor_links l WHERE u_ref.uid IS NOT NULL AND l.user_id = u_ref.uid ORDER BY l.last_seen_at DESC LIMIT 1),
+				(SELECT pv.visitor_id FROM analytics.page_views pv WHERE u_ref.uid IS NOT NULL AND pv.user_id = u_ref.uid ORDER BY pv.created_at DESC LIMIT 1),
+				''
+			) AS eff_vid,
+			COALESCE(
+				CASE
+					WHEN LENGTH(BTRIM(rl.raw_country)) = 2 AND UPPER(BTRIM(rl.raw_country)) NOT IN ('EU', 'EN', 'T1', 'XX', '--') THEN UPPER(BTRIM(rl.raw_country))
+					WHEN LOWER(BTRIM(rl.raw_country)) IN ('türkiye', 'turkiye', 'turkey') THEN 'TR'
+					WHEN LOWER(BTRIM(rl.raw_country)) IN ('rusya', 'russia') THEN 'RU'
+					WHEN LOWER(BTRIM(rl.raw_country)) IN ('almanya', 'germany', 'deutschland') THEN 'DE'
+					WHEN LOWER(BTRIM(rl.raw_country)) IN ('fransa', 'france') THEN 'FR'
+					WHEN LOWER(BTRIM(rl.raw_country)) IN ('ingiltere', 'birleşik krallık', 'uk', 'united kingdom') THEN 'GB'
+					WHEN LOWER(BTRIM(rl.raw_country)) IN ('polonya', 'poland') THEN 'PL'
+					WHEN LOWER(BTRIM(rl.raw_country)) IN ('bulgaristan', 'bulgaria') THEN 'BG'
+					WHEN LOWER(BTRIM(rl.raw_country)) IN ('suudi arabistan', 'saudi arabia') THEN 'SA'
+					WHEN LOWER(BTRIM(rl.raw_country)) IN ('bae', 'uae', 'birleşik arap emirlikleri') THEN 'AE'
+					ELSE NULL
+				END,
+				(
+					SELECT CASE
+						WHEN UPPER(COALESCE(NULLIF(pv2.country_code, ''), 'TR')) IN ('EU', 'EN', 'T1', 'XX', '--') THEN 'TR'
+						ELSE UPPER(COALESCE(NULLIF(pv2.country_code, ''), 'TR'))
+					END
+					FROM analytics.page_views pv2
+					WHERE (rl.visitor_id IS NOT NULL AND rl.visitor_id <> '' AND pv2.visitor_id = rl.visitor_id)
+					   OR (u_ref.uid IS NOT NULL AND pv2.user_id = u_ref.uid)
+					ORDER BY pv2.created_at DESC
+					LIMIT 1
+				),
+				'TR'
+			) AS eff_country
+		FROM raw_leads rl
+		LEFT JOIN LATERAL (
+			SELECT COALESCE(
+				rl.user_id,
+				(SELECT u.id FROM identity.users u WHERE rl.email <> '' AND LOWER(u.email) = LOWER(rl.email) LIMIT 1)
+			) AS uid
+		) u_ref ON true
+	)
+`
+
 func queryBISearchMining(ctx context.Context, win biTimeWindow) BISearchMining {
 	res := BISearchMining{
 		TopSearches:        []BITopSearchRow{},
@@ -764,28 +925,25 @@ func queryBISearchMining(ctx context.Context, win biTimeWindow) BISearchMining {
 		return res
 	}
 
-	var zeroCount int
-	_ = db.Pool.QueryRow(ctx, `
-		SELECT COUNT(*), COUNT(*) FILTER (WHERE results_count = 0)
-		FROM analytics.search_logs
-		WHERE created_at >= $1 AND created_at < $2
-	`, win.Since, win.Until).Scan(&res.TotalSearches, &zeroCount)
+	_ = db.Pool.QueryRow(ctx, biSearchEventsUnionCTE+`
+		SELECT COUNT(*), COUNT(*) FILTER (WHERE is_zero = true)
+		FROM combined_searches
+	`, win.Since, win.Until).Scan(&res.TotalSearches, &res.ZeroResultCount)
 
 	if res.TotalSearches == 0 {
-		return queryFallbackMemberEventSearches(ctx, win)
+		return res
 	}
-	res.ZeroResultRatePct = safePct(zeroCount, res.TotalSearches)
+	res.ZeroResultRatePct = safePct(res.ZeroResultCount, res.TotalSearches)
 
-	topRows, err := db.Pool.Query(ctx, `
+	topRows, err := db.Pool.Query(ctx, biSearchEventsUnionCTE+`
 		SELECT
 			MAX(query_text) AS q_label,
 			COUNT(*) AS searches,
 			COALESCE(AVG(results_count)::float8, 0) AS avg_res,
 			COUNT(clicked_product_id) FILTER (WHERE clicked_product_id IS NOT NULL AND clicked_product_id <> '') AS clicks,
-			UPPER(COALESCE(MODE() WITHIN GROUP (ORDER BY NULLIF(language_code, '')), 'TR')) AS top_lang,
+			UPPER(COALESCE(MODE() WITHIN GROUP (ORDER BY NULLIF(lang_code, '')), 'TR')) AS top_lang,
 			UPPER(COALESCE(MODE() WITHIN GROUP (ORDER BY NULLIF(country_code, '')), 'TR')) AS top_country
-		FROM analytics.search_logs
-		WHERE created_at >= $1 AND created_at < $2
+		FROM combined_searches
 		GROUP BY normalized_query
 		ORDER BY searches DESC, clicks DESC
 		LIMIT 20
@@ -802,16 +960,15 @@ func queryBISearchMining(ctx context.Context, win biTimeWindow) BISearchMining {
 		}
 	}
 
-	zeroRows, err := db.Pool.Query(ctx, `
+	zeroRows, err := db.Pool.Query(ctx, biSearchEventsUnionCTE+`
 		SELECT
 			MAX(query_text) AS q_label,
 			COUNT(*) AS searches,
 			MAX(created_at) AS last_at,
-			UPPER(COALESCE(MODE() WITHIN GROUP (ORDER BY NULLIF(language_code, '')), 'TR')) AS top_lang,
+			UPPER(COALESCE(MODE() WITHIN GROUP (ORDER BY NULLIF(lang_code, '')), 'TR')) AS top_lang,
 			UPPER(COALESCE(MODE() WITHIN GROUP (ORDER BY NULLIF(country_code, '')), 'TR')) AS top_country
-		FROM analytics.search_logs
-		WHERE created_at >= $1 AND created_at < $2
-		  AND results_count = 0
+		FROM combined_searches
+		WHERE is_zero = true
 		GROUP BY normalized_query
 		ORDER BY searches DESC, last_at DESC
 		LIMIT 20
@@ -829,49 +986,19 @@ func queryBISearchMining(ctx context.Context, win biTimeWindow) BISearchMining {
 	return res
 }
 
-func queryFallbackMemberEventSearches(ctx context.Context, win biTimeWindow) BISearchMining {
-	res := BISearchMining{
-		TopSearches:        []BITopSearchRow{},
-		ZeroResultSearches: []BIZeroResultSearchRow{},
-	}
-	rows, err := db.Pool.Query(ctx, `
-		SELECT
-			MAX(entity_id) AS q_label,
-			COUNT(*) AS searches,
-			UPPER(COALESCE(MODE() WITHIN GROUP (ORDER BY NULLIF(country_code, '')), 'TR')) AS top_country
-		FROM analytics.member_events
-		WHERE event_type = 'search_query'
-		  AND entity_id IS NOT NULL AND entity_id <> ''
-		  AND created_at >= $1 AND created_at < $2
-		GROUP BY LOWER(TRIM(entity_id))
-		ORDER BY searches DESC
-		LIMIT 15
-	`, win.Since, win.Until)
-	if err != nil {
-		return res
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var r BITopSearchRow
-		if scanErr := rows.Scan(&r.Query, &r.Searches, &r.TopCountry); scanErr == nil {
-			r.TopLang = "TR"
-			res.TotalSearches += r.Searches
-			res.TopSearches = append(res.TopSearches, r)
-		}
-	}
-	return res
-}
-
 func queryBIGeoCurrencyMatrix(ctx context.Context, win biTimeWindow) []BIGeoCurrencyRow {
 	list := []BIGeoCurrencyRow{}
 	if db.Pool == nil {
 		return list
 	}
 
-	sql := `
-		WITH pv_geo AS (
+	sql := `WITH ` + biUnifiedLeadsCTE + `,
+		pv_geo AS (
 			SELECT
-				UPPER(COALESCE(NULLIF(country_code, ''), 'TR')) AS ccode,
+				CASE
+					WHEN UPPER(COALESCE(NULLIF(country_code, ''), 'TR')) IN ('EU', 'EN', 'T1', 'XX', '--') THEN 'TR'
+					ELSE UPPER(COALESCE(NULLIF(country_code, ''), 'TR'))
+				END AS ccode,
 				UPPER(COALESCE(MODE() WITHIN GROUP (ORDER BY NULLIF(language, '')), 'TR')) AS top_lang,
 				UPPER(COALESCE(MODE() WITHIN GROUP (ORDER BY NULLIF(currency, '')), 'TRY')) AS top_curr,
 				COUNT(DISTINCT visitor_id) AS visitors,
@@ -883,32 +1010,21 @@ func queryBIGeoCurrencyMatrix(ctx context.Context, win biTimeWindow) []BIGeoCurr
 			GROUP BY 1
 		),
 		leads_geo AS (
-			SELECT ccode, MAX(cnt) AS leads FROM (
-				SELECT UPPER(COALESCE(NULLIF(country_code, ''), 'TR')) AS ccode, COUNT(*) AS cnt
-				FROM analytics.brand_events
-				WHERE event_type IN ('whatsapp_click', 'phone_click', 'email_click', 'website_click', 'inquiry_submit', 'chat_start')
-				  AND created_at >= $1 AND created_at < $2
-				GROUP BY 1
-				UNION ALL
-				SELECT UPPER(COALESCE(NULLIF(country_code, ''), 'TR')) AS ccode, COUNT(*) AS cnt
-				FROM analytics.member_events
-				WHERE event_type IN ('whatsapp_click', 'phone_click', 'email_click', 'chat_start', 'rfq_create', 'inquiry_submit', 'order_create')
-				  AND created_at >= $1 AND created_at < $2
-				GROUP BY 1
-			) u
-			GROUP BY ccode
+			SELECT eff_country AS ccode, COUNT(*)::int AS leads
+			FROM resolved_leads
+			GROUP BY 1
 		)
 		SELECT
-			pv_geo.ccode,
-			pv_geo.top_lang,
-			pv_geo.top_curr,
-			pv_geo.visitors,
-			pv_geo.pageviews,
-			pv_geo.product_views,
+			COALESCE(pv_geo.ccode, leads_geo.ccode) AS ccode,
+			COALESCE(pv_geo.top_lang, 'TR'),
+			COALESCE(pv_geo.top_curr, 'TRY'),
+			COALESCE(pv_geo.visitors, 0),
+			COALESCE(pv_geo.pageviews, 0),
+			COALESCE(pv_geo.product_views, 0),
 			COALESCE(leads_geo.leads, 0)
 		FROM pv_geo
-		LEFT JOIN leads_geo ON leads_geo.ccode = pv_geo.ccode
-		ORDER BY pv_geo.visitors DESC, pv_geo.pageviews DESC
+		FULL OUTER JOIN leads_geo ON leads_geo.ccode = pv_geo.ccode
+		ORDER BY COALESCE(pv_geo.visitors, 0) DESC, COALESCE(leads_geo.leads, 0) DESC, COALESCE(pv_geo.pageviews, 0) DESC
 		LIMIT 20
 	`
 	rows, err := db.Pool.Query(ctx, sql, win.Since, win.Until)
@@ -929,7 +1045,11 @@ func queryBIGeoCurrencyMatrix(ctx context.Context, win biTimeWindow) []BIGeoCurr
 			&item.B2BLeads,
 		); scanErr == nil {
 			item.CountryLabel = formatCountryLabel(item.CountryCode)
-			item.ConversionRatePct = safePct(item.B2BLeads, item.Visitors)
+			denom := item.Visitors
+			if denom == 0 && item.B2BLeads > 0 {
+				denom = item.B2BLeads
+			}
+			item.ConversionRatePct = safePct(item.B2BLeads, denom)
 			list = append(list, item)
 		}
 	}
@@ -942,8 +1062,8 @@ func queryBIAcquisitionAttribution(ctx context.Context, win biTimeWindow) []BIAc
 		return list
 	}
 
-	sql := `
-		WITH sess_base AS (
+	sql := `WITH ` + biUnifiedLeadsCTE + `,
+		sess_base AS (
 			SELECT
 				COALESCE(NULLIF(session_id, ''), visitor_id) AS sess_id,
 				visitor_id,
@@ -963,6 +1083,7 @@ func queryBIAcquisitionAttribution(ctx context.Context, win biTimeWindow) []BIAc
 			SELECT DISTINCT ON (sess_id)
 				sess_id,
 				visitor_id,
+				created_at AS first_at,
 				COALESCE(NULLIF(utm_source, ''), COALESCE(NULLIF(referrer_host, ''), 'Doğrudan (Direct)')) AS src,
 				COALESCE(NULLIF(utm_medium, ''), 'none') AS med,
 				COALESCE(NULLIF(utm_campaign, ''), '-') AS camp,
@@ -987,30 +1108,53 @@ func queryBIAcquisitionAttribution(ctx context.Context, win biTimeWindow) []BIAc
 			FROM sess_base
 			GROUP BY sess_id
 		),
-		visitor_leads AS (
-			SELECT visitor_id, COUNT(*) AS lead_cnt
-			FROM analytics.member_events
-			WHERE visitor_id IS NOT NULL AND visitor_id <> ''
-			  AND event_type IN ('whatsapp_click', 'phone_click', 'email_click', 'chat_start', 'rfq_create', 'inquiry_submit', 'order_create')
-			  AND created_at >= $1 AND created_at < $2
-			GROUP BY visitor_id
+		sess_channels AS (
+			SELECT
+				sf.channel,
+				sf.src,
+				sf.med,
+				sf.camp,
+				BOOL_OR(sf.paid_click) AS has_paid,
+				COUNT(DISTINCT sf.visitor_id) AS visitors,
+				COUNT(*) AS sessions,
+				COUNT(*) FILTER (WHERE sm.pv_cnt = 1 AND sm.dur_sum < 10) AS bounce_sess,
+				COALESCE(SUM(sm.prod_views), 0)::int AS product_views
+			FROM sess_first sf
+			JOIN sess_metrics sm ON sm.sess_id = sf.sess_id
+			GROUP BY sf.channel, sf.src, sf.med, sf.camp
+		),
+		lead_channels AS (
+			SELECT
+				COALESCE(matched_sf.channel, 'Direct') AS channel,
+				COALESCE(matched_sf.src, 'Doğrudan (Direct)') AS src,
+				COALESCE(matched_sf.med, 'none') AS med,
+				COALESCE(matched_sf.camp, '-') AS camp,
+				COUNT(*)::int AS leads
+			FROM resolved_leads rl
+			LEFT JOIN LATERAL (
+				SELECT sf.channel, sf.src, sf.med, sf.camp
+				FROM sess_first sf
+				WHERE rl.eff_vid <> '' AND sf.visitor_id = rl.eff_vid
+				ORDER BY (sf.first_at <= rl.created_at) DESC, sf.first_at DESC
+				LIMIT 1
+			) matched_sf ON true
+			GROUP BY 1, 2, 3, 4
 		)
 		SELECT
-			sf.channel,
-			sf.src,
-			sf.med,
-			sf.camp,
-			BOOL_OR(sf.paid_click) AS has_paid,
-			COUNT(DISTINCT sf.visitor_id) AS visitors,
-			COUNT(*) AS sessions,
-			COUNT(*) FILTER (WHERE sm.pv_cnt = 1 AND sm.dur_sum < 10) AS bounce_sess,
-			COALESCE(SUM(sm.prod_views), 0)::int AS product_views,
-			COALESCE(SUM(COALESCE(vl.lead_cnt, 0)), 0)::int AS leads
-		FROM sess_first sf
-		JOIN sess_metrics sm ON sm.sess_id = sf.sess_id
-		LEFT JOIN visitor_leads vl ON vl.visitor_id = sf.visitor_id
-		GROUP BY sf.channel, sf.src, sf.med, sf.camp
-		ORDER BY sessions DESC, visitors DESC
+			COALESCE(sc.channel, lc.channel) AS channel,
+			COALESCE(sc.src, lc.src) AS src,
+			COALESCE(sc.med, lc.med) AS med,
+			COALESCE(sc.camp, lc.camp) AS camp,
+			COALESCE(sc.has_paid, false) AS has_paid,
+			COALESCE(sc.visitors, 0)::int AS visitors,
+			COALESCE(sc.sessions, 0)::int AS sessions,
+			COALESCE(sc.bounce_sess, 0)::int AS bounce_sess,
+			COALESCE(sc.product_views, 0)::int AS product_views,
+			COALESCE(lc.leads, 0)::int AS leads
+		FROM sess_channels sc
+		FULL OUTER JOIN lead_channels lc
+			ON lc.channel = sc.channel AND lc.src = sc.src AND lc.med = sc.med AND lc.camp = sc.camp
+		ORDER BY COALESCE(sc.sessions, 0) DESC, COALESCE(lc.leads, 0) DESC, COALESCE(sc.visitors, 0) DESC
 		LIMIT 20
 	`
 	rows, err := db.Pool.Query(ctx, sql, win.Since, win.Until)
@@ -1027,7 +1171,11 @@ func queryBIAcquisitionAttribution(ctx context.Context, win biTimeWindow) []BIAc
 			&r.Visitors, &r.Sessions, &bounceSess, &r.ProductViews, &r.B2BLeads,
 		); scanErr == nil {
 			r.BounceRatePct = safePct(bounceSess, r.Sessions)
-			r.LeadRatePct = safePct(r.B2BLeads, r.Sessions)
+			denom := r.Sessions
+			if denom == 0 && r.B2BLeads > 0 {
+				denom = r.B2BLeads
+			}
+			r.LeadRatePct = safePct(r.B2BLeads, denom)
 			list = append(list, r)
 		}
 	}
@@ -1331,7 +1479,10 @@ func queryBIHotBuyerLeads(ctx context.Context, win biTimeWindow) []BIHotBuyerLea
 			SELECT
 				visitor_id,
 				MAX(NULLIF(user_id, '')) AS linked_uid,
-				UPPER(COALESCE((ARRAY_AGG(NULLIF(country_code, '') ORDER BY created_at DESC))[1], 'TR')) AS country_code,
+				CASE
+					WHEN UPPER(COALESCE((ARRAY_AGG(NULLIF(country_code, '') ORDER BY created_at DESC))[1], 'TR')) IN ('EU', 'EN', 'T1', 'XX', '--') THEN 'TR'
+					ELSE UPPER(COALESCE((ARRAY_AGG(NULLIF(country_code, '') ORDER BY created_at DESC))[1], 'TR'))
+				END AS country_code,
 				UPPER(COALESCE((ARRAY_AGG(NULLIF(language, '') ORDER BY created_at DESC))[1], 'TR')) AS lang,
 				UPPER(COALESCE((ARRAY_AGG(NULLIF(currency, '') ORDER BY created_at DESC))[1], 'TRY')) AS curr,
 				COALESCE((ARRAY_AGG(NULLIF(device_type, '') ORDER BY created_at DESC))[1], 'desktop') AS dev,
@@ -1440,16 +1591,21 @@ func queryBIWebVitalsAndTech(ctx context.Context, win biTimeWindow) BIWebVitalsA
 		SELECT
 			COALESCE(NULLIF(device_type, ''), 'desktop') AS dev,
 			COUNT(*) AS samples,
-			COALESCE(AVG(NULLIF(lcp_ms, 0))::float8, 0) AS avg_lcp,
-			COALESCE(AVG(NULLIF(inp_ms, 0))::float8, 0) AS avg_inp,
-			COALESCE(AVG(CASE WHEN cls_score > 0 THEN cls_score END)::float8, 0) AS avg_cls,
-			COALESCE(AVG(NULLIF(ttfb_ms, 0))::float8, 0) AS avg_ttfb,
+			COALESCE(AVG(CASE WHEN lcp_ms > 0 AND lcp_ms <= 30000 THEN lcp_ms END)::float8, 0) AS avg_lcp,
+			COALESCE(AVG(CASE WHEN inp_ms > 0 AND inp_ms <= 5000 THEN inp_ms END)::float8, 0) AS avg_inp,
+			COALESCE(AVG(CASE WHEN cls_score > 0 AND cls_score <= 5 THEN cls_score END)::float8, 0) AS avg_cls,
+			COALESCE(AVG(CASE WHEN ttfb_ms > 0 AND ttfb_ms <= 15000 THEN ttfb_ms END)::float8, 0) AS avg_ttfb,
 			COUNT(*) FILTER (WHERE lcp_ms > 0 AND lcp_ms <= 2500) AS good_lcp,
-			COUNT(*) FILTER (WHERE lcp_ms > 0) AS total_lcp
+			COUNT(*) FILTER (WHERE lcp_ms > 0 AND lcp_ms <= 30000) AS total_lcp
 		FROM analytics.page_views
 		WHERE COALESCE(is_bot, false) = false
 		  AND created_at >= $1 AND created_at < $2
-		  AND (lcp_ms > 0 OR inp_ms > 0 OR ttfb_ms > 0 OR cls_score > 0)
+		  AND (
+			(lcp_ms > 0 AND lcp_ms <= 30000)
+			OR (inp_ms > 0 AND inp_ms <= 5000)
+			OR (ttfb_ms > 0 AND ttfb_ms <= 15000)
+			OR (cls_score > 0 AND cls_score <= 5)
+		  )
 		GROUP BY dev
 		ORDER BY samples DESC
 	`
@@ -1622,6 +1778,32 @@ func queryBIHourlyHeatmap(ctx context.Context, win biTimeWindow) []BIHourlyHeatm
 	return cells
 }
 
+const biBotCrawlUnionCTE = `
+	WITH bot_hits AS (
+		SELECT
+			COALESCE(NULLIF(b.bot_name, ''), 'UnknownBot') AS bot_name,
+			b.path,
+			b.created_at
+		FROM analytics.bot_crawl_logs b
+		WHERE b.created_at >= $1 AND b.created_at < $2
+		UNION ALL
+		SELECT
+			COALESCE(NULLIF(pv.bot_name, ''), 'UnknownBot') AS bot_name,
+			pv.path,
+			pv.created_at
+		FROM analytics.page_views pv
+		WHERE pv.is_bot = true
+		  AND pv.created_at >= $1 AND pv.created_at < $2
+		  AND COALESCE(pv.bot_name, '') <> 'EmptyUA'
+		  AND NOT EXISTS (
+			SELECT 1 FROM analytics.bot_crawl_logs b2
+			WHERE b2.bot_name = COALESCE(NULLIF(pv.bot_name, ''), 'UnknownBot')
+			  AND b2.path = pv.path
+			  AND b2.created_at BETWEEN pv.created_at - INTERVAL '5 seconds' AND pv.created_at + INTERVAL '5 seconds'
+		  )
+	)
+`
+
 func queryBIBotCrawlMonitor(ctx context.Context, win biTimeWindow) BIBotCrawlMonitor {
 	out := BIBotCrawlMonitor{
 		Bots:            []BIBotSummaryRow{},
@@ -1631,22 +1813,20 @@ func queryBIBotCrawlMonitor(ctx context.Context, win biTimeWindow) BIBotCrawlMon
 		return out
 	}
 
-	_ = db.Pool.QueryRow(ctx, `
+	_ = db.Pool.QueryRow(ctx, biBotCrawlUnionCTE+`
 		SELECT COALESCE(COUNT(*), 0)
-		FROM analytics.page_views
-		WHERE is_bot = true AND created_at >= $1 AND created_at < $2
+		FROM bot_hits
 	`, win.Since, win.Until).Scan(&out.TotalBotHits)
 
-	botRows, err := db.Pool.Query(ctx, `
+	botRows, err := db.Pool.Query(ctx, biBotCrawlUnionCTE+`
 		SELECT
-			COALESCE(NULLIF(bot_name, ''), 'UnknownBot') AS bname,
+			bot_name,
 			COUNT(*) AS hits,
 			COUNT(DISTINCT path) AS uniq_paths,
 			COUNT(*) FILTER (WHERE path LIKE '/product/%' OR path ~ '^/[a-z]{2}/product/') AS prod_crawled,
 			MAX(created_at) AS last_at
-		FROM analytics.page_views
-		WHERE is_bot = true AND created_at >= $1 AND created_at < $2
-		GROUP BY bname
+		FROM bot_hits
+		GROUP BY bot_name
 		ORDER BY hits DESC
 		LIMIT 20
 	`, win.Since, win.Until)
@@ -1660,15 +1840,14 @@ func queryBIBotCrawlMonitor(ctx context.Context, win biTimeWindow) BIBotCrawlMon
 		}
 	}
 
-	pathRows, err := db.Pool.Query(ctx, `
+	pathRows, err := db.Pool.Query(ctx, biBotCrawlUnionCTE+`
 		SELECT
 			path,
 			COUNT(*) AS hits,
-			COALESCE(MODE() WITHIN GROUP (ORDER BY COALESCE(NULLIF(bot_name, ''), 'UnknownBot')), 'UnknownBot') AS top_bot,
-			COUNT(DISTINCT COALESCE(NULLIF(bot_name, ''), 'UnknownBot')) AS uniq_bots,
+			COALESCE(MODE() WITHIN GROUP (ORDER BY bot_name), 'UnknownBot') AS top_bot,
+			COUNT(DISTINCT bot_name) AS uniq_bots,
 			MAX(created_at) AS last_at
-		FROM analytics.page_views
-		WHERE is_bot = true AND created_at >= $1 AND created_at < $2
+		FROM bot_hits
 		GROUP BY path
 		ORDER BY hits DESC
 		LIMIT 20

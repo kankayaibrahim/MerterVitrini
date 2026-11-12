@@ -87,7 +87,7 @@ export default function ExecutiveMetricCards({
 
       {/* 3. Toptan Katalog & Stok */}
       <Link
-        href="/admin/products"
+        href="/admin/catalog/products"
         className="glass-card bg-white p-5 rounded-2xl border border-zinc-200/80 shadow-xs flex flex-col justify-between hover:border-amber-300 transition-all group"
       >
         <div className="flex items-center justify-between mb-3">

@@ -14,16 +14,15 @@ import {
   CheckCircle2,
   Send,
   FileText,
-  Lock,
 } from "lucide-react";
 import { Brand, Product } from "@/types/store";
 import { showToast, trackBrandEvent } from "@/app/utils";
 import {
   useIsStoreAuthenticated,
   useIsStoreMemberLoggedIn,
-  openStoreAuthModal,
 } from "@/app/storeAuth";
 import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
+import { formatAsciiSafeUpper } from "@/utils/formatters";
 
 function normalizeWaPhone(raw?: string): string {
   if (!raw) return "";
@@ -507,7 +506,7 @@ export default function SupplierDirectCard({
 
   const directWaUrl = waDigits
     ? `https://wa.me/${waDigits}?text=${encodeURIComponent(directWaMessage)}`
-    : `https://wa.me/?text=${encodeURIComponent(directWaMessage)}`;
+    : "";
 
   const supplierSlug = encodeURIComponent(bp?.slug || product.brand_id);
   const supplierHref =
@@ -573,28 +572,28 @@ export default function SupplierDirectCard({
   };
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3">
+    <div className="rounded-lg border border-[#E5E0D8] bg-[#F8F6F2] p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center shrink-0">
+          <div className="w-9 h-9 rounded-md bg-[#1C1C1C] text-white flex items-center justify-center shrink-0">
             <Building2 size={18} />
           </div>
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
               <Link
                 href={supplierHref}
-                className="text-xs font-extrabold text-slate-900 hover:text-salmon-pink uppercase tracking-wide no-underline transition-colors"
+                className="text-xs font-extrabold text-[#1C1C1C] hover:text-[#8C6D3F] tracking-wide no-underline transition-colors"
               >
-                {supplierName}
+                {formatAsciiSafeUpper(supplierName)}
               </Link>
               {(bp?.is_verified ?? true) && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 text-[10px] font-bold">
                   <ShieldCheck size={11} />
                   <span>{copy.verifiedBadge}</span>
                 </span>
               )}
             </div>
-            <p className="text-[11px] font-semibold text-slate-500">
+            <p className="text-[11px] font-semibold text-[#525252]">
               {companyTypeLabel} • {copy.zeroCommission}
             </p>
           </div>
@@ -602,7 +601,7 @@ export default function SupplierDirectCard({
 
         <Link
           href={supplierHref}
-          className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[10px] font-extrabold text-slate-800 no-underline shrink-0"
+          className="px-2.5 py-1 rounded-md bg-white hover:bg-[#EFECE6] border border-[#D6D1C7] hover:border-[#1C1C1C] text-[10px] font-extrabold text-[#1C1C1C] no-underline shrink-0 transition-colors"
         >
           {copy.showcaseLink}
         </Link>
@@ -611,19 +610,19 @@ export default function SupplierDirectCard({
       {(bp?.supports_private_label || bp?.supports_fason || bp?.export_countries) && (
         <div className="flex flex-wrap gap-1.5 pt-0.5">
           {bp?.supports_private_label && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-bold text-slate-700">
-              <CheckCircle2 size={11} className="text-emerald-600" />
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-[#E5E0D8] text-[10px] font-bold text-[#1C1C1C]">
+              <CheckCircle2 size={11} className="text-[#15803D]" />
               <span>{copy.privateLabel}</span>
             </span>
           )}
           {bp?.supports_fason && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-bold text-slate-700">
-              <CheckCircle2 size={11} className="text-emerald-600" />
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-[#E5E0D8] text-[10px] font-bold text-[#1C1C1C]">
+              <CheckCircle2 size={11} className="text-[#15803D]" />
               <span>{copy.fason}</span>
             </span>
           )}
           {bp?.export_countries && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-semibold text-slate-600">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-[#E5E0D8] text-[10px] font-semibold text-[#525252]">
               <span>
                 {copy.exportLabel}: {bp.export_countries}
               </span>
@@ -633,19 +632,19 @@ export default function SupplierDirectCard({
       )}
 
       {bp?.description && (
-        <p className="text-[11px] text-slate-600 leading-relaxed">{bp.description}</p>
+        <p className="text-[11px] text-[#525252] leading-relaxed">{bp.description}</p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-700 pt-1">
-        {waRaw && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-[#1C1C1C] pt-1">
+        {waRaw && directWaUrl && (
           <div className="flex items-center gap-1.5">
-            <MessageCircle size={13} className="text-emerald-600 shrink-0" />
+            <MessageCircle size={13} className="text-[#15803D] shrink-0" />
             <a
               href={directWaUrl}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackBrandEvent(product.brand_id, "whatsapp_click", product.id)}
-              className="font-extrabold hover:text-emerald-700 no-underline text-emerald-700"
+              className="font-extrabold hover:underline no-underline text-[#15803D]"
             >
               WhatsApp: {waRaw}
             </a>
@@ -654,11 +653,11 @@ export default function SupplierDirectCard({
 
         {callRaw && (
           <div className="flex items-center gap-1.5">
-            <Phone size={13} className="text-slate-400 shrink-0" />
+            <Phone size={13} className="text-[#8C6D3F] shrink-0" />
             <a
               href={`tel:${callRaw}`}
               onClick={() => trackBrandEvent(product.brand_id, "phone_click", product.id)}
-              className="font-bold hover:text-salmon-pink no-underline text-slate-800"
+              className="font-bold hover:text-[#8C6D3F] no-underline text-[#1C1C1C]"
             >
               Tel: {callRaw}
             </a>
@@ -667,11 +666,11 @@ export default function SupplierDirectCard({
 
         {bp?.public_email && (
           <div className="flex items-center gap-1.5">
-            <Mail size={13} className="text-slate-400 shrink-0" />
+            <Mail size={13} className="text-[#8C6D3F] shrink-0" />
             <a
               href={`mailto:${bp.public_email}`}
               onClick={() => trackBrandEvent(product.brand_id, "email_click", product.id)}
-              className="font-semibold hover:text-salmon-pink no-underline text-slate-700 truncate"
+              className="font-semibold hover:text-[#8C6D3F] no-underline text-[#525252] truncate"
             >
               {bp.public_email}
             </a>
@@ -680,13 +679,13 @@ export default function SupplierDirectCard({
 
         {bp?.website && (
           <div className="flex items-center gap-1.5">
-            <Globe size={13} className="text-slate-400 shrink-0" />
+            <Globe size={13} className="text-[#8C6D3F] shrink-0" />
             <a
               href={bp.website}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackBrandEvent(product.brand_id, "website_click", product.id)}
-              className="font-semibold hover:text-salmon-pink no-underline text-slate-700 truncate"
+              className="font-semibold hover:text-[#8C6D3F] no-underline text-[#525252] truncate"
             >
               {bp.website.replace(/^https?:\/\//, "")}
             </a>
@@ -695,90 +694,87 @@ export default function SupplierDirectCard({
 
         {bp?.location_address && (
           <div className="flex items-start gap-1.5 sm:col-span-2">
-            <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" />
-            <span className="text-[11px] text-slate-600">{bp.location_address}</span>
+            <MapPin size={13} className="text-[#8C6D3F] shrink-0 mt-0.5" />
+            <span className="text-[11px] text-[#525252]">{bp.location_address}</span>
           </div>
         )}
       </div>
 
       {bp?.iban && (
-        <div className="bg-white rounded-lg p-2.5 border border-slate-200/90 text-[11px] space-y-0.5">
-          <div className="font-bold text-slate-800 flex items-center gap-1.5">
-            <CreditCard size={12} className="text-emerald-600" />
+        <div className="bg-white rounded-md p-2.5 border border-[#E5E0D8] text-[11px] space-y-0.5">
+          <div className="font-bold text-[#1C1C1C] flex items-center gap-1.5">
+            <CreditCard size={12} className="text-[#8C6D3F]" />
             <span>{copy.bankTitle}</span>
           </div>
           {bp.bank_name && (
-            <div className="text-slate-600">
-              {copy.bankLabel}: <strong className="text-slate-800">{bp.bank_name}</strong>
+            <div className="text-[#525252]">
+              {copy.bankLabel}: <strong className="text-[#1C1C1C]">{bp.bank_name}</strong>
               {bp.bank_account_holder
                 ? ` • ${copy.holderLabel}: ${bp.bank_account_holder}`
                 : ""}
             </div>
           )}
-          <div className="font-mono font-bold text-slate-900 select-all">{bp.iban}</div>
+          <div className="font-mono font-bold text-[#1C1C1C] select-all">{bp.iban}</div>
         </div>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-        <a
-          href={directWaUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => trackBrandEvent(product.brand_id, "whatsapp_click", product.id)}
-          className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition-colors no-underline shadow-xs sm:col-span-2"
-        >
-          <MessageCircle size={16} />
-          <span>
-            {copy.whatsappBtn} {waRaw ? `(${waRaw})` : ""}
-          </span>
-        </a>
+        {directWaUrl && (
+          <a
+            href={directWaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => trackBrandEvent(product.brand_id, "whatsapp_click", product.id)}
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-extrabold transition-colors no-underline sm:col-span-2"
+          >
+            <MessageCircle size={16} />
+            <span>
+              {copy.whatsappBtn} {waRaw ? `(${waRaw})` : ""}
+            </span>
+          </a>
+        )}
 
         <button
           type="button"
           onClick={() => setShowContactForm((prev) => !prev)}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-xs font-extrabold transition-colors cursor-pointer"
+          className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-white hover:bg-[#EFECE6] text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] text-xs font-extrabold transition-colors cursor-pointer ${
+            isMemberLoggedIn ? "" : "sm:col-span-2"
+          }`}
         >
-          <FileText size={14} className="text-emerald-600" />
+          <FileText size={14} className="text-[#8C6D3F]" />
           <span>{copy.directFormBtn}</span>
         </button>
 
-        <button
-          type="button"
-          onClick={isMemberLoggedIn ? onOpenChat : () => openStoreAuthModal("login")}
-          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold transition-colors cursor-pointer"
-        >
-          {isMemberLoggedIn ? (
-            <>
-              <Building2 size={14} />
-              <span>{copy.liveChatBtn}</span>
-            </>
-          ) : (
-            <>
-              <Lock size={14} />
-              <span>{copy.liveChatMemberBtn}</span>
-            </>
-          )}
-        </button>
+        {isMemberLoggedIn && (
+          <button
+            type="button"
+            onClick={onOpenChat}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold transition-colors cursor-pointer"
+          >
+            <Building2 size={14} />
+            <span>{copy.liveChatBtn}</span>
+          </button>
+        )}
       </div>
 
       {showContactForm && (
         <form
           onSubmit={handleSendDirectInquiry}
-          className="bg-white rounded-xl border border-emerald-200 p-3.5 space-y-2.5 mt-2 shadow-xs"
+          className="bg-white rounded-lg border border-[#E5E0D8] p-3.5 space-y-2.5 mt-2"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold text-slate-900">
-              {supplierName} — {copy.formTitleSuffix}
+            <span className="text-xs font-extrabold text-[#1C1C1C]">
+              {formatAsciiSafeUpper(supplierName)} — {copy.formTitleSuffix}
             </span>
             <button
               type="button"
               onClick={() => setShowContactForm(false)}
-              className="text-[11px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+              className="text-[11px] font-bold text-[#6B6B6B] hover:text-[#1C1C1C] cursor-pointer"
             >
               {copy.closeBtn}
             </button>
           </div>
-          <p className="text-[11px] text-slate-500">{copy.formHint}</p>
+          <p className="text-[11px] text-[#525252]">{copy.formHint}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
               type="text"
@@ -786,7 +782,7 @@ export default function SupplierDirectCard({
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder={copy.fullNamePlaceholder}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-emerald-500"
+              className="px-3 py-2 rounded-md border border-[#D6D1C7] text-xs focus:outline-none focus:border-[#1C1C1C]"
             />
             <input
               type="tel"
@@ -794,7 +790,7 @@ export default function SupplierDirectCard({
               value={buyerPhone}
               onChange={(e) => setBuyerPhone(e.target.value)}
               placeholder={copy.phonePlaceholder}
-              className="px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-emerald-500"
+              className="px-3 py-2 rounded-md border border-[#D6D1C7] text-xs focus:outline-none focus:border-[#1C1C1C]"
             />
           </div>
           <input
@@ -802,24 +798,24 @@ export default function SupplierDirectCard({
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
             placeholder={copy.companyPlaceholder}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-emerald-500"
+            className="w-full px-3 py-2 rounded-md border border-[#D6D1C7] text-xs focus:outline-none focus:border-[#1C1C1C]"
           />
           <textarea
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder={copy.notesPlaceholder(pkgQty, totalPieces)}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs focus:outline-none focus:border-emerald-500"
+            className="w-full px-3 py-2 rounded-md border border-[#D6D1C7] text-xs focus:outline-none focus:border-[#1C1C1C]"
           />
           {submittedOrderNo && (
-            <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+            <div className="text-[11px] font-bold text-[#15803D] bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
               {copy.submittedNotice(submittedOrderNo, supplierName)}
             </div>
           )}
           <button
             type="submit"
             disabled={sendingForm}
-            className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+            className="w-full py-2.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] disabled:opacity-50 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
           >
             <Send size={13} />
             <span>{sendingForm ? copy.sendingBtn : copy.submitBtn}</span>

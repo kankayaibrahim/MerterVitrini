@@ -36,6 +36,8 @@ type CustomerResponse struct {
 	Email             string               `json:"email"`
 	Phone             string               `json:"phone"`
 	Role              string               `json:"role"`
+	EmailVerified     bool                 `json:"email_verified"`
+	IsVerified        bool                 `json:"is_verified"`
 	IsActive          bool                 `json:"is_active"`
 	IsBlocked         bool                 `json:"is_blocked"`
 	BlockReason       *string              `json:"block_reason"`
@@ -66,7 +68,8 @@ func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request)
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 
 	query := `
-		SELECT u.id, u.first_name, u.last_name, u.email, COALESCE(u.phone, ''), u.user_role, u.is_active, u.is_blocked, u.block_reason, u.created_at, u.updated_at,
+		SELECT u.id, u.first_name, u.last_name, u.email, COALESCE(u.phone, ''), u.user_role,
+		       COALESCE(u.email_verified, false), COALESCE(u.is_active, true), COALESCE(u.is_blocked, false), u.block_reason, u.created_at, u.updated_at,
 		       u.registration_ip, u.billing_address, u.delivery_address, u.tax_no_tckn, u.instagram_username, u.preferred_lang, u.preferred_currency,
 		       (SELECT login_at FROM identity.user_login_history WHERE user_id = u.id ORDER BY login_at DESC LIMIT 1) as last_login_at,
 		       COALESCE(
@@ -99,13 +102,15 @@ func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request)
 		var lastLoginAtTime *time.Time
 		var loginHistoryBytes []byte
 		if err := rows.Scan(
-			&c.ID, &c.FirstName, &c.LastName, &c.Email, &c.Phone, &c.Role, &c.IsActive, &c.IsBlocked, &c.BlockReason, &createdAt, &updatedAt,
+			&c.ID, &c.FirstName, &c.LastName, &c.Email, &c.Phone, &c.Role, &c.EmailVerified, &c.IsActive, &c.IsBlocked, &c.BlockReason, &createdAt, &updatedAt,
 			&c.RegistrationIP, &c.BillingAddress, &c.DeliveryAddress, &c.TaxNoTCKN, &c.InstagramUsername, &c.PreferredLang, &c.PreferredCurrency,
 			&lastLoginAtTime, &loginHistoryBytes,
 		); err != nil {
 			log.Printf("[ADMIN CUSTOMERS ERROR] Failed to scan customer: %v", err)
 			continue
 		}
+		c.IsActive = c.IsActive && !c.IsBlocked
+		c.IsVerified = c.EmailVerified
 		
 		c.CreatedAt = createdAt.Format(time.RFC3339)
 		c.UpdatedAt = updatedAt.Format(time.RFC3339)

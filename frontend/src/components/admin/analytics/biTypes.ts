@@ -629,6 +629,201 @@ export function getCountryLabelTr(countryCode: string): string {
   return COUNTRY_NAMES_TR[clean] || clean;
 }
 
+const CHANNEL_LABELS_TR: Record<string, string> = {
+  direct: "Doğrudan Trafik",
+  "(direct)": "Doğrudan Trafik",
+  "organic search": "Organik Arama",
+  organic: "Organik Arama",
+  "campaign / utm": "Kampanya / UTM",
+  campaign: "Kampanya / UTM",
+  "paid search": "Ücretli Arama (Ads)",
+  "paid social": "Ücretli Sosyal Medya",
+  "paid media": "Dijital Reklam",
+  referral: "Yönlendirme",
+  social: "Sosyal Medya",
+  "social media": "Sosyal Medya",
+  email: "E-Bülten",
+  "ai assistant": "Yapay Zeka Asistanı",
+  ai: "Yapay Zeka Asistanı",
+};
+
+export function translateChannelTr(channel: string): string {
+  const trimmed = (channel || "").trim();
+  if (!trimmed) return "Doğrudan Trafik";
+  const mapped = CHANNEL_LABELS_TR[trimmed.toLowerCase()];
+  return mapped || trimmed;
+}
+
+function normalizeAttributionToken(token: string): string {
+  const raw = (token || "").trim();
+  const lower = raw.toLowerCase();
+  if (!raw || lower === "(none)" || lower === "none" || lower === "(not set)" || lower === "-") {
+    return "";
+  }
+  if (lower === "(direct)" || lower === "direct") {
+    return "Doğrudan";
+  }
+  if (lower === "organic") {
+    return "Organik";
+  }
+  if (lower === "referral") {
+    return "Yönlendirme";
+  }
+  if (lower === "social") {
+    return "Sosyal Medya";
+  }
+  if (lower === "cpc" || lower === "ppc" || lower === "paid") {
+    return "Ücretli Tıklama (CPC)";
+  }
+  if (lower === "email") {
+    return "E-Bülten";
+  }
+  return raw;
+}
+
+export function formatSourceMediumTr(source: string, medium: string): string {
+  const cleanSource = normalizeAttributionToken(source);
+  const cleanMedium = normalizeAttributionToken(medium);
+  if (!cleanSource && !cleanMedium) return "Doğrudan";
+  if (cleanSource && (!cleanMedium || cleanSource === cleanMedium)) return cleanSource;
+  if (!cleanSource) return cleanMedium;
+  return `${cleanSource} / ${cleanMedium}`;
+}
+
+export function translateReferrerHostTr(referrer: string): string {
+  const trimmed = (referrer || "").trim();
+  const lower = trimmed.toLowerCase();
+  if (!trimmed || lower === "direct" || lower === "(direct)" || lower === "(none)" || lower === "none") {
+    return "Doğrudan Trafik";
+  }
+  return trimmed;
+}
+
+export function translateDeviceShortTr(deviceType: string): string {
+  const lower = (deviceType || "").trim().toLowerCase();
+  if (lower === "mobile") return "Mobil";
+  if (lower === "tablet") return "Tablet";
+  if (lower === "desktop") return "Masaüstü";
+  return deviceType || "Masaüstü";
+}
+
+export type OpportunityBadgeTone = "warning" | "danger" | "success" | "info" | "neutral";
+
+export interface OpportunityDiagnosis {
+  readonly label: string;
+  readonly tone: OpportunityBadgeTone;
+  readonly isWarning: boolean;
+}
+
+const OPPORTUNITY_FLAG_MAP: Record<string, OpportunityDiagnosis> = {
+  high_views_low_cart: {
+    label: "Yüksek İnceleme • Düşük Sepet",
+    tone: "warning",
+    isWarning: true,
+  },
+  cart_abandonment: {
+    label: "Sepet Terk Riski",
+    tone: "danger",
+    isWarning: true,
+  },
+  low_conversion: {
+    label: "Düşük Dönüşüm • Fiyat/Seri Kontrolü",
+    tone: "warning",
+    isWarning: true,
+  },
+  price_or_pack_friction: {
+    label: "Fiyat / Asorti Darboğazı",
+    tone: "warning",
+    isWarning: true,
+  },
+  zero_cart: {
+    label: "Sepete Eklenmedi • İnceleme Var",
+    tone: "warning",
+    isWarning: true,
+  },
+  low_discovery: {
+    label: "Düşük Keşif • Vitrin Fırsatı",
+    tone: "info",
+    isWarning: true,
+  },
+  top_performer: {
+    label: "Lider Model • Yüksek Dönüşüm",
+    tone: "success",
+    isWarning: false,
+  },
+  strong_converter: {
+    label: "Güçlü Dönüşüm",
+    tone: "success",
+    isWarning: false,
+  },
+  healthy: {
+    label: "Dengeli Dönüşüm",
+    tone: "neutral",
+    isWarning: false,
+  },
+  balanced: {
+    label: "Dengeli Dönüşüm",
+    tone: "neutral",
+    isWarning: false,
+  },
+  normal: {
+    label: "Dengeli Dönüşüm",
+    tone: "neutral",
+    isWarning: false,
+  },
+};
+
+export function resolveOpportunityDiagnosis(product: BiHotProductRow): OpportunityDiagnosis {
+  const rawFlag = (product.opportunity_flag || "").trim();
+  const normalizedKey = rawFlag.toLowerCase().replaceAll("-", "_").replaceAll(/\s+/g, "_");
+
+  if (normalizedKey && OPPORTUNITY_FLAG_MAP[normalizedKey]) {
+    return OPPORTUNITY_FLAG_MAP[normalizedKey];
+  }
+
+  if (rawFlag && !rawFlag.includes("_")) {
+    return {
+      label: rawFlag,
+      tone: "warning",
+      isWarning: true,
+    };
+  }
+
+  if (rawFlag.includes("_")) {
+    if (normalizedKey.includes("abandon")) {
+      return OPPORTUNITY_FLAG_MAP.cart_abandonment;
+    }
+    if (normalizedKey.includes("low_cart") || normalizedKey.includes("high_view")) {
+      return OPPORTUNITY_FLAG_MAP.high_views_low_cart;
+    }
+    if (normalizedKey.includes("top") || normalizedKey.includes("strong")) {
+      return OPPORTUNITY_FLAG_MAP.strong_converter;
+    }
+    if (normalizedKey.includes("low")) {
+      return OPPORTUNITY_FLAG_MAP.low_discovery;
+    }
+    return {
+      label: "Performans İncelemesi Önerilir",
+      tone: "warning",
+      isWarning: true,
+    };
+  }
+
+  if (product.views >= 15 && product.cart_adds === 0) {
+    return OPPORTUNITY_FLAG_MAP.high_views_low_cart;
+  }
+
+  if (product.cart_adds >= 3 && product.inquiries_or_orders === 0) {
+    return OPPORTUNITY_FLAG_MAP.cart_abandonment;
+  }
+
+  if (product.inquiries_or_orders > 0 || product.conversion_pct >= 10) {
+    return OPPORTUNITY_FLAG_MAP.strong_converter;
+  }
+
+  return OPPORTUNITY_FLAG_MAP.healthy;
+}
+
 export function formatDurationSec(seconds: number): string {
   const safe = Math.max(0, Math.round(seconds));
   if (safe < 60) return `${safe} sn`;

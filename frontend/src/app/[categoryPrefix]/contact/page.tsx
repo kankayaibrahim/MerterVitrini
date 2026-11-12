@@ -7,6 +7,7 @@ import {
   OG_LOCALE_BY_LANG,
   GLOBAL_B2B_SEO_MATRIX,
   normalizeSeoLang,
+  stripBrandTitleSuffix,
   buildPrefixedAlternates,
   ssrStoreFetch,
   fetchSsrCategories,
@@ -94,7 +95,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { categoryPrefix } = await params;
   const activeLangs = await fetchLanguages();
   const lang = resolveLang(categoryPrefix, activeLangs);
-  const title = CONTACT_TITLES[lang];
+  const title = stripBrandTitleSuffix(CONTACT_TITLES[lang]);
   const description = CONTACT_DESCRIPTIONS[lang];
   const alternates = buildPrefixedAlternates("contact", lang);
 

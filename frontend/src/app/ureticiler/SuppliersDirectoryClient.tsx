@@ -423,8 +423,8 @@ function SupplierCardContactDetails({
       </div>
       {waRaw && (
         <div className="flex items-center gap-1.5">
-          <MessageCircle size={13} className="text-emerald-600 shrink-0" />
-          <span className="font-bold text-emerald-700">WhatsApp: {waRaw}</span>
+          <MessageCircle size={13} className="text-[#15803D] shrink-0" />
+          <span className="font-bold text-[#15803D]">WhatsApp: {waRaw}</span>
         </div>
       )}
       {callRaw && (
@@ -432,7 +432,7 @@ function SupplierCardContactDetails({
           <Phone size={13} className="text-slate-400 shrink-0" />
           <a
             href={`tel:${callRaw}`}
-            className="font-semibold text-slate-800 hover:text-emerald-700 no-underline"
+            className="font-semibold text-slate-800 hover:text-[#1C1C1C] no-underline"
           >
             Tel: {callRaw}
           </a>
@@ -443,7 +443,7 @@ function SupplierCardContactDetails({
           <Mail size={13} className="text-slate-400 shrink-0" />
           <a
             href={`mailto:${brand.public_email}`}
-            className="font-semibold text-slate-700 hover:text-emerald-700 no-underline truncate"
+            className="font-semibold text-slate-700 hover:text-[#1C1C1C] no-underline truncate"
           >
             {brand.public_email}
           </a>
@@ -456,7 +456,7 @@ function SupplierCardContactDetails({
             href={brand.website}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-slate-700 hover:text-emerald-700 no-underline truncate"
+            className="font-semibold text-slate-700 hover:text-[#1C1C1C] no-underline truncate"
           >
             {brand.website.replace(/^https?:\/\//, "")}
           </a>
@@ -464,7 +464,7 @@ function SupplierCardContactDetails({
       )}
       {brand.iban && (
         <div className="flex items-center gap-1.5 sm:col-span-2 text-[11px] text-slate-600">
-          <CreditCard size={12} className="text-emerald-600 shrink-0" />
+          <CreditCard size={12} className="text-[#8C6D3F] shrink-0" />
           <span className="truncate">
             {copy.directIbanLabel} ({brand.bank_name || copy.bankFallback}):{" "}
             <strong className="font-mono text-slate-900">{brand.iban}</strong>
@@ -485,23 +485,23 @@ function SupplierDirectoryCard({ brand, copy, langSuffix }: SupplierDirectoryCar
   const exportText = brand.export_countries || copy.defaultExportRegions;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 hover:border-emerald-300 shadow-xs hover:shadow-md transition-all p-5 flex flex-col justify-between gap-4">
+    <div className="bg-white rounded-lg border border-[#E5E0D8] hover:border-[#1C1C1C]/40 shadow-xs hover:shadow-md transition-all p-5 flex flex-col justify-between gap-4">
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center shrink-0">
+            <div className="w-11 h-11 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] flex items-center justify-center shrink-0">
               <Building2 size={20} />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <Link
                   href={showcaseHref}
-                  className="text-base font-extrabold text-slate-900 hover:text-emerald-700 transition-colors no-underline"
+                  className="text-base font-extrabold text-[#1C1C1C] hover:text-[#6E542E] transition-colors no-underline"
                 >
                   {brand.name}
                 </Link>
                 {(brand.is_verified ?? true) && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 text-[10px] font-bold">
                     <ShieldCheck size={11} />
                     <span>{copy.verifiedBadge}</span>
                   </span>
@@ -513,8 +513,8 @@ function SupplierDirectoryCard({ brand, copy, langSuffix }: SupplierDirectoryCar
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-extrabold shrink-0">
-            <Package size={13} className="text-amber-600" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#F8F6F2] border border-[#E5E0D8] text-[#1C1C1C] text-xs font-extrabold shrink-0">
+            <Package size={13} className="text-[#8C6D3F]" />
             <span>
               {productCount} {copy.productCountSuffix}
             </span>
@@ -522,23 +522,23 @@ function SupplierDirectoryCard({ brand, copy, langSuffix }: SupplierDirectoryCar
         </div>
 
         <div className="flex flex-wrap gap-1.5">
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
-            <CheckCircle2 size={11} />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] text-[11px] font-bold">
+            <CheckCircle2 size={11} className="text-[#15803D]" />
             <span>{copy.originalSeriesBadge}</span>
           </span>
           {brand.supports_private_label && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-200 text-[11px] font-bold">
-              <CheckCircle2 size={11} />
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] text-[11px] font-bold">
+              <CheckCircle2 size={11} className="text-[#8C6D3F]" />
               <span>{copy.filterPrivateLabel}</span>
             </span>
           )}
           {brand.supports_fason && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-bold">
-              <CheckCircle2 size={11} />
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] text-[11px] font-bold">
+              <CheckCircle2 size={11} className="text-[#8C6D3F]" />
               <span>{copy.typeFason}</span>
             </span>
           )}
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200 text-[11px] font-semibold">
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#F8F6F2] text-[#525252] border border-[#E5E0D8] text-[11px] font-semibold">
             <span>
               {copy.exportPrefix}: {exportText}
             </span>
@@ -553,17 +553,17 @@ function SupplierDirectoryCard({ brand, copy, langSuffix }: SupplierDirectoryCar
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3 border-t border-slate-100">
         <Link
           href={showcaseHref}
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold transition-colors no-underline shadow-xs"
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold transition-colors no-underline shadow-xs"
         >
           <span>{copy.collectionBtn}</span>
-          <ArrowRight size={14} />
+          <ArrowRight size={14} className="rtl:rotate-180" />
         </Link>
 
         <Link
           href={editorialHref}
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-extrabold transition-colors no-underline"
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] text-xs font-extrabold transition-colors no-underline"
         >
-          <BookOpen size={14} className="text-emerald-600" />
+          <BookOpen size={14} className="text-[#8C6D3F]" />
           <span>{copy.storyGuideBtn}</span>
         </Link>
       </div>
@@ -593,12 +593,12 @@ function DirectoryContent({
   }
   if (brands.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-2">
-        <p className="text-sm font-bold text-slate-800">{copy.emptyText}</p>
+      <div className="bg-white rounded-lg border border-[#E5E0D8] p-12 text-center space-y-2">
+        <p className="text-sm font-bold text-[#1C1C1C]">{copy.emptyText}</p>
         <button
           type="button"
           onClick={onResetFilters}
-          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer border-none"
+          className="px-4 py-2 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-bold cursor-pointer border-none"
         >
           {copy.resetFiltersBtn}
         </button>
@@ -725,47 +725,47 @@ export default function SuppliersDirectoryClient({
       />
 
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 py-8 space-y-6">
-        <div className="rounded-3xl bg-gradient-to-br from-amber-50/80 via-white to-emerald-50/60 border border-amber-200/80 text-slate-900 p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xs">
+        <div className="rounded-lg bg-[#F8F6F2] border border-[#E5E0D8] text-[#1C1C1C] p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xs">
           <div className="space-y-2.5 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 border border-emerald-200 text-emerald-800 text-xs font-extrabold">
-              <ShieldCheck size={14} className="text-emerald-600" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[#15803D] text-xs font-extrabold">
+              <ShieldCheck size={14} className="text-[#15803D]" />
               <span>{copy.heroBadge}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#1C1C1C]">
               {copy.heroTitle}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{copy.heroDesc}</p>
+            <p className="text-xs sm:text-sm text-[#525252] leading-relaxed">{copy.heroDesc}</p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2.5 shrink-0">
             <Link
               href="/tedarikci-basvuru"
-              className="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold no-underline text-center transition-colors shadow-xs"
+              className="px-4 py-3 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold no-underline text-center transition-colors shadow-xs"
             >
               {copy.applyBtn}
             </Link>
             <Link
               href="/supplier"
-              className="px-4 py-3 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 text-xs font-extrabold no-underline text-center transition-colors shadow-xs"
+              className="px-4 py-3 rounded-md bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] text-xs font-extrabold no-underline text-center transition-colors shadow-xs"
             >
               {copy.portalLoginBtn}
             </Link>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-xs">
+        <div className="bg-white rounded-lg border border-[#E5E0D8] p-4 space-y-3 shadow-xs">
           <div className="flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
               <Search
                 size={16}
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                className="absolute start-3.5 top-1/2 -translate-y-1/2 text-slate-400"
               />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={copy.searchPlaceholder}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-emerald-600"
+                className="w-full ps-10 pe-4 py-2.5 rounded-md border border-[#D6D1C7] text-xs sm:text-sm focus:outline-none focus:border-[#1C1C1C]"
               />
             </div>
 
@@ -773,10 +773,10 @@ export default function SuppliersDirectoryClient({
               <button
                 type="button"
                 onClick={() => setOnlyPrivateLabel((prev) => !prev)}
-                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                className={`px-3 py-2 rounded-md text-xs font-bold border transition-colors cursor-pointer ${
                   onlyPrivateLabel
-                    ? "bg-violet-600 text-white border-violet-600"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    ? "bg-[#1C1C1C] text-white border-[#1C1C1C]"
+                    : "bg-white text-[#1C1C1C] border-[#D6D1C7] hover:border-[#1C1C1C] hover:bg-[#F8F6F2]"
                 }`}
               >
                 {copy.filterPrivateLabel}
@@ -784,10 +784,10 @@ export default function SuppliersDirectoryClient({
               <button
                 type="button"
                 onClick={() => setOnlyFason((prev) => !prev)}
-                className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                className={`px-3 py-2 rounded-md text-xs font-bold border transition-colors cursor-pointer ${
                   onlyFason
-                    ? "bg-amber-600 text-white border-amber-600"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    ? "bg-[#1C1C1C] text-white border-[#1C1C1C]"
+                    : "bg-white text-[#1C1C1C] border-[#D6D1C7] hover:border-[#1C1C1C] hover:bg-[#F8F6F2]"
                 }`}
               >
                 {copy.filterFason}
@@ -801,10 +801,10 @@ export default function SuppliersDirectoryClient({
                 key={opt.value}
                 type="button"
                 onClick={() => setSelectedType(opt.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer border ${
+                className={`px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap transition-colors cursor-pointer border ${
                   selectedType === opt.value
-                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                    : "bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-emerald-50/60 hover:text-emerald-800 hover:border-emerald-200"
+                    ? "bg-[#1C1C1C] text-white border-[#1C1C1C] shadow-xs"
+                    : "bg-white text-[#525252] border-[#D6D1C7] hover:bg-[#F8F6F2] hover:text-[#1C1C1C] hover:border-[#1C1C1C]"
                 }`}
               >
                 {opt.label}

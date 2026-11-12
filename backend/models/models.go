@@ -304,6 +304,7 @@ type Settings struct {
 	Email              string    `json:"email"`
 	ShowSinglePrice    bool      `json:"show_single_price"`
 	ShowPricesToGuests bool      `json:"show_prices_to_guests"`
+	RecaptchaSiteKey   string    `json:"recaptcha_site_key,omitempty"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
 

@@ -136,7 +136,13 @@ export function SupplierExcelImportModal({
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      const data = await res.json();
+      const data = (await res.json()) as {
+        error?: string;
+        imported_count?: number;
+        skipped_count?: number;
+        errors?: string[];
+        message?: string;
+      };
       if (!res.ok) {
         setErrorMsg(data.error || "Excel dosyası içe aktarılamadı.");
       } else {
@@ -162,7 +168,7 @@ export function SupplierExcelImportModal({
       <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
               <FileSpreadsheet size={20} />
             </div>
             <div>
@@ -177,7 +183,7 @@ export function SupplierExcelImportModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer border-none bg-transparent"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer border-none bg-transparent"
           >
             <X size={18} />
           </button>
@@ -191,7 +197,7 @@ export function SupplierExcelImportModal({
           <button
             type="button"
             onClick={handleDownloadTemplate}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-900 border border-slate-300 text-xs font-extrabold shrink-0 cursor-pointer"
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-700 border border-slate-200 text-xs font-bold shrink-0 cursor-pointer transition-colors"
           >
             <Download size={14} />
             <span>Örnek Şablon (.xlsx)</span>
@@ -199,16 +205,17 @@ export function SupplierExcelImportModal({
         </div>
 
         <form onSubmit={handleUploadSubmit} className="space-y-3">
-          <div className="border-2 border-dashed border-slate-300 hover:border-[#1677ff] rounded-xl p-5 text-center space-y-2 transition-colors">
+          <div className="border-2 border-dashed border-slate-300 hover:border-slate-900 rounded-xl p-5 text-center space-y-2 transition-colors">
             <Upload size={22} className="mx-auto text-slate-400" />
-            <div className="text-xs font-bold text-slate-700">
+            <label htmlFor="supplier-excel-upload" className="block text-xs font-bold text-slate-700 cursor-pointer">
               2. Adım: Doldurduğunuz Excel (.xlsx) veya CSV (.csv) Dosyasını Seçin
-            </div>
+            </label>
             <input
+              id="supplier-excel-upload"
               type="file"
               accept=".xlsx,.csv"
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-              className="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-[#1677ff] hover:file:bg-blue-100 cursor-pointer"
+              className="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-900 file:text-white hover:file:bg-slate-800 cursor-pointer"
             />
           </div>
 
@@ -241,14 +248,14 @@ export function SupplierExcelImportModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              className="h-9 px-4 inline-flex items-center justify-center rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-xs font-bold cursor-pointer transition-colors"
             >
               Kapat
             </button>
             <button
               type="submit"
               disabled={uploading || !selectedFile}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold cursor-pointer border-none disabled:opacity-50"
+              className="h-9 px-5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold cursor-pointer border-none disabled:opacity-50 transition-colors"
             >
               <Upload size={14} />
               <span>{uploading ? "Yükleniyor..." : "Ürünleri İçe Aktar"}</span>
@@ -303,7 +310,7 @@ export function SupplierCollectionArchiveModal({
           is_archived: true,
         }),
       });
-      const data = await res.json();
+      const data = (await res.json()) as { error?: string; message?: string };
       if (!res.ok) {
         setErrorMsg(data.error || "Arşivleme işlemi başarısız oldu.");
       } else {
@@ -322,7 +329,7 @@ export function SupplierCollectionArchiveModal({
       <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
               <Archive size={20} />
             </div>
             <div>
@@ -337,7 +344,7 @@ export function SupplierCollectionArchiveModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer border-none bg-transparent"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer border-none bg-transparent"
           >
             <X size={18} />
           </button>
@@ -345,26 +352,28 @@ export function SupplierCollectionArchiveModal({
 
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
           <div>
-            <label className="font-bold text-slate-700 block mb-1">
+            <label htmlFor="archive-season" className="font-bold text-slate-700 block mb-1">
               Sezon Adına Göre Filtrele (Opsiyonel)
             </label>
             <input
+              id="archive-season"
               type="text"
               value={season}
               onChange={(e) => setSeason(e.target.value)}
               placeholder="Örn: 2025 Kış, Eski Sezon (Boş bırakılırsa tüm sezonlar)"
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:border-slate-900"
             />
           </div>
 
           <div>
-            <label className="font-bold text-slate-700 block mb-1">
+            <label htmlFor="archive-older-days" className="font-bold text-slate-700 block mb-1">
               Yüklenme Tarihine Göre Eski Koleksiyon Sınırı
             </label>
             <select
+              id="archive-older-days"
               value={olderThanDays}
               onChange={(e) => setOlderThanDays(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white focus:outline-none focus:border-slate-900"
             >
               <option value="0">Tarih sınırı olmadan (Sezon veya Stok kriterine göre)</option>
               <option value="90">90 Günden (3 Ay) Eski Ürünler</option>
@@ -378,7 +387,7 @@ export function SupplierCollectionArchiveModal({
               type="checkbox"
               checked={zeroStockOnly}
               onChange={(e) => setZeroStockOnly(e.target.checked)}
-              className="rounded border-slate-300"
+              className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
             />
             <span className="font-semibold text-slate-700">
               Yalnızca stoğu tükenmiş (0 stoklu) ürünleri arşivle
@@ -401,14 +410,14 @@ export function SupplierCollectionArchiveModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              className="h-9 px-4 inline-flex items-center justify-center rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-xs font-bold cursor-pointer transition-colors"
             >
               Kapat
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold cursor-pointer border-none disabled:opacity-50"
+              className="h-9 px-5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-extrabold cursor-pointer border-none disabled:opacity-50 transition-colors"
             >
               <Archive size={14} />
               <span>{submitting ? "Arşivleniyor..." : "Koleksiyonu Arşive Taşı"}</span>
@@ -419,4 +428,3 @@ export function SupplierCollectionArchiveModal({
     </div>
   );
 }
-

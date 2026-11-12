@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { 
@@ -33,6 +33,7 @@ import {
 import {
   SupplierProductModal,
   FALLBACK_SIZE_DEFINITIONS,
+  buildHierarchicalCategoryOptions,
   buildSeriesRatioForMode,
   detectAssortmentMode,
   parseSeriesRatioWeights,
@@ -59,6 +60,7 @@ export interface CategoryOption {
   title: string;
   slug: string;
   node_path: string;
+  parent_id?: string | null;
 }
 
 export interface AttributeItem {
@@ -600,20 +602,20 @@ function SupplierHeader({
     <header className="bg-white/95 backdrop-blur-md text-slate-800 border-b border-slate-200/80 sticky top-0 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-[#1677ff] shadow-xs">
-            <Building2 size={22} />
+          <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-white shadow-xs">
+            <Building2 size={20} />
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <span className="font-black text-sm tracking-wider uppercase text-slate-900">MERTER VİTRİNİ</span>
-              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#1677ff] border border-blue-200 text-[10px] font-bold uppercase">
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase">
                 Tedarikçi Portalı
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <span className="font-bold text-slate-800">{profile?.brand_name || "Yükleniyor..."}</span>
               {profile?.alias_code && (
-                <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-mono font-bold">
+                <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-mono font-bold">
                   [{profile.alias_code}]
                 </span>
               )}
@@ -623,7 +625,7 @@ function SupplierHeader({
 
         <div className="flex items-center gap-3">
           <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div className="w-7 h-7 rounded-full bg-[#1677ff] text-white flex items-center justify-center text-xs font-bold shadow-xs">
+            <div className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shadow-xs">
               {(profile?.contact_name || "T").slice(0, 1).toUpperCase()}
             </div>
             <div className="flex flex-col text-left">
@@ -635,7 +637,7 @@ function SupplierHeader({
           <button
             type="button"
             onClick={onLogout}
-            className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors cursor-pointer"
+            className="h-9 w-9 inline-flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors cursor-pointer"
             title="Güvenli Çıkış"
           >
             <LogOut size={16} />
@@ -650,7 +652,7 @@ function SupplierStatsCards({ stats }: Readonly<{ stats: DashboardStats }>) {
   return (
     <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-        <div className="p-3.5 rounded-xl bg-blue-50 text-[#1677ff]">
+        <div className="p-3.5 rounded-xl bg-slate-100 text-slate-800">
           <Package size={22} />
         </div>
         <div>
@@ -670,7 +672,7 @@ function SupplierStatsCards({ stats }: Readonly<{ stats: DashboardStats }>) {
       </div>
 
       <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-        <div className="p-3.5 rounded-xl bg-amber-50 text-amber-600">
+        <div className="p-3.5 rounded-xl bg-slate-100 text-slate-800">
           <Layers size={22} />
         </div>
         <div>
@@ -680,7 +682,7 @@ function SupplierStatsCards({ stats }: Readonly<{ stats: DashboardStats }>) {
       </div>
 
       <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-        <div className="p-3.5 rounded-xl bg-purple-50 text-purple-600">
+        <div className="p-3.5 rounded-xl bg-slate-100 text-slate-800">
           <Tag size={22} />
         </div>
         <div>
@@ -695,7 +697,7 @@ function SupplierStatsCards({ stats }: Readonly<{ stats: DashboardStats }>) {
 function getProductRowStatusBadge(p: SupplierProductRow) {
   if (p.is_archived) {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold">
         <Archive size={11} />
         <span>Arşivde</span>
       </span>
@@ -755,7 +757,7 @@ function SupplierProductTable({
               </tr>
             ) : (
               products.map((p) => (
-                <tr key={p.id} className="hover:bg-blue-50/20 transition-colors">
+                <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-2.5 px-4 text-center">
                     <div className="w-12 h-14 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden relative mx-auto flex items-center justify-center shadow-xs">
                       {p.cover_image ? (
@@ -775,7 +777,7 @@ function SupplierProductTable({
                   <td className="py-2.5 px-4">
                     <div className="flex flex-col">
                       <span className="font-bold text-slate-900 line-clamp-1">{p.title}</span>
-                      <span className="font-mono text-[11px] text-[#1677ff] font-semibold mt-0.5">
+                      <span className="font-mono text-[11px] text-slate-500 font-semibold mt-0.5">
                         {p.custom_sku}
                       </span>
                     </div>
@@ -818,7 +820,7 @@ function SupplierProductTable({
                       <button
                         type="button"
                         onClick={() => onOpenTranslations(p)}
-                        className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-blue-200 bg-blue-50/70 text-[#1677ff] hover:bg-blue-100 text-[11px] font-bold transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[11px] font-bold transition-colors cursor-pointer"
                         title="Çok Dilli Çevirileri Düzenle (TR / EN / RU / AR)"
                       >
                         <Globe size={13} />
@@ -827,7 +829,7 @@ function SupplierProductTable({
                       <button
                         type="button"
                         onClick={() => onToggleArchive(p)}
-                        className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-amber-200 bg-amber-50/80 text-amber-800 hover:bg-amber-100 text-[11px] font-bold transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[11px] font-bold transition-colors cursor-pointer"
                         title={
                           p.is_archived
                             ? "Arşivden Çıkar ve Yayına Al"
@@ -846,7 +848,7 @@ function SupplierProductTable({
                       <button
                         type="button"
                         onClick={() => onOpenEdit(p)}
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-[#1677ff] hover:bg-blue-50 transition-colors cursor-pointer"
+                        className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer"
                         title="Düzenle"
                       >
                         <Edit3 size={14} />
@@ -854,7 +856,7 @@ function SupplierProductTable({
                       <button
                         type="button"
                         onClick={() => onOpenDelete(p)}
-                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors cursor-pointer"
+                        className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors cursor-pointer"
                         title="Sil"
                       >
                         <Trash2 size={14} />
@@ -939,16 +941,16 @@ function SupplierQuickWhatsappBanner({
   return (
     <form
       onSubmit={onSubmit}
-      className="bg-white rounded-xl border border-emerald-200/90 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3"
+      className="bg-white rounded-xl border border-slate-200/90 px-4 py-4 sm:px-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4 overflow-hidden"
     >
-      <div className="flex items-start sm:items-center gap-3">
+      <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 font-black text-base shadow-xs">
           WA
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wide">
-              Doğrudan Müşteri & Sipariş WhatsApp Hattınız
+              Doğrudan Müşteri &amp; Sipariş WhatsApp Hattınız
             </h3>
             {hasWhatsapp ? (
               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
@@ -960,7 +962,7 @@ function SupplierQuickWhatsappBanner({
               </span>
             )}
           </div>
-          <p className="text-[11px] text-slate-500 mt-0.5">
+          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
             Alıcılar ürün sayfalarınızda &quot;WhatsApp ile Doğrudan Tedarikçiye Yaz / Sipariş Ver&quot; butonuna bastığında doğrudan bu numaraya bağlanır.
           </p>
           {quickWaSavedMsg && (
@@ -971,27 +973,27 @@ function SupplierQuickWhatsappBanner({
         </div>
       </div>
 
-      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full md:w-auto">
+      <div className="flex flex-wrap items-center gap-2 shrink-0">
         <input
           type="text"
           value={quickWhatsapp}
           onChange={(e) => setQuickWhatsapp(e.target.value)}
           placeholder="+90 532 000 00 00"
-          className="flex-1 sm:w-52 px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-600"
+          className="h-9 w-full sm:w-48 px-3 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 focus:outline-none focus:border-emerald-600"
         />
         <button
           type="submit"
           disabled={savingQuickWa}
-          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+          className="h-9 px-3.5 inline-flex items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition-colors cursor-pointer disabled:opacity-50 shrink-0"
         >
           {savingQuickWa ? "Kaydediliyor..." : "WhatsApp Numaramı Kaydet"}
         </button>
         <button
           type="button"
           onClick={onOpenProfileSection}
-          className="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0"
+          className="h-9 px-3.5 inline-flex items-center justify-center rounded-lg bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0"
         >
-          Tüm Vitrin & IBAN Ayarları
+          Tüm Vitrin &amp; IBAN Ayarları
         </button>
       </div>
     </form>
@@ -1020,21 +1022,24 @@ function SupplierDashboardNavTabs({
   onOpenBulkArchive,
 }: SupplierDashboardNavTabsProps) {
   const tabClass = (sec: SupplierDashboardSection) =>
-    `px-4 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-2 ${
+    `shrink-0 h-9 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer inline-flex items-center gap-1.5 ${
       activeSection === sec
-        ? "bg-white text-slate-900 shadow-xs"
-        : "text-slate-600 hover:text-slate-900"
+        ? "bg-slate-900 text-white shadow-xs"
+        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
     }`;
 
   return (
-    <div className="flex items-center justify-between border-b border-slate-200 pb-3 flex-wrap gap-3">
-      <div className="bg-slate-200/80 p-1 rounded-xl inline-flex flex-wrap gap-1">
+    <div className="space-y-3">
+      <nav
+        aria-label="Tedarikçi Paneli Sekmeleri"
+        className="w-full bg-white p-1.5 rounded-xl border border-slate-200/90 shadow-xs flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap"
+      >
         <button
           type="button"
           onClick={() => setActiveSection("catalog")}
           className={tabClass("catalog")}
         >
-          <Package size={15} className="text-[#1677ff]" />
+          <Package size={15} />
           <span>Ürün Kataloğum ({stats.total_products})</span>
         </button>
 
@@ -1043,7 +1048,7 @@ function SupplierDashboardNavTabs({
           onClick={() => setActiveSection("orders")}
           className={tabClass("orders")}
         >
-          <ShoppingBag size={15} className="text-emerald-600" />
+          <ShoppingBag size={15} />
           <span>Gelen Siparişlerim ({stats.total_orders ?? 0})</span>
         </button>
 
@@ -1052,10 +1057,10 @@ function SupplierDashboardNavTabs({
           onClick={() => setActiveSection("chat")}
           className={tabClass("chat")}
         >
-          <MessageSquare size={15} className="text-[#1677ff]" />
-          <span>Canlı Müşteri Sohbetleri</span>
+          <MessageSquare size={15} />
+          <span>Müşteri Sohbetleri</span>
           {unreadChatCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+            <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none">
               {unreadChatCount}
             </span>
           )}
@@ -1066,8 +1071,8 @@ function SupplierDashboardNavTabs({
           onClick={() => setActiveSection("profile")}
           className={tabClass("profile")}
         >
-          <Building2 size={15} className="text-[#1677ff]" />
-          <span>Firma Vitrin & İletişim Bilgilerim</span>
+          <Building2 size={15} />
+          <span>Firma &amp; İletişim</span>
         </button>
 
         <button
@@ -1075,8 +1080,8 @@ function SupplierDashboardNavTabs({
           onClick={() => setActiveSection("billing")}
           className={tabClass("billing")}
         >
-          <CreditCard size={15} className="text-emerald-600" />
-          <span>Üyelik, Muhasebe & Faturalarım</span>
+          <CreditCard size={15} />
+          <span>Üyelik &amp; Faturalar</span>
         </button>
 
         <button
@@ -1084,8 +1089,8 @@ function SupplierDashboardNavTabs({
           onClick={() => setActiveSection("analytics")}
           className={tabClass("analytics")}
         >
-          <BarChart3 size={15} className="text-violet-600" />
-          <span>Ziyaretçi & ROI Analitiği</span>
+          <BarChart3 size={15} />
+          <span>Ziyaretçi Analitiği</span>
         </button>
 
         <button
@@ -1093,39 +1098,44 @@ function SupplierDashboardNavTabs({
           onClick={() => setActiveSection("rfq")}
           className={tabClass("rfq")}
         >
-          <FileText size={15} className="text-amber-600" />
+          <FileText size={15} />
           <span>Alıcı Talepleri (RFQ)</span>
         </button>
-      </div>
+      </nav>
 
       {activeSection === "catalog" && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenBulkArchive}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold transition-all cursor-pointer"
-          >
-            <Archive size={15} />
-            <span>Eski Koleksiyonu Arşivle</span>
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-0.5">
+          <div className="text-xs font-bold text-slate-600">
+            Koleksiyon &amp; Toptan Ürün Yönetimi
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onOpenBulkArchive}
+              className="h-9 px-3.5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-xs font-bold transition-colors cursor-pointer shrink-0"
+            >
+              <Archive size={14} />
+              <span>Eski Koleksiyonu Arşivle</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={onOpenExcelImport}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-          >
-            <FileSpreadsheet size={15} />
-            <span>Excel / CSV ile Toplu Yükle</span>
-          </button>
+            <button
+              type="button"
+              onClick={onOpenExcelImport}
+              className="h-9 px-3.5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-xs font-bold transition-colors cursor-pointer shrink-0"
+            >
+              <FileSpreadsheet size={14} />
+              <span>Excel / CSV ile Toplu Yükle</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={onOpenCreate}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1677ff] hover:bg-[#4096ff] text-white text-xs font-bold shadow-sm shadow-blue-500/20 transition-all cursor-pointer active:scale-95"
-          >
-            <Plus size={16} />
-            <span>Yeni Ürün Ekle</span>
-          </button>
+            <button
+              type="button"
+              onClick={onOpenCreate}
+              className="h-9 px-4 inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-[0.99] shrink-0"
+            >
+              <Plus size={15} />
+              <span>Yeni Ürün Ekle</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -1155,6 +1165,11 @@ function SupplierCatalogToolbar({
   loading,
   onRefresh,
 }: SupplierCatalogToolbarProps) {
+  const hierarchicalCategories = useMemo(
+    () => buildHierarchicalCategoryOptions(categories),
+    [categories]
+  );
+
   return (
     <section className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
       <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-1">
@@ -1165,19 +1180,19 @@ function SupplierCatalogToolbar({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Ürün adı veya SKU ile ara..."
-            className="w-full pl-9 pr-4 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1677ff]/20 focus:border-[#1677ff] transition-all"
+            className="h-9 w-full pl-9 pr-4 rounded-lg bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900 transition-all"
           />
         </div>
 
         <select
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
-          className="w-full sm:w-48 px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1677ff]/20 focus:border-[#1677ff] transition-all"
+          className="h-9 w-full sm:w-56 px-3 rounded-lg bg-white border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900 transition-all"
         >
           <option value="">Tüm Kategoriler</option>
-          {categories.map((c) => (
+          {hierarchicalCategories.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.title}
+              {c.fullLabel}
             </option>
           ))}
         </select>
@@ -1214,7 +1229,7 @@ function SupplierCatalogToolbar({
             type="button"
             onClick={() => setStatusFilter("archived")}
             className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-              statusFilter === "archived" ? "bg-white text-amber-800 shadow-xs" : "text-slate-600 hover:text-slate-900"
+              statusFilter === "archived" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
             }`}
           >
             Arşiv (Eski Koleksiyon)
@@ -1227,10 +1242,11 @@ function SupplierCatalogToolbar({
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
-          title="Yenile"
+          className="h-9 px-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+          title="Listeyi Yenile"
         >
-          <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          <span>Yenile</span>
         </button>
       </div>
     </section>
@@ -1857,6 +1873,23 @@ export default function SupplierDashboardClient() {
     });
   };
 
+  const handleOrderCountChange = useCallback(
+    (cnt: number) => {
+      setStats((prev) =>
+        prev.total_orders === cnt ? prev : { ...prev, total_orders: cnt }
+      );
+    },
+    [setStats]
+  );
+
+  const handleProfileSaved = useCallback(() => {
+    void loadProfile();
+  }, [loadProfile]);
+
+  const handleCatalogRefresh = useCallback(() => {
+    void loadProducts();
+  }, [loadProducts]);
+
   const isProductModalOpen = activeModal === "create" || activeModal === "edit";
 
   return (
@@ -1866,14 +1899,16 @@ export default function SupplierDashboardClient() {
       <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-6 flex-1">
         <SupplierStatsCards stats={stats} />
 
-        <SupplierQuickWhatsappBanner
-          quickWhatsapp={quickWhatsapp}
-          setQuickWhatsapp={setQuickWhatsapp}
-          savingQuickWa={savingQuickWa}
-          quickWaSavedMsg={quickWaSavedMsg}
-          onSubmit={handleSaveQuickWhatsapp}
-          onOpenProfileSection={() => setActiveSection("profile")}
-        />
+        {activeSection !== "profile" && (
+          <SupplierQuickWhatsappBanner
+            quickWhatsapp={quickWhatsapp}
+            setQuickWhatsapp={setQuickWhatsapp}
+            savingQuickWa={savingQuickWa}
+            quickWaSavedMsg={quickWaSavedMsg}
+            onSubmit={handleSaveQuickWhatsapp}
+            onOpenProfileSection={() => setActiveSection("profile")}
+          />
+        )}
 
         <SupplierDashboardNavTabs
           activeSection={activeSection}
@@ -1888,10 +1923,8 @@ export default function SupplierDashboardClient() {
         <SupplierSectionContent
           activeSection={activeSection}
           getToken={getToken}
-          onOrderCountChange={(cnt) =>
-            setStats((prev) => ({ ...prev, total_orders: cnt }))
-          }
-          onProfileSaved={() => void loadProfile()}
+          onOrderCountChange={handleOrderCountChange}
+          onProfileSaved={handleProfileSaved}
           profile={profile}
           products={products}
           onUnreadTotalChange={setUnreadChatCount}
@@ -1903,7 +1936,7 @@ export default function SupplierDashboardClient() {
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
           loading={loading}
-          onRefresh={() => void loadProducts()}
+          onRefresh={handleCatalogRefresh}
           onOpenEdit={handleOpenEdit}
           onOpenTranslations={handleOpenTranslations}
           onToggleArchive={(p) => void handleToggleProductArchive(p)}

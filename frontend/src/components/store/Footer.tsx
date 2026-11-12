@@ -7,6 +7,11 @@ import { apiFetch } from "../../app/utils";
 import SupplierApplicationSection from "./SupplierApplicationSection";
 import NewsletterSubscriptionBox from "./NewsletterSubscriptionBox";
 import { Building2, Smartphone } from "lucide-react";
+import {
+  DEFAULT_MERTER_ADDRESS,
+  DEFAULT_MERTER_EMAIL,
+  formatAsciiSafeUpper,
+} from "@/utils/formatters";
 
 interface Settings {
   id: string;
@@ -18,14 +23,17 @@ interface Settings {
 
 export type PolicyType = "cancellation_and_return" | "terms_of_service" | "privacy_policy";
 
-function triggerPolicyClick(
-  e: React.MouseEvent,
+function openPolicyOrFallback(
   type: PolicyType,
+  prefix: string,
   onOpenPolicy?: (type: PolicyType) => void
 ) {
   if (onOpenPolicy) {
-    e.preventDefault();
     onOpenPolicy(type);
+    return;
+  }
+  if (typeof window !== "undefined") {
+    window.location.href = `/${prefix}/b2b`;
   }
 }
 
@@ -256,54 +264,53 @@ function FooterAboutColumn({ lang }: { readonly lang: string }) {
   const labels = pickLangText(lang, FOOTER_UI_LABELS);
   return (
     <div>
-      <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
+      <h3 className="text-[#1C1C1C] font-bold text-xs tracking-[2px] uppercase mb-6">
         {t("about_us", lang)}
       </h3>
       <ul className="space-y-3 text-sm">
         <li>
-          <a href={`/${prefix}/pages/hakkimizda`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+          <Link href={`/${prefix}/pages/hakkimizda`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
             {t("about_us", lang)}
-          </a>
+          </Link>
         </li>
         <li>
-          <a href={`/${prefix}/b2b`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+          <Link href={`/${prefix}/b2b`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
             {t("wholesale_b2b", lang)}
-          </a>
+          </Link>
         </li>
         <li>
-          <a href={`/${prefix}/contact`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+          <Link href={`/${prefix}/contact`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
             {t("contact_us", lang)}
-          </a>
+          </Link>
         </li>
         <li>
-          <a href={`/${prefix}/blog`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+          <Link href={`/${prefix}/blog`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
             {t("blog", lang)}
-          </a>
+          </Link>
         </li>
         <li>
-          <Link href={buildFooterQueryRoute("/hizmet-saglayicilar", lang)} className="text-sky-700 font-bold hover:text-sky-800 hover:underline transition-colors duration-200">
+          <Link href={buildFooterQueryRoute("/hizmet-saglayicilar", lang)} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
             {labels.serviceProviders}
           </Link>
         </li>
         <li>
-          <Link href={`/${prefix}/tedarikci-basvuru`} className="text-amber-600 font-bold hover:text-amber-700 hover:underline transition-colors duration-200 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            <span>{t("supplier_apply", lang)}</span>
+          <Link href={`/${prefix}/tedarikci-basvuru`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
+            {t("supplier_apply", lang)}
           </Link>
         </li>
         <li>
-          <Link href="/supplier/login" className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+          <Link href="/supplier/login" className="text-[#525252] hover:text-[#1C1C1C] font-semibold hover:underline transition-colors duration-200 inline-flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-[#525252] shrink-0" />
             <span>{t("supplier_portal_login", lang)}</span>
           </Link>
         </li>
         <li className="pt-1">
           <Link
             href={buildFooterQueryRoute("/mobil-uygulama", lang)}
-            className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#111111] hover:bg-zinc-800 text-white text-xs font-extrabold tracking-wider uppercase transition-colors no-underline"
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md text-xs font-bold tracking-wider transition-colors no-underline"
           >
-            <Smartphone className="w-3.5 h-3.5 text-[#D4AF37] shrink-0" />
-            <span>{labels.androidAppApk}</span>
+            <Smartphone className="w-3.5 h-3.5 text-[#D8C7A6] shrink-0" />
+            <span>{lang === "ar" ? labels.androidAppApk : formatAsciiSafeUpper(labels.androidAppApk)}</span>
           </Link>
         </li>
       </ul>
@@ -321,41 +328,41 @@ function FooterCustomerServiceColumn({ lang, onOpenPolicy }: CustomerServiceProp
 
   return (
     <div>
-      <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
+      <h3 className="text-[#1C1C1C] font-bold text-xs tracking-[2px] uppercase mb-6">
         {t("customer_service", lang)}
       </h3>
       <ul className="space-y-3 text-sm">
         <li>
-          <a 
-            href="#shipping" 
-            onClick={(e) => triggerPolicyClick(e, "cancellation_and_return", onOpenPolicy)}
-            className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+          <button
+            type="button"
+            onClick={() => openPolicyOrFallback("cancellation_and_return", prefix, onOpenPolicy)}
+            className="text-start bg-transparent border-none p-0 cursor-pointer text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200"
           >
             {t("delivery_returns", lang)}
-          </a>
+          </button>
         </li>
         <li>
-          <a href={`/${prefix}/faq`} className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+          <Link href={`/${prefix}/faq`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
             {t("faq", lang)}
-          </a>
+          </Link>
         </li>
         <li>
-          <a 
-            href="#privacy" 
-            onClick={(e) => triggerPolicyClick(e, "privacy_policy", onOpenPolicy)}
-            className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+          <button
+            type="button"
+            onClick={() => openPolicyOrFallback("privacy_policy", prefix, onOpenPolicy)}
+            className="text-start bg-transparent border-none p-0 cursor-pointer text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200"
           >
             {t("privacy", lang)}
-          </a>
+          </button>
         </li>
         <li>
-          <a 
-            href="#terms" 
-            onClick={(e) => triggerPolicyClick(e, "terms_of_service", onOpenPolicy)}
-            className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+          <button
+            type="button"
+            onClick={() => openPolicyOrFallback("terms_of_service", prefix, onOpenPolicy)}
+            className="text-start bg-transparent border-none p-0 cursor-pointer text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200"
           >
             {t("terms", lang)}
-          </a>
+          </button>
         </li>
       </ul>
     </div>
@@ -363,8 +370,7 @@ function FooterCustomerServiceColumn({ lang, onOpenPolicy }: CustomerServiceProp
 }
 
 function FooterAccountColumn({ lang, whatsappUrl }: { readonly lang: string; readonly whatsappUrl: string }) {
-  const dispatchAuthEvent = (e: React.MouseEvent, mode: "login" | "register") => {
-    e.preventDefault();
+  const dispatchAuthEvent = (mode: "login" | "register") => {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode } }));
     }
@@ -373,40 +379,31 @@ function FooterAccountColumn({ lang, whatsappUrl }: { readonly lang: string; rea
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-black font-bold text-xs tracking-[2px] uppercase mb-6">
+        <h3 className="text-[#1C1C1C] font-bold text-xs tracking-[2px] uppercase mb-6">
           {t("my_account", lang)}
         </h3>
         <ul className="space-y-3 text-sm mb-4">
           <li>
-            <a 
-              href="#login" 
-              onClick={(e) => dispatchAuthEvent(e, "login")}
-              className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+            <button
+              type="button"
+              onClick={() => dispatchAuthEvent("login")}
+              className="text-start bg-transparent border-none p-0 cursor-pointer text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200"
             >
               {t("login", lang)}
-            </a>
+            </button>
           </li>
           <li>
-            <a 
-              href="#register" 
-              onClick={(e) => dispatchAuthEvent(e, "register")}
-              className="text-onyx hover:text-black hover:underline transition-colors duration-200"
+            <button
+              type="button"
+              onClick={() => dispatchAuthEvent("register")}
+              className="text-start bg-transparent border-none p-0 cursor-pointer text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200"
             >
               {t("register", lang)}
-            </a>
+            </button>
           </li>
           <li>
-            <a href="#tracking" className="text-onyx hover:text-black hover:underline transition-colors duration-200">
+            <Link href="/profile" className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
               {t("order_tracking", lang)}
-            </a>
-          </li>
-          <li className="pt-2 border-t border-cultured">
-            <Link 
-              href="/supplier/login" 
-              className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1.5 text-xs"
-            >
-              <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span>{t("supplier_login", lang)}</span>
             </Link>
           </li>
         </ul>
@@ -417,12 +414,12 @@ function FooterAccountColumn({ lang, whatsappUrl }: { readonly lang: string; rea
           href={whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-3 px-5 py-3 bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-[5px] shadow-sm transition-all duration-300 group font-bold text-xs tracking-[1.5px] border-none relative overflow-hidden uppercase"
+          className="inline-flex items-center gap-3 px-5 py-3 bg-[#15803D] hover:bg-[#166534] text-white rounded-md shadow-sm transition-all duration-300 group font-bold text-xs tracking-[1.5px] border-none relative overflow-hidden no-underline"
         >
           <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.73-1.458L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.863-9.73.001-2.595-1.006-5.035-2.836-6.87C16.671 2.16 14.237.986 11.64.985c-5.441 0-9.87 4.372-9.873 9.734-.001 1.709.467 3.376 1.354 4.887l-.982 3.582 3.71-.974zm13.14-5.932c-.3-.15-1.776-.875-2.05-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-1.127-.566-1.929-1.009-2.694-2.321-.202-.347-.202-.656-.051-.951.136-.264.3-.35.45-.5.15-.15.2-.25.3-.45.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.588-.491-.508-.675-.518-.175-.009-.375-.01-.575-.01-.2 0-.525.075-.8 1.025-.275.95-1.05 3.3-1.05 3.4 0 .1.075.2.225.35.15.15 1.75 2.673 4.237 3.743.592.255 1.054.408 1.413.523.595.19 1.137.163 1.564.1.477-.07 1.475-.603 1.675-1.18.2-.578.2-1.075.14-1.18-.06-.1-.225-.15-.525-.3z" />
           </svg>
-          <span>{t("whatsapp_line", lang)}</span>
+          <span>{lang === "ar" ? t("whatsapp_line", lang) : formatAsciiSafeUpper(t("whatsapp_line", lang))}</span>
         </a>
       </div>
     </div>
@@ -455,56 +452,38 @@ function FooterWholesaleHub({ lang }: { readonly lang: string }) {
 
 interface FooterBottomBarProps {
   readonly lang: string;
-  readonly lastUpdatedTitle: string;
   readonly onOpenPolicy?: (type: PolicyType) => void;
 }
 
-function FooterBottomBar({ lang, lastUpdatedTitle, onOpenPolicy }: FooterBottomBarProps) {
+function FooterBottomBar({ lang, onOpenPolicy }: FooterBottomBarProps) {
   const prefix = getCategoryPrefix(lang);
-  const buildNumber = process.env.NEXT_PUBLIC_BUILD_NUMBER;
-  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME || "dev";
 
   return (
     <div className="max-w-[1720px] mx-auto border-t border-cultured mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-sonic-silver">
-      <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-left">
+      <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-start">
         <span>© {new Date().getFullYear()} {t("brand_title", lang)}. {t("all_rights_reserved", lang)}</span>
-        <span className="hidden sm:inline text-zinc-300">•</span>
-        <span 
-          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-100/80 border border-zinc-200/80 text-[10px] font-mono text-zinc-500 hover:text-zinc-800 transition-colors"
-          title={lastUpdatedTitle}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Build {buildNumber ? `#${buildNumber}` : ""} ({buildTime})</span>
-        </span>
       </div>
       <div className="flex flex-wrap gap-4 sm:gap-6 items-center">
-        <Link 
-          href="/supplier/login" 
-          className="text-amber-700 hover:text-amber-900 font-bold hover:underline transition-colors duration-200 flex items-center gap-1"
-        >
-          <Building2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-          <span>{t("supplier_portal", lang)}</span>
-        </Link>
-        <a 
-          href="#privacy" 
-          onClick={(e) => triggerPolicyClick(e, "privacy_policy", onOpenPolicy)}
-          className="hover:text-black transition-colors"
+        <button
+          type="button"
+          onClick={() => openPolicyOrFallback("privacy_policy", prefix, onOpenPolicy)}
+          className="bg-transparent border-none p-0 cursor-pointer text-xs text-sonic-silver hover:text-[#1C1C1C] transition-colors"
         >
           {t("privacy", lang)}
-        </a>
-        <a 
-          href="#terms" 
-          onClick={(e) => triggerPolicyClick(e, "terms_of_service", onOpenPolicy)}
-          className="hover:text-black transition-colors"
+        </button>
+        <button
+          type="button"
+          onClick={() => openPolicyOrFallback("terms_of_service", prefix, onOpenPolicy)}
+          className="bg-transparent border-none p-0 cursor-pointer text-xs text-sonic-silver hover:text-[#1C1C1C] transition-colors"
         >
           {t("terms", lang)}
-        </a>
-        <a 
+        </button>
+        <Link 
           href={`/${prefix}/site-haritasi`} 
-          className="hover:text-black transition-colors"
+          className="text-sonic-silver hover:text-[#1C1C1C] transition-colors no-underline"
         >
           {t("sitemap_title", lang)}
-        </a>
+        </Link>
       </div>
     </div>
   );
@@ -513,10 +492,10 @@ function FooterBottomBar({ lang, lastUpdatedTitle, onOpenPolicy }: FooterBottomB
 export default function Footer({ lang, onOpenPolicy, showApplicationForm = false }: Readonly<FooterProps>) {
   const [settings, setSettings] = useState<Settings>({
     id: "",
-    address: "AKEVLER MAH. 1076 SOK. REGNUM ASTRUM TOWER 8A C2 NO:204 ESENYURT / İSTANBUL / TÜRKİYE",
+    address: DEFAULT_MERTER_ADDRESS,
     phone: "+90 533 703 08 83",
     whatsapp: "+90 533 703 08 83",
-    email: "info@toptanmoda.net",
+    email: DEFAULT_MERTER_EMAIL,
   });
 
   useEffect(() => {
@@ -532,11 +511,6 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = false
   const sanitizedWhatsapp = settings.whatsapp.replace(/\D/g, "");
   const whatsappUrl = `https://wa.me/${sanitizedWhatsapp}`;
 
-  const labels = pickLangText(lang, FOOTER_UI_LABELS);
-  const commitSuffix = process.env.NEXT_PUBLIC_GIT_COMMIT ? ` (${process.env.NEXT_PUBLIC_GIT_COMMIT})` : "";
-  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME || labels.localDev;
-  const lastUpdatedTitle = `${labels.lastUpdatedPrefix}: ${buildTime}${commitSuffix}`;
-
   return (
     <>
       {showApplicationForm && <SupplierApplicationSection lang={lang} />}
@@ -550,7 +524,7 @@ export default function Footer({ lang, onOpenPolicy, showApplicationForm = false
         </div>
 
         <FooterWholesaleHub lang={lang} />
-        <FooterBottomBar lang={lang} lastUpdatedTitle={lastUpdatedTitle} onOpenPolicy={onOpenPolicy} />
+        <FooterBottomBar lang={lang} onOpenPolicy={onOpenPolicy} />
       </footer>
     </>
   );

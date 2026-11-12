@@ -1,4 +1,6 @@
 <#macro registrationLayout bodyClass="" displayInfo=false displayMessage=true displayRequiredFields=false>
+<#assign rawHeader><#nested "header"></#assign>
+<#assign cleanHeader = rawHeader?replace("ADMİN SUİTE", msg("mvBrandSubtitle"))?replace("Admin Suite", msg("mvBrandSubtitle"))?replace("ADMIN SUITE", msg("mvBrandSubtitle"))>
 <!DOCTYPE html>
 <html lang="${lang}"<#if realm.internationalizationEnabled> dir="${(locale.rtl)?then('rtl','ltr')}"</#if>>
 
@@ -6,7 +8,7 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Merter Vitrini | <#nested "header"></title>
+    <title>Merter Vitrini | ${cleanHeader}</title>
     <link rel="icon" href="https://mertervitrini.com.tr/favicon.ico" />
     
     <#if properties.stylesCommon?has_content>
@@ -50,20 +52,31 @@
             </div>
         </a>
 
-        <!-- Multilingual Language Selector -->
+        <!-- Multilingual Language Selector (ISO Badges + Native Names, No Flag Emojis) -->
         <#if realm.internationalizationEnabled?? && realm.internationalizationEnabled && (locale.supported??) && (locale.supported?size > 1)>
             <nav class="mv-lang-selector" aria-label="Languages">
                 <#list locale.supported as l>
-                    <a href="${l.url}" class="mv-lang-btn <#if (locale.currentLanguageTag!'') == (l.languageTag!'')>active</#if>">
-                        <#if (l.label!'')?contains("Türkçe")>🇹🇷 TR
-                        <#elseif (l.label!'')?contains("English")>🇬🇧 EN
-                        <#elseif (l.label!'')?contains("Русский")>🇷🇺 RU
-                        <#elseif (l.label!'')?contains("العربية")>🇸🇦 AR
-                        <#elseif (l.label!'')?contains("Deutsch")>🇩🇪 DE
-                        <#elseif (l.label!'')?contains("Français")>🇫🇷 FR
-                        <#elseif (l.label!'')?contains("Polski")>🇵🇱 PL
-                        <#elseif (l.label!'')?contains("Български")>🇧🇬 BG
-                        <#else>${l.label!l.languageTag}
+                    <#assign tagLower = (l.languageTag!'')?lower_case>
+                    <#assign lbl = (l.label!'')>
+                    <a href="${l.url}" class="mv-lang-btn <#if (locale.currentLanguageTag!'')?lower_case == tagLower>active</#if>">
+                        <#if tagLower?starts_with("tr") || lbl?contains("Türkçe")>
+                            <span class="mv-lang-code">TR</span><span class="mv-lang-name">Türkçe</span>
+                        <#elseif tagLower?starts_with("en") || lbl?contains("English")>
+                            <span class="mv-lang-code">EN</span><span class="mv-lang-name">English</span>
+                        <#elseif tagLower?starts_with("ru") || lbl?contains("Русский")>
+                            <span class="mv-lang-code">RU</span><span class="mv-lang-name">Русский</span>
+                        <#elseif tagLower?starts_with("ar") || lbl?contains("العربية")>
+                            <span class="mv-lang-code">AR</span><span class="mv-lang-name">العربية</span>
+                        <#elseif tagLower?starts_with("de") || lbl?contains("Deutsch")>
+                            <span class="mv-lang-code">DE</span><span class="mv-lang-name">Deutsch</span>
+                        <#elseif tagLower?starts_with("fr") || lbl?contains("Français")>
+                            <span class="mv-lang-code">FR</span><span class="mv-lang-name">Français</span>
+                        <#elseif tagLower?starts_with("pl") || lbl?contains("Polski")>
+                            <span class="mv-lang-code">PL</span><span class="mv-lang-name">Polski</span>
+                        <#elseif tagLower?starts_with("bg") || lbl?contains("Български")>
+                            <span class="mv-lang-code">BG</span><span class="mv-lang-name">Български</span>
+                        <#else>
+                            <span class="mv-lang-code">${(l.languageTag!'')?upper_case}</span><span class="mv-lang-name">${l.label!l.languageTag}</span>
                         </#if>
                     </a>
                 </#list>
@@ -82,7 +95,7 @@
                         <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                     </svg>
                 </div>
-                <h1 class="mv-card-title"><#nested "header"></h1>
+                <h1 class="mv-card-title">${cleanHeader}</h1>
                 <p class="mv-card-desc">${msg("mvCardDesc")}</p>
             </div>
 

@@ -1,4 +1,23 @@
 import type { Category, Product } from "@/types/store";
+import {
+  DEFAULT_MERTER_ADDRESS,
+  sanitizePublicStoreAddress,
+  sanitizePublicStoreEmail,
+} from "@/utils/formatters";
+
+/**
+ * Strips trailing "| Merter Vitrini..." or "| مارتر فيتريني..." segments from child page
+ * titles so root `layout.tsx`'s `title.template` ("%s | Merter Vitrini B2B") never produces
+ * double brand suffixes like "... | Merter Vitrini | Merter Vitrini B2B".
+ */
+export function stripBrandTitleSuffix(rawTitle: string): string {
+  const trimmed = (rawTitle || "").trim();
+  if (!trimmed) return "Merter Vitrini";
+  const stripped = trimmed
+    .replace(/\s*\|\s*(?:Merter\s*Vitrini|مارتر\s*فيتريني)[^|]*$/i, "")
+    .trim();
+  return stripped || trimmed;
+}
 
 export const SITE_ORIGIN = "https://mertervitrini.com.tr";
 
@@ -61,7 +80,7 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
     allProductsLabel: "Tüm Toptan Ürünler",
     suppliersLabel: "Üretici Firmalar",
     portalTitle:
-      "Merter Toptan Giyim & İstanbul B2B Tekstil Üreticileri | Merter Vitrini",
+      "Merter Toptan Giyim & İstanbul B2B Tekstil Üreticileri",
     portalDescription:
       "Merter toptan giyim ve İstanbul toptan tekstil üreticilerinden aracısız seri toptan kadın giyim, erkek giyim, fason üretim ve Private Label koleksiyonları.",
     portalH1:
@@ -354,12 +373,21 @@ export async function ssrStoreFetch<T>(
       },
       next: { revalidate: revalidateSeconds },
     });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
+      if (!res.ok) return null;
+      const json = (await res.json()) as T;
+      if (normalizedEndpoint === "/settings" && json && typeof json === "object") {
+        const rawObj = json as unknown as Record<string, unknown>;
+        return {
+          ...rawObj,
+          email: sanitizePublicStoreEmail(rawObj.email as string | undefined),
+          address: sanitizePublicStoreAddress(rawObj.address as string | undefined),
+        } as unknown as T;
+      }
+      return json;
+    } catch {
+      return null;
+    }
   }
-}
 
 export async function fetchSsrCategories(): Promise<Category[]> {
   const data = await ssrStoreFetch<Category[]>("/categories", 300);
@@ -397,7 +425,7 @@ export function buildOrganizationGraphJsonLd(
 ) {
   const copy = GLOBAL_B2B_SEO_MATRIX[lang];
   const contactPhone = settings?.phone?.trim() || "+90 533 703 08 83";
-  const contactEmail = settings?.email?.trim() || "info@mertervitrini.com.tr";
+  const contactEmail = sanitizePublicStoreEmail(settings?.email);
 
   return {
     "@context": "https://schema.org",
@@ -415,8 +443,9 @@ export function buildOrganizationGraphJsonLd(
         description: copy.portalDescription,
         address: {
           "@type": "PostalAddress",
-          streetAddress:
-            settings?.address?.trim() || "Mehmet Nesih Özmen Mah., Merter",
+          streetAddress: sanitizePublicStoreAddress(
+            settings?.address || DEFAULT_MERTER_ADDRESS
+          ),
           addressLocality: "Güngören",
           addressRegion: "İstanbul",
           postalCode: "34173",

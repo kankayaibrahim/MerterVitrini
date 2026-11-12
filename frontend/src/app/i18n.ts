@@ -1,4 +1,5 @@
 import { Product, ProductAttribute, Category } from "@/types/store";
+import { fixApostropheCase } from "@/utils/formatters";
 
 export type SupportedLangCode = "tr" | "en" | "ru" | "ar" | "de" | "fr" | "pl" | "bg";
 
@@ -84,7 +85,7 @@ export const dictionary: Record<string, Record<string, string>> = {
     exchange_rate_equivalents: "Döviz Kuru Karşılıkları",
     active_tcmb_rates: "Aktif TCMB Efektif Kurları:",
     hero_subtitle: "Türkiye'nin lider üreticilerinin ihraç fazlası ve yeni sezon toptan hazır giyim koleksiyonlarını en uygun imalat fiyatlarıyla keşfedin.",
-    brand_filter: "Wholesale Markalar",
+    brand_filter: "Üretici Markalar",
     b2b_specs: "B2B Seçenekleri",
     gender: "Cinsiyet",
     season: "Sezon",
@@ -1169,7 +1170,7 @@ export const dictionary: Record<string, Record<string, string>> = {
     portal_start_shopping: "Start Shopping",
     portal_slide0_title: "MEDITERRANEAN ELEGANCE",
     portal_slide0_subtitle: "NEW SEASON COLLECTION",
-    portal_slide0_desc: "Design dresses and wholesale ready-to-wear creations inspired by the fluid silouettes of the Mediterranean.",
+    portal_slide0_desc: "Design dresses and wholesale ready-to-wear creations inspired by the fluid silhouettes of the Mediterranean.",
     portal_slide0_cta: "SHOP NOW",
     portal_slide1_title: "WOMEN COLLECTION",
     portal_slide1_subtitle: "PURE LUXURY ESSENTIALS",
@@ -5022,11 +5023,11 @@ export function t(key: string, lang: string): string {
   const safeKey = String(key).trim();
 
   if (safeKey === "__proto__" || safeKey === "constructor") {
-    return key;
+    return fixApostropheCase(key);
   }
 
   const match = lookupKey(dict, safeKey) ?? lookupKey(dictionary.tr, safeKey);
-  return match ?? key;
+  return fixApostropheCase(match ?? key);
 }
 
 export function getCategoryTitle(cat: Category | undefined | null, lang: string): string {
@@ -5039,13 +5040,13 @@ export function getCategoryTitle(cat: Category | undefined | null, lang: string)
     if (Object.hasOwn(trans, safeLang)) {
       const transObj = trans[safeLang];
       if (transObj && Object.hasOwn(transObj, "title")) {
-        return transObj.title || cat.title;
+        return fixApostropheCase(transObj.title || cat.title);
       }
     }
   }
   
   // Fallback to dictionary translation or original title
-  return t(cat.title, lang);
+  return fixApostropheCase(t(cat.title, lang));
 }
 
 export function getProductTitle(product: Product, lang: string): string {
@@ -5057,11 +5058,11 @@ export function getProductTitle(product: Product, lang: string): string {
     if (Object.hasOwn(trans, safeLang)) {
       const transObj = trans[safeLang];
       if (transObj && Object.hasOwn(transObj, "title")) {
-        return transObj.title || product.title;
+        return fixApostropheCase(transObj.title || product.title);
       }
     }
   }
-  return product.title;
+  return fixApostropheCase(product.title);
 }
 
 export interface DescriptionReplacement {

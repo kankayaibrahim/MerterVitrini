@@ -98,7 +98,7 @@ interface OrderSummary {
 const LABELS = {
   TITLE: "B2B Sipariş Yönetimi",
   SUBTITLE: "Müşteriler tarafından verilen siparişlerin durumlarını güncelleyin, ödeme bildirimlerini ve iade taleplerini doğrulayın.",
-  REFRESH: "Tazele",
+  REFRESH: "Yenile",
   SEARCH_PLACEHOLDER: "Sipariş numarası, müşteri adı veya e-posta ile ara...",
   SEARCH_BTN: "Ara",
   LOADING: "Sipariş verileri yükleniyor...",

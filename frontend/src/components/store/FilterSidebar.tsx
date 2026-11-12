@@ -444,6 +444,41 @@ function hasB2bSourcingActive(b2bFilters?: B2BSourcingFilters): boolean {
   );
 }
 
+interface DedupedAttributeOption {
+  readonly rawValue: string;
+  readonly label: string;
+  readonly count: number;
+  readonly isChecked: boolean;
+}
+
+function dedupeAttributeOptions(
+  values: readonly string[],
+  lang: string,
+  attrName: string,
+  activeValues: readonly string[],
+  attributesFacet?: Record<string, Record<string, number>>
+): DedupedAttributeOption[] {
+  const map = new Map<string, DedupedAttributeOption>();
+  for (const val of values) {
+    const label = t(val, lang).trim();
+    const normKey = label.toLowerCase();
+    const count = safeGetAttributeCount(attributesFacet, attrName, val);
+    const isChecked = activeValues.includes(val);
+    const existing = map.get(normKey);
+    if (!existing) {
+      map.set(normKey, { rawValue: val, label, count, isChecked });
+    } else {
+      map.set(normKey, {
+        rawValue: isChecked ? val : existing.rawValue,
+        label: existing.label,
+        count: existing.count + count,
+        isChecked: existing.isChecked || isChecked,
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
 export default function FilterSidebar({
   lang,
   brands,
@@ -735,7 +770,7 @@ export default function FilterSidebar({
                 <button
                   type="button"
                   onClick={() => openStoreAuthModal("login")}
-                  className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[10.5px] font-extrabold uppercase rounded-[5px] flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  className="w-full py-2 px-3 bg-[#1C1C1C] hover:bg-[#333333] border-none text-white text-[10.5px] font-bold uppercase rounded-md flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                 >
                   <Lock className="w-3.5 h-3.5 shrink-0" />
                   <span>{getShortMemberPriceLabel(lang)}</span>
@@ -750,6 +785,10 @@ export default function FilterSidebar({
           if (attrName === "__proto__" || attrName === "constructor") return null;
 
           const isSectionOpenCurrent = isSectionOpen(attrName);
+          const activeValues = Object.hasOwn(activeAttributes, attrName)
+            ? ((Reflect.get(activeAttributes, attrName) as string[]) ?? [])
+            : [];
+          const options = dedupeAttributeOptions(values, lang, attrName, activeValues, facets?.attributes);
 
           return (
             <div key={attrName} className="border-b border-cultured last:border-b-0 pb-4 last:pb-0">
@@ -770,31 +809,24 @@ export default function FilterSidebar({
 
               {isSectionOpenCurrent && (
                 <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto pr-1 mt-3.5 animate-in fade-in duration-200">
-                  {values.map((val) => {
-                    const isChecked = (
-                      attrName !== "__proto__" &&
-                      attrName !== "constructor" &&
-                      Object.hasOwn(activeAttributes, attrName)
-                    ) ? (Reflect.get(activeAttributes, attrName) as string[])?.includes(val) : false;
-
-                    const count = safeGetAttributeCount(facets?.attributes, attrName, val);
-                    const isDisabled = count === 0 && facets !== null;
+                  {options.map((opt) => {
+                    const isDisabled = opt.count === 0 && facets !== null;
                     return (
                       <label
-                        key={val}
-                        className={`flex items-center gap-2.5 text-xs font-semibold hover:text-salmon-pink cursor-pointer transition-colors duration-150 ${isDisabled && !isChecked ? "opacity-40 cursor-not-allowed pointer-events-none" : "text-onyx"
+                        key={opt.rawValue}
+                        className={`flex items-center gap-2.5 text-xs font-semibold hover:text-salmon-pink cursor-pointer transition-colors duration-150 ${isDisabled && !opt.isChecked ? "opacity-40 cursor-not-allowed pointer-events-none" : "text-onyx"
                           }`}
                       >
                         <input
                           type="checkbox"
                           className="rounded border-cultured bg-white text-salmon-pink focus:ring-salmon-pink w-4 h-4 cursor-pointer disabled:opacity-50"
-                          checked={isChecked}
-                          disabled={isDisabled && !isChecked}
-                          onChange={() => handleAttributeChange(attrName, val)}
+                          checked={opt.isChecked}
+                          disabled={isDisabled && !opt.isChecked}
+                          onChange={() => handleAttributeChange(attrName, opt.rawValue)}
                         />
                         <span>
-                          {t(val, lang)}
-                          {facets !== null && <span className="text-[10px] text-sonic-silver ml-1 font-bold">({count})</span>}
+                          {opt.label}
+                          {facets !== null && <span className="text-[10px] text-sonic-silver ml-1 font-bold">({opt.count})</span>}
                         </span>
                       </label>
                     );

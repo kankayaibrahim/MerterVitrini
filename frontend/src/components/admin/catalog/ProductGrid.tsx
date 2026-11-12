@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
-import { ShoppingBag } from "lucide-react";
+import { useState } from "react";
+import { ShoppingBag, PackageCheck } from "lucide-react";
 import { Product, XmlFeed } from "@/types/integration";
 
 // Localized labels dictionary to prevent JSX literal internationalization warnings
@@ -20,6 +21,7 @@ const LABELS = {
 
 interface ProductGridProps {
   products: Product[];
+  totalProductsCount?: number;
   feeds: XmlFeed[];
   loadingProducts: boolean;
   limit: number;
@@ -28,8 +30,34 @@ interface ProductGridProps {
   onViewDetails: (productId: string) => Promise<void>;
 }
 
+function ProductCoverThumb({
+  imageUrl,
+  title,
+}: Readonly<{ imageUrl?: string; title: string }>) {
+  const [failed, setFailed] = useState(false);
+
+  if (!imageUrl || failed) {
+    return (
+      <div className="flex flex-col items-center justify-center text-zinc-300">
+        <ShoppingBag size={48} />
+        <span className="text-[10px] mt-2 font-bold">{LABELS.noImage}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={title}
+      onError={() => setFailed(true)}
+      className="w-full h-full object-cover hover:scale-105 transition-all duration-300"
+    />
+  );
+}
+
 export default function ProductGrid({
   products,
+  totalProductsCount = 0,
   feeds,
   loadingProducts,
   limit,
@@ -54,10 +82,35 @@ export default function ProductGrid({
     );
   }
 
+  const effectiveTotal = Math.max(totalProductsCount, offset + products.length);
+  const currentPage = Math.floor(offset / limit) + 1;
+  const totalPages = Math.max(1, Math.ceil(effectiveTotal / limit));
+  const hasNextPage =
+    totalProductsCount > 0
+      ? offset + products.length < totalProductsCount
+      : products.length >= limit;
+
   return (
     <div className="flex flex-col gap-6">
+      {products.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs font-semibold text-slate-600">
+          <span className="inline-flex items-center gap-1.5 text-[#0F172A] font-bold">
+            <PackageCheck size={15} className="text-emerald-600" />
+            Toplam {effectiveTotal.toLocaleString("tr-TR")} Toptan Ürün Modeli
+          </span>
+          <span>
+            Sayfa {currentPage.toLocaleString("tr-TR")} / {totalPages.toLocaleString("tr-TR")}
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {products.map((product) => (
+        {products.map((product) => {
+          const coverUrl =
+            product.images && product.images.length > 0
+              ? product.images.find(img => img.is_cover)?.image_url || product.images[0].image_url
+              : undefined;
+          return (
           <button 
             key={product.id} 
             type="button"
@@ -66,18 +119,7 @@ export default function ProductGrid({
           >
             {/* Product image (cover or first image) */}
             <div className="relative w-full aspect-[4/5] bg-zinc-100 flex items-center justify-center overflow-hidden border-b border-zinc-100">
-              {product.images && product.images.length > 0 ? (
-                <img 
-                  src={product.images.find(img => img.is_cover)?.image_url || product.images[0].image_url} 
-                  alt={product.title}
-                  className="w-full h-full object-cover hover:scale-105 transition-all duration-300"
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center text-zinc-300">
-                  <ShoppingBag size={48} />
-                  <span className="text-[10px] mt-2 font-bold">{LABELS.noImage}</span>
-                </div>
-              )}
+              <ProductCoverThumb imageUrl={coverUrl} title={product.title} />
               <span className="absolute bottom-2.5 right-2.5 bg-black/75 text-[10px] text-white px-2 py-0.5 rounded-full font-bold shadow-md">
                 {feeds.find(f => f.id === product.feed_id)?.alias_code || "PROD"}
               </span>
@@ -105,7 +147,8 @@ export default function ProductGrid({
               </div>
             </div>
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* Empty State */}
@@ -123,19 +166,21 @@ export default function ProductGrid({
       {products.length > 0 && (
         <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-zinc-200/50 shadow-sm">
           <button 
+            type="button"
             onClick={() => setOffset(prev => Math.max(0, prev - limit))}
             disabled={offset === 0}
-            className="px-4 py-2 border border-zinc-200 rounded-xl text-sm font-semibold hover:bg-zinc-50 disabled:bg-zinc-50 disabled:text-zinc-400 transition-colors shadow-sm"
+            className="px-4 py-2 border border-zinc-200 rounded-xl text-sm font-semibold hover:bg-zinc-50 disabled:bg-zinc-50 disabled:text-zinc-400 transition-colors shadow-sm cursor-pointer disabled:cursor-not-allowed"
           >
             {LABELS.prevPageButton}
           </button>
-          <span className="text-xs font-semibold text-zinc-500">
-            {LABELS.displayedLabel}{offset + 1} - {offset + products.length}
+          <span className="text-xs font-semibold text-zinc-600">
+            {LABELS.displayedLabel}{(offset + 1).toLocaleString("tr-TR")} - {(offset + products.length).toLocaleString("tr-TR")} / {effectiveTotal.toLocaleString("tr-TR")}
           </span>
           <button 
+            type="button"
             onClick={() => setOffset(prev => prev + limit)}
-            disabled={products.length < limit}
-            className="px-4 py-2 border border-zinc-200 rounded-xl text-sm font-semibold hover:bg-zinc-50 disabled:bg-zinc-50 disabled:text-zinc-400 transition-colors shadow-sm"
+            disabled={!hasNextPage}
+            className="px-4 py-2 border border-zinc-200 rounded-xl text-sm font-semibold hover:bg-zinc-50 disabled:bg-zinc-50 disabled:text-zinc-400 transition-colors shadow-sm cursor-pointer disabled:cursor-not-allowed"
           >
             {LABELS.nextPageButton}
           </button>

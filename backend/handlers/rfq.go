@@ -272,6 +272,16 @@ func (h *MarketplaceHandler) CreatePublicRfq(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	RecordMemberActivityAsync(r, MemberActivityInput{
+		EventType:     "rfq_create",
+		EventCategory: "lead",
+		Title:         "Toptan alım ilanı (RFQ) oluşturdu: " + title,
+		Subtitle:      fmt.Sprintf("%s • %d %s (%s)", item.RfqNumber, item.TargetQuantity, item.UnitType, item.BuyerCountry),
+		URLPath:       "/alim-ilanlari",
+		EntityType:    "rfq",
+		EntityID:      item.ID,
+	})
+
 	writeMarketplaceJSON(w, http.StatusCreated, item)
 }
 

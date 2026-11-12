@@ -15,6 +15,7 @@ import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel }
 import { Heart, ShoppingBag, Eye, ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import Link from "next/link";
 import { useWishlistStore } from "@/store/useWishlistStore";
+import { formatAsciiSafeUpper } from "@/utils/formatters";
 
 interface ProductCardProps {
   readonly product: Product;
@@ -203,18 +204,10 @@ function ProductCardPriceBlock({
 }>) {
   if (!isAuthenticated) {
     return (
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openStoreAuthModal("login");
-        }}
-        className="w-full py-1 px-2 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-colors"
-      >
-        <Lock className="w-3 h-3 shrink-0" />
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#6E542E] select-none">
+        <Lock className="w-3 h-3 text-[#8C6D3F] shrink-0" />
         <span className="truncate">{getShortMemberPriceLabel(lang)}</span>
-      </button>
+      </span>
     );
   }
 
@@ -436,10 +429,10 @@ export default function ProductCard({
         {colorText && (
           <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm border border-black/5 px-2.5 py-1 flex items-center gap-1.5 z-10 rounded-none shadow-none select-none group-hover:opacity-0 transition-opacity duration-200 pointer-events-none">
             <div className="flex">
-              <span className="w-2.5 h-2.5 rounded-full border border-white bg-indigo-500 shadow-sm" />
-              <span className="w-2.5 h-2.5 rounded-full border border-white bg-purple-500 shadow-sm -ml-1.5" />
+              <span className="w-2.5 h-2.5 rounded-full border border-white bg-[#1C1C1C] shadow-sm" />
+              <span className="w-2.5 h-2.5 rounded-full border border-white bg-[#8C6D3F] shadow-sm -ml-1.5" />
             </div>
-            <span className="text-[9.5px] font-bold text-black tracking-wide uppercase">
+            <span className="text-[9.5px] font-bold text-[#1C1C1C] tracking-wide uppercase">
               {colorText}
             </span>
           </div>
@@ -477,8 +470,8 @@ export default function ProductCard({
 
       {/* 2. Visual Details Section */}
       <div className="p-3 flex flex-col gap-1 flex-grow">
-        <span className="text-[10px] uppercase font-bold tracking-[1.5px] text-black block mb-0.5">
-          {product.brand_name || t("merter_manufacturer", lang)}
+        <span className="text-[10px] font-bold tracking-[1.5px] text-[#1C1C1C] block mb-0.5">
+          {formatAsciiSafeUpper(product.brand_name || t("merter_manufacturer", lang))}
         </span>
 
         <h3 className="text-xs font-normal text-onyx line-clamp-2 min-h-[34px] leading-relaxed transition-colors duration-150 group-hover:text-black">
@@ -534,7 +527,7 @@ export default function ProductCard({
               })
             );
           }}
-          className="mt-3 relative z-10 w-full bg-black hover:bg-neutral-800 text-white text-[10px] sm:text-[11px] font-bold uppercase py-2 sm:py-2.5 px-2 sm:px-4 rounded-none transition-all duration-300 flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-none select-none border-none cursor-pointer tracking-wider"
+          className="mt-3 relative z-10 w-full bg-[#1C1C1C] hover:bg-[#333333] text-white text-[10px] sm:text-[11px] font-bold uppercase py-2 sm:py-2.5 px-2 sm:px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-none select-none border-none cursor-pointer tracking-wider"
         >
           {isAuthenticated ? (
             <>

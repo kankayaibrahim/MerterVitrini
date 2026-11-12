@@ -176,10 +176,11 @@ export default function BiHeaderBar({
             type="button"
             onClick={onRefresh}
             disabled={loading}
-            className="p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 transition-all cursor-pointer disabled:opacity-50"
-            title="Verileri Yenile"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-200 transition-all cursor-pointer disabled:opacity-50"
+            title="Yenile"
           >
-            <RefreshCw size={16} className={loading ? "animate-spin text-emerald-600" : ""} />
+            <RefreshCw size={14} className={loading ? "animate-spin text-emerald-600" : ""} />
+            <span>Yenile</span>
           </button>
         </div>
       </div>

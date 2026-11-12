@@ -55,7 +55,7 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 
 	return &AppHandlers{
 		MediaRootDir:         mediaSvc.RootDir(),
-		StoreCatalog:         handlers.NewStoreCatalogHandler(),
+		StoreCatalog:         handlers.NewStoreCatalogHandler(cfg),
 		StoreCart:            handlers.NewCartHandler(),
 		StoreOrders:          handlers.NewStoreOrdersHandler(),
 		StoreAuth:            storeAuth,
@@ -102,6 +102,7 @@ func BuildRouter(cfg *config.Config, h *AppHandlers) http.Handler {
 	registerRealtimeChatRoutes(mux, h, supplierMW)
 
 	var handler http.Handler = mux
+	handler = handlers.BotCrawlLoggingMiddleware(handler)
 	handler = middleware.LoggingMiddleware(cfg.LogFormat)(handler)
 	handler = middleware.RateLimitMiddleware(handler)
 	handler = middleware.CORSMiddleware(handler)

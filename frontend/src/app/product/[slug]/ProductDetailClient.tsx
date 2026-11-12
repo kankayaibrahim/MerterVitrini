@@ -28,7 +28,11 @@ import {
   syncShowPricesToGuestsSetting,
 } from "@/app/storeAuth";
 import { trackMemberEvent } from "@/components/analytics/AnalyticsTracker";
-import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
+import {
+  normalizeSeoLang,
+  stripBrandTitleSuffix,
+  SupportedSeoLang,
+} from "@/utils/seoHelpers";
 
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
@@ -318,9 +322,10 @@ export default function ProductDetailClient({
     if (product) {
       const localizedTitle = getProductTitle(product, safeLang);
       const brandName = product.brand_name || copy.defaultBrand;
-      document.title = `${localizedTitle} - ${brandName} | ${copy.b2bTitleSuffix}`;
+      const baseTitle = stripBrandTitleSuffix(`${localizedTitle} - ${brandName}`);
+      document.title = `${baseTitle} | Merter Vitrini B2B`;
     }
-  }, [safeLang, product, copy.defaultBrand, copy.b2bTitleSuffix]);
+  }, [safeLang, product, copy.defaultBrand]);
 
   useEffect(() => {
     const loadCategoriesIfEmpty = async () => {
@@ -373,7 +378,7 @@ export default function ProductDetailClient({
           </p>
           <Link
             href={portalHref}
-            className="px-8 py-3 bg-[#a855f7] text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase hover:bg-[#1c191f] transition-all cursor-pointer shadow-md no-underline"
+            className="px-8 py-3 bg-[#1C1C1C] text-white rounded-md font-extrabold text-xs tracking-[0.5px] uppercase hover:bg-[#333333] transition-colors cursor-pointer no-underline"
           >
             {t("back_to_homepage", safeLang)}
           </Link>
@@ -681,7 +686,7 @@ export default function ProductDetailClient({
         ).replace(/\D/g, "");
         const encodedWa = supplierWaDigits
           ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(waMsg)}`
-          : `https://wa.me/?text=${encodeURIComponent(waMsg)}`;
+          : "";
         setWhatsappUrl(encodedWa);
       }
 
@@ -764,14 +769,16 @@ export default function ProductDetailClient({
           </span>
         </nav>
 
-        <div className="bg-white border border-cultured rounded-[15px] p-6 md:p-8 shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <ProductImageGallery
-              images={product.images}
-              title={title}
-              lang={safeLang}
-              t={t}
-            />
+        <div className="bg-white border border-[#E5E0D8] rounded-xl p-6 md:p-8 shadow-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+            <div className="md:sticky md:top-24 lg:top-28 self-start">
+              <ProductImageGallery
+                images={product.images}
+                title={title}
+                lang={safeLang}
+                t={t}
+              />
+            </div>
 
             <div className="flex flex-col gap-6">
               <ProductSpecs
@@ -784,6 +791,7 @@ export default function ProductDetailClient({
                 discountedPrice={discountedPrice}
                 currency={currency}
                 dynamicAttrs={dynamicAttrs}
+                mode="header"
               />
 
               <ColorVariants product={product} lang={safeLang} t={t} />
@@ -811,6 +819,19 @@ export default function ProductDetailClient({
                 }}
               />
 
+              <ProductSpecs
+                product={product}
+                title={title}
+                lang={safeLang}
+                t={t}
+                hasDiscount={hasDiscount}
+                unitPrice={unitPrice}
+                discountedPrice={discountedPrice}
+                currency={currency}
+                dynamicAttrs={dynamicAttrs}
+                mode="specs"
+              />
+
               <SupplierDirectCard
                 product={product}
                 pkgQty={pkgQty}
@@ -827,7 +848,12 @@ export default function ProductDetailClient({
                 }}
               />
 
-              <SocialShare title={title} lang={safeLang} t={t} />
+              <SocialShare
+                title={title}
+                lang={safeLang}
+                t={t}
+                productSlug={product.slug || product.id}
+              />
             </div>
           </div>
 

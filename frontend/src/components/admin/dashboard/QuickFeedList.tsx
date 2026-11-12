@@ -3,22 +3,22 @@ import { Database, RefreshCw, ChevronRight, XCircle, AlertTriangle } from "lucid
 import { XmlFeed, SyncRun } from "@/types/integration";
 import { formatDateTime } from "@/utils/formatters";
 
-// Localized labels dictionary to prevent JSX literal internationalization warnings
 const LABELS = {
   sectionTitle: "Tedarikçi XML Entegrasyonları",
   manageAllButton: "Hepsini Yönet",
-  maskedSuffix: "",
   syncingStatusTitle: "Eşleniyor",
-  noSyncStatusTitle: "Senkronizasyon Yok",
+  activeReadyTitle: "Aktif • Hazır",
+  inactiveStatusTitle: "Pasif",
   lastStatusHeader: "Son Durum:",
   lastDateHeader: "Son Tarih:",
+  productCountHeader: "Aktif Ürün:",
   statusRunningMsg: "Senkronize ediliyor...",
   statusSuccessMsg: "Başarılı",
   statusFailedMsg: "Hata Alındı",
-  statusNoDataMsg: "Veri Yok",
-  neverRunMsg: "Hiç çalıştırılmadı",
+  statusActiveReadyMsg: "Aktif • Hazır",
+  statusInactiveMsg: "Pasif",
+  scheduledMsg: "Otomatik Planlı",
   syncNowButton: "Şimdi Senkronize Et",
-  syncActiveButton: "Aktif...",
   processedCardsLabel: "İşlenen Ürün Kartı:",
   imagePoolLabel: "Görsel Havuzu",
   threadUnit: " Thread",
@@ -27,16 +27,55 @@ const LABELS = {
   fileUnit: " dosya",
   parsingImagesMsg: "Görsel listeleri analiz ediliyor...",
   cancelSyncButton: "Senkronizasyonu Durdur",
-  cancellingSyncMsg: "Durduruluyor..."
+  cancellingSyncMsg: "Durduruluyor...",
 };
 
-// Safety guard against prototype pollution
 const getSafeKey = (key: string): string => {
   if (key === "__proto__" || key === "constructor" || key === "prototype") {
     throw new Error("Dangerous key detected");
   }
   return key;
 };
+
+interface FeedRuntimeMeta {
+  readonly rawStatus: string;
+  readonly lastSyncAt: string | null;
+  readonly productCount: number | null;
+}
+
+function readStringField(record: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const val = record[key];
+    if (typeof val === "string" && val.trim().length > 0) {
+      return val.trim();
+    }
+  }
+  return null;
+}
+
+function readNumberField(record: Record<string, unknown>, keys: readonly string[]): number | null {
+  for (const key of keys) {
+    const val = record[key];
+    if (typeof val === "number" && Number.isFinite(val)) {
+      return val;
+    }
+    if (typeof val === "string" && val.trim().length > 0) {
+      const parsed = Number(val);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+  return null;
+}
+
+function extractFeedRuntimeMeta(feed: XmlFeed): FeedRuntimeMeta {
+  const record = feed as unknown as Record<string, unknown>;
+  const rawStatus = (readStringField(record, ["last_sync_status", "sync_status", "status"]) ?? "").toLowerCase();
+  const lastSyncAt = readStringField(record, ["last_sync_at", "last_synced_at", "synced_at", "updated_at"]);
+  const productCount = readNumberField(record, ["product_count", "products_count", "total_products", "items_count"]);
+  return { rawStatus, lastSyncAt, productCount };
+}
 
 interface QuickFeedListProps {
   readonly feeds: readonly XmlFeed[];
@@ -47,36 +86,45 @@ interface QuickFeedListProps {
   readonly onNavigateToIntegrations: () => void;
 }
 
-function getFeedStatus(isSyncing: boolean, lastRun?: SyncRun) {
-  if (isSyncing) {
+function getFeedStatus(feed: XmlFeed, meta: FeedRuntimeMeta, isSyncing: boolean, lastRun?: SyncRun) {
+  if (isSyncing || meta.rawStatus === "running" || meta.rawStatus === "syncing") {
     return {
       dotClass: "bg-blue-500 animate-pulse",
       title: LABELS.syncingStatusTitle,
       textClass: "text-blue-600 animate-pulse",
-      text: LABELS.statusRunningMsg
+      text: LABELS.statusRunningMsg,
     };
   }
-  if (lastRun?.status === "success") {
+  const effectiveStatus = lastRun?.status?.toLowerCase() || meta.rawStatus;
+  if (effectiveStatus === "success" || effectiveStatus === "completed" || effectiveStatus === "ok") {
     return {
       dotClass: "bg-emerald-500",
-      title: lastRun.status,
+      title: LABELS.statusSuccessMsg,
       textClass: "text-emerald-700",
-      text: LABELS.statusSuccessMsg
+      text: LABELS.statusSuccessMsg,
     };
   }
-  if (lastRun?.status === "failed") {
+  if (effectiveStatus === "failed" || effectiveStatus === "error") {
     return {
       dotClass: "bg-rose-500",
-      title: lastRun.status,
+      title: LABELS.statusFailedMsg,
       textClass: "text-rose-700",
-      text: LABELS.statusFailedMsg
+      text: LABELS.statusFailedMsg,
+    };
+  }
+  if (feed.is_active !== false) {
+    return {
+      dotClass: "bg-emerald-500",
+      title: LABELS.activeReadyTitle,
+      textClass: "text-emerald-700",
+      text: LABELS.statusActiveReadyMsg,
     };
   }
   return {
     dotClass: "bg-zinc-300",
-    title: lastRun?.status || LABELS.noSyncStatusTitle,
+    title: LABELS.inactiveStatusTitle,
     textClass: "text-zinc-600",
-    text: LABELS.statusNoDataMsg
+    text: LABELS.statusInactiveMsg,
   };
 }
 
@@ -89,8 +137,8 @@ function FeedSyncProgress({ summary }: Readonly<FeedSyncProgressProps>) {
   const imagesDownloaded = summary.images_downloaded ?? 0;
   const speedKbps = summary.download_speed_kbps ?? 0;
   const percentage = summary.percentage ?? 0;
-  const speedText = speedKbps > 1024 
-    ? `${(speedKbps / 1024.0).toFixed(1)} MB/s` 
+  const speedText = speedKbps > 1024
+    ? `${(speedKbps / 1024).toFixed(1)} MB/s`
     : `${speedKbps} KB/s`;
   const remainingFiles = Math.max(0, imagesTotal - imagesDownloaded);
 
@@ -110,7 +158,7 @@ function FeedSyncProgress({ summary }: Readonly<FeedSyncProgressProps>) {
       </div>
 
       <div className="w-full bg-zinc-200/80 rounded-full h-1.5 overflow-hidden">
-        <div 
+        <div
           className="bg-blue-500 h-full rounded-full transition-all duration-300"
           style={{ width: `${percentage}%` }}
         />
@@ -139,23 +187,26 @@ function QuickFeedCard({
   isSyncing,
   isCancelling,
   onCancel,
-  onTrigger
+  onTrigger,
 }: Readonly<QuickFeedCardProps>) {
   const lastRun = history[0];
-  const status = getFeedStatus(isSyncing, lastRun);
-  const lastDate = lastRun ? formatDateTime(lastRun.completed_at || lastRun.started_at) : LABELS.neverRunMsg;
+  const meta = extractFeedRuntimeMeta(feed);
+  const status = getFeedStatus(feed, meta, isSyncing, lastRun);
+  const rawDate = lastRun?.completed_at || lastRun?.started_at || meta.lastSyncAt;
+  const lastDate = rawDate ? formatDateTime(rawDate) : LABELS.scheduledMsg;
+  const productCount = lastRun?.summary?.items_parsed ?? meta.productCount;
 
   return (
     <div className="p-4 rounded-xl border border-zinc-200/70 bg-zinc-50/50 flex flex-col gap-3">
       <div className="flex items-start justify-between">
         <div>
-          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-200/60 mb-1 inline-block">
-            {feed.alias_code}{LABELS.maskedSuffix}
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-200/60 mb-1 inline-block">
+            {feed.alias_code}
           </span>
           <h4 className="font-bold text-zinc-900">{feed.name}</h4>
         </div>
-        
-        <span className={`w-2.5 h-2.5 rounded-full ${status.dotClass}`} title={status.title} />
+
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1 ${status.dotClass}`} title={status.title} />
       </div>
 
       <div className="text-xs text-zinc-500 flex flex-col gap-1 border-t border-zinc-200/50 pt-2">
@@ -171,6 +222,14 @@ function QuickFeedCard({
             {lastDate}
           </span>
         </div>
+        {productCount !== null && productCount > 0 ? (
+          <div className="flex justify-between">
+            <span>{LABELS.productCountHeader}</span>
+            <span className="font-semibold text-zinc-800 tabular-nums">
+              {productCount.toLocaleString("tr-TR")} Model
+            </span>
+          </div>
+        ) : null}
 
         {isSyncing && lastRun?.summary && (
           <div className="flex flex-col gap-2 mt-2 bg-blue-50/40 border border-blue-100/60 rounded-xl p-3 text-[11px] text-zinc-600 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -229,7 +288,7 @@ export default function QuickFeedList({
   activeSyncing,
   triggerSync,
   cancelSync,
-  onNavigateToIntegrations
+  onNavigateToIntegrations,
 }: Readonly<QuickFeedListProps>) {
   const [cancellingFeeds, setCancellingFeeds] = useState<Record<string, boolean>>({});
 
@@ -248,23 +307,23 @@ export default function QuickFeedList({
   };
 
   return (
-    <div className="lg:col-span-2 glass-card bg-white rounded-2xl p-6 flex flex-col gap-4">
+    <div className="lg:col-span-2 glass-card bg-white rounded-2xl p-6 flex flex-col gap-4 border border-zinc-200/80 shadow-xs">
       <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
         <h3 className="text-lg font-bold text-zinc-950 flex items-center gap-2">
-          <Database size={18} className="text-violet-600" />
+          <Database size={18} className="text-[#8C6D3F]" />
           {LABELS.sectionTitle}
         </h3>
-        <button 
+        <button
           onClick={onNavigateToIntegrations}
           type="button"
-          className="text-xs font-semibold text-violet-600 hover:text-violet-700 flex items-center gap-1"
+          className="text-xs font-semibold text-slate-700 hover:text-[#0F172A] flex items-center gap-1 whitespace-nowrap shrink-0"
         >
           {LABELS.manageAllButton} <ChevronRight size={14} />
         </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {feeds.map(feed => {
+        {feeds.map((feed) => {
           const safeFeedId = getSafeKey(feed.id);
           const history = (Reflect.get(syncHistory, safeFeedId) as SyncRun[]) || [];
           const isSyncing = Boolean(Reflect.get(activeSyncing, safeFeedId));
@@ -286,4 +345,3 @@ export default function QuickFeedList({
     </div>
   );
 }
-

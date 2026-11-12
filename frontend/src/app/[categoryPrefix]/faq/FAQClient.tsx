@@ -19,9 +19,9 @@ import {
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
-import SafeHtml from "@/components/common/SafeHtml";
 import { CartItem, Category } from "@/types/store";
 import { SupportedSeoLang, normalizeSeoLang, safeJsonLd } from "@/utils/seoHelpers";
+import { sanitizePublicStoreEmail } from "@/utils/formatters";
 
 export interface StoreSettings {
   id: string;
@@ -569,7 +569,6 @@ export default function FAQClient({
   categories,
   activeLangs,
   settings,
-  cmsPage,
 }: Readonly<FAQClientProps>) {
   const router = useRouter();
 
@@ -636,13 +635,8 @@ export default function FAQClient({
   const sanitizedWhatsapp = (settings.whatsapp || "+90 533 703 08 83").replace(/\D/g, "");
   const whatsappUrl = `https://wa.me/${sanitizedWhatsapp}?text=${encodeURIComponent(texts.waHello)}`;
   const phoneTelUrl = `tel:${(settings.phone || "+90 533 703 08 83").replace(/\s/g, "")}`;
-  const emailAddress = settings.email || "info@mertervitrini.com.tr";
+  const emailAddress = sanitizePublicStoreEmail(settings.email);
   const emailMailtoUrl = `mailto:${emailAddress}?subject=${encodeURIComponent(texts.emailSubject)}`;
-
-  const cmsTranslation =
-    cmsPage?.translations?.[currentLang] ||
-    cmsPage?.translations?.en ||
-    cmsPage?.translations?.tr;
 
   const jsonLdData = {
     "@context": "https://schema.org",
@@ -660,7 +654,7 @@ export default function FAQClient({
 
   return (
     <div
-      className="min-h-screen flex flex-col bg-zinc-50/70 text-zinc-900 font-sans antialiased selection:bg-zinc-950 selection:text-white"
+      className="min-h-screen flex flex-col bg-zinc-50/70 text-[#1C1C1C] font-sans antialiased selection:bg-[#1C1C1C] selection:text-white"
       style={{ direction: currentLang === "ar" ? "rtl" : "ltr" }}
     >
       <script
@@ -686,32 +680,29 @@ export default function FAQClient({
         onCurrencyChange={handleCurrencyChange}
       />
 
-      <div className="w-full bg-white border-b border-zinc-200/60 py-3 px-6 md:px-12 text-xs text-zinc-500 font-medium">
+      <div className="w-full bg-white border-b border-[#E5E0D8] py-3 px-6 md:px-12 text-xs text-zinc-500 font-medium">
         <div className="max-w-[1440px] mx-auto flex items-center gap-2">
-          <a href={`/${categoryPrefix}`} className="hover:text-zinc-950 transition-colors">
+          <a href={`/${categoryPrefix}`} className="hover:text-[#1C1C1C] transition-colors">
             {texts.breadcrumbHome}
           </a>
           <span className="text-zinc-300">/</span>
-          <span className="text-zinc-900 font-semibold">{texts.breadcrumbFAQ}</span>
+          <span className="text-[#1C1C1C] font-semibold">{texts.breadcrumbFAQ}</span>
         </div>
       </div>
 
-      <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-12 py-10 flex flex-col gap-12">
-        <section className="relative overflow-hidden rounded-3xl bg-white text-zinc-900 p-8 md:p-14 border border-zinc-200/80 shadow-sm">
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-zinc-100/80 blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 right-1/4 -mb-20 w-72 h-72 rounded-full bg-amber-50/50 blur-3xl pointer-events-none" />
-
+      <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-12 py-10 flex flex-col gap-10">
+        <section className="relative overflow-hidden rounded-lg bg-[#F8F6F2] text-[#1C1C1C] p-8 md:p-12 border border-[#E5E0D8] shadow-xs">
           <div className="relative z-10 max-w-3xl flex flex-col gap-4">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-800 text-[11px] font-bold w-fit tracking-wider uppercase">
-              <Sparkles size={14} className="text-zinc-600" />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#E5E0D8] text-[#6E542E] text-[11px] font-bold w-fit tracking-wider uppercase">
+              <Sparkles size={14} className="text-[#8C6D3F]" />
               {texts.heroBadge}
             </div>
 
-            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-zinc-950 leading-tight">
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-[#1C1C1C] leading-tight">
               {texts.heroTitle}
             </h1>
 
-            <p className="text-sm md:text-base text-zinc-600 leading-relaxed font-normal">
+            <p className="text-sm md:text-base text-[#525252] leading-relaxed font-normal">
               {texts.heroSubtitle}
             </p>
 
@@ -725,20 +716,20 @@ export default function FAQClient({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={texts.searchPlaceholder}
-                className="w-full ps-11 pe-4 py-3.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-zinc-900 placeholder-zinc-400 text-sm focus:outline-none focus:border-zinc-950 focus:ring-2 focus:ring-zinc-950/10 transition-all shadow-inner"
+                className="w-full ps-11 pe-4 py-3.5 rounded-md bg-white border border-[#D6D1C7] text-[#1C1C1C] placeholder-zinc-400 text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
               />
             </div>
           </div>
         </section>
 
-        <section className="flex flex-wrap gap-2.5 items-center">
+        <section className="flex flex-wrap gap-2 items-center">
           <button
             type="button"
             onClick={() => setSelectedCategory("all")}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`px-4 py-2 rounded-md text-xs font-bold transition-colors cursor-pointer ${
               selectedCategory === "all"
-                ? "bg-zinc-950 text-white shadow-sm"
-                : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300"
+                ? "bg-[#1C1C1C] text-white border border-[#1C1C1C] shadow-xs"
+                : "bg-white text-[#525252] border border-[#D6D1C7] hover:border-[#1C1C1C] hover:text-[#1C1C1C]"
             }`}
           >
             {texts.tabAll}
@@ -746,10 +737,10 @@ export default function FAQClient({
           <button
             type="button"
             onClick={() => setSelectedCategory("order")}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-colors cursor-pointer ${
               selectedCategory === "order"
-                ? "bg-zinc-950 text-white shadow-sm"
-                : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300"
+                ? "bg-[#1C1C1C] text-white border border-[#1C1C1C] shadow-xs"
+                : "bg-white text-[#525252] border border-[#D6D1C7] hover:border-[#1C1C1C] hover:text-[#1C1C1C]"
             }`}
           >
             <Box size={14} />
@@ -758,10 +749,10 @@ export default function FAQClient({
           <button
             type="button"
             onClick={() => setSelectedCategory("payment")}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-colors cursor-pointer ${
               selectedCategory === "payment"
-                ? "bg-zinc-950 text-white shadow-sm"
-                : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300"
+                ? "bg-[#1C1C1C] text-white border border-[#1C1C1C] shadow-xs"
+                : "bg-white text-[#525252] border border-[#D6D1C7] hover:border-[#1C1C1C] hover:text-[#1C1C1C]"
             }`}
           >
             <CreditCard size={14} />
@@ -770,10 +761,10 @@ export default function FAQClient({
           <button
             type="button"
             onClick={() => setSelectedCategory("shipping")}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-colors cursor-pointer ${
               selectedCategory === "shipping"
-                ? "bg-zinc-950 text-white shadow-sm"
-                : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300"
+                ? "bg-[#1C1C1C] text-white border border-[#1C1C1C] shadow-xs"
+                : "bg-white text-[#525252] border border-[#D6D1C7] hover:border-[#1C1C1C] hover:text-[#1C1C1C]"
             }`}
           >
             <Truck size={14} />
@@ -782,10 +773,10 @@ export default function FAQClient({
           <button
             type="button"
             onClick={() => setSelectedCategory("quality")}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold transition-colors cursor-pointer ${
               selectedCategory === "quality"
-                ? "bg-zinc-950 text-white shadow-sm"
-                : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300"
+                ? "bg-[#1C1C1C] text-white border border-[#1C1C1C] shadow-xs"
+                : "bg-white text-[#525252] border border-[#D6D1C7] hover:border-[#1C1C1C] hover:text-[#1C1C1C]"
             }`}
           >
             <Tag size={14} />
@@ -795,7 +786,7 @@ export default function FAQClient({
 
         <section className="flex flex-col gap-4">
           {filteredQuestions.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center border border-zinc-200/80 shadow-sm flex flex-col items-center justify-center gap-3">
+            <div className="bg-white rounded-lg p-12 text-center border border-[#E5E0D8] shadow-xs flex flex-col items-center justify-center gap-3">
               <HelpCircle size={40} className="text-zinc-300" />
               <p className="text-xs font-semibold text-zinc-500 max-w-md">
                 {texts.noResults}
@@ -807,10 +798,10 @@ export default function FAQClient({
               return (
                 <div
                   key={item.id}
-                  className={`bg-white rounded-2xl border transition-all overflow-hidden ${
+                  className={`bg-white rounded-lg border transition-colors overflow-hidden ${
                     isOpen
-                      ? "border-zinc-950 shadow-sm ring-1 ring-zinc-950/5"
-                      : "border-zinc-200/80 shadow-sm hover:border-zinc-300"
+                      ? "border-[#1C1C1C] shadow-xs"
+                      : "border-[#E5E0D8] shadow-2xs hover:border-[#D6D1C7]"
                   }`}
                 >
                   <button
@@ -819,12 +810,12 @@ export default function FAQClient({
                     onClick={() => toggleItem(item.id)}
                     className="w-full p-6 text-start flex items-center justify-between gap-4 cursor-pointer select-none"
                   >
-                    <span className="text-base font-bold text-zinc-950 flex items-center gap-3">
+                    <span className="text-base font-bold text-[#1C1C1C] flex items-center gap-3">
                       <span
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${
+                        className={`w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${
                           isOpen
-                            ? "bg-zinc-950 text-white"
-                            : "bg-zinc-100 text-zinc-600"
+                            ? "bg-[#1C1C1C] text-white"
+                            : "bg-[#F8F6F2] text-[#525252] border border-[#E5E0D8]"
                         }`}
                       >
                         ?
@@ -834,7 +825,7 @@ export default function FAQClient({
                     <div
                       className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-transform duration-200 ${
                         isOpen
-                          ? "rotate-180 bg-zinc-100 text-zinc-900"
+                          ? "rotate-180 bg-[#F8F6F2] text-[#1C1C1C]"
                           : "text-zinc-400 bg-zinc-50"
                       }`}
                     >
@@ -844,7 +835,7 @@ export default function FAQClient({
 
                   {isOpen && (
                     <div className="px-6 pb-6 pt-0 animate-in fade-in duration-200">
-                      <div className="border-t border-zinc-100 pt-4 text-xs md:text-sm text-zinc-600 leading-relaxed ps-11">
+                      <div className="border-t border-zinc-100 pt-4 text-xs md:text-sm text-[#525252] leading-relaxed ps-11">
                         {item.a}
                       </div>
                     </div>
@@ -855,29 +846,16 @@ export default function FAQClient({
           )}
         </section>
 
-        {cmsTranslation?.content && (
-          <section className="bg-white rounded-3xl p-8 md:p-12 border border-zinc-200/80 shadow-sm flex flex-col gap-6">
-            <div className="border-b border-zinc-100 pb-4">
-              <h2 className="text-2xl md:text-3xl font-black text-zinc-950 tracking-tight">
-                {cmsTranslation.title || texts.cmsSectionTitle}
-              </h2>
-            </div>
-            <div className="prose prose-zinc max-w-none text-sm text-zinc-700 leading-relaxed">
-              <SafeHtml html={cmsTranslation.content} />
-            </div>
-          </section>
-        )}
-
-        <section className="rounded-3xl bg-white text-zinc-900 p-8 md:p-10 shadow-sm border border-zinc-200/80 flex flex-col md:flex-row items-center justify-between gap-6">
+        <section className="rounded-lg bg-[#F8F6F2] text-[#1C1C1C] p-8 md:p-10 shadow-xs border border-[#E5E0D8] flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex flex-col gap-1.5 text-center md:text-start">
-            <div className="inline-flex items-center gap-1.5 text-zinc-500 text-xs font-bold uppercase tracking-wider justify-center md:justify-start">
-              <ShieldCheck size={16} />
+            <div className="inline-flex items-center gap-1.5 text-[#8C6D3F] text-xs font-bold uppercase tracking-wider justify-center md:justify-start">
+              <ShieldCheck size={16} className="text-[#15803D]" />
               {texts.supportBadge}
             </div>
-            <h2 className="text-xl md:text-2xl font-black text-zinc-950">
+            <h2 className="text-xl md:text-2xl font-black text-[#1C1C1C]">
               {texts.helpTitle}
             </h2>
-            <p className="text-xs text-zinc-600 max-w-lg leading-relaxed">
+            <p className="text-xs text-[#525252] max-w-lg leading-relaxed">
               {texts.helpSubtitle}
             </p>
           </div>
@@ -887,21 +865,21 @@ export default function FAQClient({
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold shadow-md shadow-emerald-900/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold shadow-xs transition-colors"
             >
               <MessageSquare size={16} />
               {texts.chatWhatsappBtn}
             </a>
             <a
               href={phoneTelUrl}
-              className="inline-flex items-center gap-2 px-5 py-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold border border-zinc-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center gap-2 px-5 py-3.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-bold transition-colors"
             >
               <Phone size={16} />
               {texts.callBtn}
             </a>
             <a
               href={emailMailtoUrl}
-              className="inline-flex items-center gap-2 px-5 py-3.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold border border-zinc-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center gap-2 px-5 py-3.5 rounded-md bg-white hover:bg-[#EFECE6] text-[#1C1C1C] text-xs font-bold border border-[#D6D1C7] hover:border-[#1C1C1C] transition-colors"
             >
               <Mail size={16} />
               {texts.emailBtn}

@@ -12,6 +12,7 @@ import {
   exportBiSummaryJson,
   normalizeBiMiningResponse,
   normalizeStatsResponse,
+  resolveOpportunityDiagnosis,
 } from "./biTypes";
 import BiHeaderBar from "./BiHeaderBar";
 import BiOverviewTab from "./BiOverviewTab";
@@ -137,7 +138,7 @@ export default function AnalyticsDashboardClient() {
   const opportunityProductsCount = useMemo(
     () =>
       biData.product_and_brand_velocity.hot_products.filter(
-        (p) => Boolean(p.opportunity_flag?.trim()) || (p.views >= 15 && p.cart_adds === 0)
+        (p) => resolveOpportunityDiagnosis(p).isWarning
       ).length,
     [biData.product_and_brand_velocity.hot_products]
   );

@@ -459,26 +459,26 @@ function SupplierProfileBanner({
     : "";
 
   return (
-    <div className="bg-gradient-to-br from-amber-50/80 via-white to-emerald-50/50 rounded-3xl border border-amber-200/80 shadow-xs p-6 sm:p-8 space-y-5">
+    <div className="bg-[#F8F6F2] rounded-lg border border-[#E5E0D8] shadow-xs p-6 sm:p-8 space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
         <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+          <div className="w-14 h-14 rounded-lg bg-white border border-[#E5E0D8] text-[#1C1C1C] flex items-center justify-center shrink-0">
             <Building2 size={28} />
           </div>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900">{brand.name}</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-[#1C1C1C]">{brand.name}</h1>
               {(brand.is_verified ?? true) && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100/80 text-emerald-800 border border-emerald-200 text-xs font-extrabold">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 text-xs font-extrabold">
                   <ShieldCheck size={13} />
                   <span>{copy.verifiedBadge}</span>
                 </span>
               )}
             </div>
-            <p className="text-xs sm:text-sm font-bold text-slate-600">
+            <p className="text-xs sm:text-sm font-bold text-[#525252]">
               {companyLabel} • {copy.zeroCommissionSubtitle}
             </p>
-            <p className="text-xs sm:text-sm text-slate-600 max-w-3xl leading-relaxed pt-1">
+            <p className="text-xs sm:text-sm text-[#525252] max-w-3xl leading-relaxed pt-1">
               {brand.description || `${brand.name} ${copy.defaultBrandDesc}`}
             </p>
           </div>
@@ -487,9 +487,9 @@ function SupplierProfileBanner({
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <Link
             href={`/ureticiler/${encodeURIComponent(brand.slug || brand.id)}/tanitim${langSuffix}`}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-extrabold no-underline transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-white hover:bg-[#EFECE6] text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] text-xs font-extrabold no-underline transition-colors"
           >
-            <BookOpen size={15} className="text-amber-600" />
+            <BookOpen size={15} className="text-[#8C6D3F]" />
             <span>{copy.storyBtn}</span>
           </Link>
 
@@ -499,7 +499,7 @@ function SupplierProfileBanner({
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackBrandEvent(brand.id, "whatsapp_click")}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
             >
               <MessageCircle size={16} />
               <span>{copy.waDirectBtn}</span>
@@ -509,7 +509,7 @@ function SupplierProfileBanner({
           <button
             type="button"
             onClick={isMemberLoggedIn ? onOpenChat : () => openStoreAuthModal("login")}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold cursor-pointer border-none transition-colors shadow-xs"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold cursor-pointer border-none transition-colors shadow-xs"
           >
             {isMemberLoggedIn ? (
               <>
@@ -526,34 +526,34 @@ function SupplierProfileBanner({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 text-slate-800 text-xs font-extrabold">
-          <Package size={13} className="text-salmon-pink" />
+      <div className="flex flex-wrap gap-2 pt-2 border-t border-[#E5E0D8]">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-white border border-[#E5E0D8] text-[#1C1C1C] text-xs font-extrabold">
+          <Package size={13} className="text-[#8C6D3F]" />
           <span>
             {totalProducts} {copy.activeProductsSuffix}
           </span>
         </span>
         {brand.supports_private_label && (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 text-xs font-bold">
-            <CheckCircle2 size={13} />
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-white text-[#1C1C1C] border border-[#E5E0D8] text-xs font-bold">
+            <CheckCircle2 size={13} className="text-[#8C6D3F]" />
             <span>{copy.privateLabelBadge}</span>
           </span>
         )}
         {brand.supports_fason && (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold">
-            <CheckCircle2 size={13} />
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-white text-[#1C1C1C] border border-[#E5E0D8] text-xs font-bold">
+            <CheckCircle2 size={13} className="text-[#8C6D3F]" />
             <span>{copy.fasonBadge}</span>
           </span>
         )}
         {(brand.min_order_quantity ?? 1) > 1 && (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-white border border-[#E5E0D8] text-[#525252] text-xs font-bold">
             <span>
               {copy.minOrderPrefix}: {brand.min_order_quantity} {copy.seriesUnit}
             </span>
           </span>
         )}
         {brand.export_countries && (
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-200 text-xs font-bold">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-md bg-white text-[#525252] border border-[#E5E0D8] text-xs font-bold">
             <span>
               {copy.exportCountriesPrefix}: {brand.export_countries}
             </span>
@@ -561,7 +561,7 @@ function SupplierProfileBanner({
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-slate-100 text-xs text-slate-700">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-[#E5E0D8] text-xs text-[#525252]">
         {brand.location_address && (
           <div className="flex items-start gap-2">
             <MapPin size={14} className="text-slate-400 shrink-0 mt-0.5" />
@@ -573,7 +573,7 @@ function SupplierProfileBanner({
             <Phone size={14} className="text-slate-400 shrink-0" />
             <a
               href={`tel:${callRaw}`}
-              className="font-bold text-slate-800 hover:text-salmon-pink no-underline"
+              className="font-bold text-[#1C1C1C] hover:underline no-underline"
             >
               Tel: {callRaw}
             </a>
@@ -584,7 +584,7 @@ function SupplierProfileBanner({
             <Mail size={14} className="text-slate-400 shrink-0" />
             <a
               href={`mailto:${brand.public_email}`}
-              className="font-semibold text-slate-700 hover:text-salmon-pink no-underline truncate"
+              className="font-semibold text-[#525252] hover:text-[#1C1C1C] no-underline truncate"
             >
               {brand.public_email}
             </a>
@@ -597,7 +597,7 @@ function SupplierProfileBanner({
               href={brand.website}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold text-slate-700 hover:text-salmon-pink no-underline truncate"
+              className="font-semibold text-[#525252] hover:text-[#1C1C1C] no-underline truncate"
             >
               {brand.website.replace(/^https?:\/\//, "")}
             </a>
@@ -606,13 +606,13 @@ function SupplierProfileBanner({
       </div>
 
       {brand.iban && (
-        <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 text-xs flex flex-wrap items-center gap-2">
-          <CreditCard size={14} className="text-emerald-600 shrink-0" />
-          <span className="font-bold text-slate-800">
+        <div className="bg-white rounded-md p-3 border border-[#E5E0D8] text-xs flex flex-wrap items-center gap-2">
+          <CreditCard size={14} className="text-[#8C6D3F] shrink-0" />
+          <span className="font-bold text-[#1C1C1C]">
             {copy.directIbanTitle} ({brand.bank_name || copy.bankFallback}
             {brand.bank_account_holder ? ` • ${brand.bank_account_holder}` : ""}):
           </span>
-          <span className="font-mono font-extrabold text-slate-900 select-all">{brand.iban}</span>
+          <span className="font-mono font-extrabold text-[#1C1C1C] select-all">{brand.iban}</span>
         </div>
       )}
     </div>
@@ -818,17 +818,17 @@ export default function SupplierShowcaseClient({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <Link
             href={`/ureticiler${langSuffix}`}
-            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-emerald-700 no-underline"
+            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#525252] hover:text-[#1C1C1C] no-underline"
           >
-            <ChevronLeft size={15} />
+            <ChevronLeft size={15} className="rtl:rotate-180" />
             <span>{copy.backToDirectory}</span>
           </Link>
 
           {brand && (
-            <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-white border border-slate-200 shadow-2xs">
+            <div className="inline-flex items-center gap-1.5 p-1 rounded-lg bg-white border border-[#E5E0D8] shadow-2xs">
               <Link
                 href={`/ureticiler/${encodeURIComponent(slug)}${langSuffix}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-extrabold no-underline shadow-xs"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-[#1C1C1C] text-white text-xs font-extrabold no-underline shadow-xs"
               >
                 <Package size={14} />
                 <span>
@@ -837,7 +837,7 @@ export default function SupplierShowcaseClient({
               </Link>
               <Link
                 href={`/ureticiler/${encodeURIComponent(slug)}/tanitim${langSuffix}`}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 no-underline transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold text-[#525252] hover:text-[#1C1C1C] no-underline transition-colors"
               >
                 <BookOpen size={14} />
                 <span>{copy.tabStory}</span>
@@ -853,11 +853,11 @@ export default function SupplierShowcaseClient({
         )}
 
         {!loadingBrand && !brand && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-3">
-            <p className="text-base font-extrabold text-slate-800">{copy.notFoundTitle}</p>
+          <div className="bg-white rounded-lg border border-[#E5E0D8] p-12 text-center space-y-3">
+            <p className="text-base font-extrabold text-[#1C1C1C]">{copy.notFoundTitle}</p>
             <Link
               href={`/ureticiler${langSuffix}`}
-              className="inline-flex px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold no-underline"
+              className="inline-flex px-4 py-2 rounded-md bg-[#1C1C1C] text-white text-xs font-bold no-underline"
             >
               {copy.goToDirectoryBtn}
             </Link>
@@ -875,13 +875,13 @@ export default function SupplierShowcaseClient({
               onOpenChat={() => setIsChatOpen(true)}
             />
 
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="bg-white rounded-lg border border-[#E5E0D8] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-sm sm:text-base font-extrabold text-slate-900">
+                <h2 className="text-sm sm:text-base font-extrabold text-[#1C1C1C]">
                   {brand.name} — {copy.collectionHeadingSuffix} ({totalProducts}{" "}
                   {copy.productCountUnit})
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#525252]">
                   {copy.directShipNotePrefix} {brand.name}
                 </p>
               </div>
@@ -889,14 +889,14 @@ export default function SupplierShowcaseClient({
               <div className="relative w-full sm:w-80">
                 <Search
                   size={15}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="absolute start-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                 />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={copy.searchInBrandPlaceholder}
-                  className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-slate-900"
+                  className="w-full ps-9 pe-3.5 py-2 rounded-md border border-[#D6D1C7] text-xs focus:outline-none focus:border-[#1C1C1C]"
                 />
               </div>
             </div>

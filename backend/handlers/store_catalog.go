@@ -15,16 +15,23 @@ import (
 	"strings"
 	"time"
 
+	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
 
 	"github.com/jackc/pgx/v5"
 )
 
-type StoreCatalogHandler struct{}
+type StoreCatalogHandler struct {
+	Cfg *config.Config
+}
 
-func NewStoreCatalogHandler() *StoreCatalogHandler {
-	return &StoreCatalogHandler{}
+func NewStoreCatalogHandler(cfgs ...*config.Config) *StoreCatalogHandler {
+	var cfg *config.Config
+	if len(cfgs) > 0 {
+		cfg = cfgs[0]
+	}
+	return &StoreCatalogHandler{Cfg: cfg}
 }
 
 func shouldRecordStoreBrandEvent(r *http.Request) bool {
@@ -1308,6 +1315,10 @@ func (h *StoreCatalogHandler) GetStoreSettings(w http.ResponseWriter, r *http.Re
 		log.Printf("[STORE API ERROR] Failed to fetch settings: %v", err)
 		http.Error(w, `{"error":"Failed to fetch settings"}`, http.StatusInternalServerError)
 		return
+	}
+
+	if h != nil && h.Cfg != nil {
+		s.RecaptchaSiteKey = h.Cfg.PublicReCaptchaSiteKey()
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)

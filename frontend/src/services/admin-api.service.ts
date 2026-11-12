@@ -65,6 +65,80 @@ export interface IAdminSettingsService {
   updateStoreSettings(settings: StoreSettingsDTO): Promise<void>;
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: string): boolean {
+  return UUID_PATTERN.test(value.trim());
+}
+
+export function normalizeCanonicalAdminUrl(url: string): string {
+  return url.replace("://www.mertervitrini.com.tr", "://mertervitrini.com.tr");
+}
+
+function extractProductsListFromRecord(record: Record<string, unknown>): Product[] {
+  if (Array.isArray(record.products)) return record.products as Product[];
+  if (Array.isArray(record.items)) return record.items as Product[];
+  if (Array.isArray(record.data)) return record.data as Product[];
+  return [];
+}
+
+function extractTotalFromRecord(record: Record<string, unknown>): number | undefined {
+  if (typeof record.total === "number" && Number.isFinite(record.total)) {
+    return record.total;
+  }
+  if (typeof record.total_count === "number" && Number.isFinite(record.total_count)) {
+    return record.total_count;
+  }
+  return undefined;
+}
+
+function normalizeProductsPayload(
+  payload: unknown,
+  headerTotalRaw: string | null,
+  limit: number,
+  offset: number
+): AdminProductsPage {
+  let products: Product[] = [];
+  let bodyTotal: number | undefined;
+
+  if (Array.isArray(payload)) {
+    products = payload as Product[];
+  } else if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    products = extractProductsListFromRecord(record);
+    bodyTotal = extractTotalFromRecord(record);
+  }
+
+  const parsedHeader = headerTotalRaw ? Number.parseInt(headerTotalRaw, 10) : Number.NaN;
+  if (Number.isFinite(parsedHeader) && parsedHeader >= 0) {
+    return { products, total: parsedHeader };
+  }
+
+  if (bodyTotal !== undefined) {
+    return { products, total: bodyTotal };
+  }
+
+  const fallbackTotal =
+    products.length > 0
+      ? offset + products.length + (products.length >= limit ? 1 : 0)
+      : 0;
+
+  return { products, total: fallbackTotal };
+}
+
+function normalizeSyncRunsPayload(payload: unknown): SyncRun[] {
+  if (Array.isArray(payload)) {
+    return payload as SyncRun[];
+  }
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (Array.isArray(record.syncs)) return record.syncs as SyncRun[];
+    if (Array.isArray(record.items)) return record.items as SyncRun[];
+  }
+  return [];
+}
+
 export class AdminApiService
   implements
     IAdminSessionService,
@@ -93,17 +167,19 @@ export class AdminApiService
 
   readSavedTheme(): "light" | "dark" {
     if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("merter_admin_theme");
-      if (saved === "light" || saved === "dark") {
-        return saved;
-      }
+      localStorage.setItem("merter_admin_theme", "light");
+      document.documentElement.classList.remove("dark");
+      document.body.classList.remove("dark");
     }
     return "light";
   }
 
   saveTheme(theme: "light" | "dark"): void {
+    const normalized: "light" = theme === "dark" ? "light" : "light";
     if (typeof window !== "undefined") {
-      localStorage.setItem("merter_admin_theme", theme);
+      localStorage.setItem("merter_admin_theme", normalized);
+      document.documentElement.classList.remove("dark");
+      document.body.classList.remove("dark");
     }
   }
 
@@ -163,7 +239,7 @@ export class AdminApiService
 
     const params = new URLSearchParams({
       client_id: kcClientId,
-      post_logout_redirect_uri: postLogoutRedirectUri,
+      post_logout_redirect_uri: normalizeCanonicalAdminUrl(postLogoutRedirectUri),
     });
     if (idToken) {
       params.set("id_token_hint", idToken);
@@ -178,7 +254,7 @@ export class AdminApiService
   ): Promise<KeycloakCallbackResult> {
     return this.http.post<KeycloakCallbackResult>(
       "/api/v1/auth/keycloak-callback",
-      { code, redirect_uri: redirectUri }
+      { code, redirect_uri: normalizeCanonicalAdminUrl(redirectUri) }
     );
   }
 
@@ -194,35 +270,57 @@ export class AdminApiService
   async listFeeds(): Promise<XmlFeed[]> {
     const res = await this.http.rawFetch("/api/v1/feeds");
     if (!res.ok) return [];
-    const data = (await res.json()) as XmlFeed[] | null;
-    return Array.isArray(data) ? data : [];
+    const data: unknown = await res.json();
+    if (Array.isArray(data)) {
+      return data as XmlFeed[];
+    }
+    if (data && typeof data === "object") {
+      const record = data as Record<string, unknown>;
+      if (Array.isArray(record.feeds)) return record.feeds as XmlFeed[];
+      if (Array.isArray(record.items)) return record.items as XmlFeed[];
+    }
+    return [];
   }
 
   async listFeedHistory(feedId: string): Promise<SyncRun[]> {
-    const res = await this.http.rawFetch(`/api/v1/feeds/${feedId}/history`);
+    if (!isValidUuid(feedId)) {
+      return [];
+    }
+    const res = await this.http.rawFetch(
+      `/api/v1/feeds/${encodeURIComponent(feedId)}/syncs`
+    );
     if (!res.ok) return [];
-    const runs = (await res.json()) as SyncRun[] | null;
-    return Array.isArray(runs) ? runs : [];
+    const payload: unknown = await res.json();
+    return normalizeSyncRunsPayload(payload);
   }
 
   async triggerSync(feedId: string): Promise<string> {
     const data = await this.http.post<{ sync_run_id?: string }>(
-      `/api/v1/feeds/${feedId}/sync`
+      `/api/v1/feeds/${encodeURIComponent(feedId)}/sync`
     );
     return data.sync_run_id || "running";
   }
 
   async cancelSync(feedId: string): Promise<boolean> {
-    const res = await this.http.rawFetch(`/api/v1/feeds/${feedId}/cancel`, {
-      method: "POST",
-    });
+    const res = await this.http.rawFetch(
+      `/api/v1/feeds/${encodeURIComponent(feedId)}/cancel`,
+      {
+        method: "POST",
+      }
+    );
     return res.ok;
   }
 
   async clearFeedHistory(feedId: string): Promise<boolean> {
-    const res = await this.http.rawFetch(`/api/v1/feeds/${feedId}/history`, {
-      method: "DELETE",
-    });
+    if (!isValidUuid(feedId)) {
+      return true;
+    }
+    const res = await this.http.rawFetch(
+      `/api/v1/feeds/${encodeURIComponent(feedId)}/syncs`,
+      {
+        method: "DELETE",
+      }
+    );
     return res.ok;
   }
 
@@ -261,11 +359,10 @@ export class AdminApiService
     if (!res.ok) {
       return { products: [], total: 0 };
     }
-    const data = (await res.json()) as { products?: Product[]; total?: number };
-    return {
-      products: data.products ?? [],
-      total: data.total ?? 0,
-    };
+    const headerTotal =
+      res.headers.get("X-Total-Count") ?? res.headers.get("x-total-count");
+    const payload: unknown = await res.json();
+    return normalizeProductsPayload(payload, headerTotal, limit, offset);
   }
 
   async getStoreSettings(): Promise<StoreSettingsDTO> {

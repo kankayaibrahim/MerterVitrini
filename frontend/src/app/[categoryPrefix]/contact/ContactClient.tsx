@@ -30,6 +30,10 @@ import {
   normalizeSeoLang,
   safeJsonLd,
 } from "@/utils/seoHelpers";
+import {
+  sanitizePublicStoreAddress,
+  sanitizePublicStoreEmail,
+} from "@/utils/formatters";
 
 export interface StoreSettings {
   id: string;
@@ -703,9 +707,10 @@ export default function ContactClient({
   const sanitizedWhatsapp = (settings.whatsapp || "+90 533 703 08 83").replace(/\D/g, "");
   const whatsappUrl = `https://wa.me/${sanitizedWhatsapp}?text=${encodeURIComponent(texts.waHello)}`;
   const phoneTelUrl = `tel:${(settings.phone || "+90 533 703 08 83").replace(/\s/g, "")}`;
-  const emailAddress = settings.email || "info@mertervitrini.com.tr";
+  const effectiveAddress = sanitizePublicStoreAddress(settings.address);
+  const emailAddress = sanitizePublicStoreEmail(settings.email);
   const emailMailtoUrl = `mailto:${emailAddress}?subject=${encodeURIComponent(texts.emailSubject)}`;
-  const mapDirectionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(settings.address || "Merter Tekstil Merkezi Istanbul")}`;
+  const mapDirectionsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(effectiveAddress)}`;
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -730,10 +735,15 @@ export default function ContactClient({
     );
   };
 
-  const cmsTranslation =
+  const rawCmsTranslation =
     cmsPage?.translations?.[currentLang] ||
     cmsPage?.translations?.en ||
     cmsPage?.translations?.tr;
+  const sanitizedCmsHtml = rawCmsTranslation?.content
+    ? rawCmsTranslation.content
+        .replace(/toptanmoda\.net/gi, "mertervitrini.com.tr")
+        .replace(/Esenyurt/gi, "Merter, Güngören")
+    : "";
 
   const jsonLdData = {
     "@context": "https://schema.org",
@@ -749,7 +759,7 @@ export default function ContactClient({
       logo: `${SITE_ORIGIN}/og-image.jpg`,
       address: {
         "@type": "PostalAddress",
-        streetAddress: settings.address,
+        streetAddress: effectiveAddress,
         addressLocality: "Merter, Güngören",
         addressRegion: "İstanbul",
         addressCountry: "TR",
@@ -761,7 +771,7 @@ export default function ContactClient({
 
   return (
     <div
-      className="min-h-screen flex flex-col bg-zinc-50/70 text-zinc-900 font-sans antialiased selection:bg-violet-500 selection:text-white"
+      className="min-h-screen flex flex-col bg-zinc-50/70 text-[#1C1C1C] font-sans antialiased selection:bg-[#1C1C1C] selection:text-white"
       style={{ direction: currentLang === "ar" ? "rtl" : "ltr" }}
     >
       <script
@@ -787,32 +797,29 @@ export default function ContactClient({
         onCurrencyChange={handleCurrencyChange}
       />
 
-      <div className="w-full bg-white border-b border-zinc-200/60 py-3 px-6 md:px-12 text-xs text-zinc-500 font-medium">
+      <div className="w-full bg-white border-b border-[#E5E0D8] py-3 px-6 md:px-12 text-xs text-zinc-500 font-medium">
         <div className="max-w-[1440px] mx-auto flex items-center gap-2">
-          <a href={`/${categoryPrefix}`} className="hover:text-violet-600 transition-colors">
+          <a href={`/${categoryPrefix}`} className="hover:text-[#1C1C1C] transition-colors">
             {texts.breadcrumbHome}
           </a>
           <span className="text-zinc-300">/</span>
-          <span className="text-zinc-900 font-semibold">{texts.breadcrumbContact}</span>
+          <span className="text-[#1C1C1C] font-semibold">{texts.breadcrumbContact}</span>
         </div>
       </div>
 
-      <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-12 py-10 flex flex-col gap-12">
-        <section className="relative overflow-hidden rounded-3xl bg-white text-zinc-900 p-8 md:p-14 border border-zinc-200/80 shadow-sm">
-          <div className="absolute top-0 right-0 -mr-24 -mt-24 w-96 h-96 rounded-full bg-slate-50/80 blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 -ml-24 -mb-24 w-80 h-80 rounded-full bg-amber-50/40 blur-3xl pointer-events-none" />
-
+      <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-12 py-10 flex flex-col gap-10">
+        <section className="relative overflow-hidden rounded-lg bg-[#F8F6F2] text-[#1C1C1C] p-8 md:p-12 border border-[#E5E0D8] shadow-xs">
           <div className="relative z-10 max-w-3xl flex flex-col gap-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-800 text-xs font-bold w-fit tracking-wide uppercase">
-              <Sparkles size={14} className="text-amber-600" />
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#E5E0D8] text-[#6E542E] text-xs font-bold w-fit tracking-wide uppercase">
+              <Sparkles size={14} className="text-[#8C6D3F]" />
               {texts.heroBadge}
             </div>
 
-            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-zinc-950 leading-tight">
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-[#1C1C1C] leading-tight">
               {texts.heroTitle}
             </h1>
 
-            <p className="text-sm md:text-base text-zinc-600 leading-relaxed font-normal">
+            <p className="text-sm md:text-base text-[#525252] leading-relaxed font-normal">
               {texts.heroSubtitle}
             </p>
 
@@ -821,14 +828,14 @@ export default function ContactClient({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#25D366] hover:bg-[#20ba59] text-white text-xs font-bold shadow-md shadow-emerald-900/10 transition-all hover:scale-105 active:scale-95"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold shadow-xs transition-colors"
               >
                 <MessageSquare size={16} />
                 {texts.chatWhatsappBtn}
               </a>
               <a
                 href={phoneTelUrl}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold border border-zinc-200 transition-all hover:scale-105 active:scale-95"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-bold transition-colors"
               >
                 <Phone size={16} />
                 {texts.callBtn}
@@ -837,7 +844,7 @@ export default function ContactClient({
                 href={mapDirectionsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold border border-zinc-200 transition-all hover:scale-105 active:scale-95"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-white hover:bg-[#EFECE6] text-[#1C1C1C] text-xs font-bold border border-[#D6D1C7] hover:border-[#1C1C1C] transition-colors"
               >
                 <MapPin size={16} />
                 {texts.directionsBtn}
@@ -847,28 +854,28 @@ export default function ContactClient({
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-2xl p-6 border border-zinc-200/80 shadow-sm flex flex-col justify-between gap-4 hover:shadow-md hover:border-violet-300 transition-all group">
+          <div className="bg-white rounded-lg p-6 border border-[#E5E0D8] shadow-xs flex flex-col justify-between gap-4 hover:shadow-md hover:border-[#1C1C1C]/40 transition-all group">
             <div className="flex flex-col gap-3">
-              <div className="w-12 h-12 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center font-bold group-hover:scale-110 group-hover:bg-violet-600 group-hover:text-white transition-all">
-                <Building2 size={24} />
+              <div className="w-12 h-12 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] flex items-center justify-center font-bold group-hover:bg-[#1C1C1C] group-hover:text-white transition-colors">
+                <Building2 size={22} />
               </div>
               <div>
-                <h2 className="text-base font-bold text-zinc-950">{texts.addressTitle}</h2>
+                <h2 className="text-base font-bold text-[#1C1C1C]">{texts.addressTitle}</h2>
                 <p className="text-xs text-zinc-500 mt-0.5">{texts.addressDesc}</p>
               </div>
-              <p className="text-xs font-medium text-zinc-800 leading-relaxed bg-zinc-50 p-3 rounded-xl border border-zinc-100 select-all">
-                {settings.address}
+              <p className="text-xs font-medium text-[#1C1C1C] leading-relaxed bg-[#F8F6F2] p-3 rounded-md border border-[#E5E0D8] select-all">
+                {effectiveAddress}
               </p>
             </div>
 
             <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
               <button
                 type="button"
-                onClick={() => handleCopy(settings.address, "address")}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 transition-all cursor-pointer"
+                onClick={() => handleCopy(effectiveAddress, "address")}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-semibold text-[#1C1C1C] bg-white border border-[#D6D1C7] hover:border-[#1C1C1C] hover:bg-[#F8F6F2] transition-colors cursor-pointer"
               >
                 {copiedKey === "address" ? (
-                  <Check size={14} className="text-emerald-600" />
+                  <Check size={14} className="text-[#15803D]" />
                 ) : (
                   <Copy size={14} />
                 )}
@@ -878,7 +885,7 @@ export default function ContactClient({
                 href={mapDirectionsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-2 rounded-lg text-zinc-500 hover:text-violet-600 hover:bg-violet-50 transition-all"
+                className="p-2 rounded-md text-zinc-500 hover:text-[#1C1C1C] hover:bg-[#F8F6F2] border border-transparent hover:border-[#D6D1C7] transition-colors"
                 title={texts.showOnMap}
                 aria-label={texts.showOnMap}
               >
@@ -887,22 +894,22 @@ export default function ContactClient({
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 border border-zinc-200/80 shadow-sm flex flex-col justify-between gap-4 hover:shadow-md hover:border-emerald-300 transition-all group">
+          <div className="bg-white rounded-lg p-6 border border-[#E5E0D8] shadow-xs flex flex-col justify-between gap-4 hover:shadow-md hover:border-[#15803D]/50 transition-all group">
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold group-hover:scale-110 group-hover:bg-emerald-600 group-hover:text-white transition-all">
-                  <MessageSquare size={24} />
+                <div className="w-12 h-12 rounded-md bg-emerald-50 text-[#15803D] border border-emerald-200 flex items-center justify-center font-bold group-hover:bg-[#15803D] group-hover:text-white transition-colors">
+                  <MessageSquare size={22} />
                 </div>
-                <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="flex items-center gap-1 text-[11px] font-bold text-[#15803D] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-[#15803D] animate-pulse" />
                   <span>{texts.onlineBadge}</span>
                 </span>
               </div>
               <div>
-                <h2 className="text-base font-bold text-zinc-950">{texts.whatsappTitle}</h2>
+                <h2 className="text-base font-bold text-[#1C1C1C]">{texts.whatsappTitle}</h2>
                 <p className="text-xs text-zinc-500 mt-0.5">{texts.whatsappDesc}</p>
               </div>
-              <p className="text-sm font-bold text-emerald-700 bg-emerald-50/60 p-3 rounded-xl border border-emerald-100 tracking-wide font-mono select-all">
+              <p className="text-sm font-bold text-[#15803D] bg-emerald-50/60 p-3 rounded-md border border-emerald-200 tracking-wide font-mono select-all">
                 {settings.whatsapp}
               </p>
             </div>
@@ -912,7 +919,7 @@ export default function ContactClient({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all"
+                className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-xs font-bold text-white bg-[#15803D] hover:bg-[#166534] shadow-xs transition-colors"
               >
                 <MessageSquare size={14} />
                 {texts.chatWhatsappBtn}
@@ -920,16 +927,16 @@ export default function ContactClient({
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 border border-zinc-200/80 shadow-sm flex flex-col justify-between gap-4 hover:shadow-md hover:border-blue-300 transition-all group">
+          <div className="bg-white rounded-lg p-6 border border-[#E5E0D8] shadow-xs flex flex-col justify-between gap-4 hover:shadow-md hover:border-[#1C1C1C]/40 transition-all group">
             <div className="flex flex-col gap-3">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                <Phone size={24} />
+              <div className="w-12 h-12 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] flex items-center justify-center font-bold group-hover:bg-[#1C1C1C] group-hover:text-white transition-colors">
+                <Phone size={22} />
               </div>
               <div>
-                <h2 className="text-base font-bold text-zinc-950">{texts.phoneTitle}</h2>
+                <h2 className="text-base font-bold text-[#1C1C1C]">{texts.phoneTitle}</h2>
                 <p className="text-xs text-zinc-500 mt-0.5">{texts.phoneDesc}</p>
               </div>
-              <p className="text-sm font-bold text-zinc-900 bg-zinc-50 p-3 rounded-xl border border-zinc-100 tracking-wide font-mono select-all">
+              <p className="text-sm font-bold text-[#1C1C1C] bg-[#F8F6F2] p-3 rounded-md border border-[#E5E0D8] tracking-wide font-mono select-all">
                 {settings.phone}
               </p>
             </div>
@@ -937,7 +944,7 @@ export default function ContactClient({
             <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
               <a
                 href={phoneTelUrl}
-                className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-all"
+                className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-xs font-bold text-white bg-[#1C1C1C] hover:bg-[#333333] shadow-xs transition-colors"
               >
                 <Phone size={14} />
                 {texts.callBtn}
@@ -945,16 +952,16 @@ export default function ContactClient({
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 border border-zinc-200/80 shadow-sm flex flex-col justify-between gap-4 hover:shadow-md hover:border-violet-300 transition-all group">
+          <div className="bg-white rounded-lg p-6 border border-[#E5E0D8] shadow-xs flex flex-col justify-between gap-4 hover:shadow-md hover:border-[#1C1C1C]/40 transition-all group">
             <div className="flex flex-col gap-3">
-              <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold group-hover:scale-110 group-hover:bg-purple-600 group-hover:text-white transition-all">
-                <Mail size={24} />
+              <div className="w-12 h-12 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] flex items-center justify-center font-bold group-hover:bg-[#1C1C1C] group-hover:text-white transition-colors">
+                <Mail size={22} />
               </div>
               <div>
-                <h2 className="text-base font-bold text-zinc-950">{texts.emailTitle}</h2>
+                <h2 className="text-base font-bold text-[#1C1C1C]">{texts.emailTitle}</h2>
                 <p className="text-xs text-zinc-500 mt-0.5">{texts.emailDesc}</p>
               </div>
-              <p className="text-xs font-bold text-purple-900 bg-purple-50/50 p-3 rounded-xl border border-purple-100 font-mono break-all select-all">
+              <p className="text-xs font-bold text-[#1C1C1C] bg-[#F8F6F2] p-3 rounded-md border border-[#E5E0D8] font-mono break-all select-all">
                 {emailAddress}
               </p>
             </div>
@@ -962,7 +969,7 @@ export default function ContactClient({
             <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
               <a
                 href={emailMailtoUrl}
-                className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-sm transition-all"
+                className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-xs font-bold text-[#1C1C1C] bg-white border border-[#D6D1C7] hover:border-[#1C1C1C] hover:bg-[#F8F6F2] transition-colors"
               >
                 <Mail size={14} />
                 {texts.sendEmailBtn}
@@ -971,33 +978,33 @@ export default function ContactClient({
           </div>
         </section>
 
-        <section className="bg-white rounded-2xl p-6 border border-zinc-200/80 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+        <section className="bg-white rounded-lg p-6 border border-[#E5E0D8] shadow-xs flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-              <Clock size={24} />
+            <div className="w-12 h-12 rounded-md bg-[#F8F6F2] border border-[#E5E0D8] text-[#8C6D3F] flex items-center justify-center shrink-0">
+              <Clock size={22} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-zinc-950">{texts.hoursTitle}</h3>
-              <div className="text-xs text-zinc-600 flex flex-wrap gap-x-4 gap-y-1 mt-1 font-medium">
+              <h3 className="text-sm font-bold text-[#1C1C1C]">{texts.hoursTitle}</h3>
+              <div className="text-xs text-[#525252] flex flex-wrap gap-x-4 gap-y-1 mt-1 font-medium">
                 <span>{texts.hoursWeekday}</span>
                 <span className="text-zinc-300 hidden md:inline">•</span>
                 <span>{texts.hoursSaturday}</span>
                 <span className="text-zinc-300 hidden md:inline">•</span>
-                <span className="text-amber-700 font-semibold">{texts.hoursSunday}</span>
+                <span className="text-[#6E542E] font-semibold">{texts.hoursSunday}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-zinc-500 shrink-0">
-            <ShieldCheck size={18} className="text-emerald-600 shrink-0" />
+          <div className="flex items-center gap-3 text-xs text-[#525252] shrink-0">
+            <ShieldCheck size={18} className="text-[#15803D] shrink-0" />
             <span>{texts.officialNetworkBadge}</span>
           </div>
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-7 bg-white rounded-3xl p-8 border border-zinc-200/80 shadow-sm flex flex-col gap-6">
+          <div className="lg:col-span-7 bg-white rounded-lg p-8 border border-[#E5E0D8] shadow-xs flex flex-col gap-6">
             <div>
-              <h2 className="text-2xl font-bold text-zinc-950 tracking-tight">
+              <h2 className="text-2xl font-bold text-[#1C1C1C] tracking-tight">
                 {texts.formTitle}
               </h2>
               <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed font-medium">
@@ -1006,8 +1013,8 @@ export default function ContactClient({
             </div>
 
             {isSubmitted ? (
-              <div className="p-8 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col items-center justify-center text-center gap-3">
-                <CheckCircle2 size={48} className="text-emerald-600" />
+              <div className="p-8 rounded-lg bg-emerald-50 border border-emerald-200 flex flex-col items-center justify-center text-center gap-3">
+                <CheckCircle2 size={48} className="text-[#15803D]" />
                 <h3 className="text-lg font-bold text-emerald-950">
                   {texts.formSuccessTitle}
                 </h3>
@@ -1017,7 +1024,7 @@ export default function ContactClient({
                 <button
                   type="button"
                   onClick={() => setIsSubmitted(false)}
-                  className="mt-2 text-xs font-bold text-emerald-700 hover:text-emerald-900 underline cursor-pointer"
+                  className="mt-2 text-xs font-bold text-[#15803D] hover:text-emerald-900 underline cursor-pointer"
                 >
                   {texts.formSendAnother}
                 </button>
@@ -1037,7 +1044,7 @@ export default function ContactClient({
                         setFormData((prev) => ({ ...prev, fullName: e.target.value }))
                       }
                       placeholder={texts.formFullNamePh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
 
@@ -1052,7 +1059,7 @@ export default function ContactClient({
                         setFormData((prev) => ({ ...prev, company: e.target.value }))
                       }
                       placeholder={texts.formCompanyPh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
                 </div>
@@ -1070,7 +1077,7 @@ export default function ContactClient({
                         setFormData((prev) => ({ ...prev, phone: e.target.value }))
                       }
                       placeholder={texts.formPhonePh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
 
@@ -1086,7 +1093,7 @@ export default function ContactClient({
                         setFormData((prev) => ({ ...prev, email: e.target.value }))
                       }
                       placeholder={texts.formEmailPh}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all"
+                      className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                     />
                   </div>
                 </div>
@@ -1102,7 +1109,7 @@ export default function ContactClient({
                       setFormData((prev) => ({ ...prev, country: e.target.value }))
                     }
                     placeholder={texts.formCountryPh}
-                    className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all"
+                    className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors"
                   />
                 </div>
 
@@ -1118,14 +1125,14 @@ export default function ContactClient({
                       setFormData((prev) => ({ ...prev, message: e.target.value }))
                     }
                     placeholder={texts.formMessagePh}
-                    className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 transition-all leading-relaxed"
+                    className="px-4 py-2.5 rounded-md border border-[#D6D1C7] text-sm focus:outline-none focus:border-[#1C1C1C] transition-colors leading-relaxed"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="mt-2 inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white text-sm font-bold shadow-md shadow-violet-600/20 active:scale-[0.98] transition-all cursor-pointer"
+                  className="mt-2 inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-md bg-[#1C1C1C] hover:bg-[#333333] disabled:bg-zinc-400 text-white text-sm font-bold shadow-xs transition-colors cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
@@ -1144,10 +1151,10 @@ export default function ContactClient({
           </div>
 
           <div className="lg:col-span-5 flex flex-col gap-4">
-            <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-sm flex flex-col gap-4">
+            <div className="bg-white rounded-lg p-6 border border-[#E5E0D8] shadow-xs flex flex-col gap-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-zinc-950 flex items-center gap-2">
-                  <MapPin size={18} className="text-violet-600" />
+                <h2 className="text-base font-bold text-[#1C1C1C] flex items-center gap-2">
+                  <MapPin size={18} className="text-[#8C6D3F]" />
                   {texts.mapTitle}
                 </h2>
                 <span className="text-[11px] font-semibold text-zinc-500">
@@ -1155,7 +1162,7 @@ export default function ContactClient({
                 </span>
               </div>
 
-              <div className="w-full h-80 rounded-2xl overflow-hidden border border-zinc-200 relative bg-zinc-100">
+              <div className="w-full h-80 rounded-lg overflow-hidden border border-[#E5E0D8] relative bg-zinc-100">
                 <iframe
                   title={texts.mapTitle}
                   src="https://maps.google.com/maps?q=Merter%20Gungoren%20Istanbul&t=&z=14&ie=UTF8&iwloc=&output=embed"
@@ -1169,9 +1176,9 @@ export default function ContactClient({
                 />
               </div>
 
-              <div className="p-4 bg-zinc-50 rounded-xl border border-zinc-200/60 flex flex-col gap-2 text-xs text-zinc-600">
-                <div className="font-bold text-zinc-900 flex items-center gap-1.5">
-                  <Building2 size={14} className="text-violet-600" />
+              <div className="p-4 bg-[#F8F6F2] rounded-md border border-[#E5E0D8] flex flex-col gap-2 text-xs text-[#525252]">
+                <div className="font-bold text-[#1C1C1C] flex items-center gap-1.5">
+                  <Building2 size={14} className="text-[#8C6D3F]" />
                   {texts.transitTitle}
                 </div>
                 <p className="leading-relaxed">{texts.transitDesc}</p>
@@ -1179,7 +1186,7 @@ export default function ContactClient({
                   href={mapDirectionsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-1 inline-flex items-center gap-1 text-violet-600 hover:text-violet-800 font-bold transition-colors"
+                  className="mt-1 inline-flex items-center gap-1 text-[#1C1C1C] hover:text-[#6E542E] font-bold transition-colors"
                 >
                   {texts.liveMapLink} <ArrowRight size={12} className="rtl:rotate-180" />
                 </a>
@@ -1188,15 +1195,15 @@ export default function ContactClient({
           </div>
         </section>
 
-        {cmsTranslation?.content && (
-          <section className="bg-white rounded-3xl p-8 md:p-12 border border-zinc-200/80 shadow-sm flex flex-col gap-6">
+        {sanitizedCmsHtml && (
+          <section className="bg-white rounded-lg p-8 md:p-10 border border-[#E5E0D8] shadow-xs flex flex-col gap-6">
             <div className="border-b border-zinc-100 pb-4">
-              <h2 className="text-2xl font-bold text-zinc-950">
-                {cmsTranslation.title || texts.cmsSectionTitle}
+              <h2 className="text-2xl font-bold text-[#1C1C1C]">
+                {rawCmsTranslation?.title || texts.cmsSectionTitle}
               </h2>
             </div>
-            <div className="prose prose-zinc max-w-none text-sm text-zinc-700 leading-relaxed">
-              <SafeHtml html={cmsTranslation.content} />
+            <div className="prose prose-zinc max-w-none text-sm text-[#525252] leading-relaxed">
+              <SafeHtml html={sanitizedCmsHtml} />
             </div>
           </section>
         )}

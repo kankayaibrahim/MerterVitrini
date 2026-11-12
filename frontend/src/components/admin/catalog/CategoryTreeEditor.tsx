@@ -66,6 +66,58 @@ const LANGUAGES = [
   { code: "fr", label: "FR", name: "Français" },
 ];
 
+const TURKISH_CHAR_MAP: Readonly<Record<string, string>> = {
+  ç: "c",
+  Ç: "c",
+  ğ: "g",
+  Ğ: "g",
+  ı: "i",
+  I: "i",
+  İ: "i",
+  ö: "o",
+  Ö: "o",
+  ş: "s",
+  Ş: "s",
+  ü: "u",
+  Ü: "u",
+};
+
+function slugifyTurkishTitle(title: string): string {
+  const mapped = Array.from(title || "")
+    .map((ch) => TURKISH_CHAR_MAP[ch] ?? ch)
+    .join("");
+  return mapped
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
+}
+
+function isLikelyRawHexSegment(segment: string): boolean {
+  return /^[0-9a-f]{24,}$/i.test(segment.replaceAll("-", ""));
+}
+
+function resolveCategorySlug(node: CategoryNode): string {
+  const rawRecord = node as unknown as Record<string, unknown>;
+  const directSlug = rawRecord.slug;
+  if (typeof directSlug === "string" && directSlug.trim() && !isLikelyRawHexSegment(directSlug.trim())) {
+    return directSlug.trim();
+  }
+
+  const trRecord = node.translations?.tr as Record<string, unknown> | undefined;
+  const trSlug = trRecord?.slug;
+  if (typeof trSlug === "string" && trSlug.trim() && !isLikelyRawHexSegment(trSlug.trim())) {
+    return trSlug.trim();
+  }
+
+  const segments = (node.node_path || "").split(".").filter(Boolean);
+  const lastSegment = segments.at(-1) ?? "";
+  if (lastSegment && !isLikelyRawHexSegment(lastSegment)) {
+    return lastSegment.replaceAll("_", "-");
+  }
+
+  return slugifyTurkishTitle(node.title) || "kategori";
+}
+
 interface CategoryTreeEditorProps {
   categories: CategoryNode[];
   onRefresh: () => Promise<void>;
@@ -297,9 +349,9 @@ export default function CategoryTreeEditor({
               {node.title}
             </span>
 
-            {/* Path description badge (Ltree) */}
-            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-100/70 px-2 py-0.5 rounded border border-zinc-200/40 hidden md:inline-block">
-              {node.node_path}
+            {/* Slug badge */}
+            <span className="text-[10px] font-mono text-zinc-500 bg-zinc-100/80 px-2 py-0.5 rounded border border-zinc-200/60 hidden md:inline-block">
+              {resolveCategorySlug(node)}
             </span>
 
             {/* Status indicators */}

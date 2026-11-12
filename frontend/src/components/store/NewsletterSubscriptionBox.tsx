@@ -28,7 +28,7 @@ const NEWSLETTER_TEXTS: Record<SupportedLangCode, NewsletterLabels> = {
       "Doğrulanmış Merter üreticilerinin yeni sezon serileri, Private Label/Fason kapasite duyuruları ve ihracat bültenleri doğrudan e-postanıza gelsin.",
     emailPlaceholder: "Kurumsal E-Posta Adresiniz *",
     companyPlaceholder: "Firma / Butik Adı (Opsiyonel)",
-    countryPlaceholder: "Ülke (Örn: Türkiye, Almanya)",
+    countryPlaceholder: "Ülke",
     consentLabel:
       "6563 sayılı ETK ve KVKK kapsamında yeni koleksiyon, üretici fırsatları ve B2B bültenleri için ticari elektronik ileti gönderilmesini kabul ediyorum.",
     submitBtn: "BÜLTENE KAYDOL",
@@ -45,7 +45,7 @@ const NEWSLETTER_TEXTS: Record<SupportedLangCode, NewsletterLabels> = {
       "Get weekly updates on verified Merter manufacturers, new season size-run packs, and Private Label production availability.",
     emailPlaceholder: "Business Email Address *",
     companyPlaceholder: "Company / Boutique Name (Optional)",
-    countryPlaceholder: "Country (e.g., Germany, UK)",
+    countryPlaceholder: "Country",
     consentLabel:
       "I agree to receive B2B wholesale collection alerts and commercial electronic communications in accordance with GDPR/KVKK data privacy policies.",
     submitBtn: "SUBSCRIBE",
@@ -62,7 +62,7 @@ const NEWSLETTER_TEXTS: Record<SupportedLangCode, NewsletterLabels> = {
       "Еженедельные обзоры проверенных производителей Мертер, новые серийные коллекции и возможности пошива Private Label.",
     emailPlaceholder: "Ваш рабочий Email *",
     companyPlaceholder: "Название компании / бутика",
-    countryPlaceholder: "Страна (например: Россия, Казахстан)",
+    countryPlaceholder: "Страна",
     consentLabel:
       "Я согласен(на) получать информационные и коммерческие B2B-рассылки о новых коллекциях в соответствии с политикой конфиденциальности.",
     submitBtn: "ПОДПИСАТЬСЯ",
@@ -79,7 +79,7 @@ const NEWSLETTER_TEXTS: Record<SupportedLangCode, NewsletterLabels> = {
       "اشترك لتصلك أحدث تشكيلات السيريه، عروض المصانع المعتمدة، وفرص التصنيع للغير (Private Label) مباشرة إلى بريدك الإلكتروني.",
     emailPlaceholder: "البريد الإلكتروني التجاري *",
     companyPlaceholder: "اسم الشركة / البوتيك (اختياري)",
-    countryPlaceholder: "الدولة (مثال: الإمارات، السعودية)",
+    countryPlaceholder: "الدولة",
     consentLabel:
       "أوافق على استلام النشرات التجارية وإشعارات التشكيلات الجديدة بالجملة وفقاً لسياسة الخصوصية وحماية البيانات.",
     submitBtn: "اشترك الآن",
@@ -96,7 +96,7 @@ const NEWSLETTER_TEXTS: Record<SupportedLangCode, NewsletterLabels> = {
       "Wöchentliche Updates zu verifizierten Merter-Herstellern, neuen Serienpaketen und freien Private-Label-Produktionskapazitäten.",
     emailPlaceholder: "Geschäftliche E-Mail-Adresse *",
     companyPlaceholder: "Firma / Boutique (Optional)",
-    countryPlaceholder: "Land (z. B. Deutschland, Österreich)",
+    countryPlaceholder: "Land",
     consentLabel:
       "Ich stimme dem Erhalt von B2B-Kollektionsbenachrichtigungen und geschäftlichen E-Mails gemäß den DSGVO-/KVKK-Datenschutzrichtlinien zu.",
     submitBtn: "ABONNIEREN",
@@ -113,7 +113,7 @@ const NEWSLETTER_TEXTS: Record<SupportedLangCode, NewsletterLabels> = {
       "Recevez chaque semaine les nouveautés des fabricants vérifiés de Merter, les lots assortis de saison et les disponibilités Private Label.",
     emailPlaceholder: "Adresse E-mail Professionnelle *",
     companyPlaceholder: "Entreprise / Boutique (Facultatif)",
-    countryPlaceholder: "Pays (ex. : France, Belgique)",
+    countryPlaceholder: "Pays",
     consentLabel:
       "J'accepte de recevoir les alertes de collections B2B et les communications commerciales conformément au RGPD et à la politique de confidentialité.",
     submitBtn: "S'ABONNER",
@@ -130,7 +130,7 @@ const NEWSLETTER_TEXTS: Record<SupportedLangCode, NewsletterLabels> = {
       "Cotygodniowe powiadomienia o zweryfikowanych producentach z Merter, nowych seriach sezonowych i mocach produkcyjnych Private Label.",
     emailPlaceholder: "Firmowy adres e-mail *",
     companyPlaceholder: "Nazwa firmy / butiku (Opcjonalnie)",
-    countryPlaceholder: "Kraj (np. Polska, Niemcy)",
+    countryPlaceholder: "Kraj",
     consentLabel:
       "Wyrażam zgodę na otrzymywanie powiadomień o kolekcjach hurtowych B2B oraz informacji handlowych zgodnie z polityką prywatności RODO/KVKK.",
     submitBtn: "ZAPISZ SIĘ",
@@ -147,7 +147,7 @@ const NEWSLETTER_TEXTS: Record<SupportedLangCode, NewsletterLabels> = {
       "Седмични известия за проверени производители от Мертер, нови сезонни серии и капацитет за Private Label производство.",
     emailPlaceholder: "Служебен имейл адрес *",
     companyPlaceholder: "Име на фирма / бутик (По избор)",
-    countryPlaceholder: "Държава (напр. България, Румъния)",
+    countryPlaceholder: "Държава",
     consentLabel:
       "Съгласен/на съм да получавам B2B известия за нови колекции и търговски съобщения в съответствие с политиката за поверителност GDPR/KVKK.",
     submitBtn: "АБОНИРАЙ СЕ",
@@ -213,14 +213,14 @@ export default function NewsletterSubscriptionBox({
   };
 
   return (
-    <div className="max-w-[1720px] mx-auto mb-12 bg-[#FAFAFA] border border-cultured p-6 sm:p-8">
+    <div className="max-w-[1720px] mx-auto mb-12 bg-[#F8F6F2] border border-[#E5E0D8] rounded-lg p-6 sm:p-8">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
         <div className="lg:col-span-5 space-y-2">
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[2px] text-amber-700">
-            <Sparkles className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[2px] text-[#6E542E]">
+            <Sparkles className="w-3.5 h-3.5 text-[#8C6D3F]" />
             <span>{L.badge}</span>
           </span>
-          <h3 className="font-serif font-bold text-base sm:text-lg text-eerie-black leading-snug">
+          <h3 className="font-serif font-bold text-base sm:text-lg text-[#1C1C1C] leading-snug">
             {L.title}
           </h3>
           <p className="text-xs text-sonic-silver leading-relaxed">{L.subtitle}</p>
@@ -228,22 +228,22 @@ export default function NewsletterSubscriptionBox({
 
         <div className="lg:col-span-7">
           {success ? (
-            <div className="bg-emerald-50 border border-emerald-200 p-4 flex items-center gap-3 text-emerald-900 text-xs font-bold">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div className="bg-emerald-50 border border-emerald-200 rounded-md p-4 flex items-center gap-3 text-[#15803D] text-xs font-bold">
+              <CheckCircle2 className="w-5 h-5 text-[#15803D] shrink-0" />
               <span>{L.successMsg}</span>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-sonic-silver absolute left-3 top-1/2 -translate-y-1/2" />
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                <div className="relative sm:col-span-4">
+                  <Mail className="w-4 h-4 text-sonic-silver absolute start-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder={L.emailPlaceholder}
-                    className="w-full bg-white border border-cultured pl-9 pr-3 py-2.5 text-xs font-semibold text-eerie-black focus:outline-none focus:border-black"
+                    className="w-full bg-white border border-[#D6D1C7] rounded-md ps-9 pe-3 py-2.5 text-xs font-semibold text-[#1C1C1C] focus:outline-none focus:border-[#1C1C1C]"
                   />
                 </div>
                 <input
@@ -251,20 +251,20 @@ export default function NewsletterSubscriptionBox({
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder={L.companyPlaceholder}
-                  className="w-full bg-white border border-cultured px-3 py-2.5 text-xs font-semibold text-eerie-black focus:outline-none focus:border-black"
+                  className="sm:col-span-3 w-full bg-white border border-[#D6D1C7] rounded-md px-3 py-2.5 text-xs font-semibold text-[#1C1C1C] focus:outline-none focus:border-[#1C1C1C]"
                 />
-                <div className="flex gap-2">
+                <div className="sm:col-span-5 flex gap-2">
                   <input
                     type="text"
                     value={country}
                     onChange={(e) => setCountry(e.target.value)}
                     placeholder={L.countryPlaceholder}
-                    className="w-full bg-white border border-cultured px-3 py-2.5 text-xs font-semibold text-eerie-black focus:outline-none focus:border-black"
+                    className="flex-1 min-w-[120px] bg-white border border-[#D6D1C7] rounded-md px-3 py-2.5 text-xs font-semibold text-[#1C1C1C] focus:outline-none focus:border-[#1C1C1C]"
                   />
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-5 py-2.5 bg-black hover:bg-amber-600 text-white text-[11px] font-extrabold uppercase tracking-wider shrink-0 cursor-pointer border-none transition-colors disabled:opacity-50"
+                    className="px-5 py-2.5 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md text-[11px] font-bold uppercase tracking-wider shrink-0 cursor-pointer border-none transition-colors disabled:opacity-50 whitespace-nowrap"
                   >
                     {submitting ? L.submittingBtn : L.submitBtn}
                   </button>

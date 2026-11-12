@@ -9,6 +9,7 @@ import {
   buildQueryLangAlternates,
   normalizeSeoLang,
   safeJsonLd,
+  stripBrandTitleSuffix,
 } from "@/utils/seoHelpers";
 
 interface MobileSeoMetaCopy {
@@ -81,7 +82,7 @@ export async function generateMetadata({
   const alternates = buildQueryLangAlternates("/mobil-uygulama", lang);
 
   return {
-    title: meta.title,
+    title: stripBrandTitleSuffix(meta.title),
     description: meta.description,
     keywords: GLOBAL_B2B_SEO_MATRIX[lang].keywords,
     alternates,

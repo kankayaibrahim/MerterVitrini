@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import {
   Building2,
   Phone,
@@ -39,6 +40,72 @@ export interface SupplierBrandProfile {
   iban: string;
 }
 
+type DescLangCode = "tr" | "en" | "ru" | "ar";
+
+const DESCRIPTION_LANG_OPTIONS: ReadonlyArray<{
+  code: DescLangCode;
+  flagCode: string;
+  label: string;
+}> = [
+  { code: "tr", flagCode: "tr", label: "TR" },
+  { code: "en", flagCode: "gb", label: "EN" },
+  { code: "ru", flagCode: "ru", label: "RU" },
+  { code: "ar", flagCode: "sa", label: "AR" },
+];
+
+interface NormalizedBrandProfileForm {
+  brandName: string;
+  companyType: string;
+  description: string;
+  descTranslations: Record<string, string>;
+  whatsappPhone: string;
+  phone: string;
+  publicEmail: string;
+  website: string;
+  instagramHandle: string;
+  locationAddress: string;
+  exportCountries: string;
+  minOrderQty: number;
+  supportsPrivateLabel: boolean;
+  supportsFason: boolean;
+  bankName: string;
+  bankAccountHolder: string;
+  iban: string;
+  isVerified: boolean;
+}
+
+function strOrEmpty(val?: string): string {
+  return val || "";
+}
+
+function normalizeBrandProfileToForm(bp: SupplierBrandProfile): NormalizedBrandProfileForm {
+  const dt = bp.description_translations;
+  return {
+    brandName: strOrEmpty(bp.name),
+    companyType: bp.company_type || "uretici_toptanci",
+    description: strOrEmpty(bp.description),
+    descTranslations: {
+      en: strOrEmpty(dt?.en),
+      ru: strOrEmpty(dt?.ru),
+      ar: strOrEmpty(dt?.ar),
+    },
+    whatsappPhone: bp.whatsapp_phone || strOrEmpty(bp.phone),
+    phone: strOrEmpty(bp.phone),
+    publicEmail: strOrEmpty(bp.public_email),
+    website: strOrEmpty(bp.website),
+    instagramHandle: strOrEmpty(bp.instagram_handle),
+    locationAddress: strOrEmpty(bp.location_address),
+    exportCountries: strOrEmpty(bp.export_countries),
+    minOrderQty: bp.min_order_quantity || 1,
+    supportsPrivateLabel: Boolean(bp.supports_private_label),
+    supportsFason: Boolean(bp.supports_fason),
+    bankName: strOrEmpty(bp.bank_name),
+    bankAccountHolder: strOrEmpty(bp.bank_account_holder),
+    iban: strOrEmpty(bp.iban),
+    isVerified: bp.is_verified !== false,
+  };
+}
+
 export default function SupplierProfilePanel({
   getToken,
   onProfileSaved,
@@ -59,7 +126,7 @@ export default function SupplierProfilePanel({
     ru: "",
     ar: "",
   });
-  const [activeDescLang, setActiveDescLang] = useState<"tr" | "en" | "ru" | "ar">("tr");
+  const [activeDescLang, setActiveDescLang] = useState<DescLangCode>("tr");
   const [autoTranslatingDesc, setAutoTranslatingDesc] = useState(false);
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [phone, setPhone] = useState("");
@@ -78,6 +145,28 @@ export default function SupplierProfilePanel({
 
   useEffect(() => {
     let ignore = false;
+
+    const applyNormalized = (norm: NormalizedBrandProfileForm) => {
+      setBrandName(norm.brandName);
+      setCompanyType(norm.companyType);
+      setDescription(norm.description);
+      setDescTranslations(norm.descTranslations);
+      setWhatsappPhone(norm.whatsappPhone);
+      setPhone(norm.phone);
+      setPublicEmail(norm.publicEmail);
+      setWebsite(norm.website);
+      setInstagramHandle(norm.instagramHandle);
+      setLocationAddress(norm.locationAddress);
+      setExportCountries(norm.exportCountries);
+      setMinOrderQty(norm.minOrderQty);
+      setSupportsPrivateLabel(norm.supportsPrivateLabel);
+      setSupportsFason(norm.supportsFason);
+      setBankName(norm.bankName);
+      setBankAccountHolder(norm.bankAccountHolder);
+      setIban(norm.iban);
+      setIsVerified(norm.isVerified);
+    };
+
     async function initBrandProfile() {
       const token = getToken();
       if (!token) {
@@ -89,31 +178,9 @@ export default function SupplierProfilePanel({
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok && !ignore) {
-          const data = await res.json();
-          const bp: SupplierBrandProfile | undefined = data.brand_profile;
-          if (bp) {
-            setBrandName(bp.name || "");
-            setCompanyType(bp.company_type || "uretici_toptanci");
-            setDescription(bp.description || "");
-            setDescTranslations({
-              en: bp.description_translations?.en || "",
-              ru: bp.description_translations?.ru || "",
-              ar: bp.description_translations?.ar || "",
-            });
-            setWhatsappPhone(bp.whatsapp_phone || bp.phone || "");
-            setPhone(bp.phone || "");
-            setPublicEmail(bp.public_email || "");
-            setWebsite(bp.website || "");
-            setInstagramHandle(bp.instagram_handle || "");
-            setLocationAddress(bp.location_address || "");
-            setExportCountries(bp.export_countries || "");
-            setMinOrderQty(bp.min_order_quantity || 1);
-            setSupportsPrivateLabel(Boolean(bp.supports_private_label));
-            setSupportsFason(Boolean(bp.supports_fason));
-            setBankName(bp.bank_name || "");
-            setBankAccountHolder(bp.bank_account_holder || "");
-            setIban(bp.iban || "");
-            setIsVerified(bp.is_verified !== false);
+          const data = (await res.json()) as { brand_profile?: SupplierBrandProfile };
+          if (data.brand_profile) {
+            applyNormalized(normalizeBrandProfileToForm(data.brand_profile));
           }
         }
       } catch (err) {
@@ -122,6 +189,7 @@ export default function SupplierProfilePanel({
         if (!ignore) setLoading(false);
       }
     }
+
     void initBrandProfile();
     return () => {
       ignore = true;
@@ -146,13 +214,15 @@ export default function SupplierProfilePanel({
         }),
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as {
+          translations?: Record<string, { description?: string }>;
+        };
         const t = data.translations || {};
-        setDescTranslations({
-          en: t.en?.description || descTranslations.en || "",
-          ru: t.ru?.description || descTranslations.ru || "",
-          ar: t.ar?.description || descTranslations.ar || "",
-        });
+        setDescTranslations((prev) => ({
+          en: t.en?.description || prev.en || "",
+          ru: t.ru?.description || prev.ru || "",
+          ar: t.ar?.description || prev.ar || "",
+        }));
       }
     } catch (err) {
       console.error("Auto-translate description error:", err);
@@ -207,9 +277,9 @@ export default function SupplierProfilePanel({
         setSaveMessage(
           "Firma vitrin, doğrudan iletişim ve tahsilat (IBAN) bilgileriniz başarıyla güncellendi."
         );
-        if (onProfileSaved) onProfileSaved();
+        onProfileSaved?.();
       } else {
-        const errData = await res.json().catch(() => ({}));
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
         setErrorMsg(errData.error || "Bilgiler kaydedilirken bir hata oluştu.");
       }
     } catch (err) {
@@ -233,9 +303,9 @@ export default function SupplierProfilePanel({
       {/* Top Info Banner */}
       <div className="bg-white p-5 rounded-xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-sm font-bold text-slate-900">
-              Açık Firma Vitrini, Doğrudan İletişim & Tahsilat Ayarları
+              Açık Firma Vitrini, Doğrudan İletişim &amp; Tahsilat Ayarları
             </h2>
             {isVerified && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
@@ -252,7 +322,7 @@ export default function SupplierProfilePanel({
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1677ff] hover:bg-[#4096ff] text-white text-xs font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50 shrink-0"
+          className="h-10 inline-flex items-center justify-center gap-2 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
         >
           <Save size={15} />
           <span>{saving ? "Kaydediliyor..." : "Bilgileri Kaydet ve Yayınla"}</span>
@@ -275,52 +345,54 @@ export default function SupplierProfilePanel({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Column 1: Company Identity & Production Capabilities */}
         <div className="bg-white p-5 rounded-xl border border-slate-200/90 shadow-xs space-y-4">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2 border-b border-slate-100 pb-2.5">
-            <Factory size={15} className="text-[#1677ff]" />
-            <span>1. Firma Kimliği & Üretim Kapasitesi</span>
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2.5">
+            <Factory size={15} className="text-slate-900" />
+            <span>1. Firma Kimliği &amp; Üretim Kapasitesi</span>
           </h3>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor="prof-brand-name" className="block text-xs font-bold text-slate-700 mb-1">
               Vitrinde Görünecek Ticari Firma Adı *
             </label>
             <input
+              id="prof-brand-name"
               type="text"
               required
               value={brandName}
               onChange={(e) => setBrandName(e.target.value)}
               placeholder="Örn: Lustrin Toptan Tekstil"
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor="prof-company-type" className="block text-xs font-bold text-slate-700 mb-1">
               Faaliyet / Üretici Türü
             </label>
             <select
+              id="prof-company-type"
               value={companyType}
               onChange={(e) => setCompanyType(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-slate-900"
             >
-              <option value="uretici_toptanci">Hazır Giyim Üreticisi & Toptancı</option>
+              <option value="uretici_toptanci">Hazır Giyim Üreticisi &amp; Toptancı</option>
               <option value="private_label">Özel Etiket (Private Label) Üreticisi</option>
               <option value="fason_atolye">Fason Üretim Atölyesi</option>
-              <option value="kumas_tedarikcisi">Kumaş Üreticisi & Tedarikçisi</option>
-              <option value="aksesuar">Tekstil Aksesuar & Yan Sanayi</option>
+              <option value="kumas_tedarikcisi">Kumaş Üreticisi &amp; Tedarikçisi</option>
+              <option value="aksesuar">Tekstil Aksesuar &amp; Yan Sanayi</option>
             </select>
           </div>
 
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-              <label className="block text-xs font-bold text-slate-700">
+              <span className="block text-xs font-bold text-slate-700">
                 Firma Tanıtım Yazısı (4 Dil • Alıcılara Açık)
-              </label>
+              </span>
               <button
                 type="button"
                 onClick={() => void handleAutoTranslateDescription()}
                 disabled={autoTranslatingDesc || !description.trim()}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-[#1677ff] border border-blue-200 text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 text-[10px] font-bold transition-colors cursor-pointer disabled:opacity-50"
               >
                 <Sparkles size={11} />
                 <span>{autoTranslatingDesc ? "Çevriliyor..." : "EN/RU/AR Otomatik Çevir"}</span>
@@ -328,25 +400,31 @@ export default function SupplierProfilePanel({
             </div>
 
             <div className="flex items-center gap-1 mb-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200">
-              {([
-                { code: "tr", label: "🇹🇷 TR" },
-                { code: "en", label: "🇬🇧 EN" },
-                { code: "ru", label: "🇷🇺 RU" },
-                { code: "ar", label: "🇸🇦 AR" },
-              ] as const).map((l) => (
-                <button
-                  key={l.code}
-                  type="button"
-                  onClick={() => setActiveDescLang(l.code)}
-                  className={`flex-1 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
-                    activeDescLang === l.code
-                      ? "bg-white text-[#1677ff] shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
+              {DESCRIPTION_LANG_OPTIONS.map((l) => {
+                const isSelected = activeDescLang === l.code;
+                return (
+                  <button
+                    key={l.code}
+                    type="button"
+                    onClick={() => setActiveDescLang(l.code)}
+                    className={`flex-1 py-1.5 px-2 rounded-md text-[11px] font-bold transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 ${
+                      isSelected
+                        ? "bg-slate-900 text-white shadow-xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                    }`}
+                  >
+                    <Image
+                      unoptimized
+                      src={`https://flagcdn.com/w20/${l.flagCode}.png`}
+                      alt={l.label}
+                      width={16}
+                      height={12}
+                      className="w-4 h-3 object-cover rounded-[2px] border border-slate-200/80 shrink-0"
+                    />
+                    <span>{l.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {activeDescLang === "tr" ? (
@@ -355,7 +433,7 @@ export default function SupplierProfilePanel({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Firmanızın uzmanlık alanları, üretim kapasitesi ve koleksiyon tarzı hakkında Türkçe bilgi verin..."
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             ) : (
               <textarea
@@ -369,35 +447,37 @@ export default function SupplierProfilePanel({
                   }))
                 }
                 placeholder={`${activeDescLang.toUpperCase()} dilinde firma tanıtım yazısı (elle düzenleyebilir veya üstteki butonla otomatik çevirebilirsiniz)...`}
-                className="w-full px-3 py-2 rounded-lg border border-blue-200 bg-blue-50/20 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50/50 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor="prof-min-order" className="block text-xs font-bold text-slate-700 mb-1">
                 Min. Sipariş (Seri)
               </label>
               <input
+                id="prof-min-order"
                 type="number"
                 min={1}
                 value={minOrderQty}
                 onChange={(e) => setMinOrderQty(Number(e.target.value) || 1)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor="prof-export-countries" className="block text-xs font-bold text-slate-700 mb-1">
                 İhracat Ülkeleri
               </label>
               <input
+                id="prof-export-countries"
                 type="text"
                 value={exportCountries}
                 onChange={(e) => setExportCountries(e.target.value)}
                 placeholder="Almanya, Rusya, BAE..."
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
           </div>
@@ -408,7 +488,7 @@ export default function SupplierProfilePanel({
                 type="checkbox"
                 checked={supportsPrivateLabel}
                 onChange={(e) => setSupportsPrivateLabel(e.target.checked)}
-                className="rounded border-slate-300 text-[#1677ff] focus:ring-[#1677ff]"
+                className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
               />
               <span className="text-xs font-semibold text-slate-700">
                 Özel Etiket (Private Label) Üretim Yapıyoruz
@@ -420,7 +500,7 @@ export default function SupplierProfilePanel({
                 type="checkbox"
                 checked={supportsFason}
                 onChange={(e) => setSupportsFason(e.target.checked)}
-                className="rounded border-slate-300 text-[#1677ff] focus:ring-[#1677ff]"
+                className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
               />
               <span className="text-xs font-semibold text-slate-700">
                 Fason / Sipariş Bazlı Üretim İmkanımız Var
@@ -431,21 +511,22 @@ export default function SupplierProfilePanel({
 
         {/* Column 2: Direct Contact Channels */}
         <div className="bg-white p-5 rounded-xl border border-slate-200/90 shadow-xs space-y-4">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2 border-b border-slate-100 pb-2.5">
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2.5">
             <Phone size={15} className="text-emerald-600" />
-            <span>2. Doğrudan İletişim & Adres Bilgileri</span>
+            <span>2. Doğrudan İletişim &amp; Adres Bilgileri</span>
           </h3>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor="prof-whatsapp" className="block text-xs font-bold text-slate-700 mb-1">
               Doğrudan Sipariş WhatsApp Hattı *
             </label>
             <input
+              id="prof-whatsapp"
               type="text"
               value={whatsappPhone}
               onChange={(e) => setWhatsappPhone(e.target.value)}
               placeholder="+90 532 000 00 00"
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
             />
             <span className="text-[10px] text-slate-500 mt-0.5 block">
               Ürün sayfasındaki &quot;WhatsApp ile Doğrudan Sipariş Ver&quot; butonu bu numaraya yönlenir.
@@ -453,77 +534,82 @@ export default function SupplierProfilePanel({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor="prof-phone" className="block text-xs font-bold text-slate-700 mb-1">
               Mağaza / Santral Telefonu
             </label>
             <input
+              id="prof-phone"
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+90 212 000 00 00"
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor="prof-email" className="block text-xs font-bold text-slate-700 mb-1">
               Kurumsal E-Posta Adresi
             </label>
             <div className="relative">
               <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
+                id="prof-email"
                 type="email"
                 value={publicEmail}
                 onChange={(e) => setPublicEmail(e.target.value)}
                 placeholder="satis@firmaniz.com"
-                className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+                className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor="prof-website" className="block text-xs font-bold text-slate-700 mb-1">
                 Web Sitesi
               </label>
               <div className="relative">
                 <Globe size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
+                  id="prof-website"
                   type="text"
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                   placeholder="https://..."
-                  className="w-full pl-8 pr-2.5 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+                  className="w-full pl-8 pr-2.5 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor="prof-instagram" className="block text-xs font-bold text-slate-700 mb-1">
                 Instagram
               </label>
               <input
+                id="prof-instagram"
                 type="text"
                 value={instagramHandle}
                 onChange={(e) => setInstagramHandle(e.target.value)}
                 placeholder="@firmaniz"
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor="prof-address" className="block text-xs font-bold text-slate-700 mb-1">
               Merter Mağaza / Showroom Açık Adresi
             </label>
             <div className="relative">
               <MapPin size={14} className="absolute left-3 top-2.5 text-slate-400" />
               <textarea
+                id="prof-address"
                 rows={2}
                 value={locationAddress}
                 onChange={(e) => setLocationAddress(e.target.value)}
                 placeholder="Mehmet Nesih Özmen Mah. Fatih Cad. No:... Merter / Güngören / İstanbul"
-                className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+                className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
           </div>
@@ -531,57 +617,60 @@ export default function SupplierProfilePanel({
 
         {/* Column 3: Direct Bank / IBAN Payment Info */}
         <div className="bg-white p-5 rounded-xl border border-slate-200/90 shadow-xs space-y-4">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2 border-b border-slate-100 pb-2.5">
-            <CreditCard size={15} className="text-[#1677ff]" />
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2.5">
+            <CreditCard size={15} className="text-slate-900" />
             <span>3. Doğrudan Sipariş Tahsilat (Banka / IBAN)</span>
           </h3>
 
-          <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-3 text-[11px] text-slate-700 leading-relaxed">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-[11px] text-slate-700 leading-relaxed">
             <strong className="text-slate-900 block mb-0.5">
-              %0 Komisyon & Doğrudan Tahsilat Modeli:
+              %0 Komisyon &amp; Doğrudan Tahsilat Modeli:
             </strong>
             Merter Vitrini satışlardan komisyon almaz. Alıcılar sipariş verdiğinde ödemeyi doğrudan aşağıda belirttiğiniz banka hesabınıza (Havale/EFT) gönderir.
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor="prof-bank-name" className="block text-xs font-bold text-slate-700 mb-1">
               Banka Adı
             </label>
             <input
+              id="prof-bank-name"
               type="text"
               value={bankName}
               onChange={(e) => setBankName(e.target.value)}
               placeholder="Örn: Garanti BBVA / İş Bankası"
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor="prof-account-holder" className="block text-xs font-bold text-slate-700 mb-1">
               Alıcı Ünvanı / Hesap Sahibi Adı Soyadı
             </label>
             <div className="relative">
               <Building2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
+                id="prof-account-holder"
                 type="text"
                 value={bankAccountHolder}
                 onChange={(e) => setBankAccountHolder(e.target.value)}
                 placeholder="Örn: LUSTRİN TEKSTİL SAN. VE TİC. LTD. ŞTİ."
-                className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#1677ff]"
+                className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label htmlFor="prof-iban" className="block text-xs font-bold text-slate-700 mb-1">
               IBAN Numarası (TR)
             </label>
             <input
+              id="prof-iban"
               type="text"
               value={iban}
               onChange={(e) => setIban(e.target.value.toUpperCase())}
               placeholder="TR00 0000 0000 0000 0000 0000 00"
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-[#1677ff]"
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-slate-900"
             />
           </div>
         </div>

@@ -3,7 +3,7 @@ import { AdminProvider } from "@/context/AdminContext";
 import AdminShell from "@/components/admin/layout/AdminShell";
 
 export const metadata: Metadata = {
-  title: "Yönetim Paneli | Merter Vitrini Admin Suite",
+  title: "Yönetim Paneli | Merter Vitrini Kurumsal Yönetim Paneli",
   description: "Merter Vitrini B2B Toptan E-Ticaret Yönetim ve Entegrasyon Paneli",
   robots: {
     index: false,

@@ -14,6 +14,7 @@ import {
 import { convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { useRouter } from "next/navigation";
+import { formatAsciiSafeUpper } from "@/utils/formatters";
 
 interface WishlistUiTexts {
   title: string;
@@ -223,8 +224,8 @@ function WishlistItemCard({
       />
 
       <div className="flex-grow flex flex-col gap-1 pr-6">
-        <span className="text-[9px] uppercase font-extrabold text-salmon-pink block">
-          {product.brand_name || t("merter_manufacturer", lang)}
+        <span className="text-[9px] font-extrabold text-[#8C6D3F] block tracking-wider">
+          {formatAsciiSafeUpper(product.brand_name || t("merter_manufacturer", lang))}
         </span>
         <h4 className="text-xs font-bold text-eerie-black line-clamp-2 leading-relaxed">
           <button
@@ -258,7 +259,7 @@ function WishlistItemCard({
         <button
           type="button"
           onClick={() => onProductClick(product.slug || product.id)}
-          className="mt-2.5 px-3 py-1 bg-salmon-pink text-white rounded font-bold text-[9px] uppercase tracking-[0.5px] border-none shadow-sm hover:bg-eerie-black transition-all flex items-center justify-center gap-1 cursor-pointer shrink-0"
+          className="mt-2.5 px-3 py-1 bg-[#1C1C1C] text-white rounded-md font-bold text-[9px] uppercase tracking-[0.5px] border-none hover:bg-[#333333] transition-colors flex items-center justify-center gap-1 cursor-pointer shrink-0"
         >
           <Eye className="w-3 h-3" />
           <span>{uiTexts.viewBtn}</span>

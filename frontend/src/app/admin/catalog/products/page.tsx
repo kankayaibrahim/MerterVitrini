@@ -10,6 +10,7 @@ import { Product } from "@/types/integration";
 export default function AdminCatalogProductsPage() {
   const {
     products,
+    totalProductsCount,
     feeds,
     flatCategories,
     loadingProducts,
@@ -68,6 +69,7 @@ export default function AdminCatalogProductsPage() {
       {/* Main Grid View */}
       <ProductGrid 
         products={products}
+        totalProductsCount={totalProductsCount}
         feeds={feeds}
         loadingProducts={loadingProducts}
         limit={limit}

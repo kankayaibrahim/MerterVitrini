@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import Image from "next/image";
 import {
   Plus,
@@ -37,6 +37,119 @@ export type SizeGroupKey =
   | "shoes"
   | "standard";
 export type AssortmentMode = "single" | "middle_double" | "double";
+
+export interface HierarchicalCategoryOption {
+  id: string;
+  fullLabel: string;
+}
+
+const PILL_SELECTED_CLASS = "bg-slate-900 text-white border-slate-900 shadow-xs";
+const PILL_UNSELECTED_CLASS =
+  "bg-white text-slate-700 border-slate-200 hover:border-slate-400 hover:bg-slate-50";
+
+const LTREE_SEGMENT_LABELS: Record<string, string> = {
+  kadin: "Kadın Giyim",
+  kadin_giyim: "Kadın Giyim",
+  erkek: "Erkek Giyim",
+  erkek_giyim: "Erkek Giyim",
+  buyuk_beden: "Büyük Beden",
+  tesettur: "Tesettür Giyim",
+  tesettur_giyim: "Tesettür Giyim",
+  cocuk: "Çocuk & Bebek",
+  cocuk_giyim: "Çocuk & Bebek",
+  bebek: "Bebek Giyim",
+  ic_giyim: "İç Giyim & Pijama",
+  spor_giyim: "Spor Giyim",
+  ayakkabi: "Ayakkabı & Çanta",
+  aksesuar: "Aksesuar",
+};
+
+function humanizeLtreeSegment(segment: string): string {
+  const key = segment.trim().toLowerCase();
+  if (LTREE_SEGMENT_LABELS[key]) {
+    return LTREE_SEGMENT_LABELS[key];
+  }
+  return key
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toLocaleUpperCase("tr-TR") + part.slice(1))
+    .join(" ");
+}
+
+function resolveAncestorsFromParentId(
+  cat: CategoryOption,
+  byId: Map<string, CategoryOption>
+): string[] {
+  const ancestors: string[] = [];
+  const visited = new Set<string>([cat.id]);
+  let currentParentId = cat.parent_id;
+
+  while (currentParentId && !visited.has(currentParentId)) {
+    visited.add(currentParentId);
+    const parent = byId.get(currentParentId);
+    if (!parent) break;
+    ancestors.unshift(parent.title);
+    currentParentId = parent.parent_id;
+  }
+
+  return ancestors;
+}
+
+function resolveAncestorsFromNodePath(
+  nodePath: string,
+  byNodePath: Map<string, CategoryOption>
+): string[] {
+  if (!nodePath || !nodePath.includes(".")) return [];
+  const parts = nodePath.split(".").filter(Boolean);
+  const titles: string[] = [];
+
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const prefix = parts.slice(0, i + 1).join(".");
+    const found = byNodePath.get(prefix);
+    if (found) {
+      titles.push(found.title);
+    } else if (parts[i].toLowerCase() !== "root") {
+      titles.push(humanizeLtreeSegment(parts[i]));
+    }
+  }
+
+  return titles;
+}
+
+export function buildHierarchicalCategoryOptions(
+  categories: readonly CategoryOption[]
+): HierarchicalCategoryOption[] {
+  const byNodePath = new Map<string, CategoryOption>();
+  const byId = new Map<string, CategoryOption>();
+
+  for (const cat of categories) {
+    byId.set(cat.id, cat);
+    if (cat.node_path) {
+      byNodePath.set(cat.node_path, cat);
+    }
+  }
+
+  const formatted = categories.map((cat) => {
+    const parentAncestors = cat.parent_id
+      ? resolveAncestorsFromParentId(cat, byId)
+      : [];
+    const ancestors =
+      parentAncestors.length > 0
+        ? parentAncestors
+        : resolveAncestorsFromNodePath(cat.node_path, byNodePath);
+
+    const trail = [...ancestors, cat.title].filter(
+      (segment, idx, arr) => Boolean(segment) && (idx === 0 || arr[idx - 1] !== segment)
+    );
+
+    return {
+      id: cat.id,
+      fullLabel: trail.join(" › "),
+    };
+  });
+
+  return formatted.sort((a, b) => a.fullLabel.localeCompare(b.fullLabel, "tr"));
+}
 
 export function cleanAttributeName(name?: string | null): string {
   if (!name) return "";
@@ -319,7 +432,7 @@ function ExpressPhotosSection({
     <section className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/90 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-md bg-blue-600 text-white text-xs font-extrabold flex items-center justify-center">
+          <span className="w-6 h-6 rounded-md bg-slate-900 text-white text-xs font-extrabold flex items-center justify-center">
             1
           </span>
           <span className="text-xs font-extrabold text-slate-900">
@@ -336,11 +449,11 @@ function ExpressPhotosSection({
           htmlFor="supp-express-photos"
           className={`col-span-2 sm:col-span-2 min-h-24 p-3 rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
             imageUploadLoading
-              ? "border-blue-400 bg-blue-50/50 opacity-75 pointer-events-none"
-              : "border-slate-300 hover:border-[#1677ff] bg-white hover:bg-blue-50/30"
+              ? "border-slate-400 bg-slate-100/70 opacity-75 pointer-events-none"
+              : "border-slate-300 hover:border-slate-900 bg-white hover:bg-slate-50"
           }`}
         >
-          <UploadCloud size={22} className="text-[#1677ff] mb-1" />
+          <UploadCloud size={22} className="text-slate-700 mb-1" />
           <span className="text-xs font-bold text-slate-800">
             {imageUploadLoading ? "Fotoğraflar Yükleniyor..." : "Fotoğraf Seç (Çoklu)"}
           </span>
@@ -362,7 +475,7 @@ function ExpressPhotosSection({
           <div
             key={`${imgUrl}-${idx}`}
             className={`relative h-24 rounded-xl overflow-hidden border bg-white group ${
-              idx === 0 ? "border-2 border-[#1677ff] shadow-xs" : "border-slate-200"
+              idx === 0 ? "border-2 border-slate-900 shadow-xs" : "border-slate-200"
             }`}
           >
             <Image
@@ -373,7 +486,7 @@ function ExpressPhotosSection({
               className="object-cover"
             />
             {idx === 0 && (
-              <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-[#1677ff] text-white text-[9px] font-bold">
+              <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-900 text-white text-[9px] font-bold">
                 KAPAK
               </span>
             )}
@@ -427,11 +540,15 @@ function ExpressCoreAndPriceSection({
   setFormCurrency,
 }: ExpressCoreAndPriceSectionProps) {
   const currencySymbol = getCurrencySymbol(formCurrency);
+  const hierarchicalCategories = useMemo(
+    () => buildHierarchicalCategoryOptions(categories),
+    [categories]
+  );
 
   return (
     <section className="p-4 rounded-xl bg-white border border-slate-200/90 flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <span className="w-6 h-6 rounded-md bg-blue-600 text-white text-xs font-extrabold flex items-center justify-center">
+        <span className="w-6 h-6 rounded-md bg-slate-900 text-white text-xs font-extrabold flex items-center justify-center">
           2
         </span>
         <span className="text-xs font-extrabold text-slate-900">
@@ -450,7 +567,7 @@ function ExpressCoreAndPriceSection({
             value={formTitle}
             onChange={(e) => setFormTitle(e.target.value)}
             placeholder="Örn: Kuşaklı Keten İkili Takım"
-            className="w-full px-3.5 py-2.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1677ff]/20 focus:border-[#1677ff]"
+            className="w-full px-3.5 py-2.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900"
             required
           />
         </div>
@@ -463,13 +580,13 @@ function ExpressCoreAndPriceSection({
             id="supp-category"
             value={formCategoryId}
             onChange={(e) => setFormCategoryId(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1677ff]/20 focus:border-[#1677ff]"
+            className="w-full px-3 py-2.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900"
             required
           >
             <option value="">-- Kategori Seçiniz --</option>
-            {categories.map((c) => (
+            {hierarchicalCategories.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.title}
+                {c.fullLabel}
               </option>
             ))}
           </select>
@@ -477,7 +594,7 @@ function ExpressCoreAndPriceSection({
 
         <div className="sm:col-span-7 flex flex-col gap-1">
           <label htmlFor="supp-price" className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-            <Coins size={13} className="text-[#1677ff]" />
+            <Coins size={13} className="text-slate-700" />
             <span>Tekil Ürün Toptan Satış Fiyatı (1 Adet) <span className="text-red-500">*</span></span>
           </label>
           <div className="relative">
@@ -489,7 +606,7 @@ function ExpressCoreAndPriceSection({
               value={formPrice || ""}
               onChange={(e) => setFormPrice(Number(e.target.value))}
               placeholder="0.00"
-              className="w-full pl-3.5 pr-10 py-2.5 rounded-lg bg-white border border-slate-300 text-sm font-extrabold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1677ff]/20 focus:border-[#1677ff]"
+              className="w-full pl-3.5 pr-10 py-2.5 rounded-lg bg-white border border-slate-300 text-sm font-extrabold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900"
               required
             />
             <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-extrabold text-slate-500">
@@ -507,9 +624,7 @@ function ExpressCoreAndPriceSection({
                 type="button"
                 onClick={() => setFormCurrency(curr)}
                 className={`rounded-lg border text-xs font-extrabold transition-all cursor-pointer ${
-                  formCurrency === curr
-                    ? "bg-[#1677ff] border-[#1677ff] text-white shadow-xs"
-                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                  formCurrency === curr ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                 }`}
               >
                 {curr} ({getCurrencySymbol(curr)})
@@ -570,10 +685,10 @@ function ExpressSeriesAndSizePickerSection({
     tpl.series_ratio === seriesRatio;
 
   return (
-    <section className="p-4 rounded-xl bg-blue-50/35 border border-blue-200/80 flex flex-col gap-4">
+    <section className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/90 flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <span className="w-6 h-6 rounded-md bg-blue-600 text-white text-xs font-extrabold flex items-center justify-center">
+          <span className="w-6 h-6 rounded-md bg-slate-900 text-white text-xs font-extrabold flex items-center justify-center">
             3
           </span>
           <div>
@@ -589,8 +704,8 @@ function ExpressSeriesAndSizePickerSection({
 
       {/* 1-Click Series Templates */}
       <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wide flex items-center gap-1.5">
-          <Sparkles size={13} className="text-[#1677ff]" />
+        <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+          <Sparkles size={13} className="text-slate-900" />
           <span>Hazır Merter Seri Şablonları (Tek Tıkla Uygula)</span>
         </span>
         <div className="flex flex-wrap gap-1.5">
@@ -605,9 +720,7 @@ function ExpressSeriesAndSizePickerSection({
                   setActiveGroup(inferSizeGroupFromSelected(tpl.sizes, effectiveSizes));
                 }}
                 className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                  selected
-                    ? "bg-[#1677ff] border-[#1677ff] text-white shadow-xs"
-                    : "bg-white border-slate-200 text-slate-700 hover:border-[#1677ff] hover:text-[#1677ff]"
+                  selected ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                 }`}
               >
                 {selected && <Check size={12} />}
@@ -625,20 +738,18 @@ function ExpressSeriesAndSizePickerSection({
             Beden Tanım Tablosundan Seçin <span className="text-red-500">*</span>
           </span>
           <span className="text-[11px] font-semibold text-slate-500">
-            Seçili: <strong className="text-[#1677ff]">{selectedSizes.join(" - ") || "Yok"}</strong>
+            Seçili: <strong className="text-slate-900">{selectedSizes.join(" - ") || "Yok"}</strong>
           </span>
         </div>
 
-        <div className="flex flex-wrap gap-1 border-b border-slate-100 pb-2">
+        <div className="flex flex-wrap gap-1.5 border-b border-slate-100 pb-2.5">
           {SIZE_GROUP_TABS.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveGroup(tab.key)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
-                activeGroup === tab.key
-                  ? "bg-slate-900 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              className={`px-2.5 py-1 rounded-md border text-[11px] font-bold transition-all cursor-pointer ${
+                activeGroup === tab.key ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
               }`}
             >
               {tab.label}
@@ -655,9 +766,7 @@ function ExpressSeriesAndSizePickerSection({
                 type="button"
                 onClick={() => onToggleSize(sz.code)}
                 className={`min-w-12 px-3 py-2 rounded-lg border text-xs font-extrabold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                  isChecked
-                    ? "bg-blue-600 border-blue-600 text-white shadow-xs"
-                    : "bg-slate-50 border-slate-200 text-slate-700 hover:border-blue-400 hover:bg-blue-50/40"
+                  isChecked ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                 }`}
               >
                 {isChecked && <Check size={12} />}
@@ -677,10 +786,8 @@ function ExpressSeriesAndSizePickerSection({
               <button
                 type="button"
                 onClick={() => onSelectAssortmentMode("single")}
-                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer ${
-                  activeAssortment === "single"
-                    ? "bg-emerald-600 border-emerald-600 text-white"
-                    : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                  activeAssortment === "single" ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                 }`}
               >
                 Her Bedenden 1 Adet ({buildSeriesRatioForMode(selectedSizes.length, "single")})
@@ -689,10 +796,8 @@ function ExpressSeriesAndSizePickerSection({
                 <button
                   type="button"
                   onClick={() => onSelectAssortmentMode("middle_double")}
-                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer ${
-                    activeAssortment === "middle_double"
-                      ? "bg-emerald-600 border-emerald-600 text-white"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                    activeAssortment === "middle_double" ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                   }`}
                 >
                   Orta Bedenler Çift ({buildSeriesRatioForMode(selectedSizes.length, "middle_double")})
@@ -701,10 +806,8 @@ function ExpressSeriesAndSizePickerSection({
               <button
                 type="button"
                 onClick={() => onSelectAssortmentMode("double")}
-                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer ${
-                  activeAssortment === "double"
-                    ? "bg-emerald-600 border-emerald-600 text-white"
-                    : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
+                  activeAssortment === "double" ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                 }`}
               >
                 Çiftli Seri ({buildSeriesRatioForMode(selectedSizes.length, "double")})
@@ -714,11 +817,11 @@ function ExpressSeriesAndSizePickerSection({
         )}
       </div>
 
-      {/* Estimated Series Count (Default 100 Series) */}
+      {/* Estimated Series Count (Default 100 Series) + Live Emerald Seri Summary Box */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center p-3.5 rounded-xl bg-white border border-slate-200">
         <div className="md:col-span-7 flex flex-col gap-1.5">
           <label htmlFor="supp-series-stock" className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-            <Layers size={14} className="text-emerald-600" />
+            <Layers size={14} className="text-slate-700" />
             <span>Eldeki Tahmini Seri Adedi (Varsayılan: 100 Seri)</span>
           </label>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -728,9 +831,7 @@ function ExpressSeriesAndSizePickerSection({
                 type="button"
                 onClick={() => setSeriesStock(cnt)}
                 className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
-                  safeSeriesStock === cnt
-                    ? "bg-emerald-600 border-emerald-600 text-white shadow-xs"
-                    : "bg-slate-50 border-slate-200 text-slate-700 hover:border-emerald-400"
+                  safeSeriesStock === cnt ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                 }`}
               >
                 {cnt} Seri
@@ -742,7 +843,7 @@ function ExpressSeriesAndSizePickerSection({
               min="1"
               value={safeSeriesStock}
               onChange={(e) => setSeriesStock(Math.max(1, Number(e.target.value) || 1))}
-              className="w-24 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-extrabold text-slate-900 text-center focus:outline-none focus:border-emerald-600"
+              className="w-24 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-extrabold text-slate-900 text-center focus:outline-none focus:border-slate-900"
             />
           </div>
         </div>
@@ -756,7 +857,7 @@ function ExpressSeriesAndSizePickerSection({
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-emerald-900">1 Seri Paket Fiyatı:</span>
-            <span className="font-extrabold text-[#1677ff]">
+            <span className="font-extrabold text-emerald-700">
               {seriesTotalPrice.toLocaleString("tr-TR", { minimumFractionDigits: 2 })} {currency}
             </span>
           </div>
@@ -820,10 +921,8 @@ function ExpressColorAndFabricSection({
                 key={pc.name}
                 type="button"
                 onClick={() => pickPopularColor(pc.name)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border cursor-pointer ${
-                  isSelected
-                    ? "bg-blue-50 border-[#1677ff] text-[#1677ff]"
-                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all cursor-pointer ${
+                  isSelected ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                 }`}
               >
                 <span
@@ -839,7 +938,7 @@ function ExpressColorAndFabricSection({
           id="supp-color"
           value={formColorId}
           onChange={(e) => setFormColorId(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-800"
+          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
         >
           <option value="">-- Tüm Renklerden Seçin --</option>
           {colors.map((col) => (
@@ -862,10 +961,8 @@ function ExpressColorAndFabricSection({
                 key={fab}
                 type="button"
                 onClick={() => pickPopularFabric(fab)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border cursor-pointer ${
-                  isSelected
-                    ? "bg-blue-50 border-[#1677ff] text-[#1677ff]"
-                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all cursor-pointer ${
+                  isSelected ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                 }`}
               >
                 {fab}
@@ -877,7 +974,7 @@ function ExpressColorAndFabricSection({
           id="supp-fabric"
           value={formFabricId}
           onChange={(e) => setFormFabricId(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-800"
+          className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
         >
           <option value="">-- Tüm Kumaşlardan Seçin --</option>
           {fabrics.map((f) => (
@@ -894,12 +991,12 @@ function ExpressColorAndFabricSection({
 const TRANSLATION_LANG_TABS: ReadonlyArray<{
   code: SupportedTranslationLang;
   label: string;
-  flag: string;
+  flagCode: string;
   dir: "ltr" | "rtl";
 }> = [
-  { code: "en", label: "İngilizce (EN)", flag: "🇬🇧", dir: "ltr" },
-  { code: "ru", label: "Rusça (RU)", flag: "🇷🇺", dir: "ltr" },
-  { code: "ar", label: "Arapça (AR)", flag: "🇸🇦", dir: "rtl" },
+  { code: "en", label: "İngilizce (EN)", flagCode: "gb", dir: "ltr" },
+  { code: "ru", label: "Rusça (RU)", flagCode: "ru", dir: "ltr" },
+  { code: "ar", label: "Arapça (AR)", flagCode: "sa", dir: "rtl" },
 ];
 
 interface OptionalDetailsAndTranslationsSectionProps {
@@ -962,12 +1059,12 @@ function OptionalDetailsAndTranslationsSection({
         className="w-full px-4 py-3 bg-slate-50/70 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2">
-          <Globe size={15} className="text-[#1677ff]" />
+          <Globe size={15} className="text-slate-700" />
           <span className="text-xs font-extrabold text-slate-800">
             Ek Detaylar, Açıklama &amp; Yabancı Dil Çevirileri (Opsiyonel)
           </span>
         </div>
-        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1677ff]">
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700">
           <span>{expanded ? "Gizle" : "Genişlet"}</span>
           {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
         </span>
@@ -984,7 +1081,7 @@ function OptionalDetailsAndTranslationsSection({
                 id="supp-gender"
                 value={formGender}
                 onChange={(e) => setFormGender(e.target.value)}
-                className="px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white"
+                className="px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:border-slate-900"
               >
                 <option value="Kadın">Kadın Giyim</option>
                 <option value="Erkek">Erkek Giyim</option>
@@ -1003,7 +1100,7 @@ function OptionalDetailsAndTranslationsSection({
                 min="1"
                 value={formMinOrderSeries}
                 onChange={(e) => setFormMinOrderSeries(Math.max(1, Number(e.target.value) || 1))}
-                className="px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800"
+                className="px-3 py-2 rounded-lg border border-slate-300 text-xs font-bold text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
 
@@ -1019,7 +1116,7 @@ function OptionalDetailsAndTranslationsSection({
                 value={formBuyingPrice || ""}
                 onChange={(e) => setFormBuyingPrice(Number(e.target.value))}
                 placeholder="0.00"
-                className="px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800"
+                className="px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
           </div>
@@ -1035,7 +1132,7 @@ function OptionalDetailsAndTranslationsSection({
                 value={formShortDesc}
                 onChange={(e) => setFormShortDesc(e.target.value)}
                 placeholder="Örn: %100 Pamuk, Tam Kalıp"
-                className="px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800"
+                className="px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
 
@@ -1050,7 +1147,7 @@ function OptionalDetailsAndTranslationsSection({
                 type="button"
                 onClick={() => setFormIsActive(!formIsActive)}
                 className={`w-11 h-6 rounded-full transition-colors p-0.5 cursor-pointer flex items-center ${
-                  formIsActive ? "bg-[#1677ff] justify-end" : "bg-slate-300 justify-start"
+                  formIsActive ? "bg-emerald-600 justify-end" : "bg-slate-300 justify-start"
                 }`}
               >
                 <span className="w-5 h-5 rounded-full bg-white shadow-xs block" />
@@ -1068,21 +1165,21 @@ function OptionalDetailsAndTranslationsSection({
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value)}
               placeholder="Kumaş gramajı, yıkama talimatı, manken ölçüleri..."
-              className="px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800"
+              className="px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
             />
           </div>
 
           {/* Multi-language auto-translation */}
-          <div className="p-3.5 rounded-xl bg-blue-50/40 border border-blue-200/80 flex flex-col gap-3">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span className="text-xs font-bold text-blue-950">
+              <span className="text-xs font-bold text-slate-900">
                 İhracat Vitrini Çok Dilli Çeviri (EN / RU / AR) — Kayıtta boşsa otomatik çevrilir
               </span>
               <button
                 type="button"
                 onClick={onAutoTranslateFromTurkish}
                 disabled={autoTranslating || !formTitle.trim()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1677ff] hover:bg-[#4096ff] text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
               >
                 <Sparkles size={13} />
                 <span>{autoTranslating ? "Çevriliyor..." : "Türkçeden Otomatik Çevir"}</span>
@@ -1095,13 +1192,19 @@ function OptionalDetailsAndTranslationsSection({
                   key={tab.code}
                   type="button"
                   onClick={() => setActiveLang(tab.code)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
-                    activeLang === tab.code
-                      ? "bg-white border-[#1677ff] text-[#1677ff]"
-                      : "bg-slate-50 border-slate-200 text-slate-600"
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                    activeLang === tab.code ? PILL_SELECTED_CLASS : PILL_UNSELECTED_CLASS
                   }`}
                 >
-                  {tab.flag} {tab.label}
+                  <Image
+                    unoptimized
+                    src={`https://flagcdn.com/w20/${tab.flagCode}.png`}
+                    alt={tab.code.toUpperCase()}
+                    width={16}
+                    height={12}
+                    className="w-4 h-3 object-cover rounded-[2px] border border-slate-200/80 shrink-0"
+                  />
+                  <span>{tab.label}</span>
                 </button>
               ))}
             </div>
@@ -1116,7 +1219,7 @@ function OptionalDetailsAndTranslationsSection({
                   type="text"
                   value={currentFields.title}
                   onChange={(e) => onUpdateTranslationField(activeLang, "title", e.target.value)}
-                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800"
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -1130,7 +1233,7 @@ function OptionalDetailsAndTranslationsSection({
                   onChange={(e) =>
                     onUpdateTranslationField(activeLang, "short_description", e.target.value)
                   }
-                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800"
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
                 />
               </div>
             </div>
@@ -1230,7 +1333,7 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-white">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#1677ff] border border-blue-100 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
               {isCreate ? <Plus size={18} /> : <Edit3 size={18} />}
             </div>
             <div>
@@ -1257,7 +1360,7 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
           <div className="p-4 sm:p-5 overflow-y-auto flex-1 flex flex-col gap-4 bg-[#f8fafc]">
             {formError && (
               <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-center gap-2">
-                <span>⚠️ {formError}</span>
+                <span>{formError}</span>
               </div>
             )}
 
@@ -1332,7 +1435,7 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              className="h-10 px-4 inline-flex items-center justify-center rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 cursor-pointer transition-colors"
             >
               İptal
             </button>
@@ -1340,7 +1443,7 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              className="h-10 inline-flex items-center justify-center gap-2 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer disabled:opacity-50"
             >
               <CheckCircle2 size={16} />
               <span>{submitLabel}</span>

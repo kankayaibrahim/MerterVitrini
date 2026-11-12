@@ -6,6 +6,7 @@ import {
   GLOBAL_B2B_SEO_MATRIX,
   SupportedSeoLang,
   normalizeSeoLang,
+  stripBrandTitleSuffix,
   buildPrefixedAlternates,
   safeJsonLd,
   ssrStoreFetch,
@@ -129,7 +130,7 @@ export async function generateMetadata({ params }: Readonly<PageProps>): Promise
   const activeLangs = await fetchBlogLanguages();
   const lang = resolvePrefixLanguage(activeLangs, categoryPrefix);
 
-  const title = BLOG_TITLES[lang];
+  const title = stripBrandTitleSuffix(BLOG_TITLES[lang]);
   const desc = BLOG_DESCS[lang];
   const alternates = buildPrefixedAlternates("blog", lang);
 

@@ -16,6 +16,7 @@ import {
 } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getMemberPriceLabel, getShortMemberPriceLabel } from "@/app/storeAuth";
+import { formatAsciiSafeUpper } from "@/utils/formatters";
 
 interface ModalLocalizedTexts {
   selectMinOneItem: string;
@@ -145,7 +146,6 @@ function ModalUnitPriceValue({
   discountedPrice,
   currency,
   lang,
-  onClose,
 }: Readonly<{
   isAuthenticated: boolean;
   hasDiscount: boolean;
@@ -153,21 +153,13 @@ function ModalUnitPriceValue({
   discountedPrice: number;
   currency: string;
   lang: string;
-  onClose: () => void;
 }>) {
   if (!isAuthenticated) {
     return (
-      <button
-        type="button"
-        onClick={() => {
-          onClose();
-          openStoreAuthModal("login");
-        }}
-        className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-900 hover:bg-salmon-pink text-white text-[11px] font-extrabold transition-colors cursor-pointer border-none"
-      >
-        <Lock className="w-3 h-3 shrink-0" />
+      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#6E542E]">
+        <Lock className="w-3.5 h-3.5 text-[#8C6D3F] shrink-0" />
         <span>{getMemberPriceLabel(lang)}</span>
-      </button>
+      </span>
     );
   }
 
@@ -177,7 +169,7 @@ function ModalUnitPriceValue({
         <span className="text-xs text-sonic-silver line-through">
           {unitPrice.toFixed(2)} {currency}
         </span>
-        <span className="text-lg font-extrabold text-salmon-pink">
+        <span className="text-lg font-extrabold text-[#A30000]">
           {discountedPrice.toFixed(2)} {currency}
         </span>
       </div>
@@ -186,7 +178,7 @@ function ModalUnitPriceValue({
 
   return (
     <div className="flex items-baseline gap-2">
-      <span className="text-lg font-extrabold text-eerie-black">
+      <span className="text-lg font-extrabold text-[#1C1C1C]">
         {unitPrice.toFixed(2)} {currency}
       </span>
     </div>
@@ -338,7 +330,7 @@ export default function ProductDetailsModal({
   });
   const directWaUrl = supplierWaDigits
     ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(directWaMessage)}`
-    : `https://wa.me/?text=${encodeURIComponent(directWaMessage)}`;
+    : "";
 
   const handleAddClick = () => {
     if (!isAuthenticated) {
@@ -421,20 +413,20 @@ export default function ProductDetailsModal({
             {/* Right side specifications and calculators */}
             <div className="flex flex-col gap-5">
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-[0.5px] text-salmon-pink">
-                  {product.brand_name || t("merter_manufacturer", lang)}
+                <span className="text-[10px] font-bold tracking-[0.8px] text-[#8C6D3F]">
+                  {formatAsciiSafeUpper(product.brand_name || t("merter_manufacturer", lang))}
                 </span>
-                <h2 className="font-sans font-extrabold text-xl md:text-2xl text-eerie-black leading-snug mt-1">
+                <h2 className="font-sans font-extrabold text-xl md:text-2xl text-[#1C1C1C] leading-snug mt-1">
                   {title}
                 </h2>
-                <span className="text-[10px] font-bold text-sonic-silver mt-1 block">
+                <span className="text-[10px] font-bold text-[#6B6B6B] mt-1 block">
                   {t("sku_label", lang) || "SKU"}: {product.custom_sku || product.source_product_id}
                 </span>
               </div>
 
               {/* pricing details */}
-              <div className="flex items-center justify-between gap-3 bg-[#fafafa] border border-cultured rounded-[5px] px-4 py-3 shadow-inner">
-                <span className="text-[10px] font-bold text-onyx uppercase tracking-[0.5px] shrink-0">
+              <div className="flex items-center justify-between gap-3 bg-[#F8F6F2] border border-[#E5E0D8] rounded-md px-4 py-3">
+                <span className="text-[10px] font-bold text-[#1C1C1C] uppercase tracking-[0.5px] shrink-0">
                   {t("unit_price_label", lang)}
                 </span>
                 <ModalUnitPriceValue
@@ -444,7 +436,6 @@ export default function ProductDetailsModal({
                   discountedPrice={discountedPrice}
                   currency={currency}
                   lang={lang}
-                  onClose={onClose}
                 />
               </div>
 
@@ -608,22 +599,14 @@ export default function ProductDetailsModal({
                     <span>{t("total_weight_calc", lang)}:</span>
                     <span className="text-eerie-black">{totalWeight.toFixed(2)} {t("kg_unit", lang)}</span>
                   </div>
-                  <div className="flex justify-between items-center text-sm text-salmon-pink font-extrabold pt-2 border-t border-cultured mt-1.5">
+                  <div className="flex justify-between items-center text-sm text-[#1C1C1C] font-extrabold pt-2 border-t border-[#E5E0D8] mt-1.5">
                     <span>{t("total_price_calc", lang)} ({t("excluding_vat", lang)}):</span>
                     {isAuthenticated ? (
                       <span>{totalPrice.toFixed(2)} {currency}</span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          openStoreAuthModal("login");
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-900 hover:bg-salmon-pink text-white text-[11px] font-extrabold transition-colors cursor-pointer border-none"
-                      >
-                        <Lock className="w-3 h-3 shrink-0" />
-                        <span>{getShortMemberPriceLabel(lang)}</span>
-                      </button>
+                      <span className="text-xs font-bold text-[#6E542E]">
+                        {getShortMemberPriceLabel(lang)}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -633,7 +616,7 @@ export default function ProductDetailsModal({
               <button
                 type="button"
                 onClick={handleAddClick}
-                className="w-full py-3 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] uppercase transition-all duration-300 border-none flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.99]"
+                className="w-full py-3 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border-none flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.99]"
               >
                 {isAuthenticated ? (
                   <>
@@ -649,28 +632,32 @@ export default function ProductDetailsModal({
               </button>
 
               {/* Direct Supplier WhatsApp & Call Actions */}
-              <div className="flex flex-col sm:flex-row gap-2">
-                <a
-                  href={directWaUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[5px] font-extrabold text-xs tracking-[0.3px] transition-colors flex items-center justify-center gap-2 no-underline"
-                >
-                  <MessageCircle className="w-4 h-4 shrink-0" />
-                  <span>
-                    {modalTexts.whatsappWriteSupplier} {supplierWaRaw ? `(${supplierWaRaw})` : ""}
-                  </span>
-                </a>
-                {supplierCallRaw && (
-                  <a
-                    href={`tel:${supplierCallRaw}`}
-                    className="py-2.5 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-[5px] font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 no-underline shrink-0"
-                  >
-                    <Phone className="w-3.5 h-3.5 shrink-0" />
-                    <span>{modalTexts.callSupplier}</span>
-                  </a>
-                )}
-              </div>
+              {(directWaUrl || supplierCallRaw) && (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  {directWaUrl && (
+                    <a
+                      href={directWaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 py-2.5 px-3 bg-[#15803D] hover:bg-[#166534] text-white rounded-md font-extrabold text-xs tracking-[0.3px] transition-colors flex items-center justify-center gap-2 no-underline"
+                    >
+                      <MessageCircle className="w-4 h-4 shrink-0" />
+                      <span>
+                        {modalTexts.whatsappWriteSupplier} {supplierWaRaw ? `(${supplierWaRaw})` : ""}
+                      </span>
+                    </a>
+                  )}
+                  {supplierCallRaw && (
+                    <a
+                      href={`tel:${supplierCallRaw}`}
+                      className="py-2.5 px-3.5 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 no-underline shrink-0"
+                    >
+                      <Phone className="w-3.5 h-3.5 shrink-0" />
+                      <span>{modalTexts.callSupplier}</span>
+                    </a>
+                  )}
+                </div>
+              )}
 
             </div>
 

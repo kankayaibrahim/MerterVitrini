@@ -711,43 +711,43 @@ function BuyerRfqCard({
   );
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 hover:border-slate-300 p-5 shadow-xs flex flex-col justify-between gap-4">
+    <div className="bg-white rounded-lg border border-[#E5E0D8] hover:border-[#1C1C1C]/40 p-5 shadow-xs flex flex-col justify-between gap-4 transition-colors">
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-mono font-bold">
+          <span className="px-2.5 py-0.5 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] text-[11px] font-mono font-bold">
             {item.rfq_number}
           </span>
-          <span className="px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[11px] font-bold">
+          <span className="px-2.5 py-0.5 rounded-full bg-[#FAF7F2] text-[#6E542E] border border-[#D8C7A6] text-[11px] font-bold">
             {prodLabel}
           </span>
         </div>
 
-        <h3 className="text-base font-extrabold text-slate-900 leading-snug">
+        <h3 className="text-base font-extrabold text-[#1C1C1C] leading-snug">
           {item.title}
         </h3>
 
         {item.description && (
-          <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
+          <p className="text-xs text-[#525252] leading-relaxed line-clamp-3">
             {item.description}
           </p>
         )}
 
         <div className="flex flex-wrap gap-2 pt-1">
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-extrabold">
-            <Package size={13} />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] text-xs font-extrabold">
+            <Package size={13} className="text-[#8C6D3F]" />
             <span>
               {copy.cardTargetQty}: {item.target_quantity} {item.unit_type}
             </span>
           </span>
           {item.category_name && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#F8F6F2] text-[#525252] border border-[#E5E0D8] text-xs font-bold">
               <span>
                 {copy.cardCategory}: {item.category_name}
               </span>
             </span>
           )}
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-200 text-xs font-bold">
-            <Globe size={13} />
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#F8F6F2] text-[#525252] border border-[#E5E0D8] text-xs font-bold">
+            <Globe size={13} className="text-[#8C6D3F]" />
             <span>
               {copy.cardBuyerCountry}: {item.buyer_country}
             </span>
@@ -757,13 +757,13 @@ function BuyerRfqCard({
 
       <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3 flex-wrap">
         <div className="text-[11px] text-slate-500 space-y-0.5">
-          <div className="font-bold text-slate-700 flex items-center gap-1.5 flex-wrap">
+          <div className="font-bold text-[#1C1C1C] flex items-center gap-1.5 flex-wrap">
             <span>
               {copy.cardBuyer}: {item.buyer_name}
               {item.buyer_company ? ` (${item.buyer_company})` : ""}
             </span>
             {item.buyer_email_verified ? (
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-emerald-50 text-[#15803D] border border-emerald-200">
                 {copy.cardVerifiedBuyer}
               </span>
             ) : (
@@ -778,7 +778,7 @@ function BuyerRfqCard({
               {dateStr}
             </span>
             <span>•</span>
-            <strong className="text-emerald-700">
+            <strong className="text-[#15803D]">
               {item.offer_count} {copy.cardOfferCountSuffix}
             </strong>
           </div>
@@ -786,7 +786,7 @@ function BuyerRfqCard({
 
         <Link
           href="/supplier"
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
         >
           <Building2 size={13} />
           <span>{copy.cardSupplierQuoteBtn}</span>
@@ -1100,14 +1100,14 @@ function RfqCreateModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold cursor-pointer"
+              className="px-4 py-2 rounded-md border border-[#D6D1C7] text-[#525252] hover:border-[#1C1C1C] hover:text-[#1C1C1C] font-bold cursor-pointer bg-white"
             >
               {copy.cancelBtn}
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold cursor-pointer disabled:opacity-50"
+              className="px-5 py-2 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white font-extrabold cursor-pointer disabled:opacity-50"
             >
               {submitting ? copy.submittingBtn : copy.submitBtn}
             </button>
@@ -1142,12 +1142,12 @@ function RfqBoardListContent({
   }
   if (items.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-3">
-        <p className="text-sm font-extrabold text-slate-800">{copy.emptyText}</p>
+      <div className="bg-white rounded-lg border border-[#E5E0D8] p-12 text-center space-y-3">
+        <p className="text-sm font-extrabold text-[#1C1C1C]">{copy.emptyText}</p>
         <button
           type="button"
           onClick={onOpenCreate}
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold cursor-pointer"
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold cursor-pointer"
         >
           <Plus size={15} />
           <span>{copy.emptyCreateBtn}</span>
@@ -1171,18 +1171,18 @@ function RfqBoardListContent({
 
 function MemberOnlyRfqGate({ copy }: { readonly copy: RfqBoardLocaleCopy }) {
   return (
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-8 sm:p-12 text-center max-w-2xl mx-auto my-6 space-y-5">
-      <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+    <div className="bg-white rounded-lg border border-[#E5E0D8] shadow-xs p-8 sm:p-12 text-center max-w-2xl mx-auto my-6 space-y-5">
+      <div className="w-16 h-16 rounded-lg bg-[#F8F6F2] border border-[#E5E0D8] text-[#8C6D3F] flex items-center justify-center mx-auto">
         <Lock size={30} />
       </div>
       <div className="space-y-2">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-extrabold uppercase tracking-wider">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 text-[11px] font-extrabold uppercase tracking-wider">
           {copy.gateBadge}
         </span>
-        <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+        <h2 className="text-xl sm:text-2xl font-black text-[#1C1C1C]">
           {copy.gateTitle}
         </h2>
-        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-xl mx-auto">
+        <p className="text-xs sm:text-sm text-[#525252] leading-relaxed max-w-xl mx-auto">
           {copy.gateDesc}
         </p>
       </div>
@@ -1190,25 +1190,25 @@ function MemberOnlyRfqGate({ copy }: { readonly copy: RfqBoardLocaleCopy }) {
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
         <button
           type="button"
-          onClick={() => openStoreAuthModal("login")}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-extrabold cursor-pointer border-none shadow-xs"
-        >
-          <LogIn size={16} />
-          <span>{copy.gateLoginBtn}</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => openStoreAuthModal("register")}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs sm:text-sm font-extrabold cursor-pointer border-none shadow-xs"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs sm:text-sm font-extrabold cursor-pointer border-none shadow-xs transition-colors"
         >
           <UserPlus size={16} />
           <span>{copy.gateRegisterBtn}</span>
         </button>
 
+        <button
+          type="button"
+          onClick={() => openStoreAuthModal("login")}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-md bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] text-xs sm:text-sm font-extrabold cursor-pointer shadow-xs transition-colors"
+        >
+          <LogIn size={16} />
+          <span>{copy.gateLoginBtn}</span>
+        </button>
+
         <Link
           href="/supplier"
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs sm:text-sm font-bold no-underline"
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-md bg-[#F8F6F2] hover:bg-[#EFECE6] text-[#1C1C1C] border border-[#E5E0D8] hover:border-[#1C1C1C] text-xs sm:text-sm font-bold no-underline transition-colors"
         >
           <Building2 size={16} />
           <span>{copy.gateSupplierBtn}</span>
@@ -1362,16 +1362,16 @@ export default function BuyerRfqBoardClient({
 
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 py-8 space-y-6">
         {/* Hero */}
-        <div className="rounded-3xl bg-gradient-to-br from-emerald-50/90 via-white to-amber-50/60 border border-emerald-200/80 text-slate-900 p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xs">
+        <div className="rounded-lg bg-[#F8F6F2] border border-[#E5E0D8] text-[#1C1C1C] p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xs">
           <div className="space-y-2.5 max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 border border-emerald-200 text-emerald-800 text-xs font-extrabold">
-              <CheckCircle2 size={14} className="text-emerald-600" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[#15803D] text-xs font-extrabold">
+              <CheckCircle2 size={14} className="text-[#15803D]" />
               <span>{copy.heroBadge}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#1C1C1C]">
               {copy.heroTitle}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#525252] leading-relaxed">
               {copy.heroDesc}
             </p>
           </div>
@@ -1379,7 +1379,7 @@ export default function BuyerRfqBoardClient({
           <button
             type="button"
             onClick={handleOpenCreateClick}
-            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-extrabold cursor-pointer shrink-0 shadow-xs border-none transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs sm:text-sm font-extrabold cursor-pointer shrink-0 shadow-xs border-none transition-colors"
           >
             <Plus size={18} />
             <span>{copy.heroCreateBtn}</span>
@@ -1391,18 +1391,18 @@ export default function BuyerRfqBoardClient({
         ) : (
           <>
             {/* Filters */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-xs">
+            <div className="bg-white rounded-lg border border-[#E5E0D8] p-4 space-y-3 shadow-xs">
               <div className="relative">
                 <Search
                   size={16}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  className="absolute start-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                 />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={copy.searchPlaceholder}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-emerald-600"
+                  className="w-full ps-10 pe-4 py-2.5 rounded-md border border-[#D6D1C7] text-xs sm:text-sm focus:outline-none focus:border-[#1C1C1C]"
                 />
               </div>
 
@@ -1412,13 +1412,13 @@ export default function BuyerRfqBoardClient({
                     key={pt.value}
                     type="button"
                     onClick={() => setSelectedProdType(pt.value)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap cursor-pointer border transition-colors ${
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold whitespace-nowrap cursor-pointer border transition-colors ${
                       selectedProdType === pt.value
-                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                        : "bg-slate-50/80 text-slate-600 border-slate-200 hover:bg-emerald-50/60 hover:text-emerald-800 hover:border-emerald-200"
+                        ? "bg-[#1C1C1C] text-white border-[#1C1C1C] shadow-xs"
+                        : "bg-white text-[#525252] border-[#D6D1C7] hover:bg-[#F8F6F2] hover:text-[#1C1C1C] hover:border-[#1C1C1C]"
                     }`}
                   >
-                    <FileText size={12} className="inline mr-1" />
+                    <FileText size={12} className="inline me-1" />
                     {pt.label}
                   </button>
                 ))}

@@ -32,7 +32,7 @@ const LABELS = {
   TITLE: "Görsel Önbellek & Boyutlandırma Yönetimi",
   DESC: "Ürünlerinizin storefront (beğeni, sepet, detay ve listeleme) sayfalarında hızlı yüklenmesi için optimize edilen WebP boyutlarının önbellek durumunu takip edip eksikleri arka planda (4 paralel iş parçacığıyla) ürettirebilirsiniz.",
   BTN_START: "Eksik Görselleri Taramaya & Üretmeye Başla",
-  BTN_REFRESH: "Durumu Yenile",
+  BTN_REFRESH: "Yenile",
   BTN_SCAN: "Eksik Görselleri Tara",
   BTN_STOP: "İşlemi Durdur",
   STATUS_RUNNING: "Kuyruk İşleniyor",

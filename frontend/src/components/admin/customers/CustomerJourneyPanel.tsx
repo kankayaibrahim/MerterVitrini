@@ -178,6 +178,46 @@ function formatDeviceLabel(deviceType?: string): string {
   return "Masaüstü";
 }
 
+function formatCustomerInitials(firstName?: string, lastName?: string): string {
+  const first = (firstName || "").trim()[0] || "Ü";
+  const last = (lastName || "").trim()[0] || "";
+  return `${first}${last}`.toLocaleUpperCase("tr-TR");
+}
+
+function JourneyProductThumb({
+  imageUrl,
+  alt,
+  sizeClass = "w-11 h-14",
+}: {
+  readonly imageUrl?: string | null;
+  readonly alt: string;
+  readonly sizeClass?: string;
+}) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const resolvedSrc = imageUrl?.trim() ? getResizedImageUrl(imageUrl, 96, 128) : "";
+
+  if (!resolvedSrc || failedSrc === resolvedSrc) {
+    return (
+      <div
+        className={`${sizeClass} rounded-lg border border-zinc-200 bg-zinc-100/80 text-zinc-400 flex items-center justify-center shrink-0`}
+        title={alt}
+      >
+        <Package size={16} />
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={resolvedSrc}
+      alt={alt}
+      onError={() => setFailedSrc(resolvedSrc)}
+      className={`${sizeClass} rounded-lg object-cover border border-zinc-200 shrink-0 bg-white`}
+    />
+  );
+}
+
 interface EventVisualMeta {
   readonly badgeBg: string;
   readonly iconColor: string;
@@ -379,9 +419,8 @@ export default function CustomerJourneyPanel({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="relative">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-violet-500/20">
-                {customer.first_name?.[0] || "Ü"}
-                {customer.last_name?.[0] || ""}
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm uppercase shadow-md shadow-violet-500/20">
+                {formatCustomerInitials(customer.first_name, customer.last_name)}
               </div>
               {kpis.is_online && (
                 <span
@@ -423,10 +462,10 @@ export default function CustomerJourneyPanel({
             type="button"
             onClick={() => void reload()}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 transition-colors cursor-pointer self-start sm:self-auto"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 transition-colors cursor-pointer self-start sm:self-auto whitespace-nowrap shrink-0"
           >
             <RefreshCw size={14} className={refreshing ? "animate-spin text-violet-600" : ""} />
-            Canlı Yenile
+            Yenile
           </button>
         </div>
 
@@ -545,12 +584,7 @@ export default function CustomerJourneyPanel({
                       key={vp.product_id}
                       className="flex items-center gap-3 p-2.5 rounded-xl border border-zinc-100 hover:border-violet-200 bg-zinc-50/40 transition-colors"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={getResizedImageUrl(vp.image_url, 96, 128)}
-                        alt={vp.title}
-                        className="w-11 h-14 rounded-lg object-cover border border-zinc-200 shrink-0 bg-white"
-                      />
+                      <JourneyProductThumb imageUrl={vp.image_url} alt={vp.title} sizeClass="w-11 h-14" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-bold text-zinc-900 truncate">{vp.title}</span>
@@ -730,11 +764,10 @@ export default function CustomerJourneyPanel({
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                           <div className="flex items-start gap-3 min-w-0">
                             {ev.image_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={getResizedImageUrl(ev.image_url, 96, 128)}
-                                alt=""
-                                className="w-10 h-12 rounded-lg object-cover border border-zinc-200 shrink-0 bg-white"
+                              <JourneyProductThumb
+                                imageUrl={ev.image_url}
+                                alt={ev.title}
+                                sizeClass="w-10 h-12"
                               />
                             ) : null}
 

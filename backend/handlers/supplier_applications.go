@@ -84,13 +84,13 @@ func NewSupplierApplicationsHandler(cfg *config.Config) *SupplierApplicationsHan
 	return &SupplierApplicationsHandler{Cfg: cfg}
 }
 
-// verifyReCaptcha validates Google reCAPTCHA v3 token using FastClient with timeout and strict success check.
+// verifyReCaptcha validates Google reCAPTCHA v3 token without deadlocking when public site_key is absent.
 func (h *SupplierApplicationsHandler) verifyReCaptcha(token, action string) (bool, error) {
-	secret := ""
-	if h != nil && h.Cfg != nil {
-		secret = h.Cfg.ReCaptchaSecret
+	var cfg *config.Config
+	if h != nil {
+		cfg = h.Cfg
 	}
-	return verifyGoogleReCaptcha(secret, token, action)
+	return verifyPublicFormReCaptcha(cfg, token, action, true)
 }
 
 // SubmitApplication handles public prospective supplier submissions with 30-min email verification
@@ -118,13 +118,10 @@ func (h *SupplierApplicationsHandler) SubmitApplication(w http.ResponseWriter, r
 		return
 	}
 
-	// Validate reCAPTCHA if configured
-	if h.Cfg.ReCaptchaSecret != "" {
-		valid, err := h.verifyReCaptcha(req.ReCaptchaToken, "supplier_apply")
-		if err != nil || !valid {
-			http.Error(w, `{"error":"Güvenlik doğrulaması (reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."}`, http.StatusBadRequest)
-			return
-		}
+	// Validate reCAPTCHA when pair is configured (or when client supplied a token)
+	if valid, err := h.verifyReCaptcha(req.ReCaptchaToken, "supplier_apply"); err != nil || !valid {
+		http.Error(w, `{"error":"Güvenlik doğrulaması (reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."}`, http.StatusBadRequest)
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)

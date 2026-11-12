@@ -8,6 +8,7 @@ import {
   normalizeSeoLang,
   OG_LOCALE_BY_LANG,
   ssrStoreFetch,
+  stripBrandTitleSuffix,
   SUPPORTED_SEO_LANGS,
 } from "@/utils/seoHelpers";
 
@@ -70,12 +71,12 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
   const lang = normalizeSeoLang(categoryPrefix, "en");
-  const title = SITEMAP_TITLES[lang] || SITEMAP_TITLES.en;
+  const title = stripBrandTitleSuffix(SITEMAP_TITLES[lang] || SITEMAP_TITLES.en);
   const desc = SITEMAP_DESCS[lang] || SITEMAP_DESCS.en;
   const alternates = buildPrefixedAlternates("site-haritasi", lang);
 
   return {
-    title: `${title} | Merter Vitrini`,
+    title,
     description: desc,
     alternates,
     openGraph: {

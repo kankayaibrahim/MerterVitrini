@@ -798,10 +798,13 @@ export default function StorefrontLayout({
           mode={mode} 
           setSearchQuery={setSearchQuery} 
           setActiveCategoryId={setActiveCategoryId} 
+          setSortBy={setSortBy}
         />
       </Suspense>
-      {/* Preload critical LCP hero image as high priority */}
-      <link rel="preload" href="/banners/hero_new_opportunities.webp" as="image" type="image/webp" fetchPriority="high" />
+      {/* Preload critical LCP hero image on portal home only */}
+      {mode === "portal" && (
+        <link rel="preload" href="/banners/hero_new_season.webp?v=2" as="image" type="image/webp" fetchPriority="high" />
+      )}
 
       {/* Header Subcomponent */}
       <Header

@@ -166,6 +166,23 @@ func ensureAnalyticsSchema(ctx context.Context) {
 				ON analytics.search_logs (normalized_query);
 			CREATE INDEX IF NOT EXISTS idx_search_logs_results_created
 				ON analytics.search_logs (results_count, created_at DESC);
+			ALTER TABLE analytics.search_logs
+				ADD COLUMN IF NOT EXISTS is_zero_result BOOLEAN NOT NULL DEFAULT FALSE;
+
+			CREATE TABLE IF NOT EXISTS analytics.bot_crawl_logs (
+				id BIGSERIAL PRIMARY KEY,
+				bot_name VARCHAR(60) NOT NULL,
+				path VARCHAR(500) NOT NULL,
+				user_agent TEXT NOT NULL DEFAULT '',
+				ip_hash VARCHAR(64) NOT NULL DEFAULT '',
+				country_code VARCHAR(10) NOT NULL DEFAULT '',
+				status_code SMALLINT NOT NULL DEFAULT 200,
+				created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+			);
+			CREATE INDEX IF NOT EXISTS idx_bot_crawl_logs_created_at
+				ON analytics.bot_crawl_logs (created_at DESC);
+			CREATE INDEX IF NOT EXISTS idx_bot_crawl_logs_bot_created
+				ON analytics.bot_crawl_logs (bot_name, created_at DESC);
 
 			ALTER TABLE catalog.orders
 				ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'TRY';
@@ -325,6 +342,7 @@ type RecentActivityEvent struct {
 	ReferrerHost string    `json:"referrer_host"`
 	DeviceType   string    `json:"device_type"`
 	Language     string    `json:"language"`
+	CountryCode  string    `json:"country_code"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -430,10 +448,7 @@ func buildPageViewRecord(r *http.Request, req *TrackPageViewRequest, path string
 		lang = resolvedLang
 	}
 
-	ttfb := req.TTFBMs
-	if ttfb < 0 || ttfb > 60000 {
-		ttfb = 0
-	}
+	ttfb := sanitizeVitalMs(req.TTFBMs, maxValidTTFBMs)
 
 	return pageViewRecord{
 		userID:       userID,
@@ -522,6 +537,32 @@ func checkIsNewHumanVisitor(ctx context.Context, visitorID string) bool {
 	return !alreadySeen
 }
 
+func resolveHumanPageViewIdentity(ctx context.Context, rec pageViewRecord) (string, bool) {
+	isNew := checkIsNewHumanVisitor(ctx, rec.visitorID)
+	if rec.visitorID == "" {
+		return rec.userID, isNew
+	}
+	if rec.userID != "" {
+		StitchVisitorToMember(ctx, rec.userID, rec.visitorID)
+		return rec.userID, isNew
+	}
+	return lookupLinkedUserByVisitor(ctx, rec.visitorID), isNew
+}
+
+func buildPageViewActivityMeta(rec pageViewRecord) map[string]any {
+	meta := map[string]any{}
+	if rec.referrerHost != "" {
+		meta["referrer_host"] = rec.referrerHost
+	}
+	if rec.utmSource != "" {
+		meta["utm_source"] = rec.utmSource
+	}
+	if rec.currency != "" {
+		meta["currency"] = rec.currency
+	}
+	return meta
+}
+
 func insertPageView(rec pageViewRecord) {
 	if db.Pool == nil {
 		return
@@ -533,12 +574,7 @@ func insertPageView(rec pageViewRecord) {
 	effectiveUserID := rec.userID
 	isNewVisitor := false
 	if !rec.isBot {
-		isNewVisitor = checkIsNewHumanVisitor(ctx, rec.visitorID)
-		if effectiveUserID != "" && rec.visitorID != "" {
-			StitchVisitorToMember(ctx, effectiveUserID, rec.visitorID)
-		} else if effectiveUserID == "" && rec.visitorID != "" {
-			effectiveUserID = lookupLinkedUserByVisitor(ctx, rec.visitorID)
-		}
+		effectiveUserID, isNewVisitor = resolveHumanPageViewIdentity(ctx, rec)
 	}
 
 	query := `
@@ -562,19 +598,23 @@ func insertPageView(rec pageViewRecord) {
 	)
 
 	if rec.isBot {
+		if rec.botName != "" && rec.botName != "EmptyUA" {
+			EnqueueBotCrawlLog(rec.botName, rec.path, "", rec.ipHash, rec.countryCode, http.StatusOK)
+		}
 		return
 	}
 
 	resolved := resolveStorePathActivity(ctx, rec.path, rec.url, rec.pageTitle, rec.referrerHost)
-	meta := map[string]any{}
-	if rec.referrerHost != "" {
-		meta["referrer_host"] = rec.referrerHost
-	}
-	if rec.utmSource != "" {
-		meta["utm_source"] = rec.utmSource
-	}
-	if rec.currency != "" {
-		meta["currency"] = rec.currency
+	if resolved.EventType == "search_query" && strings.TrimSpace(resolved.EntityID) != "" {
+		persistSearchLogEntry(searchLogEntry{
+			VisitorID:    rec.visitorID,
+			SessionID:    rec.sessionID,
+			UserID:       effectiveUserID,
+			QueryText:    resolved.EntityID,
+			LanguageCode: rec.language,
+			CountryCode:  rec.countryCode,
+			ResultsCount: countStoreSearchMatches(ctx, resolved.EntityID),
+		})
 	}
 	persistMemberActivity(ctx, MemberActivityInput{
 		UserID:        effectiveUserID,
@@ -588,7 +628,7 @@ func insertPageView(rec pageViewRecord) {
 		EntityType:    resolved.EntityType,
 		EntityID:      resolved.EntityID,
 		ImageURL:      resolved.ImageURL,
-		Metadata:      meta,
+		Metadata:      buildPageViewActivityMeta(rec),
 		DeviceType:    rec.deviceType,
 		Browser:       rec.browser,
 		OS:            rec.os,
@@ -805,6 +845,27 @@ func scanTopItemCounts(ctx context.Context, query string, since time.Time, total
 	return items
 }
 
+func countStoreSearchMatches(ctx context.Context, rawQuery string) int {
+	trimmed := strings.TrimSpace(rawQuery)
+	if trimmed == "" || db.Pool == nil {
+		return 0
+	}
+	pattern := "%" + trimmed + "%"
+	var cnt int
+	_ = db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(COUNT(*), 0)
+		FROM catalog.mv_products p
+		WHERE p.is_active = true
+		  AND (
+			p.custom_sku ILIKE $1
+			OR p.brand_name ILIKE $1
+			OR COALESCE(p.names::text, '') ILIKE $1
+			OR COALESCE(p.descriptions::text, '') ILIKE $1
+		  )
+	`, pattern).Scan(&cnt)
+	return cnt
+}
+
 func (h *AnalyticsHandler) queryRecentEvents(ctx context.Context, resp *AnalyticsStatsResponse) {
 	eventsQuery := `
 		SELECT 
@@ -812,6 +873,10 @@ func (h *AnalyticsHandler) queryRecentEvents(ctx context.Context, resp *Analytic
 			COALESCE(NULLIF(referrer_host, ''), 'Doğrudan') AS ref_host,
 			COALESCE(NULLIF(device_type, ''), 'desktop') AS dev,
 			COALESCE(NULLIF(language, ''), 'tr') AS lang,
+			CASE
+				WHEN UPPER(COALESCE(NULLIF(country_code, ''), 'TR')) IN ('EU', 'EN', 'T1', '--') THEN 'TR'
+				ELSE UPPER(COALESCE(NULLIF(country_code, ''), 'TR'))
+			END AS ccode,
 			created_at
 		FROM analytics.page_views
 		WHERE COALESCE(is_bot, false) = false
@@ -826,7 +891,7 @@ func (h *AnalyticsHandler) queryRecentEvents(ctx context.Context, resp *Analytic
 
 	for evRows.Next() {
 		var ev RecentActivityEvent
-		if scanErr := evRows.Scan(&ev.Path, &ev.ReferrerHost, &ev.DeviceType, &ev.Language, &ev.CreatedAt); scanErr == nil {
+		if scanErr := evRows.Scan(&ev.Path, &ev.ReferrerHost, &ev.DeviceType, &ev.Language, &ev.CountryCode, &ev.CreatedAt); scanErr == nil {
 			resp.RecentEvents = append(resp.RecentEvents, ev)
 		}
 	}

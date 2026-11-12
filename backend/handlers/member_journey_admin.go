@@ -20,11 +20,15 @@ type MemberJourneyListItem struct {
 	Email               string  `json:"email"`
 	Phone               string  `json:"phone"`
 	EmailVerified       bool    `json:"email_verified"`
+	IsVerified          bool    `json:"is_verified"`
+	IsActive            bool    `json:"is_active"`
 	IsBlocked           bool    `json:"is_blocked"`
+	Status              string  `json:"status"`
 	CreatedAt           string  `json:"created_at"`
 	LastActiveAt        *string `json:"last_active_at"`
 	IsOnline            bool    `json:"is_online"`
 	TotalEvents         int     `json:"total_events"`
+	PageViews           int     `json:"page_views"`
 	PagesReadCount      int     `json:"pages_read_count"`
 	ProductsViewedCount int     `json:"products_viewed_count"`
 	CartActionsCount    int     `json:"cart_actions_count"`
@@ -93,38 +97,42 @@ type MemberTimelineEvent struct {
 
 // MemberJourneyKPIs summarizes quantitative engagement metrics for one member.
 type MemberJourneyKPIs struct {
-	TotalSessions       int     `json:"total_sessions"`
-	TotalEvents         int     `json:"total_events"`
-	TotalPagesRead      int     `json:"total_pages_read"`
-	CorporatePagesRead  int     `json:"corporate_pages_read"`
-	UniqueProducts      int     `json:"unique_products"`
-	TotalProductViews   int     `json:"total_product_views"`
-	CartAdditions       int     `json:"cart_additions"`
-	SupplierContacts    int     `json:"supplier_contacts"`
-	OrdersCount         int     `json:"orders_count"`
-	OrdersTotalAmount   float64 `json:"orders_total_amount"`
-	TotalTimeSpentSec   int     `json:"total_time_spent_sec"`
-	FirstSeenAt         *string `json:"first_seen_at,omitempty"`
-	LastActiveAt        *string `json:"last_active_at,omitempty"`
-	IsOnline            bool    `json:"is_online"`
-	AcquisitionSource   string  `json:"acquisition_source"`
-	PrimaryDevice       string  `json:"primary_device"`
+	TotalSessions      int     `json:"total_sessions"`
+	TotalEvents        int     `json:"total_events"`
+	PageViews          int     `json:"page_views"`
+	TotalPagesRead     int     `json:"total_pages_read"`
+	CorporatePagesRead int     `json:"corporate_pages_read"`
+	UniqueProducts     int     `json:"unique_products"`
+	TotalProductViews  int     `json:"total_product_views"`
+	CartAdditions      int     `json:"cart_additions"`
+	SupplierContacts   int     `json:"supplier_contacts"`
+	OrdersCount        int     `json:"orders_count"`
+	OrdersTotalAmount  float64 `json:"orders_total_amount"`
+	TotalTimeSpentSec  int     `json:"total_time_spent_sec"`
+	FirstSeenAt        *string `json:"first_seen_at,omitempty"`
+	LastActiveAt       *string `json:"last_active_at,omitempty"`
+	IsOnline           bool    `json:"is_online"`
+	AcquisitionSource  string  `json:"acquisition_source"`
+	PrimaryDevice      string  `json:"primary_device"`
 }
 
 // MemberJourneyCustomerProfile holds member identity details for the journey header.
 type MemberJourneyCustomerProfile struct {
-	ID                string  `json:"id"`
-	FirstName         string  `json:"first_name"`
-	LastName          string  `json:"last_name"`
-	Email             string  `json:"email"`
-	Phone             string  `json:"phone"`
-	EmailVerified     bool    `json:"email_verified"`
-	IsBlocked         bool    `json:"is_blocked"`
-	RegistrationIP    string  `json:"registration_ip"`
-	PreferredLang     string  `json:"preferred_lang"`
-	PreferredCurrency string  `json:"preferred_currency"`
-	InstagramUsername string  `json:"instagram_username"`
-	CreatedAt         string  `json:"created_at"`
+	ID                string    `json:"id"`
+	FirstName         string    `json:"first_name"`
+	LastName          string    `json:"last_name"`
+	Email             string    `json:"email"`
+	Phone             string    `json:"phone"`
+	EmailVerified     bool      `json:"email_verified"`
+	IsVerified        bool      `json:"is_verified"`
+	IsActive          bool      `json:"is_active"`
+	IsBlocked         bool      `json:"is_blocked"`
+	Status            string    `json:"status"`
+	RegistrationIP    string    `json:"registration_ip"`
+	PreferredLang     string    `json:"preferred_lang"`
+	PreferredCurrency string    `json:"preferred_currency"`
+	InstagramUsername string    `json:"instagram_username"`
+	CreatedAt         string    `json:"created_at"`
 	createdAtTime     time.Time
 }
 
@@ -138,6 +146,41 @@ type MemberJourneyDetailResponse struct {
 	TopCategories  []string                     `json:"top_categories"`
 	Timeline       []MemberTimelineEvent        `json:"timeline"`
 }
+
+func resolveCustomerStatusLabel(isActive, isBlocked bool) string {
+	if isBlocked {
+		return "blocked"
+	}
+	if isActive {
+		return "active"
+	}
+	return "inactive"
+}
+
+func finalizeMemberJourneyListItem(item *MemberJourneyListItem, rawActive, hasRegister bool, createdAt, lastActive, now time.Time) {
+	item.IsVerified = item.EmailVerified
+	item.IsActive = rawActive && !item.IsBlocked
+	item.Status = resolveCustomerStatusLabel(item.IsActive, item.IsBlocked)
+	item.PageViews = item.PagesReadCount
+	item.CreatedAt = createdAt.Format(time.RFC3339)
+	laStr := lastActive.Format(time.RFC3339)
+	item.LastActiveAt = &laStr
+	item.IsOnline = now.Sub(lastActive) <= 15*time.Minute
+	if !hasRegister {
+		item.TotalEvents++
+	}
+	if item.TotalEvents == 0 {
+		item.TotalEvents = 1 + item.OrdersCount
+	}
+	if item.LastEventTitle == "" {
+		item.LastEventTitle = "Üye kaydı oluşturuldu"
+	}
+}
+
+const memberPageVisitSQLFilter = `(
+	me.event_category IN ('content', 'navigation')
+	OR me.event_type IN ('page_view', 'category_view', 'product_view', 'brand_view', 'cms_read', 'blog_read', 'faq_read', 'contact_view', 'b2b_guide_read')
+)`
 
 // ListMemberJourneys handles GET /api/v1/admin/member-journeys for the Admin Journey Explorer.
 func (h *CustomersHandler) ListMemberJourneys(w http.ResponseWriter, r *http.Request) {
@@ -161,24 +204,58 @@ func (h *CustomersHandler) ListMemberJourneys(w http.ResponseWriter, r *http.Req
 			u.email,
 			COALESCE(u.phone, ''),
 			COALESCE(u.email_verified, false),
-			u.is_blocked,
+			COALESCE(u.is_active, true),
+			COALESCE(u.is_blocked, false),
 			u.created_at,
 			GREATEST(
 				u.created_at,
-				COALESCE((SELECT MAX(me.created_at) FROM analytics.member_events me WHERE me.user_id = u.id), u.created_at),
+				COALESCE(me_agg.last_me_at, u.created_at),
+				COALESCE(pv_agg.last_pv_at, u.created_at),
 				COALESCE((SELECT MAX(lh.login_at) FROM identity.user_login_history lh WHERE lh.user_id = u.id), u.created_at)
 			) AS last_active_at,
-			COALESCE((SELECT COUNT(*) FROM analytics.member_events me WHERE me.user_id = u.id), 0) AS raw_events,
-			COALESCE((SELECT COUNT(*) FROM analytics.member_events me WHERE me.user_id = u.id AND me.event_category IN ('content', 'navigation')), 0) AS pages_read,
-			COALESCE((SELECT COUNT(DISTINCT me.entity_id) FROM analytics.member_events me WHERE me.user_id = u.id AND me.event_type = 'product_view' AND me.entity_id IS NOT NULL), 0) AS products_viewed,
-			COALESCE((SELECT COUNT(*) FROM analytics.member_events me WHERE me.user_id = u.id AND me.event_type = 'cart_add'), 0) AS cart_actions,
+			COALESCE(me_agg.raw_events, 0) AS raw_events,
+			COALESCE(me_agg.has_register, false) AS has_register,
+			GREATEST(COALESCE(me_agg.pages_read, 0), COALESCE(pv_agg.pv_count, 0))::int AS pages_read,
+			COALESCE(me_agg.products_viewed, 0)::int AS products_viewed,
+			COALESCE(me_agg.cart_actions, 0)::int AS cart_actions,
 			(
 				COALESCE((SELECT COUNT(*) FROM catalog.orders o WHERE o.user_id = u.id), 0) +
 				COALESCE((SELECT COUNT(*) FROM catalog.store_inquiries si WHERE LOWER(si.email) = LOWER(u.email)), 0)
-			) AS orders_count,
-			COALESCE((SELECT me.title FROM analytics.member_events me WHERE me.user_id = u.id ORDER BY me.created_at DESC LIMIT 1), '') AS last_event_title,
-			COALESCE((SELECT me.event_category FROM analytics.member_events me WHERE me.user_id = u.id ORDER BY me.created_at DESC LIMIT 1), 'auth') AS last_event_category
+			)::int AS orders_count,
+			COALESCE(me_last.title, '') AS last_event_title,
+			COALESCE(me_last.event_category, 'auth') AS last_event_category
 		FROM identity.users u
+		LEFT JOIN LATERAL (
+			SELECT
+				COUNT(*)::int AS raw_events,
+				BOOL_OR(me.event_type = 'register') AS has_register,
+				COUNT(*) FILTER (WHERE ` + memberPageVisitSQLFilter + `)::int AS pages_read,
+				COUNT(DISTINCT me.entity_id) FILTER (WHERE me.event_type = 'product_view' AND me.entity_id IS NOT NULL AND me.entity_id <> '')::int AS products_viewed,
+				COUNT(*) FILTER (WHERE me.event_type = 'cart_add')::int AS cart_actions,
+				MAX(me.created_at) AS last_me_at
+			FROM analytics.member_events me
+			WHERE me.user_id = u.id
+			   OR me.visitor_id IN (SELECT uvl.visitor_id FROM analytics.user_visitor_links uvl WHERE uvl.user_id = u.id)
+		) me_agg ON true
+		LEFT JOIN LATERAL (
+			SELECT
+				COUNT(*)::int AS pv_count,
+				MAX(pv.created_at) AS last_pv_at
+			FROM analytics.page_views pv
+			WHERE COALESCE(pv.is_bot, false) = false
+			  AND (
+				pv.user_id = u.id
+				OR pv.visitor_id IN (SELECT uvl2.visitor_id FROM analytics.user_visitor_links uvl2 WHERE uvl2.user_id = u.id)
+			  )
+		) pv_agg ON true
+		LEFT JOIN LATERAL (
+			SELECT me2.title, me2.event_category
+			FROM analytics.member_events me2
+			WHERE me2.user_id = u.id
+			   OR me2.visitor_id IN (SELECT uvl3.visitor_id FROM analytics.user_visitor_links uvl3 WHERE uvl3.user_id = u.id)
+			ORDER BY me2.created_at DESC
+			LIMIT 1
+		) me_last ON true
 		WHERE u.user_role = 'customer'
 	` + whereSearch + `
 		ORDER BY last_active_at DESC, u.created_at DESC
@@ -196,25 +273,17 @@ func (h *CustomersHandler) ListMemberJourneys(w http.ResponseWriter, r *http.Req
 	list := make([]MemberJourneyListItem, 0, 32)
 	for rows.Next() {
 		var item MemberJourneyListItem
+		var rawActive, hasRegister bool
 		var createdAt, lastActive time.Time
 		if scanErr := rows.Scan(
 			&item.ID, &item.FirstName, &item.LastName, &item.Email, &item.Phone,
-			&item.EmailVerified, &item.IsBlocked, &createdAt, &lastActive,
-			&item.TotalEvents, &item.PagesReadCount, &item.ProductsViewedCount,
+			&item.EmailVerified, &rawActive, &item.IsBlocked, &createdAt, &lastActive,
+			&item.TotalEvents, &hasRegister, &item.PagesReadCount, &item.ProductsViewedCount,
 			&item.CartActionsCount, &item.OrdersCount, &item.LastEventTitle, &item.LastEventCategory,
 		); scanErr != nil {
 			continue
 		}
-		item.CreatedAt = createdAt.Format(time.RFC3339)
-		laStr := lastActive.Format(time.RFC3339)
-		item.LastActiveAt = &laStr
-		item.IsOnline = now.Sub(lastActive) <= 15*time.Minute
-		if item.TotalEvents == 0 {
-			item.TotalEvents = 1 + item.OrdersCount
-		}
-		if item.LastEventTitle == "" {
-			item.LastEventTitle = "Üye kaydı oluşturuldu"
-		}
+		finalizeMemberJourneyListItem(&item, rawActive, hasRegister, createdAt, lastActive, now)
 		list = append(list, item)
 	}
 
@@ -271,10 +340,11 @@ func (h *CustomersHandler) GetCustomerJourney(w http.ResponseWriter, r *http.Req
 
 func loadCustomerJourneyProfile(ctx context.Context, customerID string) (MemberJourneyCustomerProfile, bool) {
 	var p MemberJourneyCustomerProfile
+	var rawActive bool
 	err := db.Pool.QueryRow(ctx, `
 		SELECT
 			id, first_name, last_name, email, COALESCE(phone, ''),
-			COALESCE(email_verified, false), is_blocked,
+			COALESCE(email_verified, false), COALESCE(is_active, true), COALESCE(is_blocked, false),
 			COALESCE(registration_ip, ''), COALESCE(preferred_lang, 'tr'),
 			COALESCE(preferred_currency, 'TRY'), COALESCE(instagram_username, ''),
 			created_at
@@ -283,7 +353,7 @@ func loadCustomerJourneyProfile(ctx context.Context, customerID string) (MemberJ
 		LIMIT 1
 	`, customerID).Scan(
 		&p.ID, &p.FirstName, &p.LastName, &p.Email, &p.Phone,
-		&p.EmailVerified, &p.IsBlocked,
+		&p.EmailVerified, &rawActive, &p.IsBlocked,
 		&p.RegistrationIP, &p.PreferredLang,
 		&p.PreferredCurrency, &p.InstagramUsername,
 		&p.createdAtTime,
@@ -291,6 +361,9 @@ func loadCustomerJourneyProfile(ctx context.Context, customerID string) (MemberJ
 	if err != nil {
 		return p, false
 	}
+	p.IsVerified = p.EmailVerified
+	p.IsActive = rawActive && !p.IsBlocked
+	p.Status = resolveCustomerStatusLabel(p.IsActive, p.IsBlocked)
 	p.CreatedAt = p.createdAtTime.Format(time.RFC3339)
 	return p, true
 }
@@ -574,10 +647,10 @@ func appendHistoricalChatsAndRfqs(ctx context.Context, profile MemberJourneyCust
 		SELECT cr.id::text, COALESCE(b.brand_name, 'Tedarikçi'), cr.created_at
 		FROM catalog.chat_rooms cr
 		LEFT JOIN catalog.brands b ON cr.brand_id = b.id
-		WHERE cr.customer_user_id = $1
+		WHERE cr.customer_id = $1 OR ($2 <> '' AND LOWER(COALESCE(cr.customer_email, '')) = LOWER($2))
 		ORDER BY cr.created_at DESC
 		LIMIT 15
-	`, profile.ID)
+	`, profile.ID, profile.Email)
 	if err == nil {
 		defer cRows.Close()
 		for cRows.Next() {
@@ -601,10 +674,10 @@ func appendHistoricalChatsAndRfqs(ctx context.Context, profile MemberJourneyCust
 	rRows, rErr := db.Pool.Query(ctx, `
 		SELECT id::text, title, target_quantity, created_at
 		FROM catalog.buyer_rfqs
-		WHERE customer_user_id = $1 OR LOWER(buyer_email) = LOWER($2)
+		WHERE $1 <> '' AND LOWER(COALESCE(buyer_email, '')) = LOWER($1)
 		ORDER BY created_at DESC
 		LIMIT 15
-	`, profile.ID, profile.Email)
+	`, profile.Email)
 	if rErr == nil {
 		defer rRows.Close()
 		for rRows.Next() {
@@ -808,6 +881,35 @@ func buildReadContentAndCategories(events []MemberTimelineEvent) ([]ReadContentS
 	return pages, topCats
 }
 
+func isJourneyPageVisitEvent(ev MemberTimelineEvent) bool {
+	if ev.EventCategory == "navigation" || ev.EventCategory == "content" {
+		return true
+	}
+	switch ev.EventType {
+	case "page_view", "category_view", "product_view", "brand_view", "cms_read", "blog_read", "faq_read", "contact_view", "b2b_guide_read":
+		return true
+	default:
+		return false
+	}
+}
+
+func accumulateJourneyEventCounters(events []MemberTimelineEvent, kpis *MemberJourneyKPIs) {
+	for _, ev := range events {
+		kpis.TotalTimeSpentSec += ev.DurationSec
+		if isJourneyPageVisitEvent(ev) {
+			kpis.TotalPagesRead++
+		}
+		switch ev.EventType {
+		case "product_view":
+			kpis.TotalProductViews++
+		case "cart_add":
+			kpis.CartAdditions++
+		case "whatsapp_click", "phone_click", "email_click", "chat_start", "chat_message", "rfq_create":
+			kpis.SupplierContacts++
+		}
+	}
+}
+
 func computeMemberJourneyKPIs(
 	ctx context.Context,
 	profile MemberJourneyCustomerProfile,
@@ -824,36 +926,75 @@ func computeMemberJourneyKPIs(
 		PrimaryDevice:      bundle.primaryDevice,
 	}
 
-	for _, ev := range bundle.events {
-		kpis.TotalTimeSpentSec += ev.DurationSec
-		switch ev.EventCategory {
-		case "navigation", "content":
-			kpis.TotalPagesRead++
-		}
-		switch ev.EventType {
-		case "product_view":
-			kpis.TotalProductViews++
-		case "cart_add":
-			kpis.CartAdditions++
-		case "whatsapp_click", "phone_click", "email_click", "chat_start", "chat_message", "rfq_create":
-			kpis.SupplierContacts++
-		}
-	}
+	accumulateJourneyEventCounters(bundle.events, &kpis)
 
+	var dbPagesRead, dbUniqueProds, dbCartAdds int
+	var dbLastActive time.Time
 	_ = db.Pool.QueryRow(ctx, `
 		SELECT
-			(SELECT COUNT(*) FROM catalog.orders WHERE user_id = $1) +
-			(SELECT COUNT(*) FROM catalog.store_inquiries WHERE LOWER(email) = LOWER($2)),
+			GREATEST(
+				COALESCE((
+					SELECT COUNT(*) FROM analytics.member_events me
+					WHERE (me.user_id = $1 OR me.visitor_id IN (SELECT uvl.visitor_id FROM analytics.user_visitor_links uvl WHERE uvl.user_id = $1))
+					  AND `+memberPageVisitSQLFilter+`
+				), 0),
+				COALESCE((
+					SELECT COUNT(*) FROM analytics.page_views pv
+					WHERE COALESCE(pv.is_bot, false) = false
+					  AND (pv.user_id = $1 OR pv.visitor_id IN (SELECT uvl2.visitor_id FROM analytics.user_visitor_links uvl2 WHERE uvl2.user_id = $1))
+				), 0)
+			)::int,
+			COALESCE((
+				SELECT COUNT(DISTINCT me.entity_id) FROM analytics.member_events me
+				WHERE (me.user_id = $1 OR me.visitor_id IN (SELECT uvl.visitor_id FROM analytics.user_visitor_links uvl WHERE uvl.user_id = $1))
+				  AND me.event_type = 'product_view' AND me.entity_id IS NOT NULL AND me.entity_id <> ''
+			), 0)::int,
+			COALESCE((
+				SELECT COUNT(*) FROM analytics.member_events me
+				WHERE (me.user_id = $1 OR me.visitor_id IN (SELECT uvl.visitor_id FROM analytics.user_visitor_links uvl WHERE uvl.user_id = $1))
+				  AND me.event_type = 'cart_add'
+			), 0)::int,
+			GREATEST(
+				$2::timestamptz,
+				COALESCE((SELECT MAX(me.created_at) FROM analytics.member_events me WHERE me.user_id = $1 OR me.visitor_id IN (SELECT uvl.visitor_id FROM analytics.user_visitor_links uvl WHERE uvl.user_id = $1)), $2::timestamptz),
+				COALESCE((SELECT MAX(pv.created_at) FROM analytics.page_views pv WHERE COALESCE(pv.is_bot, false) = false AND (pv.user_id = $1 OR pv.visitor_id IN (SELECT uvl2.visitor_id FROM analytics.user_visitor_links uvl2 WHERE uvl2.user_id = $1))), $2::timestamptz),
+				COALESCE((SELECT MAX(lh.login_at) FROM identity.user_login_history lh WHERE lh.user_id = $1), $2::timestamptz)
+			),
+			(
+				COALESCE((SELECT COUNT(*) FROM catalog.orders WHERE user_id = $1), 0) +
+				COALESCE((SELECT COUNT(*) FROM catalog.store_inquiries WHERE LOWER(email) = LOWER($3)), 0)
+			)::int,
 			COALESCE((SELECT SUM(total_amount) FROM catalog.orders WHERE user_id = $1), 0) +
-			COALESCE((SELECT SUM(ii.quantity * ii.price) FROM catalog.store_inquiry_items ii INNER JOIN catalog.store_inquiries si ON ii.inquiry_id = si.id WHERE LOWER(si.email) = LOWER($2)), 0)
-	`, profile.ID, profile.Email).Scan(&kpis.OrdersCount, &kpis.OrdersTotalAmount)
+			COALESCE((SELECT SUM(ii.quantity * ii.price) FROM catalog.store_inquiry_items ii INNER JOIN catalog.store_inquiries si ON ii.inquiry_id = si.id WHERE LOWER(si.email) = LOWER($3)), 0)
+	`, profile.ID, profile.createdAtTime, profile.Email).Scan(
+		&dbPagesRead, &dbUniqueProds, &dbCartAdds, &dbLastActive,
+		&kpis.OrdersCount, &kpis.OrdersTotalAmount,
+	)
 
+	if dbPagesRead > 0 {
+		kpis.TotalPagesRead = dbPagesRead
+	}
+	kpis.PageViews = kpis.TotalPagesRead
+	if dbUniqueProds > kpis.UniqueProducts {
+		kpis.UniqueProducts = dbUniqueProds
+	}
+	if dbCartAdds > kpis.CartAdditions {
+		kpis.CartAdditions = dbCartAdds
+	}
+
+	if !dbLastActive.IsZero() {
+		laStr := dbLastActive.Format(time.RFC3339)
+		kpis.LastActiveAt = &laStr
+		kpis.IsOnline = time.Since(dbLastActive) <= 15*time.Minute
+	}
 	if len(bundle.events) > 0 {
-		newest := bundle.events[0].CreatedAt
 		oldest := bundle.events[len(bundle.events)-1].CreatedAt
-		kpis.LastActiveAt = &newest
 		kpis.FirstSeenAt = &oldest
-		kpis.IsOnline = time.Since(bundle.events[0].sortTime) <= 15*time.Minute
+		if kpis.LastActiveAt == nil {
+			newest := bundle.events[0].CreatedAt
+			kpis.LastActiveAt = &newest
+			kpis.IsOnline = time.Since(bundle.events[0].sortTime) <= 15*time.Minute
+		}
 	}
 	return kpis
 }

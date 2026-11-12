@@ -1,5 +1,46 @@
 import { CategoryNode } from "../types/integration";
 
+export const DEFAULT_MERTER_ADDRESS =
+  "Merter Tekstil Merkezi, Mehmet Nesih Özmen Mah., Güngören / İstanbul";
+
+export const DEFAULT_MERTER_EMAIL = "info@mertervitrini.com.tr";
+
+/**
+ * Fixes malformed apostrophe title-casing such as "Women' S" / "Women'S" -> "Women's"
+ * and "WOMEN' S" -> "WOMEN'S".
+ */
+export function fixApostropheCase(text: string | undefined | null): string {
+  if (!text) return "";
+  return text
+    .replace(/([a-z\u00E0-\u024F])\s*['’]\s*[sS]\b/g, "$1's")
+    .replace(/([A-Z])\s*['’]\s+([S])\b/g, "$1'$2");
+}
+
+/**
+ * Formats brand / English technical labels in uppercase in JS so CSS `uppercase`
+ * under `<html lang="tr">` never turns ASCII `i` into dotted `İ` (e.g. "ETİKA FASHİON", "ANDROİD").
+ */
+export function formatAsciiSafeUpper(text: string | undefined | null): string {
+  if (!text) return "";
+  return fixApostropheCase(text).toUpperCase();
+}
+
+export function sanitizePublicStoreEmail(rawEmail: string | undefined | null): string {
+  const trimmed = (rawEmail || "").trim();
+  if (!trimmed || /toptanmoda\.net/i.test(trimmed)) {
+    return DEFAULT_MERTER_EMAIL;
+  }
+  return trimmed;
+}
+
+export function sanitizePublicStoreAddress(rawAddress: string | undefined | null): string {
+  const trimmed = (rawAddress || "").trim();
+  if (!trimmed || /esenyurt|akevler|regnum\s*astrum/i.test(trimmed)) {
+    return DEFAULT_MERTER_ADDRESS;
+  }
+  return trimmed;
+}
+
 export const formatDateTime = (dateStr: string | null): string => {
   if (!dateStr) return "-";
   const date = new Date(dateStr);

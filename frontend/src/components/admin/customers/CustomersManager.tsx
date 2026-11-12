@@ -41,7 +41,7 @@ interface Customer {
 const LABELS = {
   TITLE: "Müşteri Listesi & Yönetimi",
   SUBTITLE: "Storefront üzerinden kayıt olan ve Keycloak OIDC altyapısı ile kimlik doğrulayan tüm aktif/engellenmiş son kullanıcı listesi.",
-  REFRESH: "Tazele",
+  REFRESH: "Yenile",
   SEARCH_PLACEHOLDER: "İsim, e-posta veya telefon ile ara...",
   SEARCH_BTN: "Ara",
   LOADING: "Müşteri verileri yükleniyor...",
@@ -54,7 +54,7 @@ const LABELS = {
   TH_ACTIONS: "İşlemler",
   STATUS_BLOCKED: "Engellenmiş",
   STATUS_ACTIVE: "Aktif",
-  UNBLOCK: "Engeli Kaldır",
+  UNBLOCK: "Engeli Aç",
   BLOCK: "Engelle",
   BLOCK_TITLE: "Müşteriyi Engelle",
   BLOCK_DESC_PRE: "isimli müşterinin sisteme erişimini engellemek üzeresiniz. Bu işlem sonrasında müşteri mağazaya giriş yapamayacaktır.",
@@ -71,6 +71,12 @@ const LABELS = {
   DELETE_BTN: "Sil",
   DELETING: "Siliniyor...",
 };
+
+function formatCustomerInitials(firstName?: string, lastName?: string): string {
+  const first = (firstName || "").trim()[0] || "M";
+  const last = (lastName || "").trim()[0] || "";
+  return `${first}${last}`.toLocaleUpperCase("tr-TR");
+}
 
 interface CustomersTableProps {
   readonly loading: boolean;
@@ -119,112 +125,153 @@ function CustomersTable({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full overflow-x-auto">
       <table className="w-full border-collapse text-left">
         <thead>
-          <tr className="border-b border-zinc-100 bg-zinc-50/30">
-            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">{LABELS.TH_CUSTOMER}</th>
-            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">{LABELS.TH_EMAIL}</th>
-            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">{LABELS.TH_PHONE}</th>
-            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">{LABELS.TH_CREATED}</th>
-            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider">{LABELS.TH_STATUS}</th>
-            <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-wider text-right">{LABELS.TH_ACTIONS}</th>
+          <tr className="border-b border-zinc-100 bg-zinc-50/40">
+            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+              {LABELS.TH_CUSTOMER}
+            </th>
+            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+              {LABELS.TH_EMAIL}
+            </th>
+            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+              {LABELS.TH_PHONE}
+            </th>
+            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+              {LABELS.TH_CREATED}
+            </th>
+            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+              {LABELS.TH_STATUS}
+            </th>
+            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider text-right whitespace-nowrap">
+              {LABELS.TH_ACTIONS}
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-100">
-          {customers.map((c) => (
-            <tr key={c.id} className="hover:bg-zinc-50/30 transition-colors">
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-violet-50 border border-violet-100 text-violet-600 flex items-center justify-center font-bold text-xs">
-                    {c.first_name[0]}{c.last_name[0]}
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-zinc-900 block">
-                      {`${c.first_name} ${c.last_name}`}
-                    </span>
-                    <span className="text-[9px] font-semibold text-zinc-400 block tracking-wider uppercase">
-                      {`${LABELS.ID_LABEL}${c.id.substring(0, 8)}...`}
-                    </span>
-                  </div>
-                </div>
-              </td>
-              <td className="px-6 py-4 text-xs font-semibold text-zinc-600">{c.email}</td>
-              <td className="px-6 py-4 text-xs font-semibold text-zinc-600">{c.phone || "-"}</td>
-              <td className="px-6 py-4 text-xs font-semibold text-zinc-500">
-                {new Date(c.created_at).toLocaleString("tr-TR")}
-              </td>
-              <td className="px-6 py-4">
-                {c.is_blocked ? (
-                  <div className="inline-flex flex-col gap-1">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 border border-rose-200 text-rose-700">
-                      {LABELS.STATUS_BLOCKED}
-                    </span>
-                    {c.block_reason && (
-                      <span className="text-[9px] font-medium text-rose-500 max-w-[150px] truncate" title={c.block_reason}>
-                        {LABELS.REASON_LABEL}{c.block_reason}
+          {customers.map((c) => {
+            const fullName = `${c.first_name || ""} ${c.last_name || ""}`.trim() || "İsimsiz Müşteri";
+            const formattedDate = new Date(c.created_at).toLocaleDateString("tr-TR", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+
+            return (
+              <tr key={c.id} className="hover:bg-zinc-50/40 transition-colors">
+                <td className="px-3 py-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-violet-50 border border-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                      {formatCustomerInitials(c.first_name, c.last_name)}
+                    </div>
+                    <div className="min-w-0">
+                      <span
+                        className="text-xs font-bold text-zinc-900 block max-w-[160px] truncate"
+                        title={fullName}
+                      >
+                        {fullName}
                       </span>
-                    )}
+                      <span className="text-[9px] font-semibold text-zinc-400 block tracking-wider uppercase">
+                        {`${LABELS.ID_LABEL}${c.id.substring(0, 8)}`}
+                      </span>
+                    </div>
                   </div>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">
-                    {LABELS.STATUS_ACTIVE}
+                </td>
+                <td className="px-3 py-3">
+                  <span
+                    className="block max-w-[200px] truncate text-xs font-semibold text-zinc-600"
+                    title={c.email}
+                  >
+                    {c.email}
                   </span>
-                )}
-              </td>
-              <td className="px-6 py-4 text-right">
-                <div className="flex justify-end items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenJourney(c)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
-                  >
-                    <Compass size={14} />
-                    Yolculuk & Tarihçe
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenDetails(c)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
-                  >
-                    <Info size={14} />
-                    Detaylar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onToggleBlock(c)}
-                    disabled={updating}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-[0.98] ${
-                      c.is_blocked
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/10"
-                        : "bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 shadow-rose-500/5"
-                    }`}
-                  >
-                    {c.is_blocked ? (
-                      <>
-                        <ShieldCheck size={14} />
-                        {LABELS.UNBLOCK}
-                      </>
-                    ) : (
-                      <>
-                        <ShieldAlert size={14} />
-                        {LABELS.BLOCK}
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenDelete(c)}
-                    disabled={updating}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-[0.98]"
-                  >
-                    <Trash2 size={14} />
-                    {LABELS.DELETE_BTN}
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="px-3 py-3 text-xs font-semibold text-zinc-600 whitespace-nowrap">
+                  {c.phone || "-"}
+                </td>
+                <td className="px-3 py-3 text-xs font-semibold text-zinc-500 whitespace-nowrap tabular-nums">
+                  {formattedDate}
+                </td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  {c.is_blocked ? (
+                    <div className="inline-flex flex-col gap-0.5">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 border border-rose-200 text-rose-700">
+                        {LABELS.STATUS_BLOCKED}
+                      </span>
+                      {c.block_reason && (
+                        <span
+                          className="text-[9px] font-medium text-rose-500 max-w-[130px] truncate"
+                          title={c.block_reason}
+                        >
+                          {LABELS.REASON_LABEL}
+                          {c.block_reason}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">
+                      {LABELS.STATUS_ACTIVE}
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-3 text-right whitespace-nowrap">
+                  <div className="inline-flex justify-end items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onOpenJourney(c)}
+                      title="Üye Yolculuk Haritası ve Aktivite Tarihçesi"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-[#0F172A] hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      <Compass size={13} />
+                      <span>Yolculuk</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenDetails(c)}
+                      title="Müşteri Hesap Detayları"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      <Info size={13} />
+                      <span>Detay</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onToggleBlock(c)}
+                      disabled={updating}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap active:scale-[0.98] ${
+                        c.is_blocked
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                          : "bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200"
+                      }`}
+                    >
+                      {c.is_blocked ? (
+                        <>
+                          <ShieldCheck size={13} />
+                          <span>{LABELS.UNBLOCK}</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldAlert size={13} />
+                          <span>{LABELS.BLOCK}</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenDelete(c)}
+                      disabled={updating}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold shadow-2xs transition-all cursor-pointer whitespace-nowrap active:scale-[0.98]"
+                    >
+                      <Trash2 size={13} />
+                      <span>{LABELS.DELETE_BTN}</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -591,8 +638,8 @@ export default function CustomersManager({ apiUrl, token }: Readonly<CustomersMa
           <div className="relative w-full max-w-2xl bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden z-10 p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start border-b border-zinc-100 pb-4 mb-5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-violet-100 border border-violet-200 text-violet-700 flex items-center justify-center font-bold text-sm">
-                  {detailedCustomer.first_name?.[0] || ""}{detailedCustomer.last_name?.[0] || ""}
+                <div className="w-10 h-10 rounded-full bg-violet-100 border border-violet-200 text-violet-700 flex items-center justify-center font-bold text-sm uppercase">
+                  {formatCustomerInitials(detailedCustomer.first_name, detailedCustomer.last_name)}
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-zinc-950">

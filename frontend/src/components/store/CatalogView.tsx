@@ -249,16 +249,19 @@ export default function CatalogView({
       {/* Category Breadcrumbs */}
       {activeCategoryId && (
         <nav className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-sonic-silver mb-6 uppercase tracking-wider select-none">
-          <Link href="/" className="hover:text-salmon-pink flex items-center gap-1 transition-colors no-underline text-sonic-silver">
+          <Link
+            href={lang && lang !== "en" ? `/${lang}` : "/"}
+            className="hover:text-[#1C1C1C] flex items-center gap-1 transition-colors no-underline text-sonic-silver"
+          >
             <Home className="w-3.5 h-3.5" />
             <span>{t("home", lang)}</span>
           </Link>
           {getCategoryTrail(categories, activeCategoryId)?.map((cat) => (
             <React.Fragment key={cat.id}>
-              <ChevronRight className="w-3 h-3 text-spanish-gray" />
+              <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
               <Link
                 href={getCategoryUrl(categories, cat, lang)}
-                className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver last:text-salmon-pink last:pointer-events-none last:font-extrabold"
+                className="hover:text-[#1C1C1C] transition-colors no-underline text-sonic-silver last:text-[#1C1C1C] last:pointer-events-none last:font-extrabold"
               >
                 {getCategoryTitle(cat, lang)}
               </Link>

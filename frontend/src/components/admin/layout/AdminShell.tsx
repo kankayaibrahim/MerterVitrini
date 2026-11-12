@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import AdminSidebar from "./AdminSidebar";
 import AdminNavbar from "./AdminNavbar";
 import LoginScreen from "@/components/admin/auth/LoginScreen";
-import { useAdminAuth, useAdminShell } from "@/context/AdminContext";
+import { useAdminAuth } from "@/context/AdminContext";
 import { Loader2 } from "lucide-react";
 
 const ADMIN_TOKEN_STORAGE_KEYS = [
@@ -133,9 +133,19 @@ function clearUnauthorizedAdminStorage(): void {
 
 export default function AdminShell({ children }: { readonly children: React.ReactNode }) {
   const { isInitialized, token } = useAdminAuth();
-  const { theme } = useAdminShell();
   const router = useRouter();
   const pathname = usePathname();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("merter_admin_theme", "light");
+    } catch {
+      // Ignore storage access errors
+    }
+    document.documentElement.classList.remove("dark");
+    document.body.classList.remove("dark");
+  }, []);
 
   const effectiveToken = useMemo(() => {
     if (!isInitialized) return null;
@@ -152,8 +162,8 @@ export default function AdminShell({ children }: { readonly children: React.Reac
     const storedCandidate = token || readStoredCandidateToken();
     if (storedCandidate && !isTokenAuthorizedAdmin(storedCandidate)) {
       clearUnauthorizedAdminStorage();
-      if (pathname !== "/admin/login") {
-        router.replace("/admin/login");
+      if (pathname !== "/admin") {
+        router.replace("/admin");
       }
     }
   }, [isInitialized, token, pathname, router]);
@@ -161,15 +171,15 @@ export default function AdminShell({ children }: { readonly children: React.Reac
   // 1. Initializing state (checking stored JWT / Keycloak callback)
   if (!isInitialized) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center gap-4 text-white">
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center gap-4 text-[#0F172A]">
         <div className="relative">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-violet-600 to-amber-500 flex items-center justify-center font-black text-lg shadow-xl shadow-violet-600/30">
+          <div className="w-12 h-12 rounded-2xl bg-[#0F172A] border border-[#8C6D3F]/40 flex items-center justify-center font-black text-lg text-[#F3E2C7] shadow-lg shadow-slate-900/15">
             MV
           </div>
-          <Loader2 size={24} className="absolute -bottom-2 -right-2 text-white animate-spin" />
+          <Loader2 size={22} className="absolute -bottom-2 -right-2 text-[#8C6D3F] animate-spin" />
         </div>
-        <p className="text-xs font-semibold text-zinc-400 tracking-wider uppercase animate-pulse">
-          Admin Suite Hazırlanıyor...
+        <p className="text-xs font-bold text-slate-600 tracking-widest animate-pulse">
+          KURUMSAL YÖNETİM PANELİ HAZIRLANIYOR...
         </p>
       </div>
     );
@@ -180,19 +190,14 @@ export default function AdminShell({ children }: { readonly children: React.Reac
     return <LoginScreen />;
   }
 
-  // 3. Authenticated & RBAC-Verified Admin SaaS Shell
-  const shellThemeClasses =
-    theme === "dark"
-      ? "dark bg-zinc-950 text-zinc-100"
-      : "bg-slate-50 text-slate-900";
-
+  // 3. Authenticated & RBAC-Verified Executive Light Workspace + Deep Slate-Navy Sidebar
   return (
-    <div className={`min-h-screen ${shellThemeClasses} flex font-sans antialiased transition-colors duration-200`}>
-      {/* Dynamic Collapsible Sidebar */}
+    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex font-sans antialiased">
+      {/* Deep Slate-Navy Collapsible Sidebar */}
       <AdminSidebar />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      {/* Main Executive Light Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#F8FAFC]">
         {/* Sticky Top Navbar */}
         <AdminNavbar />
 

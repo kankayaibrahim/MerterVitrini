@@ -124,6 +124,7 @@ func ensureSponsoredAndNewsletterSchema(ctx context.Context) {
 			'Varsayılan Öne Çıkan Üretici Sponsorluk Alanı'
 		FROM catalog.brands b
 		WHERE b.is_active = true
+		  AND EXISTS (SELECT 1 FROM catalog.mv_products mp WHERE mp.brand_id = b.id AND mp.is_active = true)
 		  AND NOT EXISTS (SELECT 1 FROM catalog.sponsored_slots LIMIT 1)
 		ORDER BY b.brand_name ASC
 		LIMIT 3;
@@ -169,6 +170,7 @@ func ensureSponsoredAndNewsletterSchema(ctx context.Context) {
 			'Kadın Giyim Kategori Sponsorluğu'
 		FROM catalog.brands b
 		WHERE b.is_active = true
+		  AND EXISTS (SELECT 1 FROM catalog.mv_products mp WHERE mp.brand_id = b.id AND mp.is_active = true)
 		  AND NOT EXISTS (SELECT 1 FROM catalog.sponsored_slots WHERE placement = 'category_sponsor')
 		ORDER BY b.brand_name ASC
 		LIMIT 1;
@@ -244,7 +246,7 @@ func (h *MarketplaceHandler) ListPublicSponsoredSlots(w http.ResponseWriter, r *
 	ensureSponsoredAndNewsletterSchema(ctx)
 
 	placement := strings.TrimSpace(r.URL.Query().Get("placement"))
-	categorySlug := strings.TrimSpace(r.URL.Query().Get("category_slug"))
+	categorySlug := strings.Trim(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("category_slug"))), "/")
 
 	rows, err := db.Pool.Query(ctx, `
 		SELECT
@@ -259,7 +261,7 @@ func (h *MarketplaceHandler) ListPublicSponsoredSlots(w http.ResponseWriter, r *
 			COALESCE(b.whatsapp_phone, '') AS whatsapp_phone,
 			COALESCE(b.city, 'İstanbul') AS city,
 			COALESCE(b.district, 'Merter') AS district,
-			COALESCE((SELECT COUNT(*) FROM catalog.products p WHERE p.brand_id = b.id AND p.is_active = true), 0)::int AS product_count,
+			COALESCE((SELECT COUNT(*) FROM catalog.mv_products mp WHERE mp.brand_id = s.brand_id AND mp.is_active = true), 0)::int AS product_count,
 			s.category_slug,
 			s.title,
 			s.subtitle,
@@ -281,8 +283,25 @@ func (h *MarketplaceHandler) ListPublicSponsoredSlots(w http.ResponseWriter, r *
 		WHERE s.is_active = true
 		  AND (s.starts_at IS NULL OR s.starts_at <= NOW())
 		  AND (s.ends_at IS NULL OR s.ends_at >= NOW())
-		  AND ($1 = '' OR s.placement = $1)
-		  AND ($2 = '' OR s.category_slug = '' OR s.category_slug = $2)
+		  AND (
+			CASE
+				WHEN $1 IN ('category', 'category_sponsor') THEN s.placement IN ('category', 'category_sponsor')
+				WHEN $1 <> '' THEN s.placement = $1
+				ELSE s.placement NOT IN ('category', 'category_sponsor')
+			END
+		  )
+		  AND (
+			CASE
+				WHEN $2 <> '' THEN LOWER(BTRIM(COALESCE(s.category_slug, ''), ' /')) = $2
+				ELSE COALESCE(BTRIM(s.category_slug, ' /'), '') = ''
+			END
+		  )
+		  AND s.brand_id IS NOT NULL
+		  AND COALESCE(b.is_active, false) = true
+		  AND EXISTS (
+			SELECT 1 FROM catalog.mv_products mp
+			WHERE mp.brand_id = s.brand_id AND mp.is_active = true
+		  )
 		ORDER BY s.priority ASC, s.created_at DESC
 		LIMIT 20
 	`, placement, categorySlug)

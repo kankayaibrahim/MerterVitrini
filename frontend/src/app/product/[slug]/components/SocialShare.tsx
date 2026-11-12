@@ -1,31 +1,42 @@
 import React, { useState } from "react";
 import { Share2 } from "lucide-react";
+import { normalizeSeoLang, SITE_ORIGIN } from "@/utils/seoHelpers";
 
 interface SocialShareProps {
   readonly title: string;
   readonly lang: string;
   readonly t: (key: string, lang: string) => string;
+  readonly productSlug?: string;
 }
 
-export default function SocialShare({ title, lang, t }: SocialShareProps) {
+export default function SocialShare({
+  title,
+  lang,
+  t,
+  productSlug,
+}: SocialShareProps) {
   const [showToast, setShowToast] = useState<boolean>(false);
 
-  const shareText = typeof window !== "undefined" ? encodeURIComponent(title + " - " + window.location.href) : "";
-  const shareUrl = typeof window !== "undefined" ? encodeURIComponent(window.location.href) : "";
+  const safeLang = normalizeSeoLang(lang, "tr");
+  const slugSegment = productSlug ? `/product/${encodeURIComponent(productSlug)}` : "";
+  const langQuery = safeLang !== "tr" && slugSegment ? `?lang=${safeLang}` : "";
+  const effectiveUrl = `${SITE_ORIGIN}${slugSegment}${langQuery}`;
+  const shareText = encodeURIComponent(`${title} - ${effectiveUrl}`);
+  const shareUrl = encodeURIComponent(effectiveUrl);
 
   return (
-    <div className="border-t border-cultured pt-5 flex flex-col gap-3 mt-2">
-      <span className="text-[11px] uppercase font-extrabold text-eerie-black tracking-[0.5px] block select-none">
+    <div className="border-t border-[#E5E0D8] pt-5 flex flex-col gap-3 mt-2">
+      <span className="text-[11px] uppercase font-extrabold text-[#1C1C1C] tracking-[0.5px] block select-none">
         {t("share_product", lang)}
       </span>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         {/* WhatsApp */}
         <a
           href={`https://api.whatsapp.com/send?text=${shareText}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-10 h-10 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 flex items-center justify-center text-emerald-600 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+          className="w-10 h-10 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 flex items-center justify-center text-[#15803D] transition-colors cursor-pointer"
           title="WhatsApp"
           aria-label="WhatsApp"
         >
@@ -39,7 +50,7 @@ export default function SocialShare({ title, lang, t }: SocialShareProps) {
           href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${shareUrl}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-10 h-10 rounded-full bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/60 flex items-center justify-center text-zinc-900 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+          className="w-10 h-10 rounded-full bg-[#F8F6F2] hover:bg-[#EFECE6] border border-[#E5E0D8] flex items-center justify-center text-[#1C1C1C] transition-colors cursor-pointer"
           title="X (Twitter)"
           aria-label="X (Twitter)"
         >
@@ -53,7 +64,7 @@ export default function SocialShare({ title, lang, t }: SocialShareProps) {
           href={`https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-10 h-10 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-100 flex items-center justify-center text-blue-600 transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm"
+          className="w-10 h-10 rounded-full bg-[#F8F6F2] hover:bg-[#EFECE6] border border-[#E5E0D8] flex items-center justify-center text-[#1C1C1C] transition-colors cursor-pointer"
           title="Facebook"
           aria-label="Facebook"
         >
@@ -67,12 +78,13 @@ export default function SocialShare({ title, lang, t }: SocialShareProps) {
           type="button"
           onClick={() => {
             if (typeof window !== "undefined") {
-              void navigator.clipboard.writeText(window.location.href);
+              const urlToCopy = window.location.href || effectiveUrl;
+              void navigator.clipboard.writeText(urlToCopy);
               setShowToast(true);
               setTimeout(() => setShowToast(false), 2000);
             }
           }}
-          className="w-10 h-10 rounded-full bg-purple-50 hover:bg-purple-100 border border-purple-100 flex items-center justify-center text-purple-600 transition-all hover:scale-105 active:scale-95 cursor-pointer border-none"
+          className="w-10 h-10 rounded-full bg-[#F8F6F2] hover:bg-[#EFECE6] border border-[#E5E0D8] flex items-center justify-center text-[#1C1C1C] transition-colors cursor-pointer"
           title={t("copy_link", lang)}
           aria-label={t("copy_link", lang)}
         >
@@ -81,7 +93,7 @@ export default function SocialShare({ title, lang, t }: SocialShareProps) {
 
         {/* Toast Notification */}
         {showToast && (
-          <span className="text-[10px] font-extrabold text-purple-600 bg-purple-50 px-3 py-1.5 rounded-[5px] border border-purple-100 animate-fade-in select-none">
+          <span className="text-[10px] font-extrabold text-[#6E542E] bg-[#FAF7F2] px-3 py-1.5 rounded-md border border-[#D8C7A6] select-none">
             {t("link_copied", lang)}
           </span>
         )}

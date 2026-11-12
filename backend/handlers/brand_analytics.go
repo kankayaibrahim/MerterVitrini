@@ -122,43 +122,43 @@ func resolveVisitorLang(r *http.Request, explicitLang string) string {
 	return lang
 }
 
-func fallbackCountryForLang(lang string) string {
-	switch lang {
-	case "ru":
-		return "RU"
-	case "ar":
-		return "AE"
-	case "de":
-		return "DE"
-	case "fr":
-		return "FR"
-	case "pl":
-		return "PL"
-	case "bg":
-		return "BG"
-	case "en":
-		return "EU"
+func isIgnoredGeoCountryCode(code string) bool {
+	switch code {
+	case "", "XX", "T1", "EU", "EN", "--":
+		return true
 	default:
-		return "TR"
+		return len(code) != 2
 	}
 }
 
-func resolveVisitorCountry(r *http.Request, explicitCountry, lang string) string {
+func resolveVisitorCountry(r *http.Request, explicitCountry, _ string) string {
 	country := strings.ToUpper(strings.TrimSpace(explicitCountry))
+	if isIgnoredGeoCountryCode(country) {
+		country = ""
+	}
 	if country == "" && r != nil {
-		for _, hdr := range []string{"CF-IPCountry", "X-Country-Code", "X-Geo-Country"} {
+		for _, hdr := range []string{
+			"CF-IPCountry",
+			"X-Country-Code",
+			"X-Geo-Country",
+			"GeoIP-Country-Code",
+			"X-Real-Country",
+			"X-AppEngine-Country",
+		} {
 			val := strings.ToUpper(strings.TrimSpace(r.Header.Get(hdr)))
-			if len(val) == 2 && val != "XX" {
+			if !isIgnoredGeoCountryCode(val) {
 				country = val
 				break
 			}
 		}
 	}
-
-	if len(country) != 2 {
-		return fallbackCountryForLang(lang)
+	if country != "" {
+		return country
 	}
-	return country
+	if r != nil && strings.TrimSpace(getClientIP(r)) == "" {
+		return "XX"
+	}
+	return "TR"
 }
 
 func resolveVisitorCountryAndLang(r *http.Request, explicitCountry, explicitLang string) (string, string) {

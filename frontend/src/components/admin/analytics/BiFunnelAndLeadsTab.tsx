@@ -17,9 +17,11 @@ import {
   BiOverviewMetrics,
   formatDurationSec,
   formatRelativeTimeTr,
-  getCountryFlagEmoji,
   getCountryLabelTr,
+  translateDeviceShortTr,
+  translateReferrerHostTr,
 } from "./biTypes";
+import CountryFlagBadge from "./CountryFlagBadge";
 
 type BuyerFilterMode = "all" | "registered" | "anonymous";
 
@@ -157,7 +159,6 @@ function HotBuyerLeadRow({ lead }: { readonly lead: BiHotBuyerLead }) {
     lead.customer_name ||
     lead.customer_email ||
     `Anonim Alıcı #${lead.visitor_id.slice(-8)}`;
-  const flag = getCountryFlagEmoji(lead.country_code);
   const countryName = getCountryLabelTr(lead.country_code);
 
   return (
@@ -205,8 +206,8 @@ function HotBuyerLeadRow({ lead }: { readonly lead: BiHotBuyerLead }) {
 
       <td className="py-3.5 px-4 whitespace-nowrap">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-          <span className="text-base" title={countryName}>{flag}</span>
-          <span>{lead.country_code || "TR"}</span>
+          <CountryFlagBadge countryCode={lead.country_code} title={countryName} />
+          <span>{countryName}</span>
           <span className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 font-mono text-[10px]">
             {(lead.language || "tr").toUpperCase()}
           </span>
@@ -222,10 +223,10 @@ function HotBuyerLeadRow({ lead }: { readonly lead: BiHotBuyerLead }) {
           <span>•</span>
           <span className="text-amber-700 dark:text-amber-400"><strong>{lead.cart_adds}</strong> sepet</span>
           <span>•</span>
-          <span className="text-emerald-700 dark:text-emerald-400"><strong>{lead.lead_actions}</strong> lead</span>
+          <span className="text-emerald-700 dark:text-emerald-400"><strong>{lead.lead_actions}</strong> talep</span>
         </div>
         <div className="text-[11px] text-zinc-400 mt-0.5">
-          Toplam odak: {formatDurationSec(lead.total_dwell_sec)} • {lead.referrer_host} ({lead.device_type})
+          Toplam odak: {formatDurationSec(lead.total_dwell_sec)} • {translateReferrerHostTr(lead.referrer_host)} ({translateDeviceShortTr(lead.device_type)})
         </div>
       </td>
 

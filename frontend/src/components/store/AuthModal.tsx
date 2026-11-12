@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { X, Lock, Mail, User, Phone, Check, AlertCircle, Building2, Info } from "lucide-react";
 import { getCategoryPrefix, t } from "@/app/i18n";
+import { fetchStoreSettingsCached } from "@/app/utils";
 import { getOrSetVisitorId } from "@/components/analytics/AnalyticsTracker";
 
 const REMEMBERED_EMAIL_KEY = "merter_remembered_email";
@@ -37,37 +38,55 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resolvedRecaptchaKey, setResolvedRecaptchaKey] = useState<string>(
+    () => process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""
+  );
 
-  // Load Google reCAPTCHA v3 script dynamically
+  // Load Google reCAPTCHA v3 script dynamically when a site key is configured
   useEffect(() => {
-    if (isOpen) {
-      const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+    if (!isOpen) return;
+    let active = true;
+
+    async function ensureRecaptchaLoaded() {
+      let siteKey = resolvedRecaptchaKey;
       if (!siteKey) {
-        console.warn("reCAPTCHA site key is missing in env configurations.");
+        const settings = await fetchStoreSettingsCached();
+        const dbKey = typeof settings?.recaptcha_site_key === "string" ? settings.recaptcha_site_key.trim() : "";
+        if (dbKey && active) {
+          siteKey = dbKey;
+          setResolvedRecaptchaKey(dbKey);
+        }
+      }
+      if (!siteKey || !active) {
         return;
       }
 
       const scriptId = "recaptcha-v3-script";
-      let script = document.getElementById(scriptId) as HTMLScriptElement;
+      let script = document.getElementById(scriptId) as HTMLScriptElement | null;
       if (!script) {
         script = document.createElement("script");
         script.id = scriptId;
-        script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}&hl=${lang}`;
+        script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(siteKey)}&hl=${encodeURIComponent(lang)}`;
         script.async = true;
         script.defer = true;
         document.head.appendChild(script);
       }
     }
-  }, [isOpen, lang]);
 
-interface GrecaptchaInstance {
-  ready: (callback: () => void) => void;
-  execute: (siteKey: string, options: { action: string }) => Promise<string>;
-}
+    void ensureRecaptchaLoaded();
+    return () => {
+      active = false;
+    };
+  }, [isOpen, lang, resolvedRecaptchaKey]);
+
+  interface GrecaptchaInstance {
+    ready: (callback: () => void) => void;
+    execute: (siteKey: string, options: { action: string }) => Promise<string>;
+  }
 
   const executeCaptcha = async (actionName: string): Promise<string> => {
     return new Promise((resolve) => {
-      const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+      const siteKey = resolvedRecaptchaKey || process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
       if (!siteKey) {
         resolve("");
         return;
@@ -75,18 +94,17 @@ interface GrecaptchaInstance {
 
       const grecaptcha = (window as unknown as { grecaptcha?: GrecaptchaInstance }).grecaptcha;
       if (!grecaptcha) {
-        console.warn("reCAPTCHA script has not loaded yet.");
         resolve("");
         return;
       }
 
       grecaptcha.ready(() => {
-        grecaptcha.execute(siteKey, { action: actionName })
+        grecaptcha
+          .execute(siteKey, { action: actionName })
           .then((token: string) => {
             resolve(token);
           })
-          .catch((err: unknown) => {
-            console.error("reCAPTCHA execution error:", err);
+          .catch(() => {
             resolve("");
           });
       });

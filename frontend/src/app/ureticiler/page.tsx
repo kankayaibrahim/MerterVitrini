@@ -7,6 +7,7 @@ import {
   GLOBAL_B2B_SEO_MATRIX,
   SupportedSeoLang,
   normalizeSeoLang,
+  stripBrandTitleSuffix,
   buildQueryLangAlternates,
   safeJsonLd,
   ssrStoreFetch,
@@ -43,7 +44,7 @@ const DIRECTORY_DESCS: Record<SupportedSeoLang, string> = {
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const sParams = await searchParams;
   const lang = normalizeSeoLang(sParams?.lang, "tr");
-  const title = DIRECTORY_TITLES[lang];
+  const title = stripBrandTitleSuffix(DIRECTORY_TITLES[lang]);
   const desc = DIRECTORY_DESCS[lang];
   const alternates = buildQueryLangAlternates("/ureticiler", lang);
 

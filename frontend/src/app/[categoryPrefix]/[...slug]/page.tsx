@@ -9,11 +9,13 @@ import {
   GLOBAL_B2B_SEO_MATRIX,
   normalizeSeoLang,
   safeJsonLd,
+  stripBrandTitleSuffix,
   buildPrefixedAlternates,
   ssrStoreFetch,
   fetchSsrCategories,
   fetchSsrProducts,
 } from "@/utils/seoHelpers";
+import { fixApostropheCase } from "@/utils/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -542,7 +544,10 @@ function resolveRawSlug(slugArr: string[] | string): string {
 }
 
 function humanizeSlug(slug: string): string {
-  return slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const spaced = slug
+    .replace(/-/g, " ")
+    .replace(/(^|\s)(\p{L})/gu, (_m, prefix: string, ch: string) => `${prefix}${ch.toUpperCase()}`);
+  return fixApostropheCase(spaced);
 }
 
 function buildCategoryItemListElements(products: Product[], lang: SupportedSeoLang) {
@@ -581,9 +586,9 @@ export async function generateMetadata({
   const alternates = buildPrefixedAlternates(nestedPath, lang);
 
   const fallbackTitle = humanizeSlug(slug);
-  const categoryTitle = catObj
-    ? catObj.translations?.[lang]?.title || catObj.title
-    : fallbackTitle;
+  const categoryTitle = fixApostropheCase(
+    catObj ? catObj.translations?.[lang]?.title || catObj.title : fallbackTitle
+  );
 
   const { titleSuffix, descTemplate } = getCategorySuffixAndDesc(categoryTitle, lang);
   const customSeo = getCustomSeoOverride(slug.toLowerCase(), lang);
@@ -591,11 +596,12 @@ export async function generateMetadata({
 
   const fullTitle = customSeo
     ? customSeo.title
-    : `${categoryTitle} | Merter Vitrini ${titleSuffix}`;
+    : `${categoryTitle} — ${titleSuffix}`;
+  const cleanTitle = stripBrandTitleSuffix(fullTitle);
   const finalDesc = dbSeoDesc || customSeo?.description || descTemplate;
 
   return {
-    title: fullTitle,
+    title: cleanTitle,
     description: finalDesc,
     keywords: `${categoryTitle}, ${GLOBAL_B2B_SEO_MATRIX[lang].keywords}`,
     robots: hasFilterParams

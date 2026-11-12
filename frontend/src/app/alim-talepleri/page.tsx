@@ -10,6 +10,7 @@ import {
   fetchSsrCategories,
   normalizeSeoLang,
   safeJsonLd,
+  stripBrandTitleSuffix,
 } from "@/utils/seoHelpers";
 
 interface RfqSeoMetaCopy {
@@ -82,7 +83,7 @@ export async function generateMetadata({
   const alternates = buildQueryLangAlternates("/alim-talepleri", lang);
 
   return {
-    title: meta.title,
+    title: stripBrandTitleSuffix(meta.title),
     description: meta.description,
     keywords: GLOBAL_B2B_SEO_MATRIX[lang].keywords,
     alternates,

@@ -7,6 +7,7 @@ import {
   GLOBAL_B2B_SEO_MATRIX,
   SupportedSeoLang,
   normalizeSeoLang,
+  stripBrandTitleSuffix,
   buildQueryLangAlternates,
   safeJsonLd,
   ssrStoreFetch,
@@ -67,7 +68,7 @@ export async function generateMetadata({
   const displayName = brand?.name || decoded.toUpperCase();
   const canonicalSlug = encodeURIComponent(brand?.slug || decoded);
   const alternates = buildQueryLangAlternates(`/ureticiler/${canonicalSlug}`, lang);
-  const title = buildBrandMetaTitle(displayName, lang);
+  const title = stripBrandTitleSuffix(buildBrandMetaTitle(displayName, lang));
   const description = buildBrandMetaDesc(displayName, brand?.description, lang);
 
   return {

@@ -4,6 +4,7 @@ import {
   OG_LOCALE_BY_LANG,
   SupportedSeoLang,
   normalizeSeoLang,
+  stripBrandTitleSuffix,
   buildPrefixedAlternates,
   fetchSsrCategories,
 } from "@/utils/seoHelpers";
@@ -51,7 +52,7 @@ const CART_DESCS: Record<SupportedSeoLang, string> = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
   const lang = normalizeSeoLang(categoryPrefix, "en");
-  const title = CART_TITLES[lang];
+  const title = stripBrandTitleSuffix(CART_TITLES[lang]);
   const desc = CART_DESCS[lang];
   const alternates = buildPrefixedAlternates("cart", lang);
 

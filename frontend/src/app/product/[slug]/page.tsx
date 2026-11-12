@@ -11,6 +11,7 @@ import {
   StorePublicSettings,
   normalizeSeoLang,
   safeJsonLd,
+  stripBrandTitleSuffix,
   toAbsoluteSiteUrl,
   buildQueryLangAlternates,
   ssrStoreFetch,
@@ -387,7 +388,7 @@ export async function generateMetadata({
 
   if (!product) {
     return {
-      title: tpl.notFoundTitle,
+      title: stripBrandTitleSuffix(tpl.notFoundTitle),
       description: tpl.notFoundDesc,
       robots: { index: false, follow: true },
     };
@@ -396,6 +397,7 @@ export async function generateMetadata({
   const canonicalSlug = product.slug || slug;
   const alternates = buildQueryLangAlternates(`/product/${canonicalSlug}`, lang);
   const { metaTitle, metaDesc } = buildProductMetaStrings(product, lang);
+  const cleanMetaTitle = stripBrandTitleSuffix(metaTitle);
 
   const coverRaw =
     product.images?.find((img) => img.is_cover)?.image_url ||
@@ -404,7 +406,7 @@ export async function generateMetadata({
   const coverAbsolute = toAbsoluteSiteUrl(coverRaw) || `${SITE_ORIGIN}/og-image.jpg`;
 
   return {
-    title: metaTitle,
+    title: cleanMetaTitle,
     description: metaDesc,
     keywords: `${resolveLocalizedProductTitle(product, lang)}, ${product.brand_name || "Merter"}, ${GLOBAL_B2B_SEO_MATRIX[lang].keywords}`,
     alternates,

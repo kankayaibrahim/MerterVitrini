@@ -60,10 +60,37 @@ try {
   gitCommit = "";
 }
 
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://www.google.com https://www.gstatic.com https://www.recaptcha.net",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: blob: https: http:",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self' https: wss:",
+  "frame-src 'self' https://www.google.com https://maps.google.com https://www.recaptcha.net https://auth.mertervitrini.com.tr",
+  "media-src 'self' data: blob: https:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+].join("; ");
+
 const nextConfig: NextConfig = {
   trailingSlash: false,
   images: {
     unoptimized: true,
+  },
+  headers() {
+    return Promise.resolve([
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: CONTENT_SECURITY_POLICY,
+          },
+        ],
+      },
+    ]);
   },
   redirects() {
     return Promise.resolve([

@@ -39,7 +39,7 @@ export default function ExecutiveHeader({
           onClick={onRefresh}
           disabled={isRefreshing}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition-colors disabled:opacity-50"
-          title="Verileri Canlı Yenile"
+          title="Yenile"
         >
           <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
           <span>Yenile</span>
@@ -62,7 +62,7 @@ export default function ExecutiveHeader({
         </Link>
 
         <Link
-          href="/admin/products"
+          href="/admin/catalog/products"
           className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-zinc-900 hover:bg-zinc-800 rounded-xl shadow-xs transition-colors"
         >
           <PlusCircle size={14} />

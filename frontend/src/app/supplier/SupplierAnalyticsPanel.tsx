@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   BarChart3,
@@ -76,69 +76,69 @@ function SupplierKpiGrid({
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex items-center gap-3.5">
-        <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex items-start gap-3.5">
+        <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0">
           <Eye size={22} />
         </div>
-        <div>
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+        <div className="min-w-0 flex-1">
+          <span className="min-h-[2.5rem] flex items-start text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-snug">
             Toplam Ürün &amp; Vitrin Görüntülenme
           </span>
           <span className="text-2xl font-black text-slate-900 block mt-0.5">
             {summary.product_views + summary.profile_views}
           </span>
-          <span className="text-[11px] font-semibold text-slate-500">
+          <span className="text-[11px] font-semibold text-slate-500 block mt-0.5">
             Ürün: {summary.product_views} • Vitrin Profili: {summary.profile_views}
           </span>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex items-center gap-3.5">
-        <div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex items-start gap-3.5">
+        <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0">
           <Users size={22} />
         </div>
-        <div>
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+        <div className="min-w-0 flex-1">
+          <span className="min-h-[2.5rem] flex items-start text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-snug">
             Tekil Alıcı Ziyaretçi
           </span>
           <span className="text-2xl font-black text-slate-900 block mt-0.5">
             {summary.unique_visitors}
           </span>
-          <span className="text-[11px] font-semibold text-slate-500">
+          <span className="text-[11px] font-semibold text-slate-500 block mt-0.5">
             Koleksiyonunuzu inceleyen tekil alıcı
           </span>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-emerald-200 p-4 shadow-xs flex items-center gap-3.5">
+      <div className="bg-white rounded-xl border border-emerald-200 p-4 shadow-xs flex items-start gap-3.5">
         <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
           <MessageCircle size={22} />
         </div>
-        <div>
-          <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">
+        <div className="min-w-0 flex-1">
+          <span className="min-h-[2.5rem] flex items-start text-[11px] font-bold text-emerald-700 uppercase tracking-wider leading-snug">
             Doğrudan WhatsApp &amp; Telefon Teması
           </span>
           <span className="text-2xl font-black text-emerald-700 block mt-0.5">
             {summary.whatsapp_clicks + summary.phone_clicks}
           </span>
-          <span className="text-[11px] font-semibold text-slate-500">
+          <span className="text-[11px] font-semibold text-slate-500 block mt-0.5">
             WhatsApp: {summary.whatsapp_clicks} • Telefon: {summary.phone_clicks}
           </span>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-amber-200 p-4 shadow-xs flex items-center gap-3.5">
-        <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex items-start gap-3.5">
+        <div className="w-11 h-11 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
           <ShoppingBag size={22} />
         </div>
-        <div>
-          <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider block">
+        <div className="min-w-0 flex-1">
+          <span className="min-h-[2.5rem] flex items-start text-[11px] font-bold text-slate-700 uppercase tracking-wider leading-snug">
             Toplam Alıcı İletişim &amp; Sipariş Talebi
           </span>
           <span className="text-2xl font-black text-slate-900 block mt-0.5">
             {summary.total_buyer_contacts}
           </span>
-          <span className="text-[11px] font-semibold text-slate-500">
+          <span className="text-[11px] font-semibold text-slate-500 block mt-0.5">
             Sipariş: {summary.inquiry_leads} • Canlı Sohbet: {summary.live_chat_rooms}
           </span>
         </div>
@@ -156,7 +156,7 @@ function SupplierCountryDistributionCard({
     <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Globe size={18} className="text-blue-600" />
+          <Globe size={18} className="text-slate-800" />
           <h3 className="text-sm font-extrabold text-slate-900">
             Ülke &amp; Pazar Dağılımı (Alıcı İlgisi)
           </h3>
@@ -184,7 +184,7 @@ function SupplierCountryDistributionCard({
               </div>
               <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-blue-600"
+                  className="h-full rounded-full bg-slate-900"
                   style={{ width: `${Math.max(4, Math.min(100, c.percentage))}%` }}
                 />
               </div>
@@ -238,7 +238,7 @@ function SupplierTopProductsCard({
                       <Link
                         href={`/product/${encodeURIComponent(p.slug || p.product_id)}`}
                         target="_blank"
-                        className="font-bold text-slate-900 hover:text-blue-600 no-underline line-clamp-1"
+                        className="font-bold text-slate-900 hover:text-emerald-700 no-underline line-clamp-1"
                       >
                         {p.title}
                       </Link>
@@ -254,7 +254,7 @@ function SupplierTopProductsCard({
                   <td className="py-2.5 px-2 text-center font-extrabold text-emerald-700">
                     {p.whatsapp_clicks}
                   </td>
-                  <td className="py-2.5 pl-2 text-center font-extrabold text-amber-700">
+                  <td className="py-2.5 pl-2 text-center font-extrabold text-slate-900">
                     {p.inquiries}
                   </td>
                 </tr>
@@ -274,8 +274,13 @@ export default function SupplierAnalyticsPanel({
   const [loading, setLoading] = useState<boolean>(true);
   const [data, setData] = useState<SupplierBrandAnalyticsResponse | null>(null);
 
+  const getTokenRef = useRef(getToken);
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
   const loadAnalytics = useCallback(async () => {
-    const token = getToken();
+    const token = getTokenRef.current();
     if (!token) return;
     setLoading(true);
     try {
@@ -291,7 +296,7 @@ export default function SupplierAnalyticsPanel({
     } finally {
       setLoading(false);
     }
-  }, [getToken, period]);
+  }, [period]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -317,7 +322,7 @@ export default function SupplierAnalyticsPanel({
       {/* Header & Period Selector */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
             <BarChart3 size={20} />
           </div>
           <div>
@@ -339,7 +344,7 @@ export default function SupplierAnalyticsPanel({
                 onClick={() => setPeriod(opt.value)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors ${
                   period === opt.value
-                    ? "bg-white text-slate-900 shadow-xs"
+                    ? "bg-slate-900 text-white shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -352,10 +357,11 @@ export default function SupplierAnalyticsPanel({
             type="button"
             onClick={() => void loadAnalytics()}
             disabled={loading}
-            className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+            className="h-9 px-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-xs font-bold cursor-pointer disabled:opacity-50"
             title="Raporu Yenile"
           >
-            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <span>Yenile</span>
           </button>
         </div>
       </div>
@@ -380,15 +386,15 @@ export default function SupplierAnalyticsPanel({
             WhatsApp Tıklaması: <strong>{summary.whatsapp_clicks}</strong>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <Phone size={14} className="text-blue-600" />
+            <Phone size={14} className="text-slate-700" />
             Telefon Tıklaması: <strong>{summary.phone_clicks}</strong>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <ShoppingBag size={14} className="text-amber-600" />
+            <ShoppingBag size={14} className="text-slate-700" />
             Doğrudan Sipariş / Form: <strong>{summary.inquiry_leads}</strong>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <Users size={14} className="text-violet-600" />
+            <Users size={14} className="text-slate-700" />
             Canlı B2B Sohbet: <strong>{summary.live_chat_rooms}</strong>
           </span>
         </div>

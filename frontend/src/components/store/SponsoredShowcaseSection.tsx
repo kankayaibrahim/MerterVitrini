@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { ShieldCheck, Sparkles, ArrowUpRight, MapPin, Globe } from "lucide-react";
 import { normalizeLangCode, pickLangText, SupportedLangCode } from "@/app/i18n";
+import { formatAsciiSafeUpper } from "@/utils/formatters";
 
 export interface SponsoredSlotItem {
   id: string;
@@ -164,19 +165,19 @@ export function PortalSponsoredSuppliersSection({
 
   return (
     <section className="mb-16 select-none">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6 border-b border-cultured pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6 border-b border-[#E5E0D8] pb-4">
         <div>
-          <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[2px] text-amber-700">
-            <Sparkles className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[2px] text-[#6E542E]">
+            <Sparkles className="w-3.5 h-3.5 text-[#8C6D3F]" />
             <span>{L.featuredSub}</span>
           </span>
-          <h3 className="font-serif font-bold text-base sm:text-lg tracking-[1.5px] text-eerie-black uppercase mt-1">
+          <h3 className="font-serif font-bold text-base sm:text-lg tracking-[1.5px] text-[#1C1C1C] uppercase mt-1">
             {L.featuredHeading}
           </h3>
         </div>
         <Link
           href={withLangParam("/ureticiler", lang)}
-          className="text-xs font-extrabold uppercase tracking-wider text-eerie-black hover:text-amber-700 no-underline transition-colors"
+          className="text-xs font-extrabold uppercase tracking-wider text-[#1C1C1C] hover:text-[#6E542E] no-underline transition-colors"
         >
           {L.allSuppliersCta}
         </Link>
@@ -196,23 +197,23 @@ export function PortalSponsoredSuppliersSection({
               key={slot.id}
               href={href}
               onClick={() => recordSponsoredSlotClick(slot.id)}
-              className="group bg-white border border-cultured hover:border-amber-500/60 transition-all duration-300 flex flex-col justify-between p-6 no-underline shadow-xs hover:shadow-md relative overflow-hidden"
+              className="group bg-white border border-[#E5E0D8] hover:border-[#D8C7A6] rounded-lg transition-all duration-300 flex flex-col justify-between p-6 no-underline shadow-xs hover:shadow-md relative overflow-hidden"
             >
               <div>
                 <div className="flex items-center justify-between gap-2 mb-3">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-extrabold uppercase tracking-widest">
-                    <Sparkles className="w-3 h-3 text-amber-600" />
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#FAF7F2] border border-[#D8C7A6] text-[#6E542E] rounded text-[10px] font-extrabold uppercase tracking-widest">
+                    <Sparkles className="w-3 h-3 text-[#8C6D3F]" />
                     <span>{badge}</span>
                   </span>
                   {slot.brand_verified && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#15803D]">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       <span>{L.verifiedTag}</span>
                     </span>
                   )}
                 </div>
 
-                <h4 className="font-serif font-bold text-base text-eerie-black group-hover:text-amber-700 transition-colors">
+                <h4 className="font-serif font-bold text-base text-[#1C1C1C] group-hover:text-[#6E542E] transition-colors">
                   {title}
                 </h4>
                 <p className="text-xs text-sonic-silver mt-1.5 line-clamp-2 leading-relaxed">
@@ -220,10 +221,10 @@ export function PortalSponsoredSuppliersSection({
                 </p>
               </div>
 
-              <div className="mt-5 pt-3.5 border-t border-cultured flex items-center justify-between text-[11px]">
+              <div className="mt-5 pt-3.5 border-t border-[#E5E0D8] flex items-center justify-between text-[11px]">
                 <div className="flex items-center gap-3 text-sonic-silver font-semibold">
                   <span className="inline-flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-amber-600" />
+                    <MapPin className="w-3 h-3 text-[#8C6D3F]" />
                     <span>
                       {slot.district || "Merter"}, {slot.city || "İstanbul"}
                     </span>
@@ -236,7 +237,7 @@ export function PortalSponsoredSuppliersSection({
                   )}
                 </div>
 
-                <span className="inline-flex items-center gap-1 font-extrabold uppercase tracking-wider text-eerie-black group-hover:text-amber-700">
+                <span className="inline-flex items-center gap-1 font-extrabold uppercase tracking-wider text-[#1C1C1C] group-hover:text-[#6E542E]">
                   <span>{cta}</span>
                   <ArrowUpRight className="w-3.5 h-3.5" />
                 </span>
@@ -289,30 +290,30 @@ export function CategorySponsorBanner({
   const href = withLangParam(rawHref, lang);
 
   return (
-    <div className="bg-gradient-to-r from-amber-50/90 via-white to-amber-50/50 border border-amber-200/80 rounded-[12px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+    <div className="bg-[#FAF7F2] border border-[#D8C7A6] rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div className="space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-500 text-white text-[10px] font-extrabold uppercase tracking-wider rounded">
-            <Sparkles className="w-3 h-3" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-white border border-[#D8C7A6] text-[#6E542E] text-[10px] font-extrabold uppercase tracking-wider rounded">
+            <Sparkles className="w-3 h-3 text-[#8C6D3F]" />
             <span>{badge}</span>
           </span>
           {slot.brand_verified && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#15803D]">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>{slot.brand_name}</span>
+              <span>{formatAsciiSafeUpper(slot.brand_name)}</span>
             </span>
           )}
         </div>
-        <h3 className="text-sm sm:text-base font-extrabold text-eerie-black">
+        <h3 className="text-sm sm:text-base font-serif font-bold text-[#1C1C1C]">
           {title}
         </h3>
-        <p className="text-xs text-sonic-silver">{subtitle}</p>
+        <p className="text-xs text-[#525252]">{subtitle}</p>
       </div>
 
       <Link
         href={href}
         onClick={() => recordSponsoredSlotClick(slot.id)}
-        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-eerie-black hover:bg-amber-600 text-white text-xs font-extrabold uppercase tracking-wider rounded-lg no-underline shrink-0 transition-colors"
+        className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-bold uppercase tracking-wider rounded-md no-underline shrink-0 transition-colors"
       >
         <span>{cta}</span>
         <ArrowUpRight className="w-4 h-4" />

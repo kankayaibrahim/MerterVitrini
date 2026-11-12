@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   ShoppingBag,
   RefreshCw,
@@ -55,6 +55,14 @@ export interface SupplierSubOrderRow {
   items?: SupplierOrderItem[];
 }
 
+interface TrackingInputState {
+  company: string;
+  number: string;
+  status: string;
+}
+
+const ORDERS_REFRESH_INTERVAL_MS = 60_000;
+
 const STATUS_LABELS: Record<string, { label: string; badgeClass: string }> = {
   PENDING: {
     label: "Yeni Sipariş (Onay Bekliyor)",
@@ -62,7 +70,7 @@ const STATUS_LABELS: Record<string, { label: string; badgeClass: string }> = {
   },
   ACCEPTED: {
     label: "Onaylandı",
-    badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
+    badgeClass: "bg-slate-100 text-slate-800 border-slate-300",
   },
   PREPARING: {
     label: "Hazırlanıyor",
@@ -123,6 +131,248 @@ function renderEmptyOrdersState(loading: boolean) {
   );
 }
 
+interface SupplierOrderCardProps {
+  readonly order: SupplierSubOrderRow;
+  readonly inputState: TrackingInputState;
+  readonly updating: boolean;
+  readonly onInputChange: (next: TrackingInputState) => void;
+  readonly onUpdateOrder: () => void;
+}
+
+function SupplierOrderCard({
+  order,
+  inputState,
+  updating,
+  onInputChange,
+  onUpdateOrder,
+}: SupplierOrderCardProps) {
+  const st = STATUS_LABELS[order.status] || {
+    label: order.status,
+    badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
+  };
+  const waDigits = normalizeWaPhone(order.customer_phone);
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden">
+      {/* Top summary bar */}
+      <div className="bg-slate-50/80 px-5 py-3.5 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-xs font-extrabold text-slate-900 bg-white px-2.5 py-1 rounded-md border border-slate-200">
+            #{order.sub_order_number}
+          </span>
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${st.badgeClass}`}
+          >
+            {getOrderStatusIcon(order.status)}
+            {st.label}
+          </span>
+          <span className="text-[11px] text-slate-500">
+            {new Date(order.created_at).toLocaleString("tr-TR")}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="text-right">
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+              Toplam Sipariş Tutarı (%0 Komisyon)
+            </span>
+            <span className="text-sm font-black text-emerald-700">
+              {Number(order.gross_amount).toLocaleString("tr-TR", {
+                minimumFractionDigits: 2,
+              })}{" "}
+              {order.currency || "TL"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main body: Buyer Contact + Order Items + Status Management */}
+      <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Left 4 cols: Direct Buyer Info */}
+        <div className="lg:col-span-4 bg-slate-50/70 rounded-xl p-4 border border-slate-200/70 space-y-2.5">
+          <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <Building2 size={13} className="text-slate-700" />
+            <span>Alıcı (Müşteri) İletişim &amp; Teslimat</span>
+          </div>
+
+          <div className="text-xs font-bold text-slate-900">
+            {order.customer_name || "İsimsiz Alıcı"}
+            {order.customer_company ? (
+              <span className="block text-[11px] font-semibold text-slate-600 mt-0.5">
+                Firma: {order.customer_company}
+              </span>
+            ) : null}
+          </div>
+
+          {order.customer_phone && (
+            <div className="flex items-center gap-2 text-xs text-slate-700">
+              <Phone size={13} className="text-slate-400 shrink-0" />
+              <a
+                href={`tel:${order.customer_phone}`}
+                className="font-semibold hover:text-slate-900 hover:underline"
+              >
+                {order.customer_phone}
+              </a>
+            </div>
+          )}
+
+          {order.customer_email && (
+            <div className="flex items-center gap-1.5 text-xs text-slate-700 flex-wrap">
+              <Mail size={13} className="text-slate-400 shrink-0" />
+              <a
+                href={`mailto:${order.customer_email}`}
+                className="hover:text-slate-900 hover:underline break-all"
+              >
+                {order.customer_email}
+              </a>
+              {order.customer_email_verified ? (
+                <span className="inline-flex items-center px-1.5 py-0.2 text-[9px] font-extrabold bg-emerald-100 text-emerald-800 rounded border border-emerald-300">
+                  ✓ Doğrulanmış E-posta
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-1.5 py-0.2 text-[9px] font-semibold bg-amber-100 text-amber-800 rounded border border-amber-300">
+                  Doğrulanmadı
+                </span>
+              )}
+            </div>
+          )}
+
+          {order.delivery_address && (
+            <div className="flex items-start gap-2 text-xs text-slate-600 pt-1 border-t border-slate-200/70">
+              <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{order.delivery_address}</span>
+            </div>
+          )}
+
+          {waDigits && (
+            <div className="pt-2">
+              <a
+                href={`https://wa.me/${waDigits}?text=${encodeURIComponent(
+                  `Merhaba ${order.customer_name || ""}, Merter Vitrini üzerindeki #${order.sub_order_number} numaralı siparişiniz için ${order.brand_name || "firmamızdan"} yazıyoruz.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs"
+              >
+                <MessageCircle size={14} />
+                <span>Alıcıya Doğrudan WhatsApp&apos;tan Yaz</span>
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* Middle 5 cols: Order Line Items */}
+        <div className="lg:col-span-5 space-y-2">
+          <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <Package size={13} className="text-slate-700" />
+            <span>Sipariş Kalemleri ({order.items?.length || 0} Ürün)</span>
+          </div>
+
+          {order.items && order.items.length > 0 ? (
+            <div className="divide-y divide-slate-100 border border-slate-200/70 rounded-xl overflow-hidden">
+              {order.items.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-2.5 bg-white flex items-center justify-between gap-3 text-xs"
+                >
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-900 truncate">
+                      {item.product_name}
+                    </p>
+                    <p className="text-[11px] text-slate-500 font-mono">
+                      SKU: {item.product_sku}
+                      {item.series_ratio ? ` • Seri: ${item.series_ratio}` : ""}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-bold text-slate-900 block">
+                      {item.quantity} Seri/Paket
+                    </span>
+                    <span className="text-[11px] text-emerald-700 font-semibold">
+                      {Number(item.total_price).toLocaleString("tr-TR", {
+                        minimumFractionDigits: 2,
+                      })}{" "}
+                      TL
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 italic">
+              Kalem detayı bulunamadı.
+            </p>
+          )}
+        </div>
+
+        {/* Right 3 cols: Status & Tracking Update */}
+        <div className="lg:col-span-3 bg-slate-50/70 rounded-xl p-4 border border-slate-200/70 space-y-3">
+          <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <Truck size={13} className="text-slate-700" />
+            <span>Sipariş &amp; Kargo Durumu</span>
+          </div>
+
+          <div>
+            <label htmlFor={`order-status-${order.id}`} className="block text-[11px] font-semibold text-slate-600 mb-1">
+              Sipariş Statüsü
+            </label>
+            <select
+              id={`order-status-${order.id}`}
+              value={inputState.status}
+              onChange={(e) => onInputChange({ ...inputState, status: e.target.value })}
+              className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800 focus:outline-none focus:border-slate-900"
+            >
+              <option value="PENDING">Onay Bekliyor</option>
+              <option value="ACCEPTED">Onaylandı</option>
+              <option value="PREPARING">Hazırlanıyor</option>
+              <option value="SENT_TO_HUB">Kargoya Verildi</option>
+              <option value="DELIVERED">Teslim Edildi</option>
+              <option value="CANCELLED">İptal Edildi</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor={`order-tracking-company-${order.id}`} className="block text-[11px] font-semibold text-slate-600 mb-1">
+              Kargo / Ambar Firması
+            </label>
+            <input
+              id={`order-tracking-company-${order.id}`}
+              type="text"
+              value={inputState.company}
+              onChange={(e) => onInputChange({ ...inputState, company: e.target.value })}
+              placeholder="Örn: Yurtiçi Kargo / Merter Ambar"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
+            />
+          </div>
+
+          <div>
+            <label htmlFor={`order-tracking-number-${order.id}`} className="block text-[11px] font-semibold text-slate-600 mb-1">
+              Kargo Takip No
+            </label>
+            <input
+              id={`order-tracking-number-${order.id}`}
+              type="text"
+              value={inputState.number}
+              onChange={(e) => onInputChange({ ...inputState, number: e.target.value })}
+              placeholder="Takip Kodu"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={onUpdateOrder}
+            disabled={updating}
+            className="w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+          >
+            {updating ? "Kaydediliyor..." : "Durumu Güncelle"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SupplierOrdersPanel({
   getToken,
   onOrderCountChange,
@@ -134,80 +384,89 @@ export default function SupplierOrdersPanel({
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [trackingInputs, setTrackingInputs] = useState<
-    Record<string, { company: string; number: string; status: string }>
-  >({});
+  const [trackingInputs, setTrackingInputs] = useState<Record<string, TrackingInputState>>({});
 
-  const fetchOrdersList = useCallback(async () => {
-    const token = getToken();
-    if (!token) return [];
-    const qs = statusFilter !== "ALL" ? `?status=${statusFilter}` : "";
-    const res = await fetch(`/api/v1/supplier/orders${qs}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.orders || []) as SupplierSubOrderRow[];
-  }, [getToken, statusFilter]);
+  const getTokenRef = useRef(getToken);
+  const onOrderCountChangeRef = useRef(onOrderCountChange);
+  const inFlightRef = useRef(false);
 
-  const applyOrdersList = useCallback(
-    (list: SupplierSubOrderRow[]) => {
-      setOrders(list);
-      if (onOrderCountChange) {
-        onOrderCountChange(list.length);
-      }
-      const initialInputs: Record<string, { company: string; number: string; status: string }> = {};
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
+  useEffect(() => {
+    onOrderCountChangeRef.current = onOrderCountChange;
+  }, [onOrderCountChange]);
+
+  const applyOrdersList = useCallback((list: SupplierSubOrderRow[], updateCount: boolean) => {
+    setOrders(list);
+    if (updateCount && onOrderCountChangeRef.current) {
+      onOrderCountChangeRef.current(list.length);
+    }
+    setTrackingInputs((prev) => {
+      const nextInputs: Record<string, TrackingInputState> = {};
       for (const o of list) {
-        initialInputs[o.id] = {
+        nextInputs[o.id] = prev[o.id] ?? {
           company: o.tracking_company || "",
           number: o.tracking_number || "",
           status: o.status || "PENDING",
         };
       }
-      setTrackingInputs(initialInputs);
-    },
-    [onOrderCountChange]
-  );
+      return nextInputs;
+    });
+  }, []);
 
-  const loadOrders = useCallback(async () => {
-    setLoading(true);
-    try {
-      const list = await fetchOrdersList();
-      applyOrdersList(list);
-    } catch (err) {
-      console.error("Failed to load supplier orders:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchOrdersList, applyOrdersList]);
+  const loadOrders = useCallback(
+    async (filterValue: string, silent = false) => {
+      if (inFlightRef.current) return;
+      const token = getTokenRef.current();
+      if (!token) {
+        if (!silent) setLoading(false);
+        return;
+      }
 
-  useEffect(() => {
-    let ignore = false;
-    async function initOrders() {
+      inFlightRef.current = true;
+      if (!silent) setLoading(true);
+
       try {
-        const list = await fetchOrdersList();
-        if (!ignore) {
-          applyOrdersList(list);
+        const qs = filterValue !== "ALL" ? `?status=${encodeURIComponent(filterValue)}` : "";
+        const res = await fetch(`/api/v1/supplier/orders${qs}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { orders?: SupplierSubOrderRow[] };
+          applyOrdersList(data.orders || [], filterValue === "ALL");
         }
       } catch (err) {
         console.error("Failed to load supplier orders:", err);
       } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
+        inFlightRef.current = false;
+        if (!silent) setLoading(false);
       }
-    }
-    void initOrders();
+    },
+    [applyOrdersList]
+  );
+
+  useEffect(() => {
+    const initTimer = window.setTimeout(() => {
+      void loadOrders(statusFilter, false);
+    }, 0);
+
+    const intervalId = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void loadOrders(statusFilter, true);
+    }, ORDERS_REFRESH_INTERVAL_MS);
+
     return () => {
-      ignore = true;
+      window.clearTimeout(initTimer);
+      window.clearInterval(intervalId);
     };
-  }, [fetchOrdersList, applyOrdersList]);
+  }, [statusFilter, loadOrders]);
 
   const handleUpdateOrder = async (orderId: string) => {
-    const token = getToken();
-    if (!token) return;
+    const token = getTokenRef.current();
     const input = trackingInputs[orderId];
-    if (!input) return;
+    if (!token || !input) return;
 
     setUpdatingId(orderId);
     try {
@@ -224,7 +483,12 @@ export default function SupplierOrdersPanel({
         }),
       });
       if (res.ok) {
-        await loadOrders();
+        setTrackingInputs((prev) => {
+          const copy = { ...prev };
+          delete copy[orderId];
+          return copy;
+        });
+        await loadOrders(statusFilter, false);
       }
     } catch (err) {
       console.error("Update order status error:", err);
@@ -239,7 +503,7 @@ export default function SupplierOrdersPanel({
       <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <ShoppingBag size={17} className="text-[#1677ff]" />
+            <ShoppingBag size={17} className="text-slate-900" />
             <span>Firmanıza Gelen Doğrudan Toptan Siparişler</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -247,11 +511,11 @@ export default function SupplierOrdersPanel({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#1677ff]"
+            className="h-9 px-3 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-slate-900"
           >
             <option value="ALL">Tüm Siparişler</option>
             <option value="PENDING">Yeni (Onay Bekleyen)</option>
@@ -264,12 +528,13 @@ export default function SupplierOrdersPanel({
 
           <button
             type="button"
-            onClick={() => void loadOrders()}
+            onClick={() => void loadOrders(statusFilter, false)}
             disabled={loading}
-            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
-            title="Yenile"
+            className="h-9 px-3 inline-flex items-center justify-center gap-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+            title="Siparişleri Yenile"
           >
-            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            <span>Yenile</span>
           </button>
         </div>
       </div>
@@ -280,253 +545,22 @@ export default function SupplierOrdersPanel({
       ) : (
         <div className="space-y-4">
           {orders.map((order) => {
-            const st = STATUS_LABELS[order.status] || {
-              label: order.status,
-              badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
-            };
-            const waDigits = normalizeWaPhone(order.customer_phone);
             const inputState = trackingInputs[order.id] || {
               company: order.tracking_company || "",
               number: order.tracking_number || "",
               status: order.status || "PENDING",
             };
-
             return (
-              <div
+              <SupplierOrderCard
                 key={order.id}
-                className="bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden"
-              >
-                {/* Top summary bar */}
-                <div className="bg-slate-50/80 px-5 py-3.5 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs font-extrabold text-slate-900 bg-white px-2.5 py-1 rounded-md border border-slate-200">
-                      #{order.sub_order_number}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${st.badgeClass}`}
-                    >
-                      {getOrderStatusIcon(order.status)}
-                      {st.label}
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      {new Date(order.created_at).toLocaleString("tr-TR")}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
-                        Toplam Sipariş Tutarı (%0 Komisyon)
-                      </span>
-                      <span className="text-sm font-black text-emerald-700">
-                        {Number(order.gross_amount).toLocaleString("tr-TR", {
-                          minimumFractionDigits: 2,
-                        })}{" "}
-                        {order.currency || "TL"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Main body: Buyer Contact + Order Items + Status Management */}
-                <div className="p-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
-                  {/* Left 4 cols: Direct Buyer Info */}
-                  <div className="lg:col-span-4 bg-slate-50/70 rounded-xl p-4 border border-slate-200/70 space-y-2.5">
-                    <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                      <Building2 size={13} className="text-[#1677ff]" />
-                      <span>Alıcı (Müşteri) İletişim & Teslimat</span>
-                    </div>
-
-                    <div className="text-xs font-bold text-slate-900">
-                      {order.customer_name || "İsimsiz Alıcı"}
-                      {order.customer_company ? (
-                        <span className="block text-[11px] font-semibold text-slate-600 mt-0.5">
-                          Firma: {order.customer_company}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {order.customer_phone && (
-                      <div className="flex items-center gap-2 text-xs text-slate-700">
-                        <Phone size={13} className="text-slate-400 shrink-0" />
-                        <a
-                          href={`tel:${order.customer_phone}`}
-                          className="font-semibold hover:text-[#1677ff]"
-                        >
-                          {order.customer_phone}
-                        </a>
-                      </div>
-                    )}
-
-                    {order.customer_email && (
-                      <div className="flex items-center gap-1.5 text-xs text-slate-700 flex-wrap">
-                        <Mail size={13} className="text-slate-400 shrink-0" />
-                        <a
-                          href={`mailto:${order.customer_email}`}
-                          className="hover:text-[#1677ff] break-all"
-                        >
-                          {order.customer_email}
-                        </a>
-                        {order.customer_email_verified ? (
-                          <span className="inline-flex items-center px-1.5 py-0.2 text-[9px] font-extrabold bg-emerald-100 text-emerald-800 rounded border border-emerald-300">
-                            ✓ Doğrulanmış E-posta
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.2 text-[9px] font-semibold bg-amber-100 text-amber-800 rounded border border-amber-300">
-                            ⚠️ Doğrulanmadı
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {order.delivery_address && (
-                      <div className="flex items-start gap-2 text-xs text-slate-600 pt-1 border-t border-slate-200/70">
-                        <MapPin size={13} className="text-slate-400 shrink-0 mt-0.5" />
-                        <span className="leading-relaxed">{order.delivery_address}</span>
-                      </div>
-                    )}
-
-                    {waDigits && (
-                      <div className="pt-2">
-                        <a
-                          href={`https://wa.me/${waDigits}?text=${encodeURIComponent(
-                            `Merhaba ${order.customer_name || ""}, Merter Vitrini üzerindeki #${order.sub_order_number} numaralı siparişiniz için ${order.brand_name || "firmamızdan"} yazıyoruz.`
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs"
-                        >
-                          <MessageCircle size={14} />
-                          <span>Alıcıya Doğrudan WhatsApp&apos;tan Yaz</span>
-                        </a>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Middle 5 cols: Order Line Items */}
-                  <div className="lg:col-span-5 space-y-2">
-                    <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                      <Package size={13} className="text-[#1677ff]" />
-                      <span>Sipariş Kalemleri ({order.items?.length || 0} Ürün)</span>
-                    </div>
-
-                    {order.items && order.items.length > 0 ? (
-                      <div className="divide-y divide-slate-100 border border-slate-200/70 rounded-xl overflow-hidden">
-                        {order.items.map((item) => (
-                          <div
-                            key={item.id}
-                            className="p-2.5 bg-white flex items-center justify-between gap-3 text-xs"
-                          >
-                            <div className="min-w-0">
-                              <p className="font-bold text-slate-900 truncate">
-                                {item.product_name}
-                              </p>
-                              <p className="text-[11px] text-slate-500 font-mono">
-                                SKU: {item.product_sku}
-                                {item.series_ratio ? ` • Seri: ${item.series_ratio}` : ""}
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <span className="font-bold text-slate-900 block">
-                                {item.quantity} Seri/Paket
-                              </span>
-                              <span className="text-[11px] text-emerald-700 font-semibold">
-                                {Number(item.total_price).toLocaleString("tr-TR", {
-                                  minimumFractionDigits: 2,
-                                })}{" "}
-                                TL
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400 italic">
-                        Kalem detayı bulunamadı.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Right 3 cols: Status & Tracking Update */}
-                  <div className="lg:col-span-3 bg-slate-50/70 rounded-xl p-4 border border-slate-200/70 space-y-3">
-                    <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                      <Truck size={13} className="text-[#1677ff]" />
-                      <span>Sipariş & Kargo Durumu</span>
-                    </div>
-
-                    <div>
-                      <label htmlFor={`order-status-${order.id}`} className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Sipariş Statüsü
-                      </label>
-                      <select
-                        id={`order-status-${order.id}`}
-                        value={inputState.status}
-                        onChange={(e) =>
-                          setTrackingInputs((prev) => ({
-                            ...prev,
-                            [order.id]: { ...inputState, status: e.target.value },
-                          }))
-                        }
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-slate-800"
-                      >
-                        <option value="PENDING">Onay Bekliyor</option>
-                        <option value="ACCEPTED">Onaylandı</option>
-                        <option value="PREPARING">Hazırlanıyor</option>
-                        <option value="SENT_TO_HUB">Kargoya Verildi</option>
-                        <option value="DELIVERED">Teslim Edildi</option>
-                        <option value="CANCELLED">İptal Edildi</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label htmlFor={`order-tracking-company-${order.id}`} className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Kargo / Ambar Firması
-                      </label>
-                      <input
-                        id={`order-tracking-company-${order.id}`}
-                        type="text"
-                        value={inputState.company}
-                        onChange={(e) =>
-                          setTrackingInputs((prev) => ({
-                            ...prev,
-                            [order.id]: { ...inputState, company: e.target.value },
-                          }))
-                        }
-                        placeholder="Örn: Yurtiçi Kargo / Merter Ambar"
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor={`order-tracking-number-${order.id}`} className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Kargo Takip No
-                      </label>
-                      <input
-                        id={`order-tracking-number-${order.id}`}
-                        type="text"
-                        value={inputState.number}
-                        onChange={(e) =>
-                          setTrackingInputs((prev) => ({
-                            ...prev,
-                            [order.id]: { ...inputState, number: e.target.value },
-                          }))
-                        }
-                        placeholder="Takip Kodu"
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-800"
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => void handleUpdateOrder(order.id)}
-                      disabled={updatingId === order.id}
-                      className="w-full py-2 rounded-lg bg-[#1677ff] hover:bg-[#4096ff] text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {updatingId === order.id ? "Kaydediliyor..." : "Durumu Güncelle"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+                order={order}
+                inputState={inputState}
+                updating={updatingId === order.id}
+                onInputChange={(next) =>
+                  setTrackingInputs((prev) => ({ ...prev, [order.id]: next }))
+                }
+                onUpdateOrder={() => void handleUpdateOrder(order.id)}
+              />
             );
           })}
         </div>

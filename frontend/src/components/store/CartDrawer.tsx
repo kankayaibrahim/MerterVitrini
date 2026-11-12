@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { X, ShoppingBag, Lock } from "lucide-react";
 import { CartItem } from "@/types/store";
 import { t, getCategoryPrefix, pickLangText, SupportedLangCode } from "@/app/i18n";
-import { convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
+import { convertPrice, fetchStoreSettingsCached, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { UserAddress } from "@/app/profile/components/types";
 
@@ -854,13 +855,10 @@ function BankTransferInfo({ lang }: { readonly lang: string }) {
 
   React.useEffect(() => {
     let active = true;
-    fetch("/api/v1/store/settings", {
-      headers: { Accept: "application/json" },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: StoreBankSettings | null) => {
+    fetchStoreSettingsCached()
+      .then((data) => {
         if (active) {
-          setBankAccounts(extractValidBankAccounts(data));
+          setBankAccounts(extractValidBankAccounts(data as StoreBankSettings | null));
         }
       })
       .catch(() => {
@@ -872,38 +870,38 @@ function BankTransferInfo({ lang }: { readonly lang: string }) {
   }, []);
 
   return (
-    <div className="bg-[#eff6ff] border border-blue-100 rounded-lg p-3.5 flex flex-col gap-2.5 text-xs text-blue-900 shadow-sm leading-normal">
-      <div className="font-extrabold uppercase tracking-[0.5px] border-b border-blue-200/50 pb-1.5 text-[11px] text-blue-800">
-        🏦 {labels.bankTransferHeader}
+    <div className="bg-[#F8F6F2] border border-[#E5E0D8] rounded-lg p-3.5 flex flex-col gap-2.5 text-xs text-[#1C1C1C] leading-normal">
+      <div className="font-extrabold uppercase tracking-[0.5px] border-b border-[#E5E0D8] pb-1.5 text-[11px] text-[#1C1C1C]">
+        {labels.bankTransferHeader}
       </div>
-      <div className="text-[11px] font-bold text-blue-950 bg-white/80 border border-blue-100 px-2.5 py-1.5 rounded">
+      <div className="text-[11px] font-bold text-[#1C1C1C] bg-white border border-[#E5E0D8] px-2.5 py-1.5 rounded">
         {labels.beneficiaryPrefix}: <span className="font-extrabold">Merter Vitrini B2B Tekstil</span>
       </div>
       {bankAccounts.length > 0 ? (
         <div className="flex flex-col gap-1.5 font-semibold text-[11px]">
           {bankAccounts.map((acc) => (
-            <div key={`${acc.bank_name}-${acc.iban}`} className="bg-white/70 px-2.5 py-1.5 rounded border border-blue-100/70">
+            <div key={`${acc.bank_name}-${acc.iban}`} className="bg-white px-2.5 py-1.5 rounded border border-[#E5E0D8]">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-blue-900">{acc.bank_name}</span>
+                <span className="font-bold text-[#1C1C1C]">{acc.bank_name}</span>
                 {acc.currency && (
-                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-[#FAF7F2] border border-[#D8C7A6] text-[#6E542E]">
                     {acc.currency}
                   </span>
                 )}
               </div>
               <div className="font-mono text-[10.5px] text-zinc-800 select-all mt-0.5">{acc.iban}</div>
               {acc.swift && (
-                <div className="font-mono text-[10px] text-blue-800 mt-0.5">SWIFT: {acc.swift}</div>
+                <div className="font-mono text-[10px] text-[#525252] mt-0.5">SWIFT: {acc.swift}</div>
               )}
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-[11px] font-semibold text-blue-900 bg-white/75 border border-blue-100/80 rounded px-2.5 py-2 leading-relaxed">
+        <p className="text-[11px] font-semibold text-[#525252] bg-white border border-[#E5E0D8] rounded px-2.5 py-2 leading-relaxed">
           {labels.proformaIbanNotice}
         </p>
       )}
-      <div className="text-[10px] font-semibold text-blue-800 italic border-t border-blue-200/40 pt-1.5 leading-snug">
+      <div className="text-[10px] font-semibold text-[#525252] italic border-t border-[#E5E0D8] pt-1.5 leading-snug">
         {labels.paymentReferenceNote}
       </div>
     </div>
@@ -1289,11 +1287,20 @@ export default function CartDrawer({
         <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4">
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center text-sonic-silver">
-              <span className="text-5xl mb-4">🛍️</span>
-              <p className="text-sm font-bold text-eerie-black">{t("empty_cart", lang)}</p>
-              <p className="text-xs font-semibold mt-1 max-w-[280px] text-sonic-silver">
+              <div className="w-14 h-14 rounded-full bg-[#F8F6F2] border border-[#E5E0D8] flex items-center justify-center mb-4">
+                <ShoppingBag className="w-6 h-6 text-[#1C1C1C]" />
+              </div>
+              <p className="text-sm font-bold text-[#1C1C1C]">{t("empty_cart", lang)}</p>
+              <p className="text-xs font-medium mt-1.5 max-w-[280px] text-[#525252] leading-relaxed">
                 {t("empty_cart_tip", lang)}
               </p>
+              <Link
+                href={`/${getCategoryPrefix(lang)}/tum-urunler`}
+                onClick={onClose}
+                className="mt-5 inline-flex items-center justify-center px-5 py-2.5 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md text-xs font-bold uppercase tracking-wider no-underline transition-colors"
+              >
+                {t("portal_explore_all_collections", lang)}
+              </Link>
             </div>
           ) : (
             <>
