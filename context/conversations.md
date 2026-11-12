@@ -2294,3 +2294,26 @@
   5. **Doğrulama:**
      - Backend: `go vet ./...`, `go test -count=1 ./...` ([`audit_fixes_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/audit_fixes_test.go) dahil), Windows (`backend\bin\backend.exe`) ve Linux AMD64 (`backend\bin\backend`) derlemeleri **0 hata / 0 uyarı** ile geçti.
      - Frontend: Proje geneli `npx tsc --noEmit` ve `npm run lint` **0 hata / 0 uyarı** ile geçti. Tüm değişiklikler **Demir Kural #1** gereği çalışma dizininde (`working tree`) incelemeye hazır bırakıldı.
+
+
+### [2026-11-12 20:42:00] - Oturum #126 (Yerel Commit, Canlı AlmaLinux Backend + SSR Frontend + Nginx + Keycloak Tema Dağıtımı ve E2E Doğrulaması)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle pushla yayınla"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Yerel Git Commit İşlemleri (Conventional Commits):**
+     - Canlı Chrome denetimi bulgularının tamamı `374dd46` (`fix: resolve live Chrome UI/UX, color harmony, WCAG contrast, RTL, polling, and BI/admin audit findings`) ve uzak Turbopack font + Nginx CSP / kanonik `www` yönlendirme uyumu `93aa14c` (`fix: ensure Turbopack remote SSR build succeeds and align Nginx CSP/canonical www redirect`) olarak `main` dalına commit'lendi.
+  2. **Canlı AlmaLinux Üretim Sunucusu Dağıtımı (`213.202.255.80`):**
+     - **Birleşik Go Backend (`merter-backend.service`, Port `8080`):** Linux AMD64 (`42.25 MB`) derlenip SFTP ile aktarılarak `53.03 sn` içinde canlıya alındı.
+     - **Birleşik Next.js 16 SSR Frontend (`merter-frontend.service`, Port `3000`):** [`unified_deployer.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/unified_deployer.py) (`--remote-build`, uzak derleme `exit_status` kontrolü `check=True` eklenerek) ile sunucu üzerinde `100/100` rota hatasız derlenip (`176.18 sn`) yayına alındı.
+     - **Nginx Ters Proxy & Güvenlik Başlıkları:** `www.mertervitrini.com.tr` -> `https://mertervitrini.com.tr` (`301`) kanonik yönlendirmesi ve Google Haritalar (`maps.google.com`) + Centrifuge canlı sohbet WebSocket (`wss:`) CSP izinleri Nginx seviyesinde etkinleştirildi.
+     - **Keycloak 26 Giriş Teması (`/opt/keycloak/themes/merter`):** Güncellenen 15 tema ve dil dosyası canlı sunucuya aktarılarak `keycloak.service` yeniden başlatıldı.
+  3. **Canlı Üretim Ortamı (`E2E`) Doğrulaması:**
+     - `GET /api/v1/health` -> `HTTP 200` (`healthy / connected`).
+     - `GET https://www.mertervitrini.com.tr/admin` -> `HTTP 301` -> `https://mertervitrini.com.tr/admin`.
+     - `GET /tr/contact` -> `HTTP 200`, tekil `<title>İletişim & Showroom Bilgileri | Merter Vitrini B2B</title>`, CSP `maps.google.com: True` & `wss:: True`.
+     - `GET /ar` -> `HTTP 200`, `<html lang="ar" dir="rtl">`.
+     - `GET /api/v1/store/sponsored-slots?placement=category` -> `HTTP 200`, `0` ürünlü `abc teksil` sızıntısı tamamen engellendi (`False`).
+     - `POST /api/v1/store/auth/login` (boş `captcha_token`) -> `HTTP 400 reCAPTCHA` kilidi kalktı, doğrudan kimlik doğrulamasına (`HTTP 401`) geçiyor.
+     - `GET https://auth.mertervitrini.com.tr/realms/merter/.well-known/openid-configuration` -> `HTTP 200`.
+  4. **GitHub Uzak Depo (`git push origin main`) Durumu:**
+     - `origin` URL'sindeki gömülü `ghp_hZkZ...` GitHub PAT süresi dolmuş olduğu için otomatik terminal gönderimi kimlik doğrulama engeline takıldı; yerel `main` dalı tamamen temiz ve VS Code Source Control / yeni PAT ile tek tıkla gönderime hazır.
