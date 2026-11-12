@@ -2242,3 +2242,22 @@
      - [`seoHelpers.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/seoHelpers.ts), [`GlobalB2BSeoKnowledgeSection.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/seo/GlobalB2BSeoKnowledgeSection.tsx), [`proxy.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/proxy.ts), [`layout.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/layout.tsx), [`product/[slug]/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/page.tsx), [`sitemap.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/sitemap.ts) ve [`robots.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/robots.ts) güncellenerek dinamik `<html lang dir>`, kendi kendine referanslı 8 dil `canonical` + `hreflang`, kategori/vitrin/üretici sayfalarında gerçek SSR ürün kartı basımı, uluslararası toptan anahtar kelime blokları, `?lang=` destekli Google Merchant beslemesi, **Yandex Market YML** (`GET /api/v1/store/feeds/yandex-market.xml`) beslemesi ve otomatik `IndexNow` bildirimi devreye alındı.
   5. **Doğrulama:**
      - `go vet ./...`, `go test ./...`, Windows (`backend.exe`) & Linux AMD64 (`backend`) derlemeleri, `npx tsc --noEmit` ve `npm run lint` kontrollerinin tamamı sıfır hata ve sıfır uyarı ile geçti; tüm değişiklikler çalışma dizininde (`working tree`) incelemeye hazır bırakıldı.
+
+
+
+### [2026-11-12 11:56:00] - Oturum #123 (Yerel Commit, Canlı AlmaLinux Dağıtımı, Canlı Güvenlik/BI/SEO E2E Doğrulaması & GitHub PAT Bilgilendirmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"onaylıyorum hepsini sonra commitle pushala yayınla"`
+- **Yapılan İşlemler ve Cevap Özeti:**
+  1. **Yerel Git Commit İşlemi (Conventional Commits):**
+     - Tüm 4 sütunlu geliştirme paketi `471ee0b` (`feat: complete 8-language i18n, security/SQL hardening, BI data mining suite, and global B2B SSR SEO overhaul`) olarak yerel `main` dalına commit'lendi.
+  2. **Canlı AlmaLinux Üretim Sunucusu Dağıtımı (`213.202.255.80`):**
+     - `python scripts\unified_deployer.py -p unified -c all -a all --remote-build` komutuyla Go Backend (`merter-backend.service`, `42.19 MB`) ve Next.js SSR Frontend (`merter-frontend.service`, sunucuda `--remote-build` ile derlenerek) toplam `187.84 sn` içinde canlıya alındı.
+  3. **Canlı Üretim Ortamı Uçtan Uca (`E2E`) Doğrulaması:**
+     - `GET /api/v1/health` -> `HTTP 200` (`healthy / connected`).
+     - Çok dilli SSR & RTL: `/ru` -> `<html lang="ru" dir="ltr">`, `/ar` -> `<html lang="ar" dir="rtl">`, `/product/{slug}?lang=ru` -> kendi kendine referanslı `?lang=ru` `canonical`, `/en/tum-urunler` -> ilk SSR HTML yanıtında **184 gerçek ürün linki**.
+     - Yandex Market YML Beslemesi: `GET /api/v1/store/feeds/yandex-market.xml?lang=ru` -> `HTTP 200` (`10.23 MB` `<yml_catalog>`).
+     - Güvenlik & RBAC: Sahte `alg: none` JWT -> `HTTP 401`; Müşteri token'ı ile Admin BI rotası -> `HTTP 403`; Halka açık ürün API'sinde `buying_price` ve `feed_id` sızıntısı -> `False` (tamamen temizlendi).
+     - Admin BI & Veri Madenciliği + Sponsorlu Vitrinler: Admin token'ı ile `GET /api/v1/analytics/bi-mining?period=7d` -> `HTTP 200` (`728` tekil insan ziyaretçi, `6` huni adımı, `25` sıcak B2B alıcı skoru, 11 BI bölümü aktif); `GET /api/v1/store/sponsored-slots` -> `HTTP 200` (`4` sponsorlu vitrin kaydı).
+  4. **GitHub Uzak Depo (`git push origin main`) Durumu:**
+     - `origin` URL'sinde kayıtlı `ghp_...` GitHub Personal Access Token süresi dolduğu / iptal edildiği için (`could not read Password for 'https://ghp_...@github.com'`) otomatik `git push` kimlik doğrulama engeline takıldı; kullanıcıya VS Code / tarayıcı OAuth veya yeni PAT ile tek komutta gönderim bilgisi iletildi.
