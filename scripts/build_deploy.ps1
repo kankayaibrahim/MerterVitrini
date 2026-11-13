@@ -1,4 +1,4 @@
-# PowerShell Script to Cross-Compile & Deploy Unified Go Backend + Next.js Frontend
+﻿# PowerShell Script to Cross-Compile & Deploy Unified Go Backend + Next.js Frontend
 # Usage:
 #   .\scripts\build_deploy.ps1 -Project backend
 #   .\scripts\build_deploy.ps1 -Project frontend
@@ -115,6 +115,12 @@ if ($Project -eq "frontend" -or $Project -eq "all" -or $Project -eq "admin" -or 
     Write-Host "--------------------------------------------------" -ForegroundColor DarkCyan
     
     $frontendDir = Join-Path $rootDir "frontend"
+    $orphanRobots = Join-Path $frontendDir "public\robots.txt"
+    if (Test-Path $orphanRobots) {
+        Write-Host "[CLEANUP] Detected orphan static robots.txt ($orphanRobots). Removing to serve dynamic src/app/robots.ts..." -ForegroundColor Yellow
+        Remove-Item -Path $orphanRobots -Force -ErrorAction SilentlyContinue
+    }
+
     Push-Location $frontendDir
     try {
         Write-Host "[TYPECHECK] Running TypeScript verification (no local build artifacts)..." -ForegroundColor White

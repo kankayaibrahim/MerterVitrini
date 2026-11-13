@@ -1,8 +1,10 @@
 import React from "react";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import {
   OG_LOCALE_BY_LANG,
   SupportedSeoLang,
+  isSupportedSeoLang,
   normalizeSeoLang,
   stripBrandTitleSuffix,
   buildPrefixedAlternates,
@@ -51,6 +53,9 @@ const CART_DESCS: Record<SupportedSeoLang, string> = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const lang = normalizeSeoLang(categoryPrefix, "en");
   const title = stripBrandTitleSuffix(CART_TITLES[lang]);
   const desc = CART_DESCS[lang];
@@ -77,6 +82,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CartPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const categories = await fetchSsrCategories();
 
   return <CartClient categoryPrefix={categoryPrefix} categories={categories} />;

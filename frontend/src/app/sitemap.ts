@@ -9,6 +9,8 @@ import {
 
 export const revalidate = 3600;
 
+const PRODUCTS_PER_SITEMAP = 2000;
+
 interface SitemapCategory {
   id: string;
   slug?: string;
@@ -16,7 +18,7 @@ interface SitemapCategory {
 }
 
 interface SitemapProduct {
-  id: string;
+  id?: string;
   slug?: string;
   updated_at?: string;
 }
@@ -236,72 +238,111 @@ function appendBlogPosts(
   }
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+export async function generateSitemaps(): Promise<Array<{ id: number }>> {
+  const productsRaw = await ssrStoreFetch<SitemapProduct[]>("/sitemap/products", 3600);
+  const products = parseProductsPayload(productsRaw);
+  const count = products.length > 0 ? products.length : 6000;
+  const chunkCount = Math.max(1, Math.ceil(count / PRODUCTS_PER_SITEMAP));
+  const sitemaps: Array<{ id: number }> = [{ id: 0 }];
+  for (let i = 1; i <= chunkCount; i++) {
+    sitemaps.push({ id: i });
+  }
+  return sitemaps;
+}
+
+export default async function sitemap(props?: {
+  id?: Promise<string | number | undefined> | string | number;
+}): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
-  const sitemapUrls: MetadataRoute.Sitemap = [];
+  const rawId = props?.id;
+  const resolvedId =
+    typeof rawId === "object" && rawId !== null && "then" in rawId
+      ? await rawId
+      : rawId;
+  const numericId =
+    typeof resolvedId === "number"
+      ? resolvedId
+      : parseInt(String(resolvedId ?? "0"), 10);
+  const safeId = isNaN(numericId) ? 0 : numericId;
 
-  const rootAlternates = buildPrefixedAlternates("", "en");
-  sitemapUrls.push({
-    url: SITE_ORIGIN,
-    lastModified: now,
-    changeFrequency: "daily",
-    priority: 1,
-    alternates: {
-      languages: {
-        ...rootAlternates.languages,
-        "x-default": SITE_ORIGIN,
+  // Partition 0: Core static, categories, brands, CMS pages, blog posts
+  if (safeId === 0) {
+    const sitemapUrls: MetadataRoute.Sitemap = [];
+
+    const rootAlternates = buildPrefixedAlternates("", "en");
+    sitemapUrls.push({
+      url: SITE_ORIGIN,
+      lastModified: now,
+      changeFrequency: "daily",
+      priority: 1,
+      alternates: {
+        languages: {
+          ...rootAlternates.languages,
+          "x-default": `${SITE_ORIGIN}/en`,
+        },
       },
-    },
-  });
+    });
 
-  appendPrefixedStaticRoutes(sitemapUrls, now);
+    appendPrefixedStaticRoutes(sitemapUrls, now);
 
-  const [categoriesRaw, productsRaw, blogRaw, brandsRaw, pagesRaw] =
-    await Promise.all([
+    const [categoriesRaw, blogRaw, brandsRaw, pagesRaw] = await Promise.all([
       ssrStoreFetch<SitemapCategory[]>("/categories", 3600),
-      ssrStoreFetch<unknown>("/products?limit=10000", 3600),
       ssrStoreFetch<unknown>("/blog", 3600),
       ssrStoreFetch<SitemapBrand[]>("/brands", 3600),
       ssrStoreFetch<SitemapStaticPage[]>("/pages", 3600),
     ]);
 
-  const categories = Array.isArray(categoriesRaw) ? categoriesRaw : [];
-  const categoryPaths = collectCategoryPaths(categories);
-  for (const catPath of categoryPaths) {
+    const categories = Array.isArray(categoriesRaw) ? categoriesRaw : [];
+    const categoryPaths = collectCategoryPaths(categories);
+    for (const catPath of categoryPaths) {
+      for (const lang of SUPPORTED_SEO_LANGS) {
+        const alt = buildPrefixedAlternates(catPath, lang);
+        sitemapUrls.push({
+          url: alt.canonical,
+          lastModified: now,
+          changeFrequency: "daily",
+          priority: 0.85,
+          alternates: { languages: alt.languages },
+        });
+      }
+    }
+
+    appendStandaloneDirectoryRoutes(
+      sitemapUrls,
+      Array.isArray(brandsRaw) ? brandsRaw : [],
+      now
+    );
+
+    appendCmsPages(sitemapUrls, Array.isArray(pagesRaw) ? pagesRaw : [], now);
+    appendBlogPosts(sitemapUrls, parseBlogPayload(blogRaw), now);
+
+    return sitemapUrls;
+  }
+
+  // Partition 1..N: Product URLs with full bidirectional hreflang for all 8 locales
+  const productsRaw = await ssrStoreFetch<SitemapProduct[]>("/sitemap/products", 3600);
+  const products = parseProductsPayload(productsRaw);
+  const startIndex = (safeId - 1) * PRODUCTS_PER_SITEMAP;
+  const chunk = products.slice(startIndex, startIndex + PRODUCTS_PER_SITEMAP);
+
+  const productUrls: MetadataRoute.Sitemap = [];
+  for (const prod of chunk) {
+    if (!prod.slug) continue;
+    const modDate = prod.updated_at ? new Date(prod.updated_at) : now;
+    const alt = buildQueryLangAlternates(`/product/${prod.slug}`, "tr");
+
     for (const lang of SUPPORTED_SEO_LANGS) {
-      const alt = buildPrefixedAlternates(catPath, lang);
-      sitemapUrls.push({
-        url: alt.canonical,
-        lastModified: now,
+      const targetUrl = alt.languages[lang];
+      if (!targetUrl) continue;
+      productUrls.push({
+        url: targetUrl,
+        lastModified: modDate,
         changeFrequency: "daily",
-        priority: 0.85,
+        priority: 0.9,
         alternates: { languages: alt.languages },
       });
     }
   }
 
-  appendStandaloneDirectoryRoutes(
-    sitemapUrls,
-    Array.isArray(brandsRaw) ? brandsRaw : [],
-    now
-  );
-
-  appendCmsPages(sitemapUrls, Array.isArray(pagesRaw) ? pagesRaw : [], now);
-
-  const products = parseProductsPayload(productsRaw);
-  for (const prod of products) {
-    if (!prod.slug) continue;
-    const alt = buildQueryLangAlternates(`/product/${prod.slug}`, "tr");
-    sitemapUrls.push({
-      url: alt.canonical,
-      lastModified: prod.updated_at ? new Date(prod.updated_at) : now,
-      changeFrequency: "daily",
-      priority: 0.9,
-      alternates: { languages: alt.languages },
-    });
-  }
-
-  appendBlogPosts(sitemapUrls, parseBlogPayload(blogRaw), now);
-
-  return sitemapUrls;
+  return productUrls;
 }

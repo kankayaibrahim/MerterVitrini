@@ -1,10 +1,12 @@
 import React from "react";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import {
   SITE_ORIGIN,
   OG_LOCALE_BY_LANG,
   GLOBAL_B2B_SEO_MATRIX,
   SupportedSeoLang,
+  isSupportedSeoLang,
   normalizeSeoLang,
   stripBrandTitleSuffix,
   buildPrefixedAlternates,
@@ -24,7 +26,7 @@ export interface BlogPostTranslation {
   slug?: string;
   title: string;
   summary?: string | null;
-  content: string;
+  content?: string | null;
   meta_title?: string | null;
   meta_description?: string | null;
 }
@@ -127,6 +129,9 @@ const BLOG_BREADCRUMB_LABEL: Record<SupportedSeoLang, string> = {
 
 export async function generateMetadata({ params }: Readonly<PageProps>): Promise<Metadata> {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const activeLangs = await fetchBlogLanguages();
   const lang = resolvePrefixLanguage(activeLangs, categoryPrefix);
 
@@ -153,6 +158,9 @@ export async function generateMetadata({ params }: Readonly<PageProps>): Promise
 
 export default async function BlogListPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
 
   const [activeLangs, categories, blogPostsData] = await Promise.all([
     fetchBlogLanguages(),

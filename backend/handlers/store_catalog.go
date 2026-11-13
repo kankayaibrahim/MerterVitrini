@@ -18,6 +18,7 @@ import (
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/httpx"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -1580,7 +1581,9 @@ func (h *StoreCatalogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Reque
 
 	query := `
 		SELECT b.id, b.slug, b.cover_image, b.is_active, b.created_at, b.updated_at,
-		       t.language_code, t.title, t.summary, t.content, t.meta_title, t.meta_description,
+		       t.language_code, t.title,
+		       COALESCE(NULLIF(t.summary, ''), LEFT(REGEXP_REPLACE(t.content, '<[^>]+>', ' ', 'g'), 180)) AS summary,
+		       t.meta_title, t.meta_description,
 		       COALESCE(t.slug, b.slug) AS trans_slug
 		FROM catalog.blog_posts b
 		LEFT JOIN catalog.blog_post_translations t ON b.id = t.post_id
@@ -1600,18 +1603,18 @@ func (h *StoreCatalogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Reque
 
 	for rows.Next() {
 		var (
-			postID, slug                 string
-			coverImage                   *string
-			isActive                     bool
-			createdAt, updatedAt         time.Time
-			langCode, title, summary     *string
-			content, metaTitle, metaDesc *string
-			transSlug                    *string
+			postID, slug             string
+			coverImage               *string
+			isActive                 bool
+			createdAt, updatedAt     time.Time
+			langCode, title, summary *string
+			metaTitle, metaDesc      *string
+			transSlug                *string
 		)
 
 		err := rows.Scan(
 			&postID, &slug, &coverImage, &isActive, &createdAt, &updatedAt,
-			&langCode, &title, &summary, &content, &metaTitle, &metaDesc, &transSlug,
+			&langCode, &title, &summary, &metaTitle, &metaDesc, &transSlug,
 		)
 		if err != nil {
 			log.Printf("[STORE API ERROR] Failed to scan blog post row: %v", err)
@@ -1634,12 +1637,12 @@ func (h *StoreCatalogHandler) ListBlogPosts(w http.ResponseWriter, r *http.Reque
 			orderedBlogIDs = append(orderedBlogIDs, postID)
 		}
 
-		if langCode != nil && title != nil && content != nil {
+		if langCode != nil && title != nil {
 			post.Translations[*langCode] = models.BlogPostTranslation{
 				Slug:            transSlug,
 				Title:           *title,
 				Summary:         summary,
-				Content:         *content,
+				Content:         "",
 				MetaTitle:       metaTitle,
 				MetaDescription: metaDesc,
 			}
@@ -1771,6 +1774,8 @@ type gItem struct {
 	CustomLabel1           string   `xml:"g:custom_label_1,omitempty"`
 	CustomLabel2           string   `xml:"g:custom_label_2,omitempty"`
 	CustomLabel3           string   `xml:"g:custom_label_3,omitempty"`
+	CustomLabel4           string   `xml:"g:custom_label_4,omitempty"`
+	ExcludedDestination    string   `xml:"g:excluded_destination,omitempty"`
 }
 
 type gChannel struct {
@@ -2060,12 +2065,22 @@ func (h *StoreCatalogHandler) GoogleMerchantFeed(w http.ResponseWriter, r *http.
 	}
 	defer rows.Close()
 
+	var showToGuests bool
+	if db.Pool != nil {
+		_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(show_prices_to_guests, false) FROM catalog.settings LIMIT 1`).Scan(&showToGuests)
+	}
+
 	var xmlItems []gItem
 	for rows.Next() {
 		item, errScan := mapRowToGoogleMerchantItem(rows, lang)
 		if errScan != nil {
 			log.Printf("[STORE API ERROR] Failed to scan product row for Google Merchant Feed: %v", errScan)
 			continue
+		}
+		if !showToGuests {
+			item.ExcludedDestination = "Shopping_ads"
+			item.CustomLabel0 = "Wholesale B2B - Member Quote"
+			item.CustomLabel4 = "MembersOnly"
 		}
 		xmlItems = append(xmlItems, item)
 	}
@@ -2095,6 +2110,48 @@ func (h *StoreCatalogHandler) GoogleMerchantFeed(w http.ResponseWriter, r *http.
 	if err := encoder.Encode(rssFeed); err != nil {
 		log.Printf("[STORE API ERROR] Failed to encode Google Merchant XML: %v", err)
 	}
+}
+
+// GetProductsSitemapData returns lightweight product sitemap data (slug and updated_at) from catalog.mv_products.
+func (h *StoreCatalogHandler) GetProductsSitemapData(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT slug, updated_at
+		FROM catalog.mv_products
+		WHERE is_active = true
+		ORDER BY updated_at DESC`
+
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		log.Printf("[STORE API ERROR] Failed to query products for sitemap: %v", err)
+		httpx.Error(w, http.StatusInternalServerError, "Failed to load products for sitemap")
+		return
+	}
+	defer rows.Close()
+
+	type sitemapProduct struct {
+		Slug      string     `json:"slug"`
+		UpdatedAt *time.Time `json:"updated_at"`
+	}
+
+	items := make([]sitemapProduct, 0, 1024)
+	for rows.Next() {
+		var item sitemapProduct
+		if err := rows.Scan(&item.Slug, &item.UpdatedAt); err != nil {
+			log.Printf("[STORE API ERROR] Failed to scan sitemap product row: %v", err)
+			continue
+		}
+		items = append(items, item)
+	}
+
+	httpx.JSON(w, http.StatusOK, items)
 }
 
 type ymlCurrency struct {

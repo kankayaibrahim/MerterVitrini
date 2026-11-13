@@ -67,6 +67,8 @@ docs/xmller/
 *.xml
 !mobile/android/**/*.xml
 !mobile/ios/**/*.xml
+!frontend/src/app/sitemap-index.xml/
+!frontend/src/app/sitemap-index.xml/**
 admin/backend/parsers/downloads/
 
 # --- Flutter & Android Mobile Build / Signing Secrets ---

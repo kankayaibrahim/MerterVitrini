@@ -1,5 +1,6 @@
 import React from "react";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { Category } from "@/types/store";
 import { getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
 import {
@@ -336,6 +337,17 @@ function buildProductJsonLdGraph(
     baseOffer.priceValidUntil = "2027-12-31";
   }
 
+  const memberQuoteOffer: Record<string, unknown> = {
+    ...baseOffer,
+    availability: "https://schema.org/InStock",
+    itemCondition: "https://schema.org/NewCondition",
+    priceSpecification: {
+      "@type": "UnitPriceSpecification",
+      priceType: "https://schema.org/InvoicePrice",
+      description: "Wholesale member pricing upon verification",
+    },
+  };
+
   const skuValue = product.custom_sku || product.source_product_id || product.id;
   const breadcrumbs = buildProductBreadcrumbElements(
     product,
@@ -362,7 +374,7 @@ function buildProductJsonLdGraph(
           "@type": "Brand",
           name: product.brand_name || tpl.defaultBrand,
         },
-        ...(showGuestPrices ? { offers: baseOffer } : {}),
+        offers: showGuestPrices ? baseOffer : memberQuoteOffer,
       },
       {
         "@type": "BreadcrumbList",
@@ -379,7 +391,6 @@ export async function generateMetadata({
   const { slug } = await params;
   const resolvedSearch = searchParams ? await searchParams : {};
   const lang = normalizeSeoLang(resolvedSearch.lang, "tr");
-  const tpl = PRODUCT_SEO_TEMPLATES[lang];
 
   const product = await ssrStoreFetch<SeoEnhancedProduct>(
     `/products/${encodeURIComponent(slug)}`,
@@ -387,11 +398,7 @@ export async function generateMetadata({
   );
 
   if (!product) {
-    return {
-      title: stripBrandTitleSuffix(tpl.notFoundTitle),
-      description: tpl.notFoundDesc,
-      robots: { index: false, follow: true },
-    };
+    notFound();
   }
 
   const canonicalSlug = product.slug || slug;
@@ -442,17 +449,19 @@ export default async function ProductDetailPage({
     fetchSsrStoreSettings(),
   ]);
 
-  const canonicalSlug = product?.slug || slug;
+  if (!product) {
+    notFound();
+  }
+
+  const canonicalSlug = product.slug || slug;
   const alternates = buildQueryLangAlternates(`/product/${canonicalSlug}`, lang);
-  const jsonLd = product
-    ? buildProductJsonLdGraph(
-        product,
-        categories,
-        settings,
-        lang,
-        alternates.canonical
-      )
-    : null;
+  const jsonLd = buildProductJsonLdGraph(
+    product,
+    categories,
+    settings,
+    lang,
+    alternates.canonical
+  );
 
   return (
     <>

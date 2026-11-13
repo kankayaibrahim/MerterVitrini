@@ -1,9 +1,11 @@
 import React from "react";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import ContactClient, { StoreSettings, ContactCMSPage, Language } from "./ContactClient";
 import {
   SITE_ORIGIN,
   SupportedSeoLang,
+  isSupportedSeoLang,
   OG_LOCALE_BY_LANG,
   GLOBAL_B2B_SEO_MATRIX,
   normalizeSeoLang,
@@ -93,6 +95,9 @@ const CONTACT_DESCRIPTIONS: Record<SupportedSeoLang, string> = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const activeLangs = await fetchLanguages();
   const lang = resolveLang(categoryPrefix, activeLangs);
   const title = stripBrandTitleSuffix(CONTACT_TITLES[lang]);
@@ -124,6 +129,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ContactPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
 
   const [activeLangs, categories, settingsData, pageData] = await Promise.all([
     fetchLanguages(),

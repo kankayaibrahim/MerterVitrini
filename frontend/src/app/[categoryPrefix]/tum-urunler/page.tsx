@@ -1,5 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import StorefrontLayout from "@/components/store/StorefrontLayout";
 import { getProductTitle } from "@/app/i18n";
 import {
@@ -7,6 +8,7 @@ import {
   fetchSsrCategories,
   fetchSsrProducts,
   GLOBAL_B2B_SEO_MATRIX,
+  isSupportedSeoLang,
   normalizeSeoLang,
   OG_LOCALE_BY_LANG,
   safeJsonLd,
@@ -18,6 +20,9 @@ interface PageProps {
   readonly params: Promise<{
     readonly categoryPrefix: string;
   }>;
+  readonly searchParams?: Promise<{
+    [key: string]: string | string[] | undefined;
+  }>;
 }
 
 export function generateStaticParams() {
@@ -28,6 +33,9 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const lang = normalizeSeoLang(categoryPrefix, "tr");
   const copy = GLOBAL_B2B_SEO_MATRIX[lang];
   const alternates = buildPrefixedAlternates("tum-urunler", lang);
@@ -58,15 +66,27 @@ export async function generateMetadata({
 
 export default async function LocalizedTumUrunlerPage({
   params,
+  searchParams,
 }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
+
+  const resolvedSearch = searchParams ? await searchParams : undefined;
+  const pageRaw = Array.isArray(resolvedSearch?.page)
+    ? resolvedSearch.page[0]
+    : resolvedSearch?.page;
+  const pageNum = Math.max(1, parseInt(pageRaw || "1", 10));
+  const offset = (pageNum - 1) * 24;
+
   const lang = normalizeSeoLang(categoryPrefix, "tr");
   const copy = GLOBAL_B2B_SEO_MATRIX[lang];
   const alternates = buildPrefixedAlternates("tum-urunler", lang);
 
   const [categories, productsPayload] = await Promise.all([
     fetchSsrCategories(),
-    fetchSsrProducts("?limit=24&offset=0&sort_by=newest", 180),
+    fetchSsrProducts(`?limit=24&offset=${offset}&sort_by=newest`, 180),
   ]);
 
   const itemListElements = productsPayload.products

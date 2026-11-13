@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Home, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Product, Category } from "@/types/store";
 import { t, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
@@ -147,51 +148,102 @@ function CatalogPagination({
   lang,
   onPageChange,
 }: Readonly<CatalogPaginationProps>) {
+  const pathname = usePathname() || "";
+  const searchParams = useSearchParams();
+
+  const getPageHref = (page: number) => {
+    const sp = new URLSearchParams(searchParams ? searchParams.toString() : "");
+    if (page <= 1) {
+      sp.delete("page");
+    } else {
+      sp.set("page", String(page));
+    }
+    const query = sp.toString();
+    return query ? `${pathname}?${query}` : pathname || "?";
+  };
+
+  const navButtonClass =
+    "w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink transition-colors cursor-pointer select-none active:scale-95 no-underline";
+  const disabledClass =
+    "w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx opacity-30 cursor-not-allowed select-none";
+
   return (
     <div className="flex items-center justify-center gap-2 sm:gap-3 mt-8 select-none">
-      <button
-        type="button"
-        disabled={currentPage === 1}
-        onClick={() => onPageChange(1)}
-        title={t("First Page", lang)}
-        className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
-      >
-        <ChevronsLeft className="w-4 h-4" />
-      </button>
+      {currentPage === 1 ? (
+        <span aria-disabled="true" title={t("First Page", lang)} className={disabledClass}>
+          <ChevronsLeft className="w-4 h-4" />
+        </span>
+      ) : (
+        <Link
+          href={getPageHref(1)}
+          onClick={(e) => {
+            e.preventDefault();
+            onPageChange(1);
+          }}
+          title={t("First Page", lang)}
+          className={navButtonClass}
+        >
+          <ChevronsLeft className="w-4 h-4" />
+        </Link>
+      )}
 
-      <button
-        type="button"
-        disabled={currentPage === 1}
-        onClick={() => onPageChange(Math.max(currentPage - 1, 1))}
-        title={t("Previous Page", lang)}
-        className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
-      >
-        <ChevronLeft className="w-4 h-4" />
-      </button>
+      {currentPage === 1 ? (
+        <span aria-disabled="true" title={t("Previous Page", lang)} className={disabledClass}>
+          <ChevronLeft className="w-4 h-4" />
+        </span>
+      ) : (
+        <Link
+          href={getPageHref(Math.max(currentPage - 1, 1))}
+          onClick={(e) => {
+            e.preventDefault();
+            onPageChange(Math.max(currentPage - 1, 1));
+          }}
+          title={t("Previous Page", lang)}
+          className={navButtonClass}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </Link>
+      )}
 
       <span className="text-xs font-bold text-sonic-silver px-2 min-w-[70px] text-center">
         {t("page", lang)} {currentPage} / {totalPages}
       </span>
 
-      <button
-        type="button"
-        disabled={currentPage >= totalPages}
-        onClick={() => onPageChange(Math.min(currentPage + 1, totalPages))}
-        title={t("Next Page", lang)}
-        className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
-      >
-        <ChevronRight className="w-4 h-4" />
-      </button>
+      {currentPage >= totalPages ? (
+        <span aria-disabled="true" title={t("Next Page", lang)} className={disabledClass}>
+          <ChevronRight className="w-4 h-4" />
+        </span>
+      ) : (
+        <Link
+          href={getPageHref(Math.min(currentPage + 1, totalPages))}
+          onClick={(e) => {
+            e.preventDefault();
+            onPageChange(Math.min(currentPage + 1, totalPages));
+          }}
+          title={t("Next Page", lang)}
+          className={navButtonClass}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </Link>
+      )}
 
-      <button
-        type="button"
-        disabled={currentPage >= totalPages}
-        onClick={() => onPageChange(totalPages)}
-        title={t("Last Page", lang)}
-        className="w-9 h-9 rounded-[5px] border border-cultured bg-white flex items-center justify-center text-onyx hover:border-salmon-pink hover:text-salmon-pink disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer select-none active:scale-95"
-      >
-        <ChevronsRight className="w-4 h-4" />
-      </button>
+      {currentPage >= totalPages ? (
+        <span aria-disabled="true" title={t("Last Page", lang)} className={disabledClass}>
+          <ChevronsRight className="w-4 h-4" />
+        </span>
+      ) : (
+        <Link
+          href={getPageHref(totalPages)}
+          onClick={(e) => {
+            e.preventDefault();
+            onPageChange(totalPages);
+          }}
+          title={t("Last Page", lang)}
+          className={navButtonClass}
+        >
+          <ChevronsRight className="w-4 h-4" />
+        </Link>
+      )}
     </div>
   );
 }
@@ -239,6 +291,15 @@ export default function CatalogView({
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (page <= 1) {
+        url.searchParams.delete("page");
+      } else {
+        url.searchParams.set("page", page.toString());
+      }
+      window.history.pushState({}, "", url.toString());
+    }
     window.scrollTo({ top: 220, behavior: "smooth" });
   };
 

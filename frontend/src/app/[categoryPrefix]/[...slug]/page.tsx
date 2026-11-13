@@ -1,5 +1,6 @@
 import React from "react";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import StorefrontLayout from "@/components/store/StorefrontLayout";
 import { Category, Product } from "@/types/store";
 import {
@@ -7,6 +8,7 @@ import {
   SupportedSeoLang,
   OG_LOCALE_BY_LANG,
   GLOBAL_B2B_SEO_MATRIX,
+  isSupportedSeoLang,
   normalizeSeoLang,
   safeJsonLd,
   stripBrandTitleSuffix,
@@ -24,13 +26,12 @@ interface PageProps {
     readonly categoryPrefix: string;
     readonly slug: string[];
   }>;
-}
-
-interface MetadataProps extends PageProps {
   readonly searchParams?: Promise<{
     [key: string]: string | string[] | undefined;
   }>;
 }
+
+type MetadataProps = PageProps;
 
 export interface Language {
   code: string;
@@ -519,7 +520,6 @@ const FILTER_KEYS = new Set([
   "max_price",
   "sort_by",
   "q",
-  "page",
 ]);
 
 async function checkHasFilterParams(
@@ -572,6 +572,10 @@ export async function generateMetadata({
   searchParams,
 }: MetadataProps): Promise<Metadata> {
   const { categoryPrefix, slug: slugArr } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
+
   const slug = resolveSlugAlias(resolveRawSlug(slugArr));
   const [hasFilterParams, activeLangs, categories] = await Promise.all([
     checkHasFilterParams(searchParams),
@@ -579,8 +583,12 @@ export async function generateMetadata({
     fetchSsrCategories(),
   ]);
 
-  const lang = resolveLangForPrefix(categoryPrefix, activeLangs);
   const catObj = findCategoryBySlug(categories, slug);
+  if (!catObj) {
+    notFound();
+  }
+
+  const lang = resolveLangForPrefix(categoryPrefix, activeLangs);
   const slugPathArr = getCategorySlugPath(categories, slug);
   const nestedPath = slugPathArr ? slugPathArr.join("/") : slug;
   const alternates = buildPrefixedAlternates(nestedPath, lang);
@@ -633,8 +641,12 @@ export async function generateMetadata({
   };
 }
 
-export default async function CategoryPage({ params }: PageProps) {
+export default async function CategoryPage({ params, searchParams }: PageProps) {
   const { categoryPrefix, slug: slugArr } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
+
   const slug = resolveSlugAlias(resolveRawSlug(slugArr));
 
   const [activeLangs, preFetchedCategories] = await Promise.all([
@@ -642,15 +654,24 @@ export default async function CategoryPage({ params }: PageProps) {
     fetchSsrCategories(),
   ]);
 
-  const defaultLang = resolveLangForPrefix(categoryPrefix, activeLangs);
   const catObj = findCategoryBySlug(preFetchedCategories, slug);
+  if (!catObj) {
+    notFound();
+  }
+
+  const resolvedSearch = searchParams ? await searchParams : undefined;
+  const pageRaw = Array.isArray(resolvedSearch?.page)
+    ? resolvedSearch.page[0]
+    : resolvedSearch?.page;
+  const pageNum = Math.max(1, parseInt(pageRaw || "1", 10));
+  const offset = (pageNum - 1) * 24;
+
+  const defaultLang = resolveLangForPrefix(categoryPrefix, activeLangs);
   const slugPathArr = getCategorySlugPath(preFetchedCategories, slug) || [slug];
 
-  const initialProductsPayload = catObj
-    ? await fetchSsrProducts(
-        `?limit=24&offset=0&sort_by=newest&category_id=${encodeURIComponent(catObj.id)}`
-      )
-    : { products: [], total: 0 };
+  const initialProductsPayload = await fetchSsrProducts(
+    `?limit=24&offset=${offset}&sort_by=newest&category_id=${encodeURIComponent(catObj.id)}`
+  );
 
   const breadcrumbElements = [
     {

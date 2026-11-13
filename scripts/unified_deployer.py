@@ -624,7 +624,8 @@ server {{
             try:
                 subprocess.run(
                     ["tar", "-czf", archive_path, "-C", parent_dir, 
-                     "--exclude=node_modules", "--exclude=.next", "--exclude=out", "--exclude=.git", base_dir],
+                     "--exclude=node_modules", "--exclude=.next", "--exclude=out", "--exclude=.git",
+                     "--exclude=public/robots.txt", "--exclude=robots.txt", base_dir],
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE
@@ -640,6 +641,8 @@ server {{
                 for root, dirs, files in os.walk(src_path):
                     dirs[:] = [d for d in dirs if d not in ["node_modules", ".next", "out", ".git"]]
                     for file in files:
+                        if file == "robots.txt":
+                            continue
                         full_path = os.path.join(root, file)
                         rel_path = os.path.relpath(full_path, parent_dir)
                         tar.add(full_path, arcname=rel_path)
@@ -671,10 +674,12 @@ server {{
         self.log("[REMOTE-DEPLOY] Copying compiled Next.js files to runtime directory...")
         self._ssh_cmd(ssh, f"mkdir -p {cfg['remote_dir']}")
         self._ssh_cmd(ssh, f"systemctl stop {cfg['service_name']} shop-frontend || true")
+        self._ssh_cmd(ssh, f"rm -f {build_root}/frontend/public/robots.txt {cfg['remote_dir']}/public/robots.txt")
         deploy_cmd = (
             f"rsync -a --delete --exclude='uploads' --exclude='.git' {build_root}/frontend/ {cfg['remote_dir']}/"
         )
         self._ssh_cmd(ssh, deploy_cmd)
+        self._ssh_cmd(ssh, f"rm -f {build_root}/frontend/public/robots.txt {cfg['remote_dir']}/public/robots.txt")
 
     def _deploy_frontend_remote_build(self, proj_key, cfg):
         self.log("[REMOTE-BUILD] Preparing to build and deploy directly on the remote server...")
@@ -715,6 +720,8 @@ server {{
             t_extract_start = time.time()
             self._ssh_cmd(ssh, f"tar -xzf {remote_archive} -C {build_root}")
             self._ssh_cmd(ssh, f"rm -f {remote_archive}")
+            self._ssh_cmd(ssh, f"rm -rf {build_root}/frontend/src/middleware.ts {build_root}/frontend/src/app/sitemap.xml")
+            self._ssh_cmd(ssh, f"rm -f {build_root}/frontend/public/robots.txt {cfg['remote_dir']}/public/robots.txt")
             t_extract_end = time.time()
             self.record_time(proj_key, "frontend", "Sunucuda Arşiv Açma (Tar Extract)", t_extract_end - t_extract_start)
 
@@ -736,7 +743,7 @@ server {{
         if has_native_tar:
             subprocess.run(
                 ["tar", "-czf", archive_path, "-C", parent_dir, 
-                 "--exclude=node_modules", "--exclude=.git", base_dir],
+                 "--exclude=node_modules", "--exclude=.git", "--exclude=public/robots.txt", "--exclude=robots.txt", base_dir],
                 check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
             return
@@ -746,6 +753,8 @@ server {{
             for root, dirs, files in os.walk(src_path):
                 dirs[:] = [d for d in dirs if d not in ["node_modules", ".git"]]
                 for file in files:
+                    if file == "robots.txt":
+                        continue
                     full_path = os.path.join(root, file)
                     rel_path = os.path.relpath(full_path, parent_dir)
                     tar.add(full_path, arcname=rel_path)

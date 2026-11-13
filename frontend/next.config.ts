@@ -79,6 +79,14 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  rewrites() {
+    return Promise.resolve([
+      {
+        source: "/sitemap.xml",
+        destination: "/sitemap-index.xml",
+      },
+    ]);
+  },
   headers() {
     return Promise.resolve([
       {

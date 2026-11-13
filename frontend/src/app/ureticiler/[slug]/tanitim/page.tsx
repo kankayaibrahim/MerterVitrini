@@ -1,5 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import type { Brand } from "@/types/store";
 import {
   SITE_ORIGIN,
@@ -68,9 +69,12 @@ export async function generateMetadata({
   const decoded = decodeURIComponent(slug);
   const lang = normalizeSeoLang(sParams?.lang, "tr");
   const brand = await ssrStoreFetch<Brand>(`/brands/${encodeURIComponent(decoded)}`, 300);
+  if (!brand) {
+    notFound();
+  }
 
-  const displayName = brand?.name || decoded.toUpperCase();
-  const canonicalSlug = encodeURIComponent(brand?.slug || decoded);
+  const displayName = brand.name || decoded.toUpperCase();
+  const canonicalSlug = encodeURIComponent(brand.slug || decoded);
   const alternates = buildQueryLangAlternates(`/ureticiler/${canonicalSlug}/tanitim`, lang);
   const title = stripBrandTitleSuffix(buildEditorialTitle(displayName, lang));
   const description = buildEditorialDesc(displayName, lang);
@@ -79,7 +83,7 @@ export async function generateMetadata({
     title,
     description,
     keywords: `${displayName}, ${GLOBAL_B2B_SEO_MATRIX[lang].keywords}`,
-    robots: brand ? { index: true, follow: true } : { index: false, follow: true },
+    robots: { index: true, follow: true },
     alternates,
     openGraph: {
       title,
@@ -106,7 +110,11 @@ export default async function SupplierEditorialPage({
     fetchSsrCategories(),
   ]);
 
-  const productsPayload = brand?.id
+  if (!brand) {
+    notFound();
+  }
+
+  const productsPayload = brand.id
     ? await fetchSsrProducts(
         `?brand_id=${encodeURIComponent(brand.id)}&limit=8&offset=0`,
         180

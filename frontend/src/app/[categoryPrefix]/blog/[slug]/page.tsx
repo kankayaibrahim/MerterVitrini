@@ -1,5 +1,6 @@
 import React from "react";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { t as translate } from "@/app/i18n";
 import {
   SITE_ORIGIN,
@@ -7,6 +8,7 @@ import {
   OG_LOCALE_BY_LANG,
   GLOBAL_B2B_SEO_MATRIX,
   SupportedSeoLang,
+  isSupportedSeoLang,
   safeJsonLd,
   stripBrandTitleSuffix,
   toAbsoluteSiteUrl,
@@ -15,6 +17,8 @@ import {
 } from "@/utils/seoHelpers";
 import BlogDetailClient from "./BlogDetailClient";
 import { BlogPost, fetchBlogLanguages, resolvePrefixLanguage } from "../page";
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   readonly params: Promise<{
@@ -45,34 +49,12 @@ const BLOG_CRUMB_BY_LANG: Record<SupportedSeoLang, string> = {
   bg: "B2B Блог",
 };
 
-export async function generateStaticParams() {
-  if (process.env.NEXT_BUILD_SSR === "true") return [];
-  const [activeLangs, posts] = await Promise.all([
-    fetchBlogLanguages(),
-    ssrStoreFetch<BlogPost[]>("/blog", 3600),
-  ]);
-
-  if (Array.isArray(posts) && posts.length > 0) {
-    const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
-    const params: { categoryPrefix: string; slug: string }[] = [];
-    for (const prefix of uniquePrefixes) {
-      for (const post of posts) {
-        if (post.slug) {
-          params.push({ categoryPrefix: prefix, slug: String(post.slug) });
-        }
-      }
-    }
-    return params;
-  }
-
-  return SUPPORTED_SEO_LANGS.map((prefix) => ({
-    categoryPrefix: prefix,
-    slug: "merter-toptan-giyim-piyasasi",
-  }));
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix, slug } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
+
   const [activeLangs, post] = await Promise.all([
     fetchBlogLanguages(),
     ssrStoreFetch<BlogPost>(`/blog/${encodeURIComponent(slug)}`, 300),
@@ -81,11 +63,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const lang = resolvePrefixLanguage(activeLangs, categoryPrefix);
 
   if (!post) {
-    return {
-      title: stripBrandTitleSuffix(translate("seo_page_not_found", lang)),
-      description: translate("seo_page_not_found_desc", lang),
-      robots: { index: false, follow: true },
-    };
+    notFound();
   }
 
   const trans =
@@ -132,12 +110,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BlogDetailPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix, slug } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
 
   const [activeLangs, categories, postData] = await Promise.all([
     fetchBlogLanguages(),
     fetchSsrCategories(),
     ssrStoreFetch<BlogPost>(`/blog/${encodeURIComponent(slug)}`, 300),
   ]);
+
+  if (!postData) {
+    notFound();
+  }
 
   const lang = resolvePrefixLanguage(activeLangs, categoryPrefix);
   const seoCopy = GLOBAL_B2B_SEO_MATRIX[lang];

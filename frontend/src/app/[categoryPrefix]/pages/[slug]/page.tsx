@@ -1,13 +1,14 @@
 import React from "react";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import PagesClient from "./PagesClient";
 import { t as translate } from "@/app/i18n";
 import {
   SITE_ORIGIN,
-  SUPPORTED_SEO_LANGS,
   OG_LOCALE_BY_LANG,
   GLOBAL_B2B_SEO_MATRIX,
   SupportedSeoLang,
+  isSupportedSeoLang,
   normalizeSeoLang,
   stripBrandTitleSuffix,
   buildPrefixedAlternates,
@@ -15,6 +16,8 @@ import {
   ssrStoreFetch,
   fetchSsrCategories,
 } from "@/utils/seoHelpers";
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   readonly params: Promise<{
@@ -79,34 +82,12 @@ function resolvePageLang(
   return normalizeSeoLang(matched?.code || categoryPrefix, "en");
 }
 
-export async function generateStaticParams() {
-  if (process.env.NEXT_BUILD_SSR === "true") return [];
-  const [activeLangs, pages] = await Promise.all([
-    fetchLanguages(),
-    ssrStoreFetch<Page[]>("/pages", 3600),
-  ]);
-
-  if (Array.isArray(pages) && pages.length > 0) {
-    const uniquePrefixes = Array.from(new Set(activeLangs.map((l) => l.categoryPrefix)));
-    const params: { categoryPrefix: string; slug: string }[] = [];
-    for (const prefix of uniquePrefixes) {
-      for (const page of pages) {
-        if (page.slug) {
-          params.push({ categoryPrefix: prefix, slug: String(page.slug) });
-        }
-      }
-    }
-    return params;
-  }
-
-  return SUPPORTED_SEO_LANGS.map((prefix) => ({
-    categoryPrefix: prefix,
-    slug: "hakkimizda",
-  }));
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix, slug } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
+
   const [activeLangs, page] = await Promise.all([
     fetchLanguages(),
     ssrStoreFetch<Page>(`/pages/${encodeURIComponent(slug)}`, 300),
@@ -115,11 +96,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const lang = resolvePageLang(activeLangs, categoryPrefix);
 
   if (!page) {
-    return {
-      title: stripBrandTitleSuffix(translate("seo_page_not_found", lang)),
-      description: translate("seo_page_not_found_desc", lang),
-      robots: { index: false, follow: true },
-    };
+    notFound();
   }
 
   const trans =
@@ -151,12 +128,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CMSPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix, slug } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
 
   const [activeLangs, categories, pageData] = await Promise.all([
     fetchLanguages(),
     fetchSsrCategories(),
     ssrStoreFetch<Page>(`/pages/${encodeURIComponent(slug)}`, 300),
   ]);
+
+  if (!pageData) {
+    notFound();
+  }
 
   const lang = resolvePageLang(activeLangs, categoryPrefix);
   const seoCopy = GLOBAL_B2B_SEO_MATRIX[lang];

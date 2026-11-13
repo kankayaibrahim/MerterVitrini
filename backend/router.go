@@ -204,6 +204,7 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 	mux.HandleFunc("GET /api/v1/store/blog/{slug}", h.StoreCatalog.GetBlogPostBySlug)
 	mux.HandleFunc("GET /api/v1/store/feeds/google-merchant.xml", h.StoreCatalog.GoogleMerchantFeed)
 	mux.HandleFunc("GET /api/v1/store/feeds/yandex-market.xml", h.StoreCatalog.YandexMarketFeed)
+	mux.HandleFunc("GET /api/v1/store/sitemap/products", h.StoreCatalog.GetProductsSitemapData)
 	mux.HandleFunc("POST /api/v1/store/inquiries", h.StoreInquiry.SubmitInquiry)
 	mux.HandleFunc("GET /api/v1/store/rfqs", h.Marketplace.ListPublicRfqs)
 	mux.HandleFunc("POST /api/v1/store/rfqs", h.Marketplace.CreatePublicRfq)

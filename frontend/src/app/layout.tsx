@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { headers } from "next/headers";
-import { Playfair_Display, Outfit } from "next/font/google";
+import { Playfair_Display, Outfit, Noto_Sans_Arabic } from "next/font/google";
 import Script from "next/script";
 import { AnalyticsTracker } from "@/components/analytics/AnalyticsTracker";
 import {
@@ -14,13 +14,19 @@ import "./globals.css";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
-  subsets: ["latin", "latin-ext"],
+  subsets: ["latin", "latin-ext", "cyrillic"],
   display: "swap",
 });
 
 const outfit = Outfit({
   variable: "--font-outfit",
   subsets: ["latin", "latin-ext"],
+  display: "swap",
+});
+
+const notoArabic = Noto_Sans_Arabic({
+  variable: "--font-arabic-next",
+  subsets: ["arabic"],
   display: "swap",
 });
 
@@ -119,7 +125,7 @@ export default async function RootLayout({
     <html
       lang={htmlLang}
       dir={htmlDir}
-      className={`${playfair.variable} ${outfit.variable} h-full antialiased`}
+      className={`${playfair.variable} ${outfit.variable} ${notoArabic.variable} h-full antialiased`}
     >
       <head>
         {googleVerification && (

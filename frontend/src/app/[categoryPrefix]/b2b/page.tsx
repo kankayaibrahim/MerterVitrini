@@ -1,9 +1,11 @@
 import React from "react";
 import { Metadata } from "next";
+import { notFound } from "next/navigation";
 import B2BClient, { StoreSettings, B2BCMSPage, Language } from "./B2BClient";
 import {
   SITE_ORIGIN,
   SupportedSeoLang,
+  isSupportedSeoLang,
   OG_LOCALE_BY_LANG,
   GLOBAL_B2B_SEO_MATRIX,
   normalizeSeoLang,
@@ -93,6 +95,9 @@ const B2B_DESCRIPTIONS: Record<SupportedSeoLang, string> = {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const activeLangs = await fetchLanguages();
   const lang = resolveLang(categoryPrefix, activeLangs);
   const title = stripBrandTitleSuffix(B2B_TITLES[lang]);
@@ -124,6 +129,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function B2BPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
 
   const [activeLangs, categories, settingsData, pageData] = await Promise.all([
     fetchLanguages(),

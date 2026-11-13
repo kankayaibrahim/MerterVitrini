@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     canonical: SITE_ORIGIN,
     languages: {
       ...rootAlternates.languages,
-      "x-default": SITE_ORIGIN,
+      "x-default": `${SITE_ORIGIN}/en`,
     },
   },
   openGraph: {

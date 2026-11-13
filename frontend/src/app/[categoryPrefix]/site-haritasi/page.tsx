@@ -1,10 +1,12 @@
 import React from "react";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import SitemapClient from "./SitemapClient";
 import type { BlogPost, Language } from "../blog/page";
 import {
   buildPrefixedAlternates,
   fetchSsrCategories,
+  isSupportedSeoLang,
   normalizeSeoLang,
   OG_LOCALE_BY_LANG,
   ssrStoreFetch,
@@ -70,6 +72,9 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const lang = normalizeSeoLang(categoryPrefix, "en");
   const title = stripBrandTitleSuffix(SITEMAP_TITLES[lang] || SITEMAP_TITLES.en);
   const desc = SITEMAP_DESCS[lang] || SITEMAP_DESCS.en;
@@ -92,6 +97,9 @@ export async function generateMetadata({
 
 export default async function SitemapPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
 
   const [activeLangs, categories, blogPostsData] = await Promise.all([
     fetchLanguages(),

@@ -65,6 +65,10 @@ func NotifyIndexNowProductSlug(slug string) {
 		baseProductURL + "?lang=en",
 		baseProductURL + "?lang=ru",
 		baseProductURL + "?lang=ar",
+		baseProductURL + "?lang=de",
+		baseProductURL + "?lang=fr",
+		baseProductURL + "?lang=pl",
+		baseProductURL + "?lang=bg",
 	}
 	NotifyIndexNow(urls)
 }

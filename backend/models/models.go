@@ -412,7 +412,7 @@ type BlogPostTranslation struct {
 	Slug            *string `json:"slug,omitempty"`
 	Title           string  `json:"title"`
 	Summary         *string `json:"summary,omitempty"`
-	Content         string  `json:"content"`
+	Content         string  `json:"content,omitempty"`
 	MetaTitle       *string `json:"meta_title,omitempty"`
 	MetaDescription *string `json:"meta_description,omitempty"`
 }

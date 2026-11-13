@@ -270,7 +270,7 @@ function renderMarkdownBlock(trimmed: string) {
   );
 }
 
-function renderContent(content: string) {
+function renderContent(content?: string | null) {
   if (!content) return null;
   const trimmed = content.trim();
   const isHtml = trimmed.startsWith("<") && trimmed.toLowerCase().includes("</");

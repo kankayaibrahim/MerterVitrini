@@ -1,5 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import StorefrontLayout from "@/components/store/StorefrontLayout";
 import {
   buildOrganizationGraphJsonLd,
@@ -8,6 +9,7 @@ import {
   fetchSsrProducts,
   fetchSsrStoreSettings,
   GLOBAL_B2B_SEO_MATRIX,
+  isSupportedSeoLang,
   normalizeSeoLang,
   OG_LOCALE_BY_LANG,
   safeJsonLd,
@@ -27,6 +29,9 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const lang = normalizeSeoLang(categoryPrefix, "en");
   const copy = GLOBAL_B2B_SEO_MATRIX[lang];
   const alternates = buildPrefixedAlternates("", lang);
@@ -63,6 +68,9 @@ export async function generateMetadata({
 
 export default async function LocalizedHomePage({ params }: PageProps) {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const lang = normalizeSeoLang(categoryPrefix, "en");
 
   const [categories, portalPayload, settings] = await Promise.all([

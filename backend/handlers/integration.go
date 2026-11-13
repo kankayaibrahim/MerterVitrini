@@ -1566,7 +1566,22 @@ func triggerIndexNowForSyncRun(runID string) {
 		for rows.Next() {
 			var slug string
 			if err := rows.Scan(&slug); err == nil && slug != "" {
-				urls = append(urls, fmt.Sprintf("https://mertervitrini.com.tr/product/%s", slug))
+				cleanSlug := strings.Trim(strings.TrimSpace(slug), "/")
+				if cleanSlug == "" {
+					continue
+				}
+				escaped := url.PathEscape(cleanSlug)
+				baseURL := fmt.Sprintf("https://mertervitrini.com.tr/product/%s", escaped)
+				urls = append(urls,
+					baseURL,
+					baseURL+"?lang=en",
+					baseURL+"?lang=ru",
+					baseURL+"?lang=ar",
+					baseURL+"?lang=de",
+					baseURL+"?lang=fr",
+					baseURL+"?lang=pl",
+					baseURL+"?lang=bg",
+				)
 			}
 		}
 

@@ -1,8 +1,9 @@
 import React from "react";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import SupplierApplicationClient from "./SupplierApplicationClient";
 import { SUPPLIER_TRANSLATIONS } from "./translations";
-import { stripBrandTitleSuffix } from "@/utils/seoHelpers";
+import { isSupportedSeoLang, stripBrandTitleSuffix } from "@/utils/seoHelpers";
 
 interface PageProps {
   readonly params: Promise<{
@@ -20,6 +21,9 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: Readonly<PageProps>): Promise<Metadata> {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const lang = categoryPrefix || "tr";
   const t = SUPPLIER_TRANSLATIONS[lang] || SUPPLIER_TRANSLATIONS.en;
 
@@ -52,6 +56,9 @@ export async function generateMetadata({ params }: Readonly<PageProps>): Promise
 
 export default async function SupplierApplicationPage({ params }: Readonly<PageProps>) {
   const { categoryPrefix } = await params;
+  if (!isSupportedSeoLang(categoryPrefix)) {
+    notFound();
+  }
   const lang = categoryPrefix || "tr";
   const t = SUPPLIER_TRANSLATIONS[lang] || SUPPLIER_TRANSLATIONS.en;
 
