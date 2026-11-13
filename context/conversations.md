@@ -2813,4 +2813,4 @@
      - `GET /api/v1/mobile/version` → `200` (`version=1.1.0`, `build_number=5`, `apk_available=true`, `file_size_bytes=66418945`, 8 dilli sürüm notları & eşleşen SHA-256)
      - `HEAD /uploads/releases/mertervitrini-v1.1.0+5.apk` → `200` (`Content-Length: 66418945`)
      - `GET /api/v1/mobile/apk` (`Range: bytes=0-15`) → `206` (`16` byte)
-- **Sonuç:** Güncellenmiş Go backend ve `mertervitrini-v1.1.0+5.apk` OTA dağıtımı canlı sunucuda doğrulandı; yerel repo temiz durumda (push yapılmadı).
+- **Sonuç:** Güncellenmiş Go backend ve `mertervitrini-v1.1.0+5.apk` OTA dağıtımı canlı sunucuda doğrulandı; yerel `backend/uploads/releases/version.json` manifesti de v1.1.0+5 ile eşitlendi (`git push` yapılmadı).

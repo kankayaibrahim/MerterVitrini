@@ -1,22 +1,26 @@
 {
   "app_name": "Merter Vitrini",
   "package_id": "com.mertervitrini.app",
-  "version": "1.0.3",
-  "build_number": 4,
+  "version": "1.1.0",
+  "build_number": 5,
   "min_build_number": 1,
   "force_update": false,
-  "apk_filename": "mertervitrini-v1.0.3+4.apk",
-  "download_url": "https://mertervitrini.com.tr/api/v1/mobile/apk?v=1.0.3.4",
-  "direct_cdn_url": "https://mertervitrini.com.tr/uploads/releases/mertervitrini-v1.0.3+4.apk",
+  "apk_filename": "mertervitrini-v1.1.0+5.apk",
+  "download_url": "https://mertervitrini.com.tr/api/v1/mobile/apk?v=1.1.0.5",
+  "direct_cdn_url": "https://mertervitrini.com.tr/uploads/releases/mertervitrini-v1.1.0+5.apk",
   "web_page_url": "https://mertervitrini.com.tr/mobil-uygulama",
-  "sha256": "009f96349d2b305c0008cd69faee0998aa50e1ba67e0f4b8d27a3ee4ad6595c7",
-  "file_size_bytes": 63449397,
-  "published_at": "2026-11-08T23:53:04+03:00",
+  "sha256": "37964c1870973c288b668b7e2c3f0eb3f6ba3f552d2788d94db305762e4d3626",
+  "file_size_bytes": 66418945,
+  "published_at": "2026-11-14T02:23:18+03:00",
   "apk_available": true,
   "release_notes": {
-    "tr": "Tam cerceve buyuk dikey urun gorselleri, yuzen hizli sepet ikonu ve 1/2 sutun gorunum gecisi eklendi.",
-    "en": "Merter Vitrini v1.0.3 (Build #4) — Luxury editorial storefront, vector country flags, B2B series ordering, live supplier chat, and automatic in-app OTA self-update support.",
-    "ru": "Merter Vitrini v1.0.3 (#4) — Обновление B2B витрины и поддержка автообновления.",
-    "ar": "Merter Vitrini v1.0.3 (#4) — تحديث متجر الجملة ودعم التحديث التلقائي."
+    "tr": "Merter Vitrini v1.1.0 (Yapı #5) — Corporate Light lüks tasarım, 8 dil + Arapça RTL, Üreticiler/RFQ/Hizmet Sağlayıcı/Blog modülleri, Tedarikçi Analitiği/Editöryal Profil/Faturalama/8 dilli AI Çeviriler ve çoklu döviz/adres düzeltmeleri.",
+    "en": "Merter Vitrini v1.1.0 (Build #5) — Corporate Light Luxury theme, 8 languages + Arabic RTL, Manufacturers/RFQ/Service Providers/B2B Blog, Supplier Analytics/17-field Editorial Profile/Billing/8-lang AI Translations, and multi-currency/address fixes.",
+    "ru": "Merter Vitrini v1.1.0 (#5) — Светлая премиум-тема Corporate Light, 8 языков + RTL, производители/RFQ/сервисы/блог B2B, аналитика и ИИ-переводы поставщика, исправления мультивалютной корзины и адресов.",
+    "ar": "Merter Vitrini v1.1.0 (#5) — تصميم فخم فاتح، 8 لغات مع دعم RTL، دليل المصنعين وطلبات عروض الأسعار ومقدمي الخدمات والمدونة، وتحليلات الموردين والترجمة الذكية وإصلاحات العملات المتعددة والعناوين.",
+    "de": "Merter Vitrini v1.1.0 (#5) — Corporate-Light-Design, 8 Sprachen + Arabisch RTL, Herstellerverzeichnis/RFQ/Dienstleister/Blog, Lieferanten-Analysen, 8-Sprachen-KI-Übersetzung sowie Mehrwährungs- und Adresskorrekturen.",
+    "fr": "Merter Vitrini v1.1.0 (#5) — Design Corporate Light, 8 langues + RTL, annuaire fabricants/RFQ/prestataires/blog B2B, analyses fournisseur, traduction IA 8 langues et correctifs multidevises/adresses.",
+    "pl": "Merter Vitrini v1.1.0 (#5) — Jasny styl Corporate Light, 8 języków + RTL, katalog producentów/RFQ/usługodawcy/blog B2B, analityka i tłumaczenia AI dostawcy oraz poprawki wielowalutowego koszyka i adresów.",
+    "bg": "Merter Vitrini v1.1.0 (#5) — Изчистен Corporate Light дизайн, 8 езика + RTL, производители/RFQ/доставчици на услуги/B2B блог, анализи и AI преводи за търговци, и корекции за мултивалута и адреси."
   }
 }
