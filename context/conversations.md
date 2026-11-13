@@ -2415,3 +2415,353 @@
      - `GET https://mertervitrini.com.tr/admin?code=healthcheck` -> `HTTP 200` (`NEXT_REDIRECT` ile `code=healthcheck` parametresini koruyarak `/admin/dashboard?code=healthcheck` hedefine yönlendiriyor) & `GET /admin/dashboard` -> `HTTP 200`.
      - `GET https://auth.mertervitrini.com.tr/realms/merter/protocol/openid-connect/auth?client_id=admin-client&...` -> `HTTP 200` (`13750` bayt, `kc-form-login: True`, `mv-login-card: True`).
      - `POST https://mertervitrini.com.tr/api/v1/store/auth/register`: boş `phone: ""` -> `HTTP 400` (`"Cep telefonu numarası zorunludur."`); sahte `phone: "+905551112233"` -> `HTTP 400` (`"Lütfen ülke kodu ile birlikte geçerli ve gerçek bir cep telefonu numarası giriniz..."`).
+
+---
+
+### [2026-11-13 22:05:00] - Oturum #133 (Yurtdışı B2B İhracat Hedefli Kapsamlı Teknik & Semantik SEO Denetim Raporu)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"tüm yapıyı seo açısından değerlendir ve eksiklerimizi raporla yurtdışı hedefliyoruz ona göre düşün"`
+- **Yapılan İşlemler:**
+  1. **Kod Tabanı, Canlı HTTP/XML & PostgreSQL (`merterdevdb`) Denetimi:**
+     - İncelenen dosyalar: `proxy.ts`, `seoHelpers.ts`, `formatters.ts`, `sitemap.ts`, `robots.ts`, `layout.tsx`, `page.tsx`, `[categoryPrefix]/page.tsx`, `[...slug]/page.tsx`, `tum-urunler/page.tsx`, `product/[slug]/page.tsx`, `ureticiler/page.tsx`, `ureticiler/[slug]/page.tsx`, `blog/page.tsx`, `blog/[slug]/page.tsx`, `pages/[slug]/page.tsx`, `site-haritasi/page.tsx`, `alim-talepleri/page.tsx`, `hizmet-saglayicilar/page.tsx`, `mobil-uygulama/page.tsx`, `CatalogView.tsx`, `Footer.tsx`, `GlobalB2BSeoKnowledgeSection.tsx`, `next.config.ts`, `backend/handlers/{indexnow.go,bot_crawl_logger.go,store_catalog.go}`, `backend/router.go` ve `scripts/optimize_seo.py`.
+     - Canlı `Googlebot` tarama bulguları: `/tr/pages/hakkimizda`, `/en/pages/hakkimizda`, `/en/blog/zess-woman`, `/tr/blog/zess-woman` sayfalarının Next.js 16 çalışma zamanında `headers` kaynaklı `HTTP 500` verdiği (`sitemap.xml` içindeki `1.584` URL), AlmaLinux sunucuda kalan yetim `/var/www/mertervitrini.com.tr/frontend/public/robots.txt` (`338` bayt) dosyasının `src/app/robots.ts` kurallarını ezdiği, `/en/non-existent-category-xyz-999`, `/es/kadin-giyim` ve `/llms.txt` yollarının `HTTP 200` + `index, follow` Soft-404 döndürdüğü, `/en/blog` (`9.480.640 B`) ve `/en/site-haritasi` (`9.008.427 B`) sayfalarının HTML boyutunu aşırı şişirdiği ve `/api/v1/store/feeds/google-merchant.xml?lang=en` (`12.563.963 B`) çıktısında ham LibreTranslate hataları (`"Sands Rope Hanger Dress"`, `"Home Fabric Info"`) ile `show_prices_to_guests: false` kaynaklı fiyat çelişkisi bulunduğu saptandı.
+     - Canlı DB bulguları: `5.835` aktif ürün, `4.417` Türkçe-only `product_ai_content` kaydı, `74` kategori (`tr` `74/74` dolu, diğer 7 dilde `1/74` SEO açıklaması), `194` blog × 8 dil ve `8.109` `<loc>` (`0` adet yabancı dil `?lang=` ürün `<loc>`).
+  2. **Rapor Artifact'ı Oluşturuldu:**
+     - [`yurtdisi_b2b_seo_denetim_raporu.md`](file:///C:/Users/zamazingo/.gemini/antigravity/brain/ea80f35f-34dd-451d-a636-45dd496a7728/yurtdisi_b2b_seo_denetim_raporu.md) P0 / P1 / P2 öncelikli yol haritasıyla oluşturuldu. Uygulama kodlarında veya sunucuda değişiklik yapılmadı; commit/push çalıştırılmadı.
+
+---
+
+### [2026-11-13 22:10:30] - Oturum #134 (`/teamwork` Çok Ajanlı SEO Görev Listesi ve Ajan Dağıtımı Başlatıldı)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `/teamwork tüm bu sorun ve yapılacaklar için task listesi çıkar ve ajanlara dağıt`
+- **Yapılan İşlemler:**
+  1. `<TEAMWORK>` protokolü gereği yurtdışı B2B SEO denetim raporu ([`yurtdisi_b2b_seo_denetim_raporu.md`](file:///C:/Users/zamazingo/.gemini/antigravity/brain/ea80f35f-34dd-451d-a636-45dd496a7728/yurtdisi_b2b_seo_denetim_raporu.md)), [`AGENTS.md`](file:///c:/Projects/mertervitrini.com.tr/AGENTS.md) Demir Kuralları, tespit edilen P0/P1/P2 teknik/semantik SEO bulguları ve 3 açık stratejik karar noktası tam bağlamıyla birlikte `teamwork` alt ajanına (`65f9187e-7d8b-41b3-905f-dd39b7725cdd`) devredildi.
+  2. `teamwork` mülakatçısı (`f900a187-b003-49ef-84fc-280c7438b00c`) tarafından iletilen 6 kapsam sorusu kullanıcıya sunuldu; kullanıcının seçimleri (**A1:** Tüm P0+P1+P2 tek planda, **A2:** Yerel doğrulama sonrası AlmaLinux sunucuya `--remote-build` dağıtımı yapılsın, **A3:** Fiyatlar üyelik arkasında gizli kalsın ve Merchant/Schema buna göre uyarlansın, **A4:** Dil URL mimarisi ekibe OPEN, **A5:** Mevcut doğrulama araçları yeterli, **A6:** Kısıtlama yok) mülakatçıya iletildi.
+  3. Mülakatçının hazırladığı görev istemi taslağı (`prompt_draft.md`) [`teamwork_prompt_65f9187e-7d8b-41b3-905f-dd39b7725cdd.md`](file:///C:/Users/zamazingo/.gemini/antigravity/brain/ea80f35f-34dd-451d-a636-45dd496a7728/teamwork_prompt_65f9187e-7d8b-41b3-905f-dd39b7725cdd.md) artifact dosyasına kopyalanarak kullanıcının yazılı onayına sunuldu.
+
+
+---
+
+### [2026-11-13 22:13:00] - Oturum #135 (`teamwork_interviewer` Görev Mülakatı ve İster Belirleme)
+- **Conversation ID:** `f900a187-b003-49ef-84fc-280c7438b00c`
+- **Kullanıcı İstemi:** `"tüm bu sorun ve yapılacaklar için task listesi çıkar ve ajanlara dağıt"` (Yurtdışı B2B SEO Denetim Raporu P0/P1/P2 yol haritası bağlamı)
+- **Yapılan İşlemler:**
+  1. `prompt_draft.md` taslağı `C:\Users\zamazingo\.gemini\antigravity\brain\65f9187e-7d8b-41b3-905f-dd39b7725cdd\scratch\.agents\teamwork\interviewer\` dizininde oluşturuldu.
+  2. Görevin kapsamı, canlı dağıtım tercihi, misafir fiyat politikası, dil URL mimarisi, doğrulama araçları ve çalışma kısıtları üzerine mülakat soruları hazırlanarak relay ajanı (`ea80f35f-34dd-451d-a636-45dd496a7728`) üzerinden kullanıcıya sunulmak üzere iletildi.
+
+
+---
+
+### [2026-11-13 22:15:30] - Oturum #136 (`teamwork_interviewer` Görev Taslağı Hazırlandı ve Onaya Sunuldu)
+- **Conversation ID:** `f900a187-b003-49ef-84fc-280c7438b00c`
+- **Kullanıcı Yanıtları:**
+  - Kapsam: (a) Tüm öncelikler (P0, P1, P2) tek görevde.
+  - Canlı Dağıtım: (b) Yerel testler geçtikten sonra `unified_deployer.py` ile AlmaLinux sunucusuna deploy edilecek.
+  - Fiyat Politikası: (b) Toptan fiyatlar üyelik arkasında gizli tutulacak; Google Merchant ve Schema.org buna uyarlanacak.
+  - Dil URL Mimarisi: (c) Ekibin kararına bırakıldı (OPEN).
+  - Doğrulama: (a) Mevcut araçlar ve komutlar (`go vet`, `npm run lint`, `tsc --noEmit`).
+  - Kısıtlamalar: (e) Kısıtlama yok.
+- **Yapılan İşlemler:**
+  1. `prompt_draft.md` dosyası R1 (P0 kritik düzeltmeler), R2 (P1 mimari ve kapalı fiyat entegrasyonu), R3 (P2 semantik ve çok dillilik) ve R4 (doğrulama ve canlı deploy) isterleri ve objektif kabul kriterleriyle güncellendi.
+  2. Hazırlanan tam görev taslağı relay ajanı (`ea80f35f-34dd-451d-a636-45dd496a7728`) üzerinden kullanıcı onayına sunuldu.
+
+---
+
+### [2026-11-13 22:20:00] - Oturum #135 (Teamwork Görev İsteminin Onaylanması ve Çok Ajanlı Uygulamanın Başlatılması)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"onaylıyorum"`
+- **Yapılan İşlemler:**
+  1. Kullanıcının yazılı onayıyla [`teamwork_prompt_65f9187e-7d8b-41b3-905f-dd39b7725cdd.md`](file:///C:/Users/zamazingo/.gemini/antigravity/brain/ea80f35f-34dd-451d-a636-45dd496a7728/teamwork_prompt_65f9187e-7d8b-41b3-905f-dd39b7725cdd.md) içeriğindeki görev istemi `Approved task prompt:` başlığıyla doğrudan [`International SEO Teamwork`](conversation://65f9187e-7d8b-41b3-905f-dd39b7725cdd) (`65f9187e-7d8b-41b3-905f-dd39b7725cdd`) oturumuna iletildi.
+  2. Proje Orkestratörü (`333c3c7f-cbd8-4ddd-bfe4-3dcd3dc5a80d`) tüm P0, P1, P2 gereksinimlerinin ve canlı AlmaLinux dağıtımının `%100` tamamlandığına dair bitiş raporunu sundu. Şu anda bağımsız `teamwork_victory_auditor` (`497ef3ea-b48d-4aca-9f39-e59ff091ce1d`) 3 fazlı doğrulama denetimini (gereksinim & `AGENTS.md` adli incelemesi, kısa yol/stub denetimi ve bağımsız derleyici/linter/canlı uç nokta testleri) yürütüyor; onay kararı (`VICTORY CONFIRMED`) sonrası final kapanış raporu iletilecek.
+
+---
+
+### [2026-11-13 22:44:00] - Oturum #137 (Milestone 1: Backend & Dağıtım SEO Altyapısı Tamamlandı)
+- **Conversation ID:** `d8fa1158-f382-41a0-a98f-d192b2b87b61` (Worker M1)
+- **Parent ID:** `cae24707-673a-4276-8fe8-c5061b534e8e` (Sub-Orchestrator M1)
+- **Görev:** F09 (Yetim robots.txt temizliği), F10 & F11 (Hafif Blog List API & Next.js cache uyumu), F16 (Google Merchant B2B gizli fiyat uyumu), F18 (Özel Backend Ürün Sitemap Ucu), F24 (IndexNow 8 Dil Bildirimi).
+- **Yapılan İşlemler:**
+  1. `backend/models/models.go`: `BlogPostTranslation.Content` alanı `json:"content,omitempty"` olarak güncellendi.
+  2. `backend/handlers/store_catalog.go`:
+     - `ListBlogPosts`: Ağır `t.content` sütunu sorgudan ve scan'den çıkarıldı; HTML etiketlerinden arındırılmış `COALESCE(NULLIF(t.summary, ''), LEFT(REGEXP_REPLACE(t.content, '<[^>]+>', ' ', 'g'), 180))` alanı `summary` olarak çekilip `Content: ""` atandı. `GetBlogPostBySlug` detay ucu tam içeriği korudu.
+     - `gItem` ve `GoogleMerchantFeed`: `CustomLabel4` ve `ExcludedDestination` XML alanları eklendi. `catalog.settings.show_prices_to_guests` false olduğunda otomatik olarak `ExcludedDestination = "Shopping_ads"`, `CustomLabel0 = "Wholesale B2B - Member Quote"`, `CustomLabel4 = "MembersOnly"` tanımlandı.
+     - `GetProductsSitemapData`: `catalog.mv_products` üzerinden aktif ürünlerin `slug` ve `updated_at` alanlarını döndüren hafif `GET /api/v1/store/sitemap/products` endpoint'i yazıldı.
+  3. `backend/router.go`: `GET /api/v1/store/sitemap/products` rotası kaydedildi.
+  4. `backend/handlers/indexnow.go`: `NotifyIndexNowProductSlug` fonksiyonuna 8 desteklenen mağaza dili (`tr`, `en`, `ru`, `ar`, `de`, `fr`, `pl`, `bg`) eklendi.
+  5. `backend/handlers/integration.go`: `triggerIndexNowForSyncRun` içinde her ürün slug'ı 8 yerelleştirilmiş URL olarak genişletildi.
+  6. `scripts/unified_deployer.py`: Native tar ve Python arşivleyicisine `public/robots.txt` hariç tutma kuralları eklendi; `_deploy_frontend_remote_build` ve `_sync_remote_frontend_files` aşamalarına sunucu üzerindeki yetim `robots.txt` dosyasını silen SSH komutu eklendi.
+  7. `scripts/build_deploy.ps1`: Dağıtım öncesi yerel `frontend/public/robots.txt` tespit edilip silinecek temizlik adımı eklendi.
+- **Doğrulama Sonuçları:**
+  - `go vet ./...`: 0 hata, 0 uyarı (exit code 0).
+  - `go build -o bin\backend.exe .`: Windows executable başarıyla derlendi (exit code 0).
+  - `$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o bin/backend .`: AlmaLinux production binary başarıyla derlendi (exit code 0).
+
+
+---
+
+### [2026-11-13 23:18:00] - Oturum #138 (Milestone 2: Frontend Runtime, Routing, Structured Data & Metadata Tamamlandı)
+- **Conversation ID:** `2adc162b-32c5-4c74-a1bb-2c2221baa41e` (Worker M2)
+- **Parent ID:** `f2fc0a53-24da-4a15-a8fe-e0d3884d854d` (Sub-Orchestrator M2)
+- **Rol:** Senior Frontend SEO Engineer Worker (`worker_m2`)
+- **Görev:** Milestone 2 kapsamındaki 14 teknik SEO ve SSR çalışma zamanı geliştirmesinin eksiksiz uygulanması.
+- **Yapılan İşlemler:**
+  1. **F01 & F05 (Blog Detay SSR & 404 Koruması):**
+     - `frontend/src/app/[categoryPrefix]/blog/[slug]/page.tsx`: `export const dynamic = "force-dynamic"` eklendi, statik build çakışmasını önlemek için `generateStaticParams` kaldırıldı. `generateMetadata` ve `BlogDetailPage` içinde `!isSupportedSeoLang(categoryPrefix)` veya `!postData` durumunda `notFound()` çağrısı eklendi.
+     - `frontend/src/app/[categoryPrefix]/blog/page.tsx`: M1'de `content` alanının API listesinde hafifletilmesiyle uyumlu olarak `BlogPostTranslation.content` opsiyonel (`string | null | undefined`) yapıldı; dil ön eki koruması eklendi.
+     - `BlogDetailClient.tsx`: `renderContent` fonksiyonu `content?: string | null` tipine uyum sağlandı.
+  2. **F02 & F06 (CMS Sayfaları SSR & 404 Koruması):**
+     - `frontend/src/app/[categoryPrefix]/pages/[slug]/page.tsx`: `export const dynamic = "force-dynamic"` eklendi, `generateStaticParams` kaldırıldı. `generateMetadata` ve `CMSPage` bileşenlerine `!isSupportedSeoLang(categoryPrefix)` ve `!pageData` kontrolleri eklenerek gerçek HTTP 404 (`notFound()`) sağlandı.
+  3. **F03 (Dil Ön Eki 404 Koruması):**
+     - `frontend/src/app/[categoryPrefix]/page.tsx`: `generateMetadata` ve `LocalizedHomePage` içinde `if (!isSupportedSeoLang(categoryPrefix)) notFound();` eklendi; `/llms.txt`, `/es` vb. desteklenmeyen rotaların anasayfayı 200 ile dönmesi (Soft-404) engellendi.
+  4. **F04, F21, F22 (Kategori 404 Koruması, SSR Sayfalama Offset & Filtre Ayrıştırma):**
+     - `frontend/src/app/[categoryPrefix]/[...slug]/page.tsx`:
+       - `FILTER_KEYS` kümesinden `"page"` çıkarıldı; böylece `?page=2` gibi sayfalanmış kategori sayfaları `noindex` zorlamasından kurtarıldı.
+       - `generateMetadata` ve `CategoryPage` içinde kategori bulunamadığında (`!catObj`) veya dil geçersiz olduğunda `notFound()` çağrısı eklendi.
+       - `searchParams` Promise'i çözülerek `page` parametresi okundu (`const offset = (pageNum - 1) * 24`) ve `fetchSsrProducts` çağrısına dinamik olarak aktarıldı.
+  5. **F07 & F15 (Ürün Detay 404 Koruması & B2B Schema.org Offer Uyumu):**
+     - `frontend/src/app/product/[slug]/page.tsx`:
+       - Ürün bulunamadığında (`!product`) doğrudan `notFound()` çağrıldı.
+       - Misafir fiyatları gizliyken (`show_prices_to_guests: false` veya fiyat <= 0), Schema.org `Product` nesnesinden `offers` tamamen silinmek yerine toptan teklif şartlarını içeren `UnitPriceSpecification` / `InvoicePrice` Offer nesnesi eklendi; böylece fiyat sızdırılmadan Google Search Console'un "Eksik alan: offers" kritik hatası çözüldü.
+  6. **F08 (Üretici Sayfaları 404 Koruması):**
+     - `frontend/src/app/ureticiler/[slug]/page.tsx` ve `frontend/src/app/ureticiler/[slug]/tanitim/page.tsx`: Marka verisi bulunamadığında (`!brand`) `generateMetadata` ve sayfa bileşenlerinde `notFound()` tetiklendi.
+  7. **F21 (Tüm Ürünler SSR Sayfalama Offset & Dil Koruması):**
+     - `frontend/src/app/[categoryPrefix]/tum-urunler/page.tsx`: `isSupportedSeoLang` denetimi eklendi; `searchParams.page` okunarak hesaplanan `offset` parametresi `fetchSsrProducts` sorgusuna aktarıldı.
+  8. **Soft-404 Temizliği & Kök `not-found.tsx`:**
+     - `frontend/src/app/[categoryPrefix]/b2b/page.tsx`, `faq/page.tsx`, `contact/page.tsx`, `site-haritasi/page.tsx`, `tedarikci-basvuru/page.tsx`, `cart/page.tsx` rotalarına `if (!isSupportedSeoLang(categoryPrefix)) notFound();` eklendi.
+     - `frontend/src/app/not-found.tsx`: Kurumsal B2B çok dilli 404 sayfası oluşturuldu (Ana Sayfa, Katalog ve Üreticiler yönlendirme butonlarıyla).
+  9. **F25 (Yapılandırılmış `/llms.txt` Route Handler):**
+     - `frontend/src/app/llms.txt/route.ts`: LLM ve yapay zeka tarayıcıları için Merter Vitrini B2B toptan ihracat modelini, asortili seri/paket yapısını ve kategori dizinini özetleyen `Content-Type: text/plain; charset=utf-8` Markdown route handler'ı oluşturuldu.
+  10. **F23 (Kiril ve Arapça Web Font Alt Kümeleri):**
+      - `frontend/src/app/layout.tsx`: `Playfair_Display` için `subsets: ["latin", "latin-ext", "cyrillic"]` genişletildi; `Noto_Sans_Arabic` (`variable: "--font-arabic-next"`, `subsets: ["arabic"]`) Google Fonts'tan dinamik olarak içe aktarıldı ve `<html>` sınıfına eklendi.
+      - `frontend/src/app/globals.css`: `--font-arabic` değişkeni `var(--font-arabic-next)` önceliğiyle güncellendi.
+  11. **F17, F18, F19 (Next.js Sitemap Index & Özel Endpoint Entegrasyonu):**
+      - `frontend/src/app/sitemap.ts`: Ağır `/products?limit=10000` (44 MB) çağrısı yerine M1'de yazılan hafif `/sitemap/products` ucu bağlandı. `generateSitemaps()` ile 2000'er ürünlük modüler sitemap indeks bölümlendirmesi (`0.xml`, `1.xml`, `2.xml`...) yapıldı; tüm ürün ve kategoriler için 8 dilde (`tr`, `en`, `ru`, `ar`, `de`, `fr`, `pl`, `bg`) çift yönlü hreflang üretildi.
+  12. **F20 (Taranabilir Link Tabanlı Sayfalama):**
+      - `frontend/src/components/store/CatalogView.tsx` (`CatalogPagination`): Düz `<button>` etiketleri yerine arama motoru botlarının takip edebildiği `<a href="?page=X">` / Next.js `<Link>` elemanları yerleştirildi; mevcut filtre parametreleri korunurken istemci tarafında `e.preventDefault()` ve `history.pushState` ile kesintisiz UX sağlandı.
+  13. **F13 & F14 (Footer ltree Kanonik Yolları & İstemci Hidrasyon Temizliği):**
+      - `frontend/src/components/store/Footer.tsx`: Alt kategori bağlantıları hiyerarşik `ltree` yollarına (`/kadin-giyim/triko-hirka-kazak`, `/kadin-giyim/elbise-abiye/abiye`, vb.) geçirildi; `loadSettings()` aşamasında mağaza adres ve e-postası `sanitizePublicStoreAddress` ve `sanitizePublicStoreEmail` ile temizlendi.
+  14. **F12 (Kök `/` ile `/en` Hreflang Uyumu):**
+      - `frontend/src/app/page.tsx`, `[categoryPrefix]/page.tsx` ve `sitemap.ts` dosyalarında `x-default` çakışması giderilerek `https://mertervitrini.com.tr/en` standardına hizalandı.
+- **Doğrulama Sonuçları:**
+  - `npx tsc --noEmit`: 0 hata, 0 uyarı (exit code 0).
+  - `npm run lint`: 0 hata, 0 uyarı (exit code 0).
+  - `cd backend; go vet ./...`: 0 hata (exit code 0).
+  - Demir Kurallar: 0 commit/push yapıldı; yerel frontend build yapılmadı; tüm değişiklikler çalışma ağacında bırakıldı.
+
+
+---
+
+### [2026-11-13 23:24:30] - Oturum #139 (Milestone 2: Challenger 1 Empirik Karşılaştırmalı ve Düşmanca Doğrulama)
+- **Conversation ID:** `fb7e8093-3d83-45e6-9ef2-f1f1da048db8` (Challenger 1 M2)
+- **Parent ID:** `f2fc0a53-24da-4a15-a8fe-e0d3884d854d` (Sub-Orchestrator M2)
+- **Rol:** Challenger 1 (Empirical Adversarial Verifier)
+- **Görev:** Milestone 2 kapsamındaki Next.js App Router SSR çalışma zamanı, dinamik dışa aktarımlar, 404 korumaları, `/llms.txt` route handler'ı, font alt kümeleri ve B2B Schema.org Offer yapısının empirik testlerle sınanması.
+- **Yürütülen Empirik Testler ve Doğrulama Adımları:**
+  1. **Çalışma Zamanı ve 404 Korumaları Denetimi:**
+     - `blog/[slug]/page.tsx` ve `pages/[slug]/page.tsx`: `export const dynamic = "force-dynamic"` dışa aktarımının varlığı, `generateStaticParams` fonksiyonunun tamamen kaldırıldığı ve eksik içerik durumunda `notFound()` çağrısı doğrulandı.
+     - `[categoryPrefix]/page.tsx`: Desteklenmeyen dil veya rastgele ön eklerde (`llms.txt`, `wp-admin`, `es`, `it`, `admin-login` vb.) `notFound()` tetiklendiği doğrulandı.
+     - `[...slug]/page.tsx`: Desteklenmeyen dillerde veya kategori ağacında bulunamayan slug'larda `notFound()` tetiklendiği; `"page"` parametresinin `FILTER_KEYS` kümesinden ayrıştırıldığı ve `offset = (pageNum - 1) * 24` şeklinde dinamik aktarıldığı doğrulandı.
+     - `product/[slug]/page.tsx`: Ürün bulunamadığında `notFound()` tetiklendiği; `show_prices_to_guests: false` iken `UnitPriceSpecification` / `InvoicePrice` içeren B2B teklif şemasının (`Offer`) üretildiği doğrulandı.
+     - `ureticiler/[slug]/page.tsx` ve `tanitim/page.tsx`: Marka bulunamadığında `notFound()` tetiklendiği doğrulandı.
+  2. **Yapılandırılmış `/llms.txt` Route Testi:**
+     - `frontend/src/app/llms.txt/route.ts`: `Content-Type: text/plain; charset=utf-8` ve `Cache-Control: public, max-age=86400, s-maxage=86400` başlıklarıyla eksiksiz Markdown özeti döndürdüğü doğrudan doğrulandı.
+  3. **Kiril & Arapça Font Alt Kümeleri:**
+     - `frontend/src/app/layout.tsx`: `Playfair_Display` için `cyrillic` alt kümesi ve `Noto_Sans_Arabic` (`--font-arabic-next`) Google Fonts tanımlamaları doğrulandı.
+     - `frontend/src/app/globals.css`: `--font-arabic` değişkeninin `var(--font-arabic-next)` önceliğiyle bağlandığı doğrulandı.
+  4. **Empirik Test Paketi ve Statik Kod Analizi:**
+     - İzole temp dizininde (`teamwork_probe_*`) 22 empirik düşmanca test çalıştırıldı; 22/22 (%100) başarıyla geçti. Temp dizini test sonrası tamamen silindi.
+     - `npx tsc --noEmit`: 0 hata (exit code 0).
+     - `npm run lint`: 0 hata, 0 uyarı (exit code 0).
+     - `backend/ go vet ./...`: 0 hata (exit code 0).
+     - `AGENTS.md` Demir Kuralları: 0 commit/push yapıldı; yerel frontend build yapılmadı.
+- **Karar:** **APPROVE** (Onaylandı). Milestone 2 kodu üretime ve Milestone 3 dağıtımına hazır.
+
+
+---
+
+### [2026-11-13 23:28:00] - Oturum #140 (Milestone 2: Challenger 2 Empirik Düşmanca Doğrulama & Sitemap / Pagination / Footer ltree Denetimi)
+- **Conversation ID:** `9e6bd2bc-8ca5-456c-8e10-9caae6769817` (Challenger 2 M2)
+- **Parent ID:** `f2fc0a53-24da-4a15-a8fe-e0d3884d854d` (Sub-Orchestrator M2)
+- **Rol:** Challenger 2 (Empirical Adversarial Verifier)
+- **Görev:** Milestone 2 kapsamındaki Sitemap Ölçeklenebilirliği & İndeks Bölümlendirme, Taranabilir Sayfalama Linkleri, B2B Schema.org Teklif Şeması ve Footer ltree Kanonik Bağlantılarının empirik test paketleriyle (generators, oracles, stress harnesses) sınanması.
+- **Yürütülen Empirik Testler ve Bulgular:**
+  1. **Sitemap Ölçeklenebilirliği & İndeks Bölümlendirme (`frontend/src/app/sitemap.ts`):**
+     - `generateSitemaps()` fonksiyonunun 2000'er ürünlük dilimler için bölümlenmiş ID'ler (`[{ id: 0 }, { id: 1 }, ...]`) döndürdüğü; 5.835 ürünlük katalog için 4 adet sitemap dosyası (ID 0: statik/kategoriler/CMS/blog; ID 1..3: ürünler) ürettiği doğrulandı.
+     - Eski 44 MB'lık `/products?limit=10000` çağrısının tamamen temizlendiği ve M1'de açılan hafif `GET /api/v1/store/sitemap/products` endpoint'inin tüketildiği AST ve regex ile doğrulandı.
+     - 8 desteklenen dil (`tr`, `en`, `ru`, `ar`, `de`, `fr`, `pl`, `bg`) ve `x-default` (`https://mertervitrini.com.tr/product/${slug}?lang=en`) için çift yönlü (reciprocal) hreflang doğrulaması yapıldı; her dil varyantının diğer tüm varyantlara eksiksiz ve karşılıklı işaret ettiği kanıtlandı.
+     - Bölüm başına 16.000 URL yoğunluğu ile 50.000 URL ve 50 MB sınırlarının güvenle altında kalındığı test edildi. (SONUÇ: BAŞARILI)
+  2. **Taranabilir Sayfalama Linkleri & SSR Offset (`CatalogView.tsx`, `[...slug]/page.tsx`, `tum-urunler/page.tsx`):**
+     - `CatalogPagination` bileşeninin arama motoru botlarının takip edebildiği `<Link href={getPageHref(...)}>` (HTML `<a href="...">`) elemanları render ettiği doğrulandı.
+     - 1. sayfa için `page` parametresinin temizlenerek kanonik kök URL'in korunduğu (`/tr/kadin-giyim`), sayfa 2+ için `?page=X` ve mevcut filtrelerin korunduğu doğrulandı.
+     - `FILTER_KEYS` kümesinden `"page"` çıkarıldığı; `[...slug]/page.tsx` ve `tum-urunler/page.tsx` sayfalarında `searchParams.page` okunarak `offset = (pageNum - 1) * 24` şeklinde dinamik hesaplanıp `fetchSsrProducts` sorgusuna aktarıldığı doğrulandı. (SONUÇ: BAŞARILI)
+  3. **B2B Schema.org Teklif Uyumu & Gizli Fiyat Koruması (`product/[slug]/page.tsx`):**
+     - Misafir fiyatları gizliyken (`show_prices_to_guests: false`), `@type: "Offer"` içinde `UnitPriceSpecification` ve `InvoicePrice` alanlarıyla toptan üye fiyatlandırması ibaresi yer aldığı doğrulandı.
+     - Fiyat sızıntısı testi çalıştırıldı: Serialized JSON-LD çıktısında hiçbir sayısal toptan fiyatın (`price`, `priceCurrency` veya ham fiyat dizesi) yer almadığı, %100 fiyat gizliliği sağlandığı kanıtlandı.
+     - `safeJsonLd` fonksiyonunun `<` karakterlerini `\u003c` olarak kaçırarak XSS saldırılarını engellediği doğrulandı.
+     - Bulunamayan ürünler için `generateMetadata` ve sayfa bileşeninde gerçek HTTP 404 (`notFound()`) tetiklendiği doğrulandı. (SONUÇ: BAŞARILI)
+  4. **Footer ltree Kanonik Bağlantıları (`frontend/src/components/store/Footer.tsx`):**
+     - 8 dilde toplam 64 link denetlendi.
+     - **HATA TESPİT EDİLDİ:** Bulgarca (`bg`) lokalinde Satır 147'de:
+       `{ label: "Макси Мода на Едро", href: `/${prefix}/buyuk-beden` },`
+       ifadesinin yer aldığı; diğer tüm dillerde (`tr`, `en`, `ru`, `ar`, `de`, `fr`, `pl`) hiyerarşik `/${prefix}/kadin-giyim/buyuk-beden` kullanılırken, Bulgarca footer'da `kadin-giyim/` üst kategori ön ekinin eksik bırakıldığı tespit edildi.
+     - Bu durum, PostgreSQL `ltree` kanonik hiyerarşisiyle (`kadin-giyim.buyuk-beden`) çelişmekte ve iç link asimetrisi yaratmaktadır. (SONUÇ: BAŞARISIZ / DÜZELTME GEREKİYOR)
+  5. **Kod Tabanı ve Derleyici Denetimi:**
+     - `npx tsc --noEmit`: 0 hata (exit code 0).
+     - `npm run lint`: 0 hata, 0 uyarı (exit code 0).
+     - `backend/ go vet ./...`: 0 hata (exit code 0).
+     - Tüm test betikleri izole geçici probe dizininde koşturuldu ve işlem bitiminde dizin tamamen temizlendi.
+     - `AGENTS.md` Demir Kuralları: Çalışma ağacında izinsiz kod değişikliği yapılmadı; commit/push yürütülmedi.
+- **Karar:** **REJECT** (Footer.tsx satır 147'deki `/${prefix}/buyuk-beden` bağlantısının `/${prefix}/kadin-giyim/buyuk-beden` olarak 1 satırlık düzeltilmesi şartıyla reddedildi; düzeltme tamamlandığında M3'e geçilebilir).
+
+
+---
+
+### [2026-11-13 23:31:00] - Oturum #141 (Milestone 2 İyileştirme: Footer ltree Kanonik Link Düzeltmesi & Parite Uyumu)
+- **Conversation ID:** `579667f7-eea5-49d8-88ea-20d76fb719ab` (Worker M2 Retry 1)
+- **Parent ID:** `f2fc0a53-24da-4a15-a8fe-e0d3884d854d` (Sub-Orchestrator M2)
+- **Rol:** Kıdemli Frontend SEO Mühendisi (`worker_m2_retry1` - Implementer / QA / Specialist)
+- **Görev:** Challenger 2 tarafından tespit edilen ve Milestone 2 reddine yol açan `frontend/src/components/store/Footer.tsx` Satır 147'deki Bulgarca (`bg`) büyük beden linkinin kanonik `ltree` hiyerarşisine (`/${prefix}/kadin-giyim/buyuk-beden`) uyumlu hale getirilmesi ve kalite kontrollerinin doğrulanması.
+- **Yapılan İşlemler:**
+  1. **Footer Kanonik Bağlantı Düzeltmesi (`frontend/src/components/store/Footer.tsx`):**
+     - Bulgarca dil bloğundaki `{ label: "Макси Мода на Едро", href: `/${prefix}/buyuk-beden` }` bağlantısı, diğer 7 dildeki (`tr`, `en`, `ru`, `ar`, `de`, `fr`, `pl`) kanonik yapı ile eşitlenerek `/${prefix}/kadin-giyim/buyuk-beden` olarak güncellendi.
+     - Tüm 8 dildeki 8 adet büyük beden bağlantısının istisnasız `/${prefix}/kadin-giyim/buyuk-beden` kanonik `ltree` yolunu kullandığı doğrulandı.
+  2. **Doğrulama ve Derleyici Kontrolleri:**
+     - `frontend/`: `npx tsc --noEmit` çalıştırıldı -> Exit code 0 (0 hata).
+     - `frontend/`: `npm run lint` çalıştırıldı -> Exit code 0 (0 hata, 0 uyarı).
+     - `backend/`: `go vet ./...` çalıştırıldı -> Exit code 0 (0 hata).
+     - `AGENTS.md` Demir Kuralları: İzinsiz git commit veya git push yapılmadı, yerel frontend build (`out/` veya `.next`) oluşturulmadı.
+- **Sonuç:** Milestone 2 kapsamındaki tek kusur giderildi. Kod tabanı hatasız ve tam uyumlu olarak hazırlandı.
+
+
+---
+
+### [2026-11-13 23:36:00] - Oturum #142 (Milestone 2 İyileştirme Doğrulaması: Primary Verifier / Reviewer 1 Denetimi)
+- **Conversation ID:** `66af42a7-c569-48a5-92ea-7eca741653e2` (Reviewer 1 / Primary Verifier)
+- **Parent ID:** `f2fc0a53-24da-4a15-a8fe-e0d3884d854d` (Sub-Orchestrator M2)
+- **Rol:** Primary Verifier & Adversarial Critic (`reviewer_m2_retry1` - reviewer, critic)
+- **Görev:** Milestone 2 İterasyon 2 post-remediation bağımsız doğrulaması; `Footer.tsx` Satır 147 Bulgarca (`bg`) linkinin kanonik `ltree` yolu ile düzeltilmesinin, 8 dilin tam paritesinin ve tam otomatik kalite kapılarının denetlenmesi.
+- **Yapılan İşlemler:**
+  1. **Footer Kanonik Bağlantı Denetimi (`frontend/src/components/store/Footer.tsx`):**
+     - Satır 147 incelendi: `{ label: "Макси Мода на Едро", href: `/${prefix}/kadin-giyim/buyuk-beden` }` olarak başarıyla güncellendiği doğrulandı.
+     - 8 dilin tamamı (`tr`, `en`, `ru`, `ar`, `de`, `fr`, `pl`, `bg`) tek tek incelendi; her 8 dilde de büyük beden bağlantısının eksiksiz olarak `/${prefix}/kadin-giyim/buyuk-beden` yolunu kullandığı ve hiçbir dilde düz/eksik `/${prefix}/buyuk-beden` bulunmadığı teyit edildi.
+  2. **Otomatik Kalite Kapıları ve Derleyici Kontrolleri:**
+     - `frontend/`: `npx tsc --noEmit` çalıştırıldı -> Exit code 0 (0 hata).
+     - `frontend/`: `npm run lint` çalıştırıldı -> Exit code 0 (0 hata, 0 uyarı).
+     - `backend/`: `go vet ./...` çalıştırıldı -> Exit code 0 (0 hata).
+  3. **Git Çalışma Ağacı ve Bütünlük Denetimi:**
+     - `git status` denetlendi: Hiçbir izinsiz commit veya push yapılmadığı doğrulandı.
+     - `out/` derleme dizini bulunmadığı, `frontend/.next` dizininin eski oturumlardan (20.10.2026) kalma ve gitignore kapsamında olduğu, yerel derleme yapılmadığı doğrulandı.
+     - Kaynak kodlarda sahte test verisi, bypass veya integrity violation tespit edilmedi.
+- **Karar:** **APPROVE** (Milestone 2 tüm kabul kriterleri %100 sağlanmış olup Milestone 3 üretim dağıtımına geçiş uygundur).
+
+
+---
+
+### [2026-11-13 23:40:00] - Oturum #143 (Milestone 2 İterasyon 2: Challenger 2 Empirical Adversarial Re-verification)
+- **Conversation ID:** `2fe40ff3-1636-4503-82a3-e5eb52e60415` (Challenger 2 / Empirical Adversarial Verifier)
+- **Parent ID:** `f2fc0a53-24da-4a15-a8fe-e0d3884d854d` (Sub-Orchestrator M2)
+- **Rol:** Challenger 2 (Empirical Adversarial Verifier - critic, specialist)
+- **Görev:** İterasyon 1'de reddedilen `Footer.tsx` Satır 147 Bulgarca (`bg`) ltree link kusurunun düzeltilmesini deneysel olarak doğrulamak, 8 dildeki 64 toptan kategori bağlantısının %100 kanonik ltree uyumunu teyit etmek, önceki raporda onaylanan 3 temel alanın (Sitemap, Pagination, Schema.org B2B Offer) regresyona uğramadığını deneysel testlerle yeniden doğrulamak, kalite kapılarını denetlemek ve nihai karar vermek (APPROVE / REJECT).
+- **Yapılan İşlemler:**
+  1. **Footer.tsx Deneysel Probe & Çalışma Zamanı Denetimi:**
+     - `frontend/src/components/store/Footer.tsx` Satır 147 doğrudan incelendi ve çalışma zamanı AST probu ile doğrulandı.
+     - Bulgarca Satır 147'nin `{ label: "Макси Мода на Едро", href: `/${prefix}/kadin-giyim/buyuk-beden` }` olduğu kesinleşti.
+     - 8 dildeki 64 toptan bağlantının tamamı (`tr: 9`, `en: 9`, `ru: 9`, `ar: 9`, `de: 7`, `fr: 7`, `pl: 7`, `bg: 7`) programatik olarak çözümlendi; hiçbir dilde eksik/düz `/${prefix}/buyuk-beden` veya hiyerarşi dışı alt kategori kalmadığı, %100 kanonik `ltree` uyumu sağlandığı kanıtlandı.
+  2. **Diğer 3 Temel Alanın Deneysel Regresyon Doğrulaması:**
+     - **Sitemap Bölümleme & Tüketim (`sitemap.ts`):** `PRODUCTS_PER_SITEMAP = 2000`, `GET /api/v1/store/sitemap/products` endpoint tüketimi ve 44 MB'lık `/products?limit=10000` çağrısının bulunmadığı, `generateSitemaps()` bölümlemesi ve çift yönlü 8 dilli `hreflang` / `x-default` üretimi eksiksiz doğrulandı.
+     - **Taranabilir Sayfalama & SSR Offset (`CatalogView.tsx`, `[...slug]/page.tsx`, `tum-urunler/page.tsx`):** `CatalogPagination` bileşeninde botlar için taranabilir `<Link href={...}>` (HTML `<a>`) bağlantıları, sayfa 1 için temiz kanonik URL (`sp.delete("page")`), `FILTER_KEYS` Set içerisinde `"page"` bulunmayarak robots noindex engellenmesi ve `offset = (pageNum - 1) * 24` SSR hesaplaması doğrulandı.
+     - **B2B Schema.org Offer Uyumu & Sıfır Fiyat Sızıntısı (`product/[slug]/page.tsx`):** `UnitPriceSpecification` / `InvoicePrice` ve `"Wholesale member pricing upon verification"` B2B teklif yapısı, `safeJsonLd` XSS koruması, fiyatların `showGuestPrices` arkasında kesin kilitlenmesi ve eksik ürünlerde `notFound()` tetiklenmesi doğrulandı.
+  3. **Otomatik Kalite Kapıları & Derleyici Testleri:**
+     - `npx tsc --noEmit`: 0 hata (exit code 0).
+     - `npm run lint`: 0 hata, 0 uyarı (exit code 0).
+     - `backend/ go vet ./...`: 0 hata (exit code 0).
+  4. **Geçici Dosyalar & Git Bütünlüğü:**
+     - Tüm geçici test ve probe scriptleri temizlendi.
+     - Çalışma ağacında izinsiz git commit veya push yapılmadı.
+     - Yerel `.next` veya `out/` derlemesi üretilmedi.
+- **Karar:** **APPROVE** (İterasyon 1'deki tek kusur eksiksiz olarak giderilmiş olup, tüm 4 temel alan ve kalite kapıları %100 yeşildir; Milestone 3 üretim dağıtımına geçiş ONAYLANMIŞTIR).
+
+
+---
+
+### [2026-11-14 00:15:00] - Oturum #144 (Milestone 3: Verification, Remote Build & Production Deployment)
+- **Conversation ID:** `d0d25660-729e-48f7-b733-172831e8de0c` (Production Deployment Worker M3)
+- **Parent ID:** `a20e4428-395f-427c-8ba7-10bd3a431a7a` (Sub-Orchestrator M3)
+- **Rol:** Production Deployment Worker (`worker_m3` - implementer, qa, specialist)
+- **Görev:** Milestone 3 kapsamındaki yerel kod tabanı doğrulaması (`go vet ./...`, `npx tsc --noEmit`, `npm run lint`), `scripts/unified_deployer.py` ile AlmaLinux üretim sunucusuna tam uzaktan derleme ve dağıtım (`--remote-build`), yetim `robots.txt` temizliği, sitemap index entegrasyonu ve canlı üretim ortamında 8 temel uç noktanın duman testleri (smoke testing).
+- **Yapılan İşlemler:**
+  1. **Ön Dağıtım Yerel Doğrulaması:**
+     - `backend/`: `go vet ./...` çalıştırıldı -> 0 hata, 0 uyarı (Exit code 0).
+     - `backend/`: Windows binary derlemesi (`go build -o bin\backend.exe .`) -> Exit code 0.
+     - `backend/`: Linux AMD64 cross-compile testi (`$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o bin\backend .`) -> Exit code 0 (42.28 MB).
+     - `frontend/`: `npx tsc --noEmit` çalıştırıldı -> 0 hata (Exit code 0).
+     - `frontend/`: `npm run lint` çalıştırıldı -> 0 hata, 0 uyarı (Exit code 0).
+  2. **Uzaktan Üretim Dağıtımı (`scripts/unified_deployer.py`):**
+     - `python scripts/unified_deployer.py -p unified -c all -a all --remote-build` çalıştırıldı.
+     - Go backend Linux ikili dosyası derlendi ve SFTP ile sunucuya aktarıldı; `merter-backend.service` systemd servisi aktif hale getirildi (PID 1199943).
+     - Next.js SSR kaynak kodları tar ile paketlendi (`unified_frontend_sources.tar.gz`), sunucuya aktarıldı, yetim `robots.txt` dosyaları silindi ve `npm run build` uzaktan AlmaLinux üzerinde başarıyla derlendi.
+     - Next.js `generateSitemaps` ile üretilen çoklu sitemap'lerin indekslenmesi için `src/app/sitemap-index.xml/route.ts` oluşturuldu, Next.js App Router metadata çakışmalarını önlemek adına `next.config.ts` üzerinden `/sitemap.xml` -> `/sitemap-index.xml` rewrite kuralı tanımlandı ve deployer'a remote build dizini temizliği eklendi.
+     - `merter-frontend.service` ve `nginx.service` başarıyla yeniden başlatıldı.
+  3. **Canlı Üretim Duman Testleri (`https://mertervitrini.com.tr`):**
+     - **Probe 1 (`/robots.txt`):** HTTP 200 OK — Next.js dinamik direktifleri (`Clean-param: utm_...`, `Disallow: /admin`, `Sitemap: https://mertervitrini.com.tr/sitemap.xml`).
+     - **Probe 2 (`/sitemap.xml`):** HTTP 200 OK — Geçerli `<sitemapindex>` XML yanıtı, `/sitemap/0.xml` ve `/sitemap/1.xml` referansları eksiksiz.
+     - **Probe 3 (`/llms.txt`):** HTTP 200 OK — Yapılandırılmış Markdown formatında platform tanıtımı ve B2B toptan ihracat rehberi.
+     - **Probe 4 (`/tr/pages/hakkimizda`):** HTTP 200 OK — Dinamik SSR render, sıfır 500 hatası.
+     - **Probe 5 (`/en/blog`):** HTTP 200 OK — Hafif veri yükü, sıfır 500 hatası.
+     - **Probe 6 (`/es/kadin-giyim`):** HTTP 404 Not Found — Desteklenmeyen dil öneki için gerçek 404 yanıtı.
+     - **Probe 7 (`/product/non-existent-probe-12345`):** HTTP 404 Not Found — Var olmayan ürün için gerçek 404 yanıtı.
+     - **Probe 8 (`/api/v1/store/feeds/google-merchant.xml`):** HTTP 200 OK — B2B toptan kurallarına uygun `<g:excluded_destination>Shopping_ads</g:excluded_destination>` ve `<g:custom_label_0>Wholesale B2B - Member Quote</g:custom_label_0>` etiketleri.
+  4. **Kural ve Sözleşme Uyumu:**
+     - `AGENTS.md` Demir Kural 1: İzinsiz git commit veya push yapılmadı; tüm değişiklikler yerel ağaçta bırakıldı.
+     - `AGENTS.md` Demir Kural 3: Sıfır derleyici/linter uyarısı sağlandı.
+     - `AGENTS.md` Demir Kural 5 & 7: Yerelde `.next` veya `out/` statik derlemesi üretilmedi; tüm derleme AlmaLinux üzerinde uzaktan tamamlandı.
+     - `AGENTS.md` Demir Kural 8: Bu özet ile kalıcı konuşma geçmişi güncellendi.
+- **Sonuç:** Milestone 3 doğrulaması, uzaktan derlemesi, dağıtımı ve canlı duman testleri %100 başarıyla tamamlandı.
+
+
+---
+
+### [2026-11-14 00:45:00] - Oturum #145 (Teamwork Sentinel: Bağımsız Victory Audit ve Proje Kapanışı)
+- **Conversation ID:** `65f9187e-7d8b-41b3-905f-dd39b7725cdd` (Teamwork Sentinel)
+- **Parent ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Rol:** Project Sentinel (Task Router, Dispatcher, Sentinel Reporter)
+- **Görev:** Proje orkestratörünün bitiş iddiası sonrası bağımsız zafer denetiminin (`teamwork_victory_auditor`) yürütülmesi, sentinel crons temizliği ve final kapanış raporunun üst ajana iletilmesi.
+- **Yapılan İşlemler:**
+  1. **Bağımsız Victory Audit Yürütüldü:**
+     - `teamwork_victory_auditor` (`497ef3ea-b48d-4aca-9f39-e59ff091ce1d`) sıfır paylaşılan bağlam ile 3 fazlı adli inceleme yürüttü:
+       - **Faz A (Zaman Çizelgesi & Menşe):** PASS. `AGENTS.md` Demir Kuralları tam korundu; 0 yetkisiz commit/push yapıldı (değişiklikler incelenmek üzere çalışma ağacında bırakıldı); 0 yerel frontend build üretildi.
+       - **Faz B (Bütünlük & Kestirme/Stub Tespiti):** PASS. Sıfır sahte veri, sıfır bypass; tüm PostgreSQL dinamik sorguları, Next.js `force-dynamic` ve `notFound()` uygulamaları gerçek ve eksiksiz.
+       - **Faz C (Bağımsız Test Çalıştırma):** PASS. `go vet ./...` (0 hata/uyarı), Windows & Linux AMD64 backend derlemeleri (0 hata), `npx tsc --noEmit` (0 hata), `npm run lint` (0 hata/uyarı) ve 8/8 canlı AlmaLinux HTTPS uç nokta duman testi %100 başarılı.
+     - **Denetçi Kararı:** **VICTORY CONFIRMED**.
+  2. **Sentinel İzleme ve Alt Ajan Temizliği:**
+     - Cron 1 (Görev İlerleme Raporlama) ve Cron 2 (Liveness Kontrolü) arka plan görevleri iptal edildi.
+     - Tüm alt ajanlar (`teamwork_orchestrator`, `teamwork_victory_auditor`) nizami olarak sonlandırıldı (`manage_subagents(Action="kill_all")`).
+  3. **Handoff ve Briefing Tamamlandı:**
+     - `handoff.md` ve `BRIEFING.md` state dosyaları güncellendi ve nihai rapor parent ajana (`ea80f35f-34dd-451d-a636-45dd496a7728`) iletildi.
+- **Sonuç:** Merter Vitrini B2B Teknik ve Semantik SEO optimizasyonu başarıyla tamamlandı, canlı üretim ortamında doğrulandı ve onaylandı.
+
+
+---
+
+### [2026-11-14 00:48:30] - Oturum #146 (Koordinatör Bağımsız Doğrulama & Kullanıcıya Kapanış Raporu)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Yapılan İşlemler:**
+  1. `teamwork` (`65f9187e-7d8b-41b3-905f-dd39b7725cdd`) oturumunun **`VICTORY CONFIRMED`** kapanış bildirimi alındıktan sonra koordinatör tarafından yerel çalışma ağacı, statik kontroller ve canlı HTTPS uç noktaları bağımsız olarak teyit edildi:
+     - `git log -n 3 --oneline`: Son commit `8af4903` olarak kaldı (`AGENTS.md` Demir Kural #1 uyarınca izinsiz commit/push yapılmadı).
+     - `backend`: `go vet ./...` ve `go test -count=1 ./...` (`handlers`, `pkg/phoneutil`, `services`) exit code `0` ile geçti.
+     - `frontend`: `npx tsc --noEmit` ve `npm run lint` exit code `0` (sıfır hata/uyarı) ile geçti.
+     - Canlı HTTPS kontrolleri (`mertervitrini.com.tr`): `/robots.txt` (200), `/sitemap.xml` (200, `<sitemapindex>`), `/sitemap/0.xml` (200), `/llms.txt` (200), `/tr/pages/hakkimizda` (200), `/en/pages/hakkimizda` (200), `/en/blog` (200), `/en/blog/zess-woman` (200), `/es/kadin-giyim` (404), `/product/non-existent-probe-12345` (404), `/product/vasco-madonna-drapeli-elbise-5rqr?lang=en` (200 + `UnitPriceSpecification` / `InvoicePrice`), `/api/v1/store/feeds/google-merchant.xml` (200 + `Shopping_ads` hariç tutma), `/api/v1/store/blog?lang=tr&limit=250` (200, `1.102.823` byte), `/api/v1/store/sitemap/products` (200, `684.732` byte), `/bg` (Footer'da `/bg/kadin-giyim/buyuk-beden`) ve `/ar` (`noto_sans_arabic` değişken sınıfı) doğrulandı.
+  2. Ek gözlem olarak yerel Windows makineden `scripts/test_production_smoke.py` içindeki `--resolve mertervitrini.com.tr:443:213.202.255.80` doğrudan IP bağlantısının zaman aşımına uğradığı (Cloudflare üzerinden normal HTTPS testinin ise geçtiği), `/bg` anasayfa vitrin şeridinde bir adet `/bg/buyuk-beden` kısayol kartının korunduğu ve `?page=2` kanonik etiketinin kategori kök URL'sine işaret ettiği kullanıcıya şeffafça raporlandı.
+- **Sonuç:** Tüm değişiklikler commit/push edilmeden çalışma dizininde (`M`/`??` dosyalar) inceleme ve yayın onayı için hazır bırakıldı.
+
+
+---
+
+### [2026-11-14 00:58:00] - Oturum #147 (SEO Değişikliklerinin Commit'lenmesi ve Canlı Sunucuda Yayınlanması)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle sonra sitede yayınla"`
+- **Yapılan İşlemler:**
+  1. **Conventional Commit Oluşturuldu (`ff8346b`):** `.gitignore`, `backend/**`, `frontend/**` ve `scripts/**` altındaki 35 dosyalık SEO iyileştirmesi (823 ekleme, 263 silme) `feat: optimize international B2B technical and semantic SEO across backend, SSR frontend, and deployer` mesajıyla commit'lendi (`AGENTS.md` Demir Kural #1 ve kullanıcı istemi gereği `git push` yapılmadı).
+  2. **Canlı AlmaLinux Üretim Yayını (`213.202.255.80`):** `python -u scripts/unified_deployer.py -p unified -c all -a all --remote-build` komutu `177,62 sn` sürede `exit code 0` ile tamamlandı; Linux AMD64 Go backend (`42.28 MB`) konuşlandırılıp `merter-backend.service` aktif edildi, Next.js 16.2.6 (Turbopack) SSR ön yüzü sunucuda derlenerek yetim `robots.txt` temizliğiyle birlikte `merter-frontend` ve `nginx` servisleri yeniden başlatıldı.
+  3. **Canlı HTTPS Doğrulaması (`9/9` Başarılı — Cloudflare `104.21.53.15`):** `/api/v1/health` (200 + `healthy`), `/robots.txt` (200 + `Disallow: /admin`, `Clean-param`, `sitemap.xml`), `/sitemap.xml` (200 + `<sitemapindex>`), `/llms.txt` (200), `/tr/pages/hakkimizda` (200), `/en/blog` (200), `/es/kadin-giyim` (404), `/product/non-existent-probe-12345` (404) ve `/api/v1/store/feeds/google-merchant.xml` (200 + `Shopping_ads` hariç tutma) doğrulandı.
+- **Sonuç:** Tüm SEO değişiklikleri yerel Git geçmişine işlendi, canlı sitede (`mertervitrini.com.tr`) yayına alındı ve doğrulandı.
