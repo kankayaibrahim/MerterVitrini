@@ -2796,3 +2796,21 @@
      - `mobile`: `flutter pub get` (`exit 0`), `flutter analyze` (`No issues found!`), `flutter test` (`widget_test.dart` + yeni `modernization_test.dart` toplam **25/25 test geçti**).
      - `scripts\build_mobile_release.ps1` çalıştırıldı: `mobile\build\app\outputs\bundle\release\app-release.aab` (`65,886,322` B / `62.83 MB`) ve `mobile\build\app\outputs\flutter-apk\app-release.apk` (`66,418,945` B / `63.3 MB`) release imzalı olarak üretildi.
 - **Sonuç:** Tüm değişiklikler `AGENTS.md` Kural #1 ve kullanıcı kararı gereği commit/push edilmeden ve canlı sunucuya dağıtılmadan çalışma dizininde incelemeye hazır bırakıldı (`HEAD`: `2729b07`).
+
+---
+
+### [2026-11-14 02:25:00] - Oturum #149 (Mobil v1.1.0+5 Commit, Go Backend ve İmzalı OTA APK Canlı Sunucu Yayını)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle sunucuda yayınla"`
+- **Yapılan İşlemler:**
+  1. **Conventional Commit (`2f1f08c` — Push Yapılmadı):** `.gitignore` içine `backend/uploads/` kuralı eklendi; tüm Go backend, Flutter mobil (`v1.1.0+5`), `scripts/publish_mobile_apk.py` ve `Oturum #148` kaydını içeren **99 dosya** (`+36720 / -10787` satır) `feat: modernize mobile app to v1.1.0+5 with full B2B parity, 8-lang RTL, corporate light theme, and mobile challenge APIs` mesajıyla commit'lendi (`AGENTS.md` Demir Kural #1 uyarınca `git push` yapılmadı).
+  2. **Go Backend Canlı AlmaLinux Dağıtımı (`213.202.255.80`):** `python -u scripts/unified_deployer.py -p unified -c backend -a all` (`50.34 sn`, exit `0`) ile Linux AMD64 binary (`42.33 MB`) konuşlandırıldı ve `merter-backend.service` (`PID 1213092`, Port `8080`) ile `nginx` yeniden başlatıldı.
+  3. **İmzalı APK (`v1.1.0+5`) & 8 Dilli OTA Manifest Yayını:** `python -u scripts/publish_mobile_apk.py` (`65.9 sn`, exit `0`) ile `mertervitrini-v1.1.0+5.apk` (`66.418.945` byte / `63.34 MB`, SHA-256: `37964c1870973c288b668b7e2c3f0eb3f6ba3f552d2788d94db305762e4d3626`) ve 8 dilli (`tr, en, ru, ar, de, fr, pl, bg`) `version.json` atomik olarak `/var/www/media/releases/` dizinine yayınlandı.
+  4. **Canlı HTTPS Doğrulamaları (`https://mertervitrini.com.tr`):**
+     - `GET /api/v1/health` → `200 healthy`
+     - `GET /api/v1/mobile/challenge` → `200` (token `len=156`)
+     - `GET /api/v1/mobile/bootstrap` → `200` (`brands=2`, `challenge_in_cfg=True`)
+     - `GET /api/v1/mobile/version` → `200` (`version=1.1.0`, `build_number=5`, `apk_available=true`, `file_size_bytes=66418945`, 8 dilli sürüm notları & eşleşen SHA-256)
+     - `HEAD /uploads/releases/mertervitrini-v1.1.0+5.apk` → `200` (`Content-Length: 66418945`)
+     - `GET /api/v1/mobile/apk` (`Range: bytes=0-15`) → `206` (`16` byte)
+- **Sonuç:** Güncellenmiş Go backend ve `mertervitrini-v1.1.0+5.apk` OTA dağıtımı canlı sunucuda doğrulandı; yerel repo temiz durumda (push yapılmadı).
