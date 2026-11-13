@@ -190,18 +190,20 @@ func (h *MarketplaceHandler) ListPublicServiceProviders(w http.ResponseWriter, r
 }
 
 type serviceProviderApplyPayload struct {
-	CompanyName      string `json:"company_name"`
-	ContactName      string `json:"contact_name"`
-	ServiceCategory  string `json:"service_category"`
-	ShortDescription string `json:"short_description"`
-	ServicesOffered  string `json:"services_offered"`
-	TargetCountries  string `json:"target_countries"`
-	Address          string `json:"address"`
-	Phone            string `json:"phone"`
-	WhatsappPhone    string `json:"whatsapp_phone"`
-	Email            string `json:"email"`
-	Website          string `json:"website"`
-	ReCaptchaToken   string `json:"recaptcha_token"`
+	CompanyName        string `json:"company_name"`
+	ContactName        string `json:"contact_name"`
+	ServiceCategory    string `json:"service_category"`
+	ShortDescription   string `json:"short_description"`
+	ServicesOffered    string `json:"services_offered"`
+	TargetCountries    string `json:"target_countries"`
+	Address            string `json:"address"`
+	Phone              string `json:"phone"`
+	WhatsappPhone      string `json:"whatsapp_phone"`
+	Email              string `json:"email"`
+	Website            string `json:"website"`
+	ReCaptchaToken     string `json:"recaptcha_token"`
+	ChallengeToken     string `json:"challenge_token,omitempty"`
+	FormChallengeToken string `json:"form_challenge_token,omitempty"`
 }
 
 func validateServiceProviderApplyPayload(req *serviceProviderApplyPayload) string {
@@ -226,26 +228,9 @@ func validateServiceProviderApplyPayload(req *serviceProviderApplyPayload) strin
 	return ""
 }
 
-// CreatePublicServiceProviderApplication handles POST /api/v1/store/service-providers.
-func (h *MarketplaceHandler) CreatePublicServiceProviderApplication(w http.ResponseWriter, r *http.Request) {
+func (h *MarketplaceHandler) createServiceProviderApplication(w http.ResponseWriter, r *http.Request, req serviceProviderApplyPayload) {
 	ctx := r.Context()
 	ensureServiceProvidersSchema(ctx)
-
-	var req serviceProviderApplyPayload
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": "Geçersiz başvuru verisi"})
-		return
-	}
-
-	if errMsg := validateServiceProviderApplyPayload(&req); errMsg != "" {
-		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": errMsg})
-		return
-	}
-
-	if valid, err := verifyServiceProviderReCaptcha(h.Cfg, req.ReCaptchaToken, "service_provider_apply"); err != nil || !valid {
-		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": "Güvenlik doğrulaması (Google reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."})
-		return
-	}
 
 	slug := slugifyServiceProviderName(req.CompanyName)
 	verificationToken := generateSecureToken(32)
@@ -295,6 +280,27 @@ func (h *MarketplaceHandler) CreatePublicServiceProviderApplication(w http.Respo
 		"expires_in_minutes": 30,
 		"message":            fmt.Sprintf("Başvurunuz oluşturuldu. Lütfen 30 dakika içinde %s adresinize gönderilen doğrulama bağlantısına tıklayarak e-posta adresinizi onaylayınız.", req.Email),
 	})
+}
+
+// CreatePublicServiceProviderApplication handles POST /api/v1/store/service-providers.
+func (h *MarketplaceHandler) CreatePublicServiceProviderApplication(w http.ResponseWriter, r *http.Request) {
+	var req serviceProviderApplyPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": "Geçersiz başvuru verisi"})
+		return
+	}
+
+	if errMsg := validateServiceProviderApplyPayload(&req); errMsg != "" {
+		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": errMsg})
+		return
+	}
+
+	if valid, err := verifyServiceProviderReCaptcha(h.Cfg, req.ReCaptchaToken, "service_provider_apply"); err != nil || !valid {
+		writeMarketplaceJSON(w, http.StatusBadRequest, map[string]string{"error": "Güvenlik doğrulaması (Google reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."})
+		return
+	}
+
+	h.createServiceProviderApplication(w, r, req)
 }
 
 // VerifyServiceProviderEmail handles GET /api/v1/store/service-providers/verify?token=...

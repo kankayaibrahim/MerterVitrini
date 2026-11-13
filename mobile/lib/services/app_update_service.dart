@@ -8,6 +8,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../core/app_config.dart';
+import '../core/localization.dart';
+import 'api_client.dart';
 
 class InstalledAppInfo {
   final String version;
@@ -120,7 +122,10 @@ class AppReleaseInfo {
     if (en != null && en.trim().isNotEmpty) {
       return en.trim();
     }
-    return 'Performans, güvenlik ve katalog iyileştirmeleri içerir.';
+    return AppStrings.t(
+      ApiClient.defaultLanguageCode,
+      'err_update_notes_fallback',
+    );
   }
 }
 
@@ -254,7 +259,9 @@ class AppUpdateService {
 
     final data = response.data;
     if (data is! Map) {
-      throw Exception('Güncelleme bilgisi okunamadı.');
+      throw Exception(
+        AppStrings.t(ApiClient.defaultLanguageCode, 'err_update_read'),
+      );
     }
 
     final remote = AppReleaseInfo.fromJson(Map<String, dynamic>.from(data));
@@ -285,7 +292,7 @@ class AppUpdateService {
   }) async {
     if (!supportsInAppApkUpdate) {
       throw UnsupportedError(
-        'Otomatik APK kurulumu yalnızca Android cihazlarda desteklenir.',
+        AppStrings.t(ApiClient.defaultLanguageCode, 'err_update_android_only'),
       );
     }
 
@@ -346,7 +353,9 @@ class AppUpdateService {
     );
 
     if (!partFile.existsSync() || partFile.lengthSync() <= 0) {
-      throw Exception('APK dosyası indirilemedi.');
+      throw Exception(
+        AppStrings.t(ApiClient.defaultLanguageCode, 'err_apk_download'),
+      );
     }
 
     if (release.sha256.isNotEmpty) {
@@ -356,7 +365,7 @@ class AppUpdateService {
           partFile.deleteSync();
         } catch (_) {}
         throw Exception(
-          'İndirilen paket doğrulama kontrolünden geçemedi (SHA-256 uyuşmazlığı). Lütfen tekrar deneyin.',
+          AppStrings.t(ApiClient.defaultLanguageCode, 'err_apk_sha256'),
         );
       }
     }

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/app_theme.dart';
+import '../../../core/localization.dart';
 import '../../../models/product.dart';
+import '../utils/supplier_l10n.dart';
+import '../widgets/supplier_editorial_widgets.dart';
 import 'searchable_option_sheet.dart';
 import 'wizard_translations_card.dart';
 
@@ -24,6 +28,7 @@ class WizardPricingSeriesCard extends StatelessWidget {
   final ValueChanged<String> onSeasonChanged;
   final ValueChanged<bool> onActiveChanged;
   final VoidCallback onAutoTranslate;
+  final String lang;
 
   const WizardPricingSeriesCard({
     super.key,
@@ -46,23 +51,45 @@ class WizardPricingSeriesCard extends StatelessWidget {
     required this.onSeasonChanged,
     required this.onActiveChanged,
     required this.onAutoTranslate,
+    this.lang = 'tr',
   });
+
+  static const List<String> _genderValues = [
+    'Kadın',
+    'Erkek',
+    'Unisex',
+    'Çocuk',
+  ];
+
+  static const List<String> _seasonValues = [
+    '2026 İlkbahar/Yaz',
+    '2026 Sonbahar/Kış',
+    '4 Mevsim',
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return EditorialSurfaceCard(
+      padding: EdgeInsets.zero,
       child: ExpansionTile(
-        title: const Text(
-          '4. Ek Detaylar, Renk/Kumaş & Çeviri (Opsiyonel)',
-          style: TextStyle(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        iconColor: AppColors.obsidian,
+        collapsedIconColor: AppColors.mutedAccessible,
+        title: Text(
+          '4. ${SupplierL10n.t(lang, 'wizard_extras_section')}',
+          style: const TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 13.5,
+            color: AppColors.obsidian,
           ),
         ),
-        subtitle: const Text(
-          'Renk, kumaş, açıklama ve yabancı dil ayarları',
-          style: TextStyle(fontSize: 11.5),
+        subtitle: Text(
+          SupplierL10n.t(lang, 'wizard_extras_desc'),
+          style: const TextStyle(
+            fontSize: 11.5,
+            color: AppColors.mutedAccessible,
+          ),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
         children: [
@@ -70,29 +97,35 @@ class WizardPricingSeriesCard extends StatelessWidget {
             children: [
               Expanded(
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppColors.radiusLg),
                   onTap: () async {
                     final picked = await showSearchableOptionSheet(
                       context,
-                      title: 'Renk Seçiniz',
+                      title: SupplierL10n.t(lang, 'wizard_color_label'),
                       options: colorOptions,
                       allowClear: true,
+                      languageCode: lang,
                     );
                     if (picked != null) {
                       onColorPicked(picked);
                     }
                   },
                   child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Renk',
-                      suffixIcon: Icon(Icons.palette_outlined, size: 18),
+                    decoration: InputDecoration(
+                      labelText: AppStrings.t(lang, 'color'),
+                      suffixIcon: const Icon(Icons.palette_outlined, size: 18),
                     ),
                     child: Text(
                       selectedColorLabel.isNotEmpty
                           ? selectedColorLabel
-                          : 'Seçiniz',
+                          : SupplierL10n.t(lang, 'wizard_select_placeholder'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selectedColorLabel.isNotEmpty
+                            ? AppColors.obsidian
+                            : AppColors.mutedAccessible,
+                      ),
                     ),
                   ),
                 ),
@@ -100,29 +133,35 @@ class WizardPricingSeriesCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppColors.radiusLg),
                   onTap: () async {
                     final picked = await showSearchableOptionSheet(
                       context,
-                      title: 'Kumaş Tipi Seçiniz',
+                      title: SupplierL10n.t(lang, 'wizard_fabric_label'),
                       options: fabricOptions,
                       allowClear: true,
+                      languageCode: lang,
                     );
                     if (picked != null) {
                       onFabricPicked(picked);
                     }
                   },
                   child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Kumaş',
-                      suffixIcon: Icon(Icons.texture_rounded, size: 18),
+                    decoration: InputDecoration(
+                      labelText: AppStrings.t(lang, 'fabric'),
+                      suffixIcon: const Icon(Icons.texture_rounded, size: 18),
                     ),
                     child: Text(
                       selectedFabricLabel.isNotEmpty
                           ? selectedFabricLabel
-                          : 'Seçiniz',
+                          : SupplierL10n.t(lang, 'wizard_select_placeholder'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selectedFabricLabel.isNotEmpty
+                            ? AppColors.obsidian
+                            : AppColors.mutedAccessible,
+                      ),
                     ),
                   ),
                 ),
@@ -135,16 +174,22 @@ class WizardPricingSeriesCard extends StatelessWidget {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   initialValue:
-                      ['Kadın', 'Erkek', 'Unisex', 'Çocuk'].contains(gender)
-                          ? gender
-                          : 'Kadın',
-                  decoration: const InputDecoration(labelText: 'Cinsiyet'),
-                  items: const [
-                    DropdownMenuItem(value: 'Kadın', child: Text('Kadın')),
-                    DropdownMenuItem(value: 'Erkek', child: Text('Erkek')),
-                    DropdownMenuItem(value: 'Unisex', child: Text('Unisex')),
-                    DropdownMenuItem(value: 'Çocuk', child: Text('Çocuk')),
-                  ],
+                      _genderValues.contains(gender) ? gender : 'Kadın',
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: AppStrings.t(lang, 'gender'),
+                  ),
+                  items: _genderValues
+                      .map(
+                        (val) => DropdownMenuItem(
+                          value: val,
+                          child: Text(
+                            SupplierL10n.genderLabel(lang, val),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
                   onChanged: (v) {
                     if (v != null) onGenderChanged(v);
                   },
@@ -153,28 +198,24 @@ class WizardPricingSeriesCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  initialValue: [
-                    '2026 İlkbahar/Yaz',
-                    '2026 Sonbahar/Kış',
-                    '4 Mevsim',
-                  ].contains(season)
+                  initialValue: _seasonValues.contains(season)
                       ? season
                       : '2026 İlkbahar/Yaz',
-                  decoration: const InputDecoration(labelText: 'Sezon'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: '2026 İlkbahar/Yaz',
-                      child: Text('İlkbahar/Yaz'),
-                    ),
-                    DropdownMenuItem(
-                      value: '2026 Sonbahar/Kış',
-                      child: Text('Sonbahar/Kış'),
-                    ),
-                    DropdownMenuItem(
-                      value: '4 Mevsim',
-                      child: Text('4 Mevsim'),
-                    ),
-                  ],
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: AppStrings.t(lang, 'season'),
+                  ),
+                  items: _seasonValues
+                      .map(
+                        (val) => DropdownMenuItem(
+                          value: val,
+                          child: Text(
+                            SupplierL10n.seasonLabel(lang, val),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
                   onChanged: (v) {
                     if (v != null) onSeasonChanged(v);
                   },
@@ -189,8 +230,8 @@ class WizardPricingSeriesCard extends StatelessWidget {
                 child: TextField(
                   controller: minOrderCtrl,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Min. Sipariş (Seri)',
+                  decoration: InputDecoration(
+                    labelText: SupplierL10n.t(lang, 'wizard_min_order_series'),
                   ),
                 ),
               ),
@@ -201,8 +242,8 @@ class WizardPricingSeriesCard extends StatelessWidget {
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  decoration: const InputDecoration(
-                    labelText: 'Maliyet (Gizli)',
+                  decoration: InputDecoration(
+                    labelText: SupplierL10n.t(lang, 'buying_price'),
                   ),
                 ),
               ),
@@ -211,28 +252,30 @@ class WizardPricingSeriesCard extends StatelessWidget {
           const SizedBox(height: 10),
           TextField(
             controller: shortDescCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Kısa Özet (Kalıp / Kumaş Oranı)',
-              hintText: 'Örn: %100 Pamuk, Tam Kalıp',
+            decoration: InputDecoration(
+              labelText: SupplierL10n.t(lang, 'short_desc_field'),
+              hintText: SupplierL10n.t(lang, 'wizard_short_desc_hint'),
             ),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: descCtrl,
             maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'Detaylı Ürün Açıklaması',
+            decoration: InputDecoration(
+              labelText: SupplierL10n.t(lang, 'full_desc_field'),
             ),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
+            activeTrackColor: AppColors.luxuryBronze,
             value: isActive,
             onChanged: onActiveChanged,
-            title: const Text(
-              'Kaydedildiğinde Vitrinde Aktif Yayınla',
-              style: TextStyle(
+            title: Text(
+              SupplierL10n.t(lang, 'active_in_storefront'),
+              style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
+                color: AppColors.obsidian,
               ),
             ),
           ),
@@ -240,6 +283,7 @@ class WizardPricingSeriesCard extends StatelessWidget {
             translations: translations,
             autoTranslating: autoTranslating,
             onAutoTranslate: onAutoTranslate,
+            lang: lang,
           ),
         ],
       ),

@@ -21,21 +21,23 @@ class AppScrollBehavior extends MaterialScrollBehavior {
   const AppScrollBehavior();
 
   @override
-  Set<PointerDeviceKind> get dragDevices => const {
+  Set<PointerDeviceKind> get dragDevices => {
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
     PointerDeviceKind.trackpad,
     PointerDeviceKind.stylus,
-    PointerDeviceKind.unknown,
   };
 }
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+    ),
+  );
   runApp(const MerterVitriniMobileApp());
 }
 
@@ -56,12 +58,6 @@ class _MerterVitriniMobileAppState extends State<MerterVitriniMobileApp> {
     _apiClient = ApiClient();
     _sessionProvider = SessionProvider(apiClient: _apiClient);
     _sessionProvider.initialize();
-  }
-
-  @override
-  void dispose() {
-    _sessionProvider.dispose();
-    super.dispose();
   }
 
   @override
@@ -90,26 +86,31 @@ class _MerterVitriniMobileAppState extends State<MerterVitriniMobileApp> {
       ],
       child: Consumer<SessionProvider>(
         builder: (context, session, _) {
-          final isSupplier =
-              session.isSupplierMode && session.isSupplierLoggedIn;
-
+          final isSupplier = session.isSupplierMode && session.isSupplierLoggedIn;
           return MaterialApp(
             title: AppConfig.appName,
             debugShowCheckedModeBanner: false,
             scrollBehavior: const AppScrollBehavior(),
-            theme: AppTheme.light(isSupplierMode: isSupplier),
-            locale: Locale(session.languageCode),
+            locale: Locale(AppStrings.normalizeCode(session.languageCode)),
             supportedLocales: const [
               Locale('tr'),
               Locale('en'),
               Locale('ru'),
               Locale('ar'),
+              Locale('de'),
+              Locale('fr'),
+              Locale('pl'),
+              Locale('bg'),
             ],
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
+            theme: AppTheme.light(
+              isSupplier: isSupplier,
+              languageCode: session.languageCode,
+            ),
             builder: (context, child) {
               return Directionality(
                 textDirection: AppStrings.directionOf(session.languageCode),
@@ -119,8 +120,8 @@ class _MerterVitriniMobileAppState extends State<MerterVitriniMobileApp> {
             home: !session.initialized
                 ? const _SplashBootstrapView()
                 : isSupplier
-                    ? const SupplierShell()
-                    : const CustomerShell(),
+                ? const SupplierShell()
+                : const CustomerShell(),
           );
         },
       ),
@@ -134,40 +135,43 @@ class _SplashBootstrapView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.obsidian,
+      backgroundColor: AppColors.warmIvory,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const MvEditorialCrest(size: 72),
-            const SizedBox(height: 22),
-            const Text(
+            Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                color: AppColors.pureWhite,
+                borderRadius: BorderRadius.circular(AppColors.radiusLg),
+                border: Border.all(color: AppColors.warmHairline, width: 1),
+              ),
+              child: const Center(
+                child: MvEditorialCrest(size: 48, darkBackground: false),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
               'MERTER VİTRİNİ',
               style: TextStyle(
-                fontFamily: AppColors.serifFontFamily,
-                color: Colors.white,
-                fontSize: 21,
+                color: AppColors.obsidian,
+                fontSize: 18,
                 fontWeight: FontWeight.w800,
-                letterSpacing: 3.4,
+                letterSpacing: AppStrings.letterSpacing(
+                  ApiClient.defaultLanguageCode,
+                  3.2,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'GLOBAL B2B TOPTAN MODA & ÜRETİCİ ATÖLYESİ',
-              style: TextStyle(
-                color: AppColors.champagneGold,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 2.4,
-              ),
-            ),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: 110,
-              child: LinearProgressIndicator(
-                minHeight: 1.5,
-                backgroundColor: Colors.white.withValues(alpha: 0.14),
-                color: AppColors.champagneGold,
+            const SizedBox(height: 22),
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.luxuryBronze,
               ),
             ),
           ],

@@ -428,7 +428,7 @@ func buildPageViewRecord(r *http.Request, req *TrackPageViewRequest, path string
 	ip := getClientIP(r)
 	ipHash := hashIP(ip)
 	userID := resolveAuthenticatedMemberID(r, req.AuthToken)
-	visitorID := firstNonEmptyStr(req.VisitorID, ipHash)
+	visitorID := firstNonEmptyStr(req.VisitorID, r.Header.Get(headerVisitorID), ipHash)
 	sessionID := firstNonEmptyStr(req.SessionID, visitorID)
 
 	ua := r.UserAgent()
@@ -903,23 +903,31 @@ func hashIP(ip string) string {
 }
 
 func parseDeviceType(uaLower string, screenWidth int) string {
+	if strings.Contains(uaLower, "mertervitriniapp") {
+		if strings.Contains(uaLower, "ipad") || strings.Contains(uaLower, "tablet") {
+			return "tablet"
+		}
+		return "mobile"
+	}
 	if screenWidth > 0 && screenWidth < 768 {
 		return "mobile"
 	}
 	if screenWidth >= 768 && screenWidth < 1024 {
 		return "tablet"
 	}
-	if strings.Contains(uaLower, "mobile") || strings.Contains(uaLower, "iphone") || strings.Contains(uaLower, "android") {
-		return "mobile"
-	}
 	if strings.Contains(uaLower, "ipad") || strings.Contains(uaLower, "tablet") {
 		return "tablet"
+	}
+	if strings.Contains(uaLower, "mobile") || strings.Contains(uaLower, "iphone") || strings.Contains(uaLower, "android") {
+		return "mobile"
 	}
 	return defaultDeviceDesktop
 }
 
 func parseBrowserName(uaLower string) string {
 	switch {
+	case strings.Contains(uaLower, "mertervitriniapp"):
+		return "Mobil Uygulama"
 	case strings.Contains(uaLower, "edg/"):
 		return "Edge"
 	case strings.Contains(uaLower, "chrome/"):

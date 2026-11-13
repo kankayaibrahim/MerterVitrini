@@ -1,6 +1,7 @@
 import '../contracts/catalog_repository.dart';
 import '../models/product.dart';
 import '../services/api_client.dart';
+import 'http_repo_helpers.dart';
 
 class HttpCatalogRepository implements ICatalogRepository {
   final ApiClient _client;
@@ -15,49 +16,54 @@ class HttpCatalogRepository implements ICatalogRepository {
       );
       final data = resp.data ?? <String, dynamic>{};
       return BootstrapPayload(
-        settings: data['settings'] is Map<String, dynamic>
-            ? data['settings'] as Map<String, dynamic>
-            : <String, dynamic>{},
-        exchangeRates: _parseRates(data['exchange_rates']),
-        categories: _parseList(data['categories'], CategoryNode.fromJson),
-        brands: _parseList(data['brands'], BrandSummary.fromJson),
-        newestProducts: _parseList(data['newest_products'], Product.fromJson),
-        featuredProducts:
-            _parseList(data['featured_products'], Product.fromJson),
+        appConfig: HttpRepoHelpers.asMap(data['app_config']),
+        settings: HttpRepoHelpers.asMap(data['settings']),
+        languages: HttpRepoHelpers.parseList(
+          data['languages'],
+          (m) => m,
+        ),
+        exchangeRates: HttpRepoHelpers.parseExchangeRates(
+          data['exchange_rates'],
+        ),
+        categories: HttpRepoHelpers.parseList(
+          data['categories'],
+          CategoryNode.fromJson,
+        ),
+        brands: HttpRepoHelpers.parseList(data['brands'], BrandSummary.fromJson),
+        newestProducts: HttpRepoHelpers.parseList(
+          data['newest_products'],
+          Product.fromJson,
+        ),
+        featuredProducts: HttpRepoHelpers.parseList(
+          data['featured_products'],
+          Product.fromJson,
+        ),
       );
     } catch (_) {
-      // Fallback to existing live /api/v1/store/* endpoints when /api/v1/mobile/bootstrap
-      // has not yet been deployed to the remote server.
-      return _fetchBootstrapFromStorefrontEndpoints();
-    }
-  }
-
-  Future<BootstrapPayload> _fetchBootstrapFromStorefrontEndpoints() async {
-    try {
+      // Fallback to existing live /api/v1/store/* endpoints if /api/v1/mobile/bootstrap fails.
       final results = await Future.wait<dynamic>([
         _safeGet('/api/v1/store/products', const {
           'limit': 12,
-          'offset': 0,
           'sort_by': 'newest',
         }),
         _safeGet('/api/v1/store/products', const {
           'limit': 12,
-          'offset': 12,
-          'sort_by': 'newest',
+          'sort_by': 'price_asc',
         }),
         _safeGet('/api/v1/store/categories'),
         _safeGet('/api/v1/store/brands'),
         _safeGet('/api/v1/store/exchange-rates'),
         _safeGet('/api/v1/store/settings'),
+        _safeGet('/api/v1/store/languages'),
       ]);
 
       final newestMap = results[0];
       final featuredMap = results[1];
       final newestList = newestMap is Map<String, dynamic>
-          ? _parseList(newestMap['products'], Product.fromJson)
+          ? HttpRepoHelpers.parseList(newestMap['products'], Product.fromJson)
           : <Product>[];
       var featuredList = featuredMap is Map<String, dynamic>
-          ? _parseList(featuredMap['products'], Product.fromJson)
+          ? HttpRepoHelpers.parseList(featuredMap['products'], Product.fromJson)
           : <Product>[];
       if (featuredList.isEmpty) {
         featuredList = newestList;
@@ -66,15 +72,17 @@ class HttpCatalogRepository implements ICatalogRepository {
       return BootstrapPayload(
         settings: results[5] is Map<String, dynamic>
             ? results[5] as Map<String, dynamic>
-            : <String, dynamic>{},
-        exchangeRates: _parseRates(results[4]),
-        categories: _parseList(results[2], CategoryNode.fromJson),
-        brands: _parseList(results[3], BrandSummary.fromJson),
+            : <String, dynamic>{'show_prices_to_guests': false},
+        languages: HttpRepoHelpers.parseList(results[6], (m) => m),
+        exchangeRates: HttpRepoHelpers.parseExchangeRates(results[4]),
+        categories: HttpRepoHelpers.parseList(
+          results[2],
+          CategoryNode.fromJson,
+        ),
+        brands: HttpRepoHelpers.parseList(results[3], BrandSummary.fromJson),
         newestProducts: newestList,
         featuredProducts: featuredList,
       );
-    } catch (e) {
-      throw ApiClient.mapError(e);
     }
   }
 
@@ -93,20 +101,42 @@ class HttpCatalogRepository implements ICatalogRepository {
     }
   }
 
-  Map<String, double> _parseRates(dynamic raw) {
-    final ratesMap = <String, double>{'TRY': 1.0};
-    if (raw is List) {
-      for (final r in raw) {
-        if (r is Map<String, dynamic>) {
-          final code = (r['currency_code'] ?? '').toString().toUpperCase();
-          final rate = (r['buying_rate'] as num?)?.toDouble() ?? 0.0;
-          if (code.isNotEmpty && rate > 0) {
-            ratesMap[code] = rate;
-          }
-        }
-      }
+  @override
+  Future<CatalogQueryResult> searchCatalog(
+    CatalogFilterParams filter, {
+    int limit = 24,
+    int offset = 0,
+    String? lang,
+  }) async {
+    try {
+      final params = filter.toQueryParameters(
+        limit: limit,
+        offset: offset,
+        lang: lang ?? _client.activeLanguageCode,
+      );
+      final resp = await _client.dio.get<dynamic>(
+        '/api/v1/store/products',
+        queryParameters: params,
+      );
+      final data = HttpRepoHelpers.asMap(resp.data);
+      final list = HttpRepoHelpers.parseList(
+        data['products'],
+        Product.fromJson,
+      );
+      final total = (data['total'] as num?)?.toInt() ?? list.length;
+      final facets = data['facets'] is Map
+          ? CatalogFacets.fromJson(HttpRepoHelpers.asMap(data['facets']))
+          : const CatalogFacets();
+      return CatalogQueryResult(
+        products: list,
+        total: total,
+        offset: offset,
+        limit: limit,
+        facets: facets,
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
-    return ratesMap;
   }
 
   @override
@@ -114,6 +144,7 @@ class HttpCatalogRepository implements ICatalogRepository {
     String query = '',
     String categoryId = '',
     String brandId = '',
+    String brandSlug = '',
     String gender = '',
     String season = '',
     bool fason = false,
@@ -122,39 +153,42 @@ class HttpCatalogRepository implements ICatalogRepository {
     String maxMoq = '',
     String exportCountry = '',
     String sortBy = 'newest',
+    double? minPrice,
+    double? maxPrice,
+    String displayCurrency = '',
+    Map<String, List<String>> attributeFilters = const {},
+    String lang = '',
     int limit = 24,
     int offset = 0,
-  }) async {
-    try {
-      final params = <String, dynamic>{
-        'limit': limit,
-        'offset': offset,
-        'sort_by': sortBy,
-      };
-      if (query.trim().isNotEmpty) params['q'] = query.trim();
-      if (categoryId.isNotEmpty) params['category_id'] = categoryId;
-      if (brandId.isNotEmpty) params['brand_id'] = brandId;
-      if (gender.isNotEmpty) params['gender'] = gender;
-      if (season.isNotEmpty) params['season'] = season;
-      if (fason) params['fason'] = 'true';
-      if (privateLabel) params['private_label'] = 'true';
-      if (companyType.isNotEmpty) params['company_type'] = companyType;
-      if (maxMoq.isNotEmpty) params['max_moq'] = maxMoq;
-      if (exportCountry.isNotEmpty) params['export_country'] = exportCountry;
-
-      final resp = await _client.dio.get<Map<String, dynamic>>(
-        '/api/v1/store/products',
-        queryParameters: params,
-      );
-      final data = resp.data ?? <String, dynamic>{};
-      final list = _parseList(data['products'], Product.fromJson);
-      return CatalogQueryResult(
-        products: list,
-        total: (data['total'] as num?)?.toInt() ?? list.length,
-      );
-    } catch (e) {
-      throw ApiClient.mapError(e);
-    }
+  }) {
+    final parsedMoq = int.tryParse(maxMoq.trim());
+    return searchCatalog(
+      CatalogFilterParams(
+        query: query.trim().isEmpty ? null : query.trim(),
+        categoryId: categoryId.trim().isEmpty ? null : categoryId.trim(),
+        brandId: brandId.trim().isEmpty ? null : brandId.trim(),
+        brandSlug: brandSlug.trim().isEmpty ? null : brandSlug.trim(),
+        gender: gender.trim().isEmpty ? null : gender.trim(),
+        season: season.trim().isEmpty ? null : season.trim(),
+        fasonOnly: fason,
+        privateLabelOnly: privateLabel,
+        companyType: companyType.trim().isEmpty ? null : companyType.trim(),
+        maxMoq: parsedMoq,
+        exportCountry: exportCountry.trim().isEmpty
+            ? null
+            : exportCountry.trim(),
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        displayCurrency: displayCurrency.trim().isEmpty
+            ? null
+            : displayCurrency.trim(),
+        sortBy: CatalogSortOption.fromApi(sortBy),
+        attributeFilters: attributeFilters,
+      ),
+      limit: limit,
+      offset: offset,
+      lang: lang.trim().isEmpty ? _client.activeLanguageCode : lang.trim(),
+    );
   }
 
   @override
@@ -165,23 +199,52 @@ class HttpCatalogRepository implements ICatalogRepository {
       );
       return Product.fromJson(resp.data ?? <String, dynamic>{});
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
-  List<T> _parseList<T>(
-    dynamic raw,
-    T Function(Map<String, dynamic>) mapper,
-  ) {
-    final result = <T>[];
-    if (raw is List) {
-      for (final item in raw) {
-        if (item is Map<String, dynamic>) {
-          result.add(mapper(item));
+  @override
+  Future<List<CatalogAttributeGroup>> listStoreAttributes() async {
+    try {
+      final resp = await _client.dio.get<dynamic>('/api/v1/store/attributes');
+      final rawMap = HttpRepoHelpers.asMap(resp.data);
+      final groups = <CatalogAttributeGroup>[];
+      rawMap.forEach((name, val) {
+        if (val is List) {
+          final values = val
+              .map((e) => (e ?? '').toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
+          if (values.isNotEmpty) {
+            groups.add(CatalogAttributeGroup(name: name, values: values));
+          }
         }
-      }
+      });
+      return groups;
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
-    return result;
+  }
+
+  @override
+  Future<List<ManufacturerSummary>> listManufacturers() async {
+    try {
+      final resp = await _client.dio.get<dynamic>('/api/v1/store/brands');
+      return HttpRepoHelpers.parseList(resp.data, ManufacturerSummary.fromJson);
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<ManufacturerDetail> fetchManufacturerDetail(String slugOrId) async {
+    try {
+      final resp = await _client.dio.get<dynamic>(
+        '/api/v1/store/brands/${slugOrId.trim()}',
+      );
+      return ManufacturerDetail.fromJson(HttpRepoHelpers.asMap(resp.data));
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
   }
 }
-

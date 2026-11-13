@@ -201,7 +201,7 @@ func RecordBrandAnalyticsEvent(brandID, productID, eventType string, r *http.Req
 	countryCode, langCode := resolveVisitorCountryAndLang(r, "", "")
 	if r != nil {
 		ip := getClientIP(r)
-		visitorID = hashIP(ip)
+		visitorID = truncateStr(firstNonEmptyStr(r.Header.Get(headerVisitorID), hashIP(ip)), 64)
 		deviceType, _, _ = parseDeviceAndBrowser(r.UserAgent(), 0)
 		refHost = parseReferrerHost(r.Referer())
 	} else {
@@ -268,10 +268,7 @@ func (h *AnalyticsHandler) TrackBrandEvent(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	visitorID := strings.TrimSpace(req.VisitorID)
-	if visitorID == "" {
-		visitorID = hashIP(getClientIP(r))
-	}
+	visitorID := truncateStr(firstNonEmptyStr(req.VisitorID, r.Header.Get(headerVisitorID), hashIP(getClientIP(r))), 64)
 	userID := resolveAuthenticatedMemberID(r, req.AuthToken)
 	countryCode, langCode := resolveVisitorCountryAndLang(r, req.CountryCode, req.Language)
 	deviceType, _, _ := parseDeviceAndBrowser(r.UserAgent(), 0)

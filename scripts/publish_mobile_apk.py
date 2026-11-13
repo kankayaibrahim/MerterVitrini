@@ -134,6 +134,12 @@ def main() -> int:
     parser.add_argument("--base-url", default="https://mertervitrini.com.tr", help="Public base URL")
     parser.add_argument("--notes-tr", default="", help="Turkish release notes")
     parser.add_argument("--notes-en", default="", help="English release notes")
+    parser.add_argument("--notes-ru", default="", help="Russian release notes")
+    parser.add_argument("--notes-ar", default="", help="Arabic release notes")
+    parser.add_argument("--notes-de", default="", help="German release notes")
+    parser.add_argument("--notes-fr", default="", help="French release notes")
+    parser.add_argument("--notes-pl", default="", help="Polish release notes")
+    parser.add_argument("--notes-bg", default="", help="Bulgarian release notes")
     parser.add_argument("--min-build", type=int, default=1, help="Minimum supported build number")
     parser.add_argument("--force", action="store_true", help="Mark update as forced")
     parser.add_argument("--local-only", action="store_true", help="Only generate local manifest without SFTP upload")
@@ -159,6 +165,30 @@ def main() -> int:
         "Luxury editorial storefront, vector country flags, B2B series ordering, "
         "live supplier chat, and automatic in-app OTA self-update support."
     )
+    notes_ru = args.notes_ru.strip() or (
+        f"Merter Vitrini v{version_name} (#{build_number}) — "
+        "Обновление оптовой B2B-витрины, заказы сериями, живой чат с поставщиком и поддержка автообновления."
+    )
+    notes_ar = args.notes_ar.strip() or (
+        f"Merter Vitrini v{version_name} (#{build_number}) — "
+        "تحديث متجر الجملة والطلب بالـسيريا والدردشة المباشرة مع الموردين ودعم التحديث التلقائي."
+    )
+    notes_de = args.notes_de.strip() or (
+        f"Merter Vitrini v{version_name} (#{build_number}) — "
+        "B2B-Großhandels-Update mit Serienbestellung, Live-Lieferantenchat und automatischem OTA-Update."
+    )
+    notes_fr = args.notes_fr.strip() or (
+        f"Merter Vitrini v{version_name} (#{build_number}) — "
+        "Mise à jour de la boutique B2B, commandes par séries, chat fournisseur en direct et mise à jour OTA."
+    )
+    notes_pl = args.notes_pl.strip() or (
+        f"Merter Vitrini v{version_name} (#{build_number}) — "
+        "Aktualizacja hurtowni B2B, zamówienia seriami, czat z dostawcą i automatyczna aktualizacja OTA."
+    )
+    notes_bg = args.notes_bg.strip() or (
+        f"Merter Vitrini v{version_name} (#{build_number}) — "
+        "Актуализация на B2B витрината, поръчки на серии, директен чат с доставчици и автоматично OTA обновяване."
+    )
 
     now_iso = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
 
@@ -180,8 +210,12 @@ def main() -> int:
         "release_notes": {
             "tr": notes_tr,
             "en": notes_en,
-            "ru": f"Merter Vitrini v{version_name} (#{build_number}) — Обновление B2B витрины и поддержка автообновления.",
-            "ar": f"Merter Vitrini v{version_name} (#{build_number}) — تحديث متجر الجملة ودعم التحديث التلقائي.",
+            "ru": notes_ru,
+            "ar": notes_ar,
+            "de": notes_de,
+            "fr": notes_fr,
+            "pl": notes_pl,
+            "bg": notes_bg,
         },
     }
 

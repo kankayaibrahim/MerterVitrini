@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_theme.dart';
+import '../../core/currency_formatter.dart';
+import '../../core/localization.dart';
 import '../../models/chat.dart';
 import '../../models/product.dart';
+import '../../models/user.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/session_provider.dart';
+import '../../widgets/editorial_ui.dart';
 import '../../widgets/luxury_icons.dart';
 import '../../widgets/smart_network_image.dart';
 import '../auth/auth_screen.dart';
 import '../chat/chat_conversation_screen.dart';
+import 'direct_inquiry_sheet.dart';
+import 'manufacturers_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String productId;
@@ -26,7 +31,6 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   final PageController _pageController = PageController();
-  final FocusNode _galleryFocusNode = FocusNode();
 
   Product? _product;
   bool _loading = true;
@@ -38,13 +42,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadProduct(widget.productId);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProduct(widget.productId);
+    });
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    _galleryFocusNode.dispose();
     super.dispose();
   }
 
@@ -70,18 +75,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     if (_pageController.hasClients) {
       _pageController.jumpToPage(0);
     }
+    final session = context.read<SessionProvider>();
     try {
-      final prod = await context.read<SessionProvider>().api.fetchProductDetail(
-            id,
-          );
+      final prod = await session.api.fetchProductDetail(id);
       if (!mounted) return;
       setState(() {
         _product = prod;
         _packagesQty = prod.minOrderPackages;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _galleryFocusNode.requestFocus();
-      });
+      await session.telemetry.trackScreenView(
+        path: '/product/${prod.slug.isNotEmpty ? prod.slug : prod.id}',
+        pageTitle: prod.localizedTitle(session.languageCode),
+      );
+      if (prod.brandId.isNotEmpty) {
+        await session.telemetry.trackBrandEvent(
+          brandId: prod.brandId,
+          eventType: 'product_view',
+          productId: prod.id,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -92,9 +104,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _addToCart() async {
     final session = context.read<SessionProvider>();
+    final lang = session.languageCode;
     if (!session.canViewPrices) {
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
+        MaterialPageRoute<void>(
+          builder: (_) => const AuthScreen(initialRole: AppRole.customer),
+        ),
       );
       return;
     }
@@ -104,11 +119,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     try {
       await context.read<CartProvider>().addProductPackages(p, _packagesQty);
       if (!mounted) return;
+      final totalUnits = _packagesQty * p.unitsPerPackage;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.obsidian,
           content: Text(
-            '$_packagesQty Seri (${_packagesQty * p.unitsPerPackage} Adet) toptan sepetinize eklendi.',
+            UiText.seriesQuickAdded(lang, _packagesQty, totalUnits),
+            style: const TextStyle(color: Colors.white),
           ),
         ),
       );
@@ -127,6 +144,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   Future<void> _openSupplierChatSelector() async {
     final session = context.read<SessionProvider>();
+    final lang = session.languageCode;
     if (!session.isMemberLoggedIn) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
@@ -158,25 +176,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppColors.radiusLg),
+        ),
+      ),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
                     child: Text(
-                      '${p.maskedBrandName.toUpperCase()} SATIŞ TEMSİLCİSİ',
-                      style: const TextStyle(
+                      p.maskedBrandName.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
                         fontFamily: AppColors.serifFontFamily,
                         fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.4,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: AppStrings.letterSpacing(lang, 1.0),
                         color: AppColors.obsidian,
                       ),
                     ),
@@ -188,48 +211,39 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 2),
-              const Text(
-                'Dil tercihinize uygun müşteri temsilcisiyle canlı B2B pazarlığa başlayın:',
-                style: TextStyle(fontSize: 12, color: AppColors.sonicSilver),
+              const SizedBox(height: 4),
+              Text(
+                AppStrings.t(lang, 'live_chat'),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.sonicSilver,
+                ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               const Divider(height: 1),
               ...agents.map(
                 (a) => ListTile(
                   contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.obsidian,
-                      border: Border.all(
-                        color: AppColors.champagneGold.withValues(alpha: 0.6),
-                      ),
-                    ),
-                    alignment: Alignment.center,
+                  leading: CircleAvatar(
+                    backgroundColor: AppColors.warmIvory,
                     child: Text(
                       a.contactName.isNotEmpty
                           ? a.contactName.characters.first.toUpperCase()
-                          : 'T',
+                          : 'S',
                       style: const TextStyle(
-                        fontFamily: AppColors.serifFontFamily,
-                        color: Colors.white,
+                        color: AppColors.obsidian,
                         fontWeight: FontWeight.w800,
-                        fontSize: 15,
                       ),
                     ),
                   ),
                   title: Text(
                     a.contactName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13.5,
-                      color: AppColors.obsidian,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   subtitle: Text(
-                    '${a.jobTitle} • Diller: ${a.spokenLanguages}',
+                    '${a.jobTitle} • ${a.spokenLanguages}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11.5,
                       color: AppColors.sonicSilver,
@@ -290,6 +304,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  void _openBrandShowcase(Product p) {
+    final slugOrId = (p.brandProfile != null && p.brandProfile!.slug.isNotEmpty)
+        ? p.brandProfile!.slug
+        : p.brandId;
+    if (slugOrId.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ManufacturerDetailScreen(
+          slugOrId: slugOrId,
+          initialSummary: p.brandProfile,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = context.watch<SessionProvider>();
@@ -297,1112 +326,447 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final p = _product;
     final wishlisted = p != null && session.isWishlisted(p.id);
 
-    final hasDiscount = p != null &&
-        p.discountedPrice != null &&
-        p.discountedPrice! > 0 &&
-        p.discountedPrice! < p.price;
+    final galleryUrls = p == null
+        ? const <String>[]
+        : (p.images.isNotEmpty
+            ? p.images.map((e) => e.imageUrl).where((u) => u.isNotEmpty).toList()
+            : [if (p.coverImageUrl.isNotEmpty) p.coverImageUrl]);
+
+    final ratioText = p == null
+        ? ''
+        : (p.seriesRatio.trim().isNotEmpty
+            ? p.seriesRatio.trim()
+            : p.packingRatio.trim());
 
     final specs = <(String, String)>[
-      if (p != null && p.fabric.trim().isNotEmpty) ('KUMAŞ', p.fabric.trim()),
-      if (p != null && p.color.trim().isNotEmpty) ('RENK', p.color.trim()),
+      if (p != null && p.fabric.trim().isNotEmpty)
+        (AppStrings.tUpper(lang, 'fabric'), p.fabric.trim()),
+      if (p != null && p.color.trim().isNotEmpty)
+        (AppStrings.tUpper(lang, 'color'), p.color.trim()),
       if (p != null && p.gender.trim().isNotEmpty)
-        ('KOLEKSİYON', p.gender.trim()),
-      if (p != null && p.season.trim().isNotEmpty) ('SEZON', p.season.trim()),
+        (AppStrings.tUpper(lang, 'gender'), p.gender.trim()),
+      if (p != null && p.season.trim().isNotEmpty)
+        (AppStrings.tUpper(lang, 'season'), p.season.trim()),
+      if (p != null && p.customSku.trim().isNotEmpty)
+        (AppStrings.tUpper(lang, 'sku'), p.customSku.trim()),
+      if (p != null)
+        (
+          AppStrings.tUpper(lang, 'series'),
+          '${p.unitsPerPackage} ${AppStrings.t(lang, 'piece')} ($ratioText)',
+        ),
     ];
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(56),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: AppColors.cultured)),
-          ),
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  InkWell(
-                    onTap: () => Navigator.of(context).maybePop(),
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: AppColors.cultured),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.arrow_back_rounded,
-                        size: 18,
-                        color: AppColors.obsidian,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (p != null)
-                          Text(
-                            p.maskedBrandName.toUpperCase(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.8,
-                              color: AppColors.editorialGold,
-                            ),
-                          ),
-                        Text(
-                          p?.localizedTitle(lang) ?? 'ÜRÜN DETAYI',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.obsidian,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (p != null) ...[
-                    const SizedBox(width: 8),
-                    InkWell(
-                      onTap: () => session.toggleWishlist(p),
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: wishlisted ? AppColors.obsidian : Colors.white,
-                          border: Border.all(
-                            color: wishlisted
-                                ? AppColors.obsidian
-                                : AppColors.cultured,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: LuxuryIcon(
-                          kind: LuxuryIconKind.heart,
-                          size: 16,
-                          active: wishlisted,
-                          color: wishlisted ? Colors.white : AppColors.obsidian,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    InkWell(
-                      onTap: () {
-                        SharePlus.instance.share(
-                          ShareParams(
-                            text:
-                                '${p.title} (${p.customSku}) - https://mertervitrini.com.tr/product/${p.slug}',
-                          ),
-                        );
-                      },
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(color: AppColors.cultured),
-                        ),
-                        alignment: Alignment.center,
-                        child: const LuxuryIcon(
-                          kind: LuxuryIconKind.share,
-                          size: 16,
-                          color: AppColors.obsidian,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+      backgroundColor: AppColors.warmIvory,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.obsidian,
+        title: Text(
+          p?.maskedBrandName.toUpperCase() ??
+              AppStrings.tUpper(lang, 'wholesale_series'),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: AppColors.serifFontFamily,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: AppStrings.letterSpacing(lang, 1.0),
           ),
         ),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1),
+        ),
+        actions: [
+          if (p != null) ...[
+            IconButton(
+              onPressed: () {
+                final shareUrl = p.slug.isNotEmpty
+                    ? 'https://mertervitrini.com.tr/product/${p.slug}'
+                    : 'https://mertervitrini.com.tr';
+                SharePlus.instance.share(
+                  ShareParams(
+                    text: '${p.localizedTitle(lang)} — $shareUrl',
+                  ),
+                );
+              },
+              icon: const LuxuryIcon(
+                kind: LuxuryIconKind.share,
+                size: 18,
+                color: AppColors.obsidian,
+              ),
+            ),
+            IconButton(
+              onPressed: () => session.toggleWishlist(p),
+              icon: LuxuryIcon(
+                kind: LuxuryIconKind.heart,
+                size: 18,
+                active: wishlisted,
+                color: wishlisted ? AppColors.discountRed : AppColors.obsidian,
+                accentColor: AppColors.discountRed,
+              ),
+            ),
+          ],
+        ],
       ),
-      body: _loading
+      body: _loading && p == null
           ? const Center(
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 color: AppColors.obsidian,
               ),
             )
-          : (_error != null || p == null)
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(_error ?? 'Ürün bulunamadı.'),
-                  ),
+          : _error != null && p == null
+              ? EditorialEmptyState(
+                  icon: Icons.error_outline_rounded,
+                  title: AppStrings.t(lang, 'error'),
+                  subtitle: _error!,
+                  actionLabel: AppStrings.t(lang, 'retry'),
+                  onAction: () => _loadProduct(widget.productId),
                 )
-              : CallbackShortcuts(
-                  bindings: <ShortcutActivator, VoidCallback>{
-                    const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-                        _goToImage(_activeImageIdx - 1, p.images.length),
-                    const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-                        _goToImage(_activeImageIdx + 1, p.images.length),
-                  },
-                  child: Focus(
-                    focusNode: _galleryFocusNode,
-                    autofocus: true,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.only(bottom: 120),
+              : p == null
+                  ? const SizedBox.shrink()
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.only(bottom: 24),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 1. Tall Editorial Gallery Frame
-                          Container(
-                            height: MediaQuery.sizeOf(context).width > 560
-                                ? 540
-                                : (MediaQuery.sizeOf(context).width * 1.28)
-                                    .clamp(480.0, 580.0),
-                            decoration: const BoxDecoration(
-                              color: AppColors.editorialOffWhite,
-                              border: Border(
-                                bottom: BorderSide(color: AppColors.cultured),
-                              ),
-                            ),
-                            child: Stack(
-                              children: [
-                                PageView.builder(
-                                  controller: _pageController,
-                                  physics: const BouncingScrollPhysics(),
-                                  itemCount: p.images.isNotEmpty
-                                      ? p.images.length
-                                      : 1,
-                                  onPageChanged: (i) =>
-                                      setState(() => _activeImageIdx = i),
-                                  itemBuilder: (context, index) {
-                                    final url = p.images.isNotEmpty
-                                        ? p.images[index].imageUrl
-                                        : '';
-                                    final isWide =
-                                        MediaQuery.sizeOf(context).width > 560;
-                                    return InteractiveViewer(
-                                      panEnabled: false,
-                                      minScale: 1.0,
-                                      maxScale: 3.0,
-                                      child: SmartNetworkImage(
-                                        imageUrl: url,
-                                        fit: isWide
-                                            ? BoxFit.contain
-                                            : BoxFit.cover,
+                          // 1. Multi-Image Editorial Carousel
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                            child: ClipRRect(
+                              borderRadius:
+                                  BorderRadius.circular(AppColors.radiusLg),
+                              child: Container(
+                                color: AppColors.editorialOffWhite,
+                                height: 390,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    if (galleryUrls.isEmpty)
+                                      const SmartNetworkImage(
+                                        imageUrl: '',
+                                        fit: BoxFit.cover,
+                                      )
+                                    else
+                                      PageView.builder(
+                                        controller: _pageController,
+                                        itemCount: galleryUrls.length,
+                                        onPageChanged: (idx) => setState(
+                                          () => _activeImageIdx = idx,
+                                        ),
+                                        itemBuilder: (context, index) =>
+                                            SmartNetworkImage(
+                                          imageUrl: galleryUrls[index],
+                                          fit: BoxFit.cover,
+                                        ),
                                       ),
-                                    );
-                                  },
+                                    if (galleryUrls.length > 1) ...[
+                                      Positioned(
+                                        left: 10,
+                                        top: 0,
+                                        bottom: 0,
+                                        child: Center(
+                                          child: _CarouselArrowButton(
+                                            icon: Icons.chevron_left_rounded,
+                                            onTap: () => _goToImage(
+                                              _activeImageIdx - 1,
+                                              galleryUrls.length,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        right: 10,
+                                        top: 0,
+                                        bottom: 0,
+                                        child: Center(
+                                          child: _CarouselArrowButton(
+                                            icon: Icons.chevron_right_rounded,
+                                            onTap: () => _goToImage(
+                                              _activeImageIdx + 1,
+                                              galleryUrls.length,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: 12,
+                                        left: 0,
+                                        right: 0,
+                                        child: Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.5,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(99),
+                                            ),
+                                            child: Text(
+                                              '${_activeImageIdx + 1} / ${galleryUrls.length}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                                if (p.images.length > 1) ...[
-                                  Positioned(
-                                    left: 12,
-                                    top: 0,
-                                    bottom: 0,
-                                    child: Center(
-                                      child: _GalleryNavButton(
-                                        icon: Icons.chevron_left_rounded,
-                                        tooltip: 'Önceki Görsel (←)',
-                                        onPressed: () => _goToImage(
-                                          _activeImageIdx - 1,
-                                          p.images.length,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    right: 12,
-                                    top: 0,
-                                    bottom: 0,
-                                    child: Center(
-                                      child: _GalleryNavButton(
-                                        icon: Icons.chevron_right_rounded,
-                                        tooltip: 'Sonraki Görsel (→)',
-                                        onPressed: () => _goToImage(
-                                          _activeImageIdx + 1,
-                                          p.images.length,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  Positioned(
-                                    bottom: 14,
-                                    right: 14,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 5,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.obsidian
-                                            .withValues(alpha: 0.88),
-                                        border: Border.all(
-                                          color: AppColors.champagneGold
-                                              .withValues(alpha: 0.55),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '${_activeImageIdx + 1} / ${p.images.length}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: 1.2,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
+                              ),
                             ),
                           ),
 
-                          // 2. Architectural Portrait Thumbnail Strip
-                          if (p.images.length > 1)
-                            Container(
-                              color: Colors.white,
-                              padding:
-                                  const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                              child: SizedBox(
-                                height: 70,
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: p.images.length,
-                                  separatorBuilder: (context, index) =>
-                                      const SizedBox(width: 8),
-                                  itemBuilder: (context, index) {
-                                    final selected = index == _activeImageIdx;
-                                    return GestureDetector(
-                                      onTap: () =>
-                                          _goToImage(index, p.images.length),
-                                      child: AnimatedContainer(
-                                        duration:
-                                            const Duration(milliseconds: 160),
-                                        padding: const EdgeInsets.all(2),
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: selected
-                                                ? AppColors.obsidian
-                                                : AppColors.cultured,
-                                            width: selected ? 2.0 : 1.0,
-                                          ),
-                                        ),
-                                        child: SmartNetworkImage(
-                                          imageUrl: p.images[index].imageUrl,
-                                          width: 52,
-                                          height: 64,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-
-                          // 3. Product Editorial Body
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                            padding: const EdgeInsets.all(12),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // Masked Brand Crest Pill + SKU
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4.5,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.editorialIvory,
-                                        border: Border.all(
-                                          color: AppColors.champagneGold
-                                              .withValues(alpha: 0.55),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        p.maskedBrandName.toUpperCase(),
-                                        style: const TextStyle(
-                                          color: AppColors.obsidian,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 10,
-                                          letterSpacing: 1.6,
-                                        ),
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.editorialOffWhite,
-                                        border: Border.all(
-                                          color: AppColors.cultured,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'SKU: ${p.customSku}',
-                                        style: const TextStyle(
-                                          color: AppColors.sonicSilver,
-                                          fontSize: 10.5,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.6,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  p.localizedTitle(lang),
-                                  style: const TextStyle(
-                                    fontFamily: AppColors.serifFontFamily,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.obsidian,
-                                    height: 1.25,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-
-                                // 4. Couture Wholesale Series & Pack Calculator
-                                Container(
+                                // 2. Title + Price / Guest Lock + Series Stepper Card
+                                EditorialCard(
                                   padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.editorialOffWhite,
-                                    border:
-                                        Border.all(color: AppColors.cultured),
-                                  ),
+                                  borderRadius: AppColors.radiusLg,
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      if (session.canViewPrices)
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: [
+                                          EditorialBadge(
+                                            label:
+                                                '${p.unitsPerPackage} ${AppStrings.t(lang, 'piece')} • $ratioText',
+                                            backgroundColor:
+                                                AppColors.warmIvory,
+                                            languageCode: lang,
+                                          ),
+                                          EditorialBadge(
+                                            label: p.stock > 0
+                                                ? '${AppStrings.t(lang, 'in_stock')} (${p.seriesStock})'
+                                                : AppStrings.t(
+                                                    lang,
+                                                    'out_of_stock',
+                                                  ),
+                                            backgroundColor: p.stock > 0
+                                                ? AppColors.emeraldLight
+                                                : AppColors.dangerLight,
+                                            textColor: p.stock > 0
+                                                ? AppColors.emerald
+                                                : AppColors.danger,
+                                            languageCode: lang,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        p.localizedTitle(lang),
+                                        style: const TextStyle(
+                                          fontFamily: AppColors.serifFontFamily,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.obsidian,
+                                          height: 1.25,
+                                        ),
+                                      ),
+                                      if (p
+                                          .localizedShortDescription(lang)
+                                          .isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          p.localizedShortDescription(lang),
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: AppColors.sonicSilver,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                      const Divider(height: 22),
+
+                                      if (session.canViewPrices) ...[
                                         Row(
                                           crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                              CrossAxisAlignment.end,
                                           children: [
                                             Expanded(
                                               child: Column(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
-                                                  const Text(
-                                                    'BİRİM TOPTAN FİYATI',
-                                                    style: TextStyle(
+                                                  Text(
+                                                    AppStrings.tUpper(
+                                                      lang,
+                                                      'pack_price',
+                                                    ),
+                                                    style: const TextStyle(
                                                       fontSize: 9.5,
-                                                      fontWeight: FontWeight.w800,
-                                                      letterSpacing: 1.1,
-                                                      color:
-                                                          AppColors.sonicSilver,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: AppColors
+                                                          .sonicSilver,
                                                     ),
                                                   ),
-                                                  const SizedBox(height: 4),
-                                                  if (hasDiscount)
-                                                    Text(
-                                                      session.formatPrice(
-                                                        p.price,
-                                                        sourceCurrency:
-                                                            p.currency,
-                                                      ),
-                                                      style: const TextStyle(
-                                                        fontSize: 12,
-                                                        color: AppColors
-                                                            .spanishGray,
-                                                        decoration: TextDecoration
-                                                            .lineThrough,
-                                                      ),
-                                                    ),
+                                                  const SizedBox(height: 2),
                                                   Text(
-                                                    session.formatPrice(
-                                                      p.effectiveUnitPrice,
-                                                      sourceCurrency: p.currency,
-                                                    ),
-                                                    style: TextStyle(
-                                                      fontSize: 23,
-                                                      fontWeight: FontWeight.w900,
-                                                      color: hasDiscount
-                                                          ? AppColors.discountRed
-                                                          : AppColors.obsidian,
-                                                      letterSpacing: -0.3,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 13,
-                                                vertical: 10,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.obsidian,
-                                                border: Border.all(
-                                                  color: AppColors.champagneGold
-                                                      .withValues(alpha: 0.65),
-                                                ),
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.end,
-                                                children: [
-                                                  Text(
-                                                    '1 SERİ (${p.unitsPerPackage} ADET)',
-                                                    style: const TextStyle(
-                                                      fontSize: 9,
-                                                      fontWeight: FontWeight.w800,
-                                                      letterSpacing: 1.0,
-                                                      color:
-                                                          AppColors.champagneGold,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 3),
-                                                  Text(
-                                                    session.formatPrice(
+                                                    CurrencyFormatter.format(
                                                       p.packageTotalPrice,
-                                                      sourceCurrency: p.currency,
+                                                      currency:
+                                                          session.currencyCode,
+                                                      ratesToTry:
+                                                          session.exchangeRates,
+                                                      sourceCurrency:
+                                                          p.currency,
                                                     ),
                                                     style: const TextStyle(
-                                                      fontSize: 16.5,
-                                                      fontWeight: FontWeight.w900,
-                                                      color: Colors.white,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      else
-                                        InkWell(
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute<void>(
-                                                builder: (_) =>
-                                                    const AuthScreen(),
-                                              ),
-                                            );
-                                          },
-                                          child: Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 14,
-                                              vertical: 12,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.obsidian,
-                                              border: Border.all(
-                                                color: AppColors.champagneGold
-                                                    .withValues(alpha: 0.65),
-                                              ),
-                                            ),
-                                            child: const Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.center,
-                                              children: [
-                                                Icon(
-                                                  Icons.lock_outline_rounded,
-                                                  size: 16,
-                                                  color:
-                                                      AppColors.champagneGold,
-                                                ),
-                                                SizedBox(width: 8),
-                                                Flexible(
-                                                  child: Text(
-                                                    'FİYATLARI GÖRMEK İÇİN GİRİŞ YAPIN / ÜYE OLUN',
-                                                    style: TextStyle(
-                                                      fontSize: 11,
+                                                      fontSize: 22,
                                                       fontWeight:
                                                           FontWeight.w900,
-                                                      color: Colors.white,
-                                                      letterSpacing: 0.8,
+                                                      color: AppColors.obsidian,
                                                     ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  AppStrings.tUpper(
+                                                    lang,
+                                                    'unit_price',
+                                                  ),
+                                                  style: const TextStyle(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.w800,
+                                                    color:
+                                                        AppColors.sonicSilver,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  session.formatPrice(
+                                                    p.effectiveUnitPrice,
+                                                    sourceCurrency: p.currency,
+                                                  ),
+                                                  style: const TextStyle(
+                                                    fontSize: 14.5,
+                                                    fontWeight: FontWeight.w800,
+                                                    color:
+                                                        AppColors.editorialGold,
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                          ),
-                                        ),
-                                      const SizedBox(height: 14),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 9,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          border: Border.all(
-                                            color: AppColors.cultured,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text(
-                                                    'SERİ DAĞILIMI',
-                                                    style: TextStyle(
-                                                      fontSize: 8.5,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      letterSpacing: 1.0,
-                                                      color: AppColors
-                                                          .spanishGray,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    p.seriesRatio.isNotEmpty
-                                                        ? p.seriesRatio
-                                                        : (p.packingRatio
-                                                                .isNotEmpty
-                                                            ? p.packingRatio
-                                                            : 'STANDART'),
-                                                    style: const TextStyle(
-                                                      fontSize: 12.5,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      color: AppColors.obsidian,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            Container(
-                                              width: 1,
-                                              height: 26,
-                                              color: AppColors.cultured,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text(
-                                                    'MİNİMUM SİPARİŞ',
-                                                    style: TextStyle(
-                                                      fontSize: 8.5,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      letterSpacing: 1.0,
-                                                      color: AppColors
-                                                          .spanishGray,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    '${p.minOrderPackages} Seri (${p.minOrderUnits} Adet)',
-                                                    style: const TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      color: AppColors.obsidian,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
                                           ],
                                         ),
-                                      ),
-                                      const SizedBox(height: 14),
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                        const SizedBox(height: 14),
+                                        // Series Quantity Stepper
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.warmIvory,
+                                            borderRadius: BorderRadius.circular(
+                                              AppColors.radiusSm,
+                                            ),
+                                            border: Border.all(
+                                              color: AppColors.cultured,
+                                            ),
+                                          ),
+                                          child: Row(
                                             children: [
-                                              const Text(
-                                                'SİPARİŞ SERİ ADEDİ',
-                                                style: TextStyle(
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.w800,
-                                                  letterSpacing: 1.0,
-                                                  color: AppColors.obsidian,
+                                              Expanded(
+                                                child: Text(
+                                                  '${AppStrings.t(lang, 'wholesale_series')} (${p.minOrderPackages}+ ${AppStrings.t(lang, 'package')})',
+                                                  style: const TextStyle(
+                                                    fontSize: 12.2,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppColors.obsidian,
+                                                  ),
                                                 ),
                                               ),
-                                              const SizedBox(height: 2),
+                                              IconButton(
+                                                onPressed: _packagesQty >
+                                                        p.minOrderPackages
+                                                    ? () => setState(
+                                                        () => _packagesQty--)
+                                                    : null,
+                                                icon: const Icon(
+                                                  Icons.remove_circle_outline,
+                                                ),
+                                              ),
                                               Text(
-                                                '$_packagesQty Seri × ${p.unitsPerPackage} Adet = ${_packagesQty * p.unitsPerPackage} Adet',
+                                                '$_packagesQty',
                                                 style: const TextStyle(
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: AppColors.editorialGold,
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                onPressed: () => setState(
+                                                  () => _packagesQty++,
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.add_circle_outline,
                                                 ),
                                               ),
                                             ],
                                           ),
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              border: Border.all(
-                                                color: AppColors.obsidian,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                InkWell(
-                                                  onTap: _packagesQty >
-                                                          p.minOrderPackages
-                                                      ? () => setState(
-                                                            () =>
-                                                                _packagesQty--,
-                                                          )
-                                                      : null,
-                                                  child: Container(
-                                                    width: 36,
-                                                    height: 36,
-                                                    alignment: Alignment.center,
-                                                    child: Icon(
-                                                      Icons.remove,
-                                                      size: 16,
-                                                      color: _packagesQty >
-                                                              p.minOrderPackages
-                                                          ? AppColors.obsidian
-                                                          : AppColors
-                                                              .spanishGray,
-                                                    ),
-                                                  ),
-                                                ),
-                                                Container(
-                                                  constraints:
-                                                      const BoxConstraints(
-                                                    minWidth: 78,
-                                                  ),
-                                                  height: 36,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 12,
-                                                  ),
-                                                  decoration:
-                                                      const BoxDecoration(
-                                                    border: Border.symmetric(
-                                                      vertical: BorderSide(
-                                                        color:
-                                                            AppColors.cultured,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  alignment: Alignment.center,
-                                                  child: Text(
-                                                    '$_packagesQty SERİ',
-                                                    style: const TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight:
-                                                          FontWeight.w900,
-                                                      letterSpacing: 0.6,
-                                                      color: AppColors.obsidian,
-                                                    ),
-                                                  ),
-                                                ),
-                                                InkWell(
-                                                  onTap: () => setState(
-                                                    () => _packagesQty++,
-                                                  ),
-                                                  child: Container(
-                                                    width: 36,
-                                                    height: 36,
-                                                    alignment: Alignment.center,
-                                                    child: const Icon(
-                                                      Icons.add,
-                                                      size: 16,
-                                                      color: AppColors.obsidian,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // 5. Color Variants ("DİĞER RENK SEÇENEKLERİ")
-                                if (p.colorVariants.isNotEmpty) ...[
-                                  const SizedBox(height: 22),
-                                  const Text(
-                                    'DİĞER RENK SEÇENEKLERİ',
-                                    style: TextStyle(
-                                      fontFamily: AppColors.serifFontFamily,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12.5,
-                                      letterSpacing: 1.5,
-                                      color: AppColors.obsidian,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  SizedBox(
-                                    height: 96,
-                                    child: ListView.separated(
-                                      scrollDirection: Axis.horizontal,
-                                      itemCount: p.colorVariants.length,
-                                      separatorBuilder: (context, index) =>
-                                          const SizedBox(width: 10),
-                                      itemBuilder: (context, index) {
-                                        final sib = p.colorVariants[index];
-                                        return GestureDetector(
-                                          onTap: () => _loadProduct(sib.id),
-                                          child: SizedBox(
-                                            width: 64,
-                                            child: Column(
-                                              children: [
-                                                Container(
-                                                  decoration: BoxDecoration(
-                                                    border: Border.all(
-                                                      color: AppColors.cultured,
-                                                    ),
-                                                  ),
-                                                  child: SmartNetworkImage(
-                                                    imageUrl: sib.imageUrl,
-                                                    width: 62,
-                                                    height: 72,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  sib.color.toUpperCase(),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontSize: 9.5,
-                                                    fontWeight: FontWeight.w700,
-                                                    letterSpacing: 0.4,
-                                                    color: AppColors.onyx,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-
-                                // 6. Concierge Live Supplier Negotiation CTA
-                                const SizedBox(height: 18),
-                                InkWell(
-                                  onTap: _openSupplierChatSelector,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.editorialIvory,
-                                      border: Border.all(
-                                        color: AppColors.champagneGold
-                                            .withValues(alpha: 0.65),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 38,
-                                          height: 38,
-                                          color: AppColors.obsidian,
-                                          alignment: Alignment.center,
-                                          child: const LuxuryIcon(
-                                            kind: LuxuryIconKind.concierge,
-                                            size: 18,
-                                            color: Colors.white,
-                                            accentColor:
-                                                AppColors.champagneGold,
-                                          ),
                                         ),
-                                        const SizedBox(width: 12),
-                                        const Expanded(
+                                      ] else ...[
+                                        // Localized Guest Members-Only Unlock Card
+                                        Container(
+                                          padding: const EdgeInsets.all(14),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.warmIvory,
+                                            borderRadius: BorderRadius.circular(
+                                              AppColors.radiusMd,
+                                            ),
+                                            border: Border.all(
+                                              color: AppColors.champagneGold
+                                                  .withValues(alpha: 0.6),
+                                            ),
+                                          ),
                                           child: Column(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                'TEDARİKÇİYE SOR / ÖZEL SERİ TEKLİFİ İSTE',
-                                                style: TextStyle(
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.w800,
-                                                  letterSpacing: 0.9,
-                                                  color: AppColors.obsidian,
-                                                ),
-                                              ),
-                                              SizedBox(height: 2),
-                                              Text(
-                                                'Üretici temsilcisiyle canlı pazarlık ve stok teyidi başlatın',
-                                                style: TextStyle(
-                                                  fontSize: 11.5,
-                                                  color: AppColors.sonicSilver,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const Icon(
-                                          Icons.arrow_forward_rounded,
-                                          size: 17,
-                                          color: AppColors.editorialGold,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-
-                                const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.editorialOffWhite,
-                                    border: Border.all(color: AppColors.cultured),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          const Icon(
-                                            Icons.verified_rounded,
-                                            size: 15,
-                                            color: AppColors.emerald,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              'ÜRETİCİ FİRMA: ${p.maskedBrandName.toUpperCase()}',
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w800,
-                                                letterSpacing: 0.8,
-                                                color: AppColors.obsidian,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      const Text(
-                                        'Doğrudan Üretici / Toptancı • %0 Komisyon Fabrika Çıkış Fiyatı',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.sonicSilver,
-                                        ),
-                                      ),
-                                      if (p.brandPhone.isNotEmpty ||
-                                          p.brandWhatsapp.isNotEmpty) ...[
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          'Doğrudan Tel / WhatsApp: ${p.brandWhatsapp.isNotEmpty ? p.brandWhatsapp : p.brandPhone}',
-                                          style: const TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.obsidian,
-                                          ),
-                                        ),
-                                      ],
-                                      if (p.brandEmail.isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'E-posta: ${p.brandEmail}',
-                                          style: const TextStyle(
-                                            fontSize: 11.5,
-                                            color: AppColors.sonicSilver,
-                                          ),
-                                        ),
-                                      ],
-                                      if (p.brandAddress.isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Merter Adres: ${p.brandAddress}',
-                                          style: const TextStyle(
-                                            fontSize: 11.5,
-                                            color: AppColors.sonicSilver,
-                                          ),
-                                        ),
-                                      ],
-                                      if (p.brandIban.isNotEmpty) ...[
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          'Doğrudan Havale IBAN (${p.brandBankName.isNotEmpty ? p.brandBankName : "Banka"}): ${p.brandIban}',
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.obsidian,
-                                          ),
-                                        ),
-                                      ],
-                                      const SizedBox(height: 10),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor:
-                                                    AppColors.emerald,
-                                                foregroundColor: Colors.white,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  vertical: 10,
-                                                  horizontal: 10,
-                                                ),
-                                              ),
-                                              onPressed: () {
-                                                final rawWa =
-                                                    p.brandWhatsapp.isNotEmpty
-                                                        ? p.brandWhatsapp
-                                                        : p.brandPhone;
-                                                var digits = rawWa.replaceAll(
-                                                  RegExp(r'\D'),
-                                                  '',
-                                                );
-                                                if (digits.startsWith('0') &&
-                                                    digits.length == 11) {
-                                                  digits =
-                                                      '90${digits.substring(1)}';
-                                                } else if (digits.length ==
-                                                        10 &&
-                                                    digits.startsWith('5')) {
-                                                  digits = '90$digits';
-                                                }
-                                                final msg =
-                                                    'Merhaba ${p.maskedBrandName},\nMerter Vitrini üzerindeki ${p.localizedTitle(lang)} (SKU: ${p.customSku}) ürününüz hakkında doğrudan iletişime geçmek ve $_packagesQty Seri sipariş vermek istiyorum.';
-                                                final url = digits.isNotEmpty
-                                                    ? 'https://wa.me/$digits?text=${Uri.encodeComponent(msg)}'
-                                                    : 'https://wa.me/?text=${Uri.encodeComponent(msg)}';
-                                                launchUrl(
-                                                  Uri.parse(url),
-                                                  mode: LaunchMode
-                                                      .externalApplication,
-                                                );
-                                              },
-                                              icon: const Icon(
-                                                Icons.chat_rounded,
-                                                size: 15,
-                                              ),
-                                              label: const Text(
-                                                'WHATSAPP İLE TEDARİKÇİYE YAZ',
-                                                style: TextStyle(
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          if (p.brandPhone.isNotEmpty ||
-                                              p.brandWhatsapp.isNotEmpty) ...[
-                                            const SizedBox(width: 8),
-                                            OutlinedButton.icon(
-                                              style: OutlinedButton.styleFrom(
-                                                foregroundColor:
-                                                    AppColors.obsidian,
-                                                side: const BorderSide(
-                                                  color: AppColors.obsidian,
-                                                ),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  vertical: 10,
-                                                  horizontal: 10,
-                                                ),
-                                              ),
-                                              onPressed: () {
-                                                final callNo =
-                                                    p.brandPhone.isNotEmpty
-                                                        ? p.brandPhone
-                                                        : p.brandWhatsapp;
-                                                launchUrl(
-                                                  Uri.parse('tel:$callNo'),
-                                                );
-                                              },
-                                              icon: const Icon(
-                                                Icons.phone_in_talk_rounded,
-                                                size: 15,
-                                              ),
-                                              label: const Text(
-                                                'ARA',
-                                                style: TextStyle(
-                                                  fontSize: 10.5,
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // 7. Architectural Specification Table & Description
-                                if (specs.isNotEmpty ||
-                                    p
-                                        .localizedDescription(lang)
-                                        .isNotEmpty) ...[
-                                  const SizedBox(height: 22),
-                                  const Text(
-                                    'TEKNİK ÖZELLİKLER & DETAYLAR',
-                                    style: TextStyle(
-                                      fontFamily: AppColors.serifFontFamily,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12.5,
-                                      letterSpacing: 1.5,
-                                      color: AppColors.obsidian,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  if (specs.isNotEmpty)
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        border: Border.all(
-                                          color: AppColors.cultured,
-                                        ),
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          for (var i = 0;
-                                              i < specs.length;
-                                              i++) ...[
-                                            if (i > 0)
-                                              const Divider(height: 1),
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                                vertical: 9,
-                                              ),
-                                              child: Row(
+                                              Row(
                                                 children: [
-                                                  SizedBox(
-                                                    width: 110,
-                                                    child: Text(
-                                                      specs[i].$1,
-                                                      style: const TextStyle(
-                                                        fontSize: 10,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        letterSpacing: 1.0,
-                                                        color: AppColors
-                                                            .sonicSilver,
-                                                      ),
-                                                    ),
+                                                  const Icon(
+                                                    Icons.lock_outline_rounded,
+                                                    size: 18,
+                                                    color:
+                                                        AppColors.editorialGold,
                                                   ),
+                                                  const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Text(
-                                                      specs[i].$2,
-                                                      style: const TextStyle(
-                                                        fontSize: 12.5,
+                                                      AppStrings.tUpper(
+                                                        lang,
+                                                        'members_only',
+                                                      ),
+                                                      style: TextStyle(
+                                                        fontSize: 12,
                                                         fontWeight:
-                                                            FontWeight.w700,
+                                                            FontWeight.w800,
+                                                        letterSpacing: AppStrings
+                                                            .letterSpacing(
+                                                          lang,
+                                                          0.8,
+                                                        ),
                                                         color:
                                                             AppColors.obsidian,
                                                       ),
@@ -1410,26 +774,500 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   ),
                                                 ],
                                               ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                AppStrings.t(
+                                                  lang,
+                                                  'guest_price_lock_subtitle',
+                                                ),
+                                                style: const TextStyle(
+                                                  fontSize: 12.2,
+                                                  color: AppColors.sonicSilver,
+                                                  height: 1.4,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: ElevatedButton(
+                                                      onPressed: () {
+                                                        Navigator.of(context)
+                                                            .push(
+                                                          MaterialPageRoute<
+                                                              void>(
+                                                            builder: (_) =>
+                                                                const AuthScreen(
+                                                              initialRole:
+                                                                  AppRole
+                                                                      .customer,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
+                                                      style: ElevatedButton
+                                                          .styleFrom(
+                                                        backgroundColor:
+                                                            AppColors.obsidian,
+                                                        foregroundColor:
+                                                            Colors.white,
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                            AppColors.radiusSm,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        AppStrings.t(
+                                                          lang,
+                                                          'login',
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: OutlinedButton(
+                                                      onPressed: () {
+                                                        Navigator.of(context)
+                                                            .push(
+                                                          MaterialPageRoute<
+                                                              void>(
+                                                            builder: (_) =>
+                                                                const AuthScreen(
+                                                              initialRole:
+                                                                  AppRole
+                                                                      .customer,
+                                                              initialRegisterMode:
+                                                                  true,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
+                                                      style: OutlinedButton
+                                                          .styleFrom(
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                            AppColors.radiusSm,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        AppStrings.t(
+                                                          lang,
+                                                          'register',
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+
+                                // 3. Color Sibling Variants
+                                if (p.colorVariants.length > 1) ...[
+                                  const SizedBox(height: 12),
+                                  EditorialCard(
+                                    padding: const EdgeInsets.all(14),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          UiText.colorVariantsLabel(
+                                            lang,
+                                            p.colorVariants.length,
+                                          ),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppColors.obsidian,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        SizedBox(
+                                          height: 70,
+                                          child: ListView.separated(
+                                            scrollDirection: Axis.horizontal,
+                                            itemCount: p.colorVariants.length,
+                                            separatorBuilder: (_, _) =>
+                                                const SizedBox(width: 8),
+                                            itemBuilder: (context, idx) {
+                                              final sib = p.colorVariants[idx];
+                                              final current = sib.id == p.id;
+                                              return InkWell(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                  AppColors.radiusSm,
+                                                ),
+                                                onTap: current
+                                                    ? null
+                                                    : () =>
+                                                        _loadProduct(sib.id),
+                                                child: Container(
+                                                  width: 56,
+                                                  decoration: BoxDecoration(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      AppColors.radiusSm,
+                                                    ),
+                                                    border: Border.all(
+                                                      color: current
+                                                          ? AppColors.obsidian
+                                                          : AppColors.cultured,
+                                                      width: current ? 2 : 1,
+                                                    ),
+                                                  ),
+                                                  clipBehavior: Clip.antiAlias,
+                                                  child: SmartNetworkImage(
+                                                    imageUrl: sib.imageUrl,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+
+                                const SizedBox(height: 12),
+
+                                // 4. Verified Manufacturer & Direct Inquiry Card
+                                EditorialCard(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      InkWell(
+                                        onTap: () => _openBrandShowcase(p),
+                                        child: Row(
+                                          children: [
+                                            if (p.brandVerified) ...[
+                                              const Icon(
+                                                Icons.verified_rounded,
+                                                size: 17,
+                                                color: AppColors.emerald,
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    p.maskedBrandName,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      fontFamily: AppColors
+                                                          .serifFontFamily,
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: AppColors.obsidian,
+                                                    ),
+                                                  ),
+                                                  if (p.brandAddress.isNotEmpty)
+                                                    Text(
+                                                      p.brandAddress,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                        fontSize: 11.5,
+                                                        color: AppColors
+                                                            .sonicSilver,
+                                                      ),
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                            Text(
+                                              AppStrings.t(
+                                                lang,
+                                                'visit_storefront',
+                                              ),
+                                              style: const TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w800,
+                                                color: AppColors.editorialGold,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            const Icon(
+                                              Icons.arrow_forward_rounded,
+                                              size: 15,
+                                              color: AppColors.editorialGold,
                                             ),
                                           ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: ElevatedButton.icon(
+                                              onPressed: () =>
+                                                  showDirectInquiryModal(
+                                                context,
+                                                brandId: p.brandId,
+                                                brandName: p.maskedBrandName,
+                                                product: p,
+                                                initialPackagesQty:
+                                                    _packagesQty,
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    AppColors.obsidian,
+                                                foregroundColor: Colors.white,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                    AppColors.radiusSm,
+                                                  ),
+                                                ),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.mail_outline_rounded,
+                                                size: 15,
+                                              ),
+                                              label: Text(
+                                                AppStrings.t(
+                                                  lang,
+                                                  'direct_inquiry',
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: OutlinedButton.icon(
+                                              onPressed:
+                                                  _openSupplierChatSelector,
+                                              style: OutlinedButton.styleFrom(
+                                                foregroundColor:
+                                                    AppColors.obsidian,
+                                                side: const BorderSide(
+                                                  color: AppColors.obsidian,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                    AppColors.radiusSm,
+                                                  ),
+                                                ),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.forum_outlined,
+                                                size: 15,
+                                              ),
+                                              label: Text(
+                                                AppStrings.t(
+                                                  lang,
+                                                  'ask_supplier',
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
                                         ],
                                       ),
+                                      if (p.brandWhatsapp.isNotEmpty ||
+                                          p.brandPhone.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: ElevatedButton.icon(
+                                                onPressed: () {
+                                                  session.telemetry
+                                                      .trackBrandEvent(
+                                                    brandId: p.brandId,
+                                                    eventType: 'whatsapp_click',
+                                                    productId: p.id,
+                                                  );
+                                                  final rawWa =
+                                                      p.brandWhatsapp.isNotEmpty
+                                                          ? p.brandWhatsapp
+                                                          : p.brandPhone;
+                                                  var digits = rawWa.replaceAll(
+                                                    RegExp(r'\D'),
+                                                    '',
+                                                  );
+                                                  if (digits.startsWith('0') &&
+                                                      digits.length == 11) {
+                                                    digits =
+                                                        '90${digits.substring(1)}';
+                                                  }
+                                                  final msg =
+                                                      '${p.maskedBrandName}: ${p.localizedTitle(lang)} (SKU: ${p.customSku}) - $_packagesQty ${AppStrings.t(lang, 'package')}';
+                                                  final url = digits.isNotEmpty
+                                                      ? 'https://wa.me/$digits?text=${Uri.encodeComponent(msg)}'
+                                                      : 'https://wa.me/?text=${Uri.encodeComponent(msg)}';
+                                                  launchUrl(
+                                                    Uri.parse(url),
+                                                    mode: LaunchMode
+                                                        .externalApplication,
+                                                  );
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      AppColors.emerald,
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      AppColors.radiusSm,
+                                                    ),
+                                                  ),
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.chat_rounded,
+                                                  size: 15,
+                                                ),
+                                                label: Text(
+                                                  AppStrings.t(
+                                                    lang,
+                                                    'whatsapp_direct',
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 11.5,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            if (p.brandPhone.isNotEmpty) ...[
+                                              const SizedBox(width: 8),
+                                              OutlinedButton.icon(
+                                                onPressed: () {
+                                                  session.telemetry
+                                                      .trackBrandEvent(
+                                                    brandId: p.brandId,
+                                                    eventType: 'phone_click',
+                                                    productId: p.id,
+                                                  );
+                                                  launchUrl(
+                                                    Uri.parse(
+                                                      'tel:${p.brandPhone}',
+                                                    ),
+                                                  );
+                                                },
+                                                style: OutlinedButton.styleFrom(
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      AppColors.radiusSm,
+                                                    ),
+                                                  ),
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.phone_in_talk_rounded,
+                                                  size: 15,
+                                                ),
+                                                label: Text(p.brandPhone),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+
+                                // 5. Technical Specs & Full Description
+                                if (specs.isNotEmpty ||
+                                    p.localizedDescription(lang).isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  EditorialCard(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        ...specs.map(
+                                          (s) => Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 6,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    s.$1,
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color:
+                                                          AppColors.sonicSilver,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  child: Text(
+                                                    s.$2,
+                                                    textAlign: TextAlign.end,
+                                                    style: const TextStyle(
+                                                      fontSize: 12.5,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      color: AppColors.obsidian,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        if (p
+                                            .localizedDescription(lang)
+                                            .isNotEmpty) ...[
+                                          const Divider(height: 20),
+                                          Text(
+                                            p.localizedDescription(lang),
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: AppColors.onyx,
+                                              height: 1.55,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
-                                  if (p
-                                      .localizedDescription(lang)
-                                      .isNotEmpty) ...[
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      p
-                                          .localizedDescription(lang)
-                                          .replaceAll(RegExp(r'<[^>]*>'), ''),
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.sonicSilver,
-                                        height: 1.55,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ],
                               ],
                             ),
@@ -1437,8 +1275,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ],
                       ),
                     ),
-                  ),
-                ),
       bottomNavigationBar: p == null
           ? null
           : Container(
@@ -1460,22 +1296,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'TOPLAM ($_packagesQty SERİ • ${_packagesQty * p.unitsPerPackage} ADET)',
+                          '$_packagesQty ${AppStrings.tUpper(lang, 'package')} • ${_packagesQty * p.unitsPerPackage} ${AppStrings.tUpper(lang, 'piece')}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 9.5,
+                            fontSize: 10,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: 0.8,
                             color: AppColors.sonicSilver,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          session.formatPrice(
-                            p.packageTotalPrice * _packagesQty,
-                            sourceCurrency: p.currency,
-                          ),
-                          style: const TextStyle(
-                            fontSize: 19,
+                          session.canViewPrices
+                              ? CurrencyFormatter.format(
+                                  p.packageTotalPrice * _packagesQty,
+                                  currency: session.currencyCode,
+                                  ratesToTry: session.exchangeRates,
+                                  sourceCurrency: p.currency,
+                                )
+                              : AppStrings.t(lang, 'members_only'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: session.canViewPrices ? 18 : 13.5,
                             fontWeight: FontWeight.w900,
                             color: AppColors.obsidian,
                           ),
@@ -1486,37 +1329,40 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   const SizedBox(width: 12),
                   SizedBox(
                     height: 46,
-                    child: Material(
-                      color: AppColors.obsidian,
-                      child: InkWell(
-                        onTap: _addingCart ? null : _addToCart,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const LuxuryIcon(
-                                kind: LuxuryIconKind.bag,
-                                size: 16,
+                    child: ElevatedButton.icon(
+                      onPressed: _addingCart ? null : _addToCart,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.obsidian,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppColors.radiusMd),
+                        ),
+                      ),
+                      icon: _addingCart
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
                                 color: Colors.white,
-                                accentColor: AppColors.champagneGold,
                               ),
-                              const SizedBox(width: 9),
-                              Text(
-                                !session.canViewPrices
-                                    ? 'FİYAT İÇİN GİRİŞ YAP'
-                                    : (_addingCart
-                                        ? 'EKLENİYOR...'
-                                        : 'SERİYİ SEPETE EKLE'),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.2,
-                                ),
-                              ),
-                            ],
-                          ),
+                            )
+                          : const LuxuryIcon(
+                              kind: LuxuryIconKind.bag,
+                              size: 16,
+                              color: Colors.white,
+                              accentColor: AppColors.champagneGold,
+                            ),
+                      label: Text(
+                        !session.canViewPrices
+                            ? AppStrings.tUpper(lang, 'login')
+                            : AppStrings.tUpper(lang, 'card_add_to_cart'),
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: AppStrings.letterSpacing(lang, 0.9),
                         ),
                       ),
                     ),
@@ -1528,38 +1374,24 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 }
 
-class _GalleryNavButton extends StatelessWidget {
+class _CarouselArrowButton extends StatelessWidget {
   final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
+  final VoidCallback onTap;
 
-  const _GalleryNavButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
+  const _CarouselArrowButton({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: 0.92),
-        child: InkWell(
-          onTap: onPressed,
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black.withValues(alpha: 0.12)),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              icon,
-              color: AppColors.obsidian,
-              size: 21,
-            ),
-          ),
+    return Material(
+      color: Colors.white.withValues(alpha: 0.85),
+      borderRadius: BorderRadius.circular(AppColors.radiusSm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+        onTap: onTap,
+        child: SizedBox(
+          width: 34,
+          height: 38,
+          child: Icon(icon, color: AppColors.obsidian, size: 22),
         ),
       ),
     );

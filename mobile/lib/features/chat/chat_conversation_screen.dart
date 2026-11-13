@@ -4,11 +4,14 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_theme.dart';
+import '../../core/localization.dart';
 import '../../models/chat.dart';
 import '../../models/product.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/chat_provider.dart';
+import '../../providers/session_provider.dart';
 import '../../providers/supplier_provider.dart';
+import '../../widgets/editorial_ui.dart';
 import '../../widgets/smart_network_image.dart';
 import '../supplier/camera_studio_screen.dart';
 
@@ -144,7 +147,9 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppColors.radiusLg),
+        ),
       ),
       builder: (_) => _SupplierCustomOfferSheet(
         roomId: widget.room.id,
@@ -155,6 +160,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
   }
 
   Future<void> _acceptOffer(ChatMessage msg) async {
+    final lang = context.read<SessionProvider>().languageCode;
     try {
       final chat = context.read<ChatProvider>();
       final cart = context.read<CartProvider>();
@@ -174,9 +180,19 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Özel fiyat teklifi kabul edildi ve sepetinize eklendi!',
+              UiText.pick(
+                lang,
+                tr: 'Özel fiyat teklifi kabul edildi ve sepetinize eklendi!',
+                en: 'Custom quote accepted and added to your cart!',
+                ru: 'Спецпредложение принято и добавлено в корзину!',
+                ar: 'تم قبول العرض الخاص وإضافته إلى سلتك!',
+                de: 'Sonderangebot angenommen und zum Warenkorb hinzugefügt!',
+                fr: 'Offre spéciale acceptée et ajoutée au panier !',
+                pl: 'Oferta specjalna zaakceptowana i dodana do koszyka!',
+                bg: 'Специалната оферта е приета и добавена в количката!',
+              ),
             ),
             backgroundColor: AppColors.emerald,
           ),
@@ -197,6 +213,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
   @override
   Widget build(BuildContext context) {
     final chat = context.watch<ChatProvider>();
+    final lang = context.watch<SessionProvider>().languageCode;
     final messages = chat.activeMessages;
     final headerTitle = widget.asSupplier
         ? widget.room.customerName
@@ -204,24 +221,62 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
     final headerSub = widget.asSupplier
         ? (widget.room.customerPhone.isNotEmpty
             ? widget.room.customerPhone
-            : 'B2B Alıcı Müşteri')
+            : UiText.pick(
+                lang,
+                tr: 'B2B Alıcı Müşteri',
+                en: 'B2B Wholesale Buyer',
+                ru: 'Оптовый покупатель B2B',
+                ar: 'مشتري جملة B2B',
+                de: 'B2B-Großhandelskunde',
+                fr: 'Acheteur grossiste B2B',
+                pl: 'Kupujący hurtowy B2B',
+                bg: 'B2B купувач на едро',
+              ))
         : (widget.room.supplierUserName.isNotEmpty
             ? '${widget.room.supplierUserName} (${widget.room.supplierUserLanguages})'
-            : 'Üretici Satış Hattı');
+            : UiText.pick(
+                lang,
+                tr: 'Üretici Satış Hattı',
+                en: 'Manufacturer Sales Desk',
+                ru: 'Отдел продаж фабрики',
+                ar: 'مكتب مبيعات المصنع',
+                de: 'Hersteller-Vertrieb',
+                fr: 'Service commercial fabricant',
+                pl: 'Dział sprzedaży producenta',
+                bg: 'Търговски отдел на производителя',
+              ));
 
     return Scaffold(
+      backgroundColor: AppColors.warmIvory,
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.obsidian,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1, color: AppColors.warmHairline),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(headerTitle, style: const TextStyle(fontSize: 15.5)),
+            Text(
+              headerTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 15.5,
+                fontWeight: FontWeight.w800,
+                color: AppColors.obsidian,
+              ),
+            ),
             Text(
               headerSub,
-              style: TextStyle(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
                 fontSize: 11.5,
-                color: widget.asSupplier
-                    ? Colors.white70
-                    : AppColors.textSecondary,
+                color: AppColors.sonicSilver,
               ),
             ),
           ],
@@ -229,18 +284,37 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         actions: [
           if (widget.asSupplier)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: 10),
               child: TextButton.icon(
                 onPressed: _openSendCustomOfferModal,
                 style: TextButton.styleFrom(
-                  backgroundColor: AppColors.accentGold,
+                  backgroundColor: AppColors.luxuryBronze,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  ),
                 ),
-                icon: const Icon(Icons.local_offer_rounded, size: 16),
-                label: const Text(
-                  'Özel Teklif',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                icon: const Icon(Icons.local_offer_rounded, size: 15),
+                label: Text(
+                  UiText.pick(
+                    lang,
+                    tr: 'Özel Teklif',
+                    en: 'Custom Offer',
+                    ru: 'Спеццена',
+                    ar: 'عرض خاص',
+                    de: 'Sonderangebot',
+                    fr: 'Offre B2B',
+                    pl: 'Oferta',
+                    bg: 'Оферта',
+                  ),
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ),
@@ -250,7 +324,12 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         children: [
           Expanded(
             child: chat.loadingMessages && messages.isEmpty
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.obsidian,
+                    ),
+                  )
                 : ListView.builder(
                     controller: _scrollCtrl,
                     padding: const EdgeInsets.all(14),
@@ -261,6 +340,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                           ? m.senderType == 'supplier'
                           : m.senderType == 'customer';
                       return _MessageBubble(
+                        lang: lang,
                         message: m,
                         isMine: isMine,
                         asSupplier: widget.asSupplier,
@@ -272,30 +352,52 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
           Container(
             decoration: const BoxDecoration(
               color: Colors.white,
-              border: Border(top: BorderSide(color: AppColors.border)),
+              border: Border(
+                top: BorderSide(color: AppColors.warmHairline),
+              ),
             ),
             padding: EdgeInsets.only(
               left: 8,
-              right: 8,
+              right: 10,
               top: 8,
               bottom: MediaQuery.of(context).padding.bottom + 8,
             ),
             child: Row(
               children: [
                 IconButton(
-                  tooltip: 'Kamerayla Çek',
+                  tooltip: UiText.pick(
+                    lang,
+                    tr: 'Kamerayla Çek',
+                    en: 'Take Photo',
+                    ru: 'Снять фото',
+                    ar: 'التقاط صورة',
+                    de: 'Foto aufnehmen',
+                    fr: 'Prendre une photo',
+                    pl: 'Zrób zdjęcie',
+                    bg: 'Направи снимка',
+                  ),
                   onPressed: chat.sending ? null : _captureAndSendCameraPhoto,
                   icon: const Icon(
                     Icons.photo_camera_outlined,
-                    color: AppColors.primary,
+                    color: AppColors.obsidian,
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Galeriden Seç',
+                  tooltip: UiText.pick(
+                    lang,
+                    tr: 'Galeriden Seç',
+                    en: 'Choose from Gallery',
+                    ru: 'Выбрать из галереи',
+                    ar: 'اختيار من المعرض',
+                    de: 'Aus Galerie wählen',
+                    fr: 'Choisir dans la galerie',
+                    pl: 'Wybierz z galerii',
+                    bg: 'Избери от галерията',
+                  ),
                   onPressed: chat.sending ? null : _pickAndSendGalleryPhoto,
                   icon: const Icon(
                     Icons.image_outlined,
-                    color: AppColors.textSecondary,
+                    color: AppColors.sonicSilver,
                   ),
                 ),
                 Expanded(
@@ -305,36 +407,74 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                     maxLines: 4,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _sendText(),
-                    decoration: const InputDecoration(
-                      hintText: 'Mesajınızı yazın...',
-                      contentPadding: EdgeInsets.symmetric(
+                    decoration: InputDecoration(
+                      hintText: UiText.pick(
+                        lang,
+                        tr: 'Mesajınızı yazın...',
+                        en: 'Write your message...',
+                        ru: 'Введите сообщение...',
+                        ar: 'اكتب رسالتك...',
+                        de: 'Nachricht schreiben...',
+                        fr: 'Écrivez votre message...',
+                        pl: 'Napisz wiadomość...',
+                        bg: 'Напишете съобщението си...',
+                      ),
+                      filled: true,
+                      fillColor: AppColors.warmSurface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppColors.radiusMd),
+                        borderSide: const BorderSide(
+                          color: AppColors.warmHairline,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppColors.radiusMd),
+                        borderSide: const BorderSide(
+                          color: AppColors.warmHairline,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppColors.radiusMd),
+                        borderSide: const BorderSide(
+                          color: AppColors.obsidian,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 10,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
-                CircleAvatar(
-                  backgroundColor: widget.asSupplier
-                      ? AppColors.navy
-                      : AppColors.primary,
-                  child: IconButton(
-                    onPressed: chat.sending ? null : _sendText,
-                    icon: chat.sending
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 42,
+                  height: 42,
+                  child: Material(
+                    color: widget.asSupplier
+                        ? AppColors.luxuryBronze
+                        : AppColors.obsidian,
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                      onTap: chat.sending ? null : _sendText,
+                      child: Center(
+                        child: chat.sending
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -347,12 +487,14 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
 }
 
 class _MessageBubble extends StatelessWidget {
+  final String lang;
   final ChatMessage message;
   final bool isMine;
   final bool asSupplier;
   final VoidCallback onAcceptOffer;
 
   const _MessageBubble({
+    required this.lang,
     required this.message,
     required this.isMine,
     required this.asSupplier,
@@ -365,13 +507,18 @@ class _MessageBubble extends StatelessWidget {
 
     if (message.messageType == 'product_card') {
       final meta = message.metadata;
+      final unitWord = AppStrings.t(lang, 'pieces_short');
+      final seriesWord = AppStrings.t(lang, 'series_label');
       return Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.primaryLight, width: 1.5),
+          borderRadius: BorderRadius.circular(AppColors.radiusLg),
+          border: Border.all(
+            color: AppColors.luxuryBronze.withValues(alpha: 0.5),
+            width: 1.3,
+          ),
         ),
         child: Row(
           children: [
@@ -379,21 +526,35 @@ class _MessageBubble extends StatelessWidget {
               imageUrl: meta.imageUrl,
               width: 54,
               height: 68,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppColors.radiusSm),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'İLGİLENİLEN TOPTAN ÜRÜN',
+                  Text(
+                    UiText.pick(
+                      lang,
+                      tr: 'İLGİLENİLEN TOPTAN ÜRÜN',
+                      en: 'WHOLESALE PRODUCT INQUIRY',
+                      ru: 'ИНТЕРЕСУЮЩИЙ ОПТОВЫЙ ТОВАР',
+                      ar: 'منتج الجملة المستفسر عنه',
+                      de: 'ANGEFRAGTES GROSSHANDELSPRODUKT',
+                      fr: 'PRODUIT DE GROS DEMANDÉ',
+                      pl: 'PRODUKT HURTOWY W ZAPYTANIU',
+                      bg: 'ЗАПИТВАНЕ ЗА ПРОДУКТ НА ЕДРО',
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
+                      letterSpacing: AppStrings.letterSpacing(lang, 0.8),
+                      color: AppColors.luxuryBronze,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     meta.title,
                     maxLines: 2,
@@ -401,13 +562,17 @@ class _MessageBubble extends StatelessWidget {
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
+                      color: AppColors.obsidian,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
-                    'SKU: ${meta.customSku} • Seri: ${meta.seriesRatio} (${meta.unitsPerPackage} Adet)',
+                    'SKU: ${meta.customSku} • $seriesWord: ${meta.seriesRatio} (${meta.unitsPerPackage} $unitWord)',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11.5,
-                      color: AppColors.textSecondary,
+                      color: AppColors.sonicSilver,
                     ),
                   ),
                 ],
@@ -421,15 +586,49 @@ class _MessageBubble extends StatelessWidget {
     if (message.messageType == 'custom_offer') {
       final meta = message.metadata;
       final isAccepted = meta.offerStatus == 'accepted';
+      final unitWord = AppStrings.t(lang, 'pieces_short');
+      final pkgWord = UiText.pick(
+        lang,
+        tr: 'Paket',
+        en: 'Pkg',
+        ru: 'Уп.',
+        ar: 'طرد',
+        de: 'Pack',
+        fr: 'Lot',
+        pl: 'Op.',
+        bg: 'Пак.',
+      );
+      final offerUnitPrefix = UiText.pick(
+        lang,
+        tr: 'Teklif Birim',
+        en: 'Offered Unit',
+        ru: 'Цена за ед.',
+        ar: 'سعر الوحدة',
+        de: 'Stückpreis',
+        fr: 'Prix unitaire',
+        pl: 'Cena szt.',
+        bg: 'Ед. цена',
+      );
+      final totalLabel = UiText.pick(
+        lang,
+        tr: 'Toplam',
+        en: 'Total',
+        ru: 'Итого',
+        ar: 'الإجمالي',
+        de: 'Gesamt',
+        fr: 'Total',
+        pl: 'Razem',
+        bg: 'Общо',
+      );
       return Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppColors.radiusLg),
           border: Border.all(
-            color: isAccepted ? AppColors.emerald : AppColors.accentGold,
-            width: 1.6,
+            color: isAccepted ? AppColors.emerald : AppColors.luxuryBronze,
+            width: 1.5,
           ),
         ),
         child: Column(
@@ -440,18 +639,45 @@ class _MessageBubble extends StatelessWidget {
                 Icon(
                   isAccepted ? Icons.verified_rounded : Icons.redeem_rounded,
                   size: 18,
-                  color: isAccepted ? AppColors.emerald : AppColors.accentGold,
+                  color:
+                      isAccepted ? AppColors.emerald : AppColors.luxuryBronze,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  isAccepted
-                      ? 'KABUL EDİLEN TOPTAN TEKLİF'
-                      : 'ÖZEL TOPTAN FİYAT TEKLİFİ',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    color:
-                        isAccepted ? AppColors.emerald : AppColors.accentGold,
+                Expanded(
+                  child: Text(
+                    isAccepted
+                        ? UiText.pick(
+                            lang,
+                            tr: 'KABUL EDİLEN TOPTAN TEKLİF',
+                            en: 'ACCEPTED WHOLESALE OFFER',
+                            ru: 'ПРИНЯТОЕ ОПТОВОЕ ПРЕДЛОЖЕНИЕ',
+                            ar: 'تم قبول عرض الجملة',
+                            de: 'ANGENOMMENES B2B-ANGEBOT',
+                            fr: 'OFFRE DE GROS ACCEPTÉE',
+                            pl: 'ZAAKCEPTOWANA OFERTA HURTOWA',
+                            bg: 'ПРИЕТА ОФЕРТА НА ЕДРО',
+                          )
+                        : UiText.pick(
+                            lang,
+                            tr: 'ÖZEL TOPTAN FİYAT TEKLİFİ',
+                            en: 'CUSTOM WHOLESALE QUOTE',
+                            ru: 'ИНДИВИДУАЛЬНОЕ ОПТОВОЕ ПРЕДЛОЖЕНИЕ',
+                            ar: 'عرض سعر جملة خاص',
+                            de: 'INDIVIDUELLES B2B-ANGEBOT',
+                            fr: 'DEVIS DE GROS PERSONNALISÉ',
+                            pl: 'INDYWIDUALNA OFERTA HURTOWA',
+                            bg: 'СПЕЦИАЛНА ОФЕРТА НА ЕДРО',
+                          ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: AppStrings.letterSpacing(lang, 0.7),
+                      color: isAccepted
+                          ? AppColors.emerald
+                          : AppColors.luxuryBronze,
+                    ),
                   ),
                 ),
               ],
@@ -463,7 +689,7 @@ class _MessageBubble extends StatelessWidget {
                   imageUrl: meta.imageUrl,
                   width: 56,
                   height: 70,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -472,26 +698,29 @@ class _MessageBubble extends StatelessWidget {
                     children: [
                       Text(
                         meta.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 13.5,
+                          color: AppColors.obsidian,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '${meta.packagesQty} Paket × ${meta.unitsPerPackage} Adet = ${meta.packagesQty * meta.unitsPerPackage} Adet',
+                        '${meta.packagesQty} $pkgWord × ${meta.unitsPerPackage} $unitWord = ${meta.packagesQty * meta.unitsPerPackage} $unitWord',
                         style: const TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: AppColors.sonicSilver,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Teklif Birim: ${meta.offeredUnitPrice.toStringAsFixed(2)} ${meta.currency}  (Toplam: ${meta.totalOfferPrice.toStringAsFixed(2)} ${meta.currency})',
+                        '$offerUnitPrefix: ${meta.offeredUnitPrice.toStringAsFixed(2)} ${meta.currency}  ($totalLabel: ${meta.totalOfferPrice.toStringAsFixed(2)} ${meta.currency})',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
-                          color: AppColors.navy,
+                          color: AppColors.obsidian,
                         ),
                       ),
                     ],
@@ -507,9 +736,25 @@ class _MessageBubble extends StatelessWidget {
                   onPressed: onAcceptOffer,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.emerald,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                    ),
                   ),
                   icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
-                  label: const Text('Teklifi Kabul Et & Sepete Ekle'),
+                  label: Text(
+                    UiText.pick(
+                      lang,
+                      tr: 'Teklifi Kabul Et & Sepete Ekle',
+                      en: 'Accept Quote & Add to Cart',
+                      ru: 'Принять и добавить в корзину',
+                      ar: 'قبول العرض وإضافة للسلة',
+                      de: 'Angebot annehmen & in Warenkorb',
+                      fr: 'Accepter & ajouter au panier',
+                      pl: 'Akceptuj i dodaj do koszyka',
+                      bg: 'Приеми офертата и добави',
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -522,21 +767,21 @@ class _MessageBubble extends StatelessWidget {
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.76,
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
         ),
         margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
         decoration: BoxDecoration(
           color: isMine
-              ? (asSupplier ? AppColors.navy : AppColors.primary)
+              ? (asSupplier ? AppColors.luxuryBronze : AppColors.obsidian)
               : Colors.white,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMine ? 16 : 4),
-            bottomRight: Radius.circular(isMine ? 4 : 16),
+            topLeft: const Radius.circular(AppColors.radiusLg),
+            topRight: const Radius.circular(AppColors.radiusLg),
+            bottomLeft: Radius.circular(isMine ? AppColors.radiusLg : 4),
+            bottomRight: Radius.circular(isMine ? 4 : AppColors.radiusLg),
           ),
-          border: isMine ? null : Border.all(color: AppColors.border),
+          border: isMine ? null : Border.all(color: AppColors.warmHairline),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,7 +794,7 @@ class _MessageBubble extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
+                    color: AppColors.luxuryBronze,
                   ),
                 ),
               ),
@@ -561,7 +806,7 @@ class _MessageBubble extends StatelessWidget {
                   imageUrl: message.metadata.imageUrl,
                   width: 220,
                   height: 260,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
                 ),
               ),
             if (message.content.isNotEmpty &&
@@ -570,7 +815,7 @@ class _MessageBubble extends StatelessWidget {
               Text(
                 message.content,
                 style: TextStyle(
-                  color: isMine ? Colors.white : AppColors.textPrimary,
+                  color: isMine ? Colors.white : AppColors.obsidian,
                   fontSize: 13.5,
                   height: 1.35,
                 ),
@@ -582,7 +827,7 @@ class _MessageBubble extends StatelessWidget {
                 timeStr,
                 style: TextStyle(
                   fontSize: 10,
-                  color: isMine ? Colors.white70 : AppColors.textMuted,
+                  color: isMine ? Colors.white70 : AppColors.sonicSilver,
                 ),
               ),
             ),
@@ -679,6 +924,7 @@ class _SupplierCustomOfferSheetState extends State<_SupplierCustomOfferSheet> {
   @override
   Widget build(BuildContext context) {
     final products = context.watch<SupplierProvider>().products;
+    final lang = context.watch<SessionProvider>().languageCode;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -691,29 +937,67 @@ class _SupplierCustomOfferSheetState extends State<_SupplierCustomOfferSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            '🎁 Müşteriye Özel Toptan Fiyat Teklifi Gönder',
-            style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800),
+          Text(
+            UiText.pick(
+              lang,
+              tr: 'Özel Toptan Fiyat Teklifi Gönder',
+              en: 'Send Custom Wholesale Quote',
+              ru: 'Отправить оптовое спецпредложение',
+              ar: 'إرسال عرض سعر جملة خاص',
+              de: 'Individuelles B2B-Angebot senden',
+              fr: 'Envoyer un devis de gros',
+              pl: 'Wyślij ofertę hurtową',
+              bg: 'Изпрати специална оферта на едро',
+            ),
+            style: const TextStyle(
+              fontFamily: AppColors.serifFontFamily,
+              fontSize: 16.5,
+              fontWeight: FontWeight.w800,
+              color: AppColors.obsidian,
+            ),
           ),
           const SizedBox(height: 14),
           if (products.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                'Teklif gönderebilmek için önce aktif bir ürününüz olmalıdır.',
+                UiText.pick(
+                  lang,
+                  tr: 'Teklif gönderebilmek için önce aktif bir ürününüz olmalıdır.',
+                  en: 'You must have at least one active product to send a quote.',
+                  ru: 'Для отправки предложения нужен хотя бы один активный товар.',
+                  ar: 'يجب أن يكون لديك منتج نشط واحد على الأقل لإرسال عرض.',
+                  de: 'Sie benötigen mindestens ein aktives Produkt, um ein Angebot zu senden.',
+                  fr: 'Vous devez avoir au moins un produit actif pour envoyer un devis.',
+                  pl: 'Musisz mieć przynajmniej jeden aktywny produkt, aby wysłać ofertę.',
+                  bg: 'Трябва да имате поне един активен продукт, за да изпратите оферта.',
+                ),
+                style: const TextStyle(color: AppColors.sonicSilver),
               ),
             )
           else ...[
             DropdownButtonFormField<Product>(
               initialValue: _selectedProduct,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'Ürün Seçin'),
+              decoration: InputDecoration(
+                labelText: UiText.pick(
+                  lang,
+                  tr: 'Ürün Seçin',
+                  en: 'Select Product',
+                  ru: 'Выберите товар',
+                  ar: 'اختر المنتج',
+                  de: 'Produkt wählen',
+                  fr: 'Sélectionner un produit',
+                  pl: 'Wybierz produkt',
+                  bg: 'Изберете продукт',
+                ),
+              ),
               items: products
                   .map(
                     (p) => DropdownMenuItem<Product>(
                       value: p,
                       child: Text(
-                        '${p.title} (${p.price.toStringAsFixed(2)} ${p.currency})',
+                        '${p.localizedTitle(lang)} (${p.price.toStringAsFixed(2)} ${p.currency})',
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -736,8 +1020,18 @@ class _SupplierCustomOfferSheetState extends State<_SupplierCustomOfferSheet> {
                   child: TextField(
                     controller: _pkgsCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Paket / Seri Adedi',
+                    decoration: InputDecoration(
+                      labelText: UiText.pick(
+                        lang,
+                        tr: 'Paket / Seri Adedi',
+                        en: 'Series / Packs Qty',
+                        ru: 'Кол-во серий',
+                        ar: 'عدد الطرود',
+                        de: 'Serien / Pakete',
+                        fr: 'Qté séries / lots',
+                        pl: 'Liczba serii',
+                        bg: 'Брой серии',
+                      ),
                     ),
                   ),
                 ),
@@ -750,7 +1044,7 @@ class _SupplierCustomOfferSheetState extends State<_SupplierCustomOfferSheet> {
                     ),
                     decoration: InputDecoration(
                       labelText:
-                          'Teklif Birim Fiyatı (${_selectedProduct?.currency ?? 'TRY'})',
+                          '${UiText.pick(lang, tr: 'Teklif Birim Fiyatı', en: 'Quote Unit Price', ru: 'Цена за единицу', ar: 'سعر الوحدة المقترح', de: 'Stückpreis Angebot', fr: 'Prix unitaire devis', pl: 'Cena jednostkowa', bg: 'Единична цена')} (${_selectedProduct?.currency ?? 'TRY'})',
                     ),
                   ),
                 ),
@@ -759,20 +1053,69 @@ class _SupplierCustomOfferSheetState extends State<_SupplierCustomOfferSheet> {
             const SizedBox(height: 12),
             TextField(
               controller: _noteCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Teklif Notu (Opsiyonel)',
-                hintText: 'Örn: Peşin havale alımına özel seri fiyatıdır.',
+              decoration: InputDecoration(
+                labelText: UiText.pick(
+                  lang,
+                  tr: 'Teklif Notu (Opsiyonel)',
+                  en: 'Quote Note (Optional)',
+                  ru: 'Примечание (необяз.)',
+                  ar: 'ملاحظة العرض (اختياري)',
+                  de: 'Angebotsnotiz (Optional)',
+                  fr: 'Note du devis (Optionnel)',
+                  pl: 'Uwaga do oferty (Opcjonalnie)',
+                  bg: 'Бележка към офертата',
+                ),
+                hintText: UiText.pick(
+                  lang,
+                  tr: 'Örn: Peşin havale alımına özel seri fiyatıdır.',
+                  en: 'e.g. Special series rate for wire transfer.',
+                  ru: 'Напр.: Спеццена при оплате переводом.',
+                  ar: 'مثال: سعر خاص للدفع بالتحويل البنكي.',
+                  de: 'z.B. Sonderpreis bei Überweisung.',
+                  fr: 'Ex: Tarif spécial pour virement.',
+                  pl: 'Np. Specjalna cena przy przelewie.',
+                  bg: 'Напр.: Специална цена при банков превод.',
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _submitting ? null : _send,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accentGold,
-              ),
-              icon: const Icon(Icons.send_rounded),
-              label: Text(
-                _submitting ? 'Gönderiliyor...' : 'Özel Teklifi Anında Gönder',
+            SizedBox(
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed: _submitting ? null : _send,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.luxuryBronze,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  ),
+                ),
+                icon: const Icon(Icons.send_rounded, size: 17),
+                label: Text(
+                  _submitting
+                      ? UiText.pick(
+                          lang,
+                          tr: 'Gönderiliyor...',
+                          en: 'Sending...',
+                          ru: 'Отправка...',
+                          ar: 'جاري الإرسال...',
+                          de: 'Wird gesendet...',
+                          fr: 'Envoi...',
+                          pl: 'Wysyłanie...',
+                          bg: 'Изпращане...',
+                        )
+                      : UiText.pick(
+                          lang,
+                          tr: 'Özel Teklifi Anında Gönder',
+                          en: 'Send Custom Quote Now',
+                          ru: 'Отправить спецпредложение',
+                          ar: 'إرسال العرض الخاص الآن',
+                          de: 'Sonderangebot sofort senden',
+                          fr: 'Envoyer le devis maintenant',
+                          pl: 'Wyślij ofertę teraz',
+                          bg: 'Изпрати офертата веднага',
+                        ),
+                ),
               ),
             ),
           ],

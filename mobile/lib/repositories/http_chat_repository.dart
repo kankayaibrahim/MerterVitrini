@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../contracts/chat_repository.dart';
 import '../models/chat.dart';
 import '../services/api_client.dart';
+import 'http_repo_helpers.dart';
 
 class HttpChatRepository implements IChatRepository {
   final ApiClient _client;
@@ -15,9 +16,9 @@ class HttpChatRepository implements IChatRepository {
       final resp = await _client.dio.get<dynamic>(
         '/api/v1/store/chat/brands/$brandId/agents',
       );
-      return _parseList(resp.data, SupplierAgent.fromJson);
+      return HttpRepoHelpers.parseList(resp.data, SupplierAgent.fromJson);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -46,7 +47,7 @@ class HttpChatRepository implements IChatRepository {
       );
       return ChatRoom.fromJson(resp.data ?? <String, dynamic>{});
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -54,9 +55,9 @@ class HttpChatRepository implements IChatRepository {
   Future<List<ChatRoom>> listCustomerChatRooms() async {
     try {
       final resp = await _client.dio.get<dynamic>('/api/v1/store/chat/rooms');
-      return _parseList(resp.data, ChatRoom.fromJson);
+      return HttpRepoHelpers.parseList(resp.data, ChatRoom.fromJson);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -67,9 +68,9 @@ class HttpChatRepository implements IChatRepository {
         '/api/v1/supplier/chat/rooms',
         queryParameters: {'scope': scope},
       );
-      return _parseList(resp.data, ChatRoom.fromJson);
+      return HttpRepoHelpers.parseList(resp.data, ChatRoom.fromJson);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -83,9 +84,9 @@ class HttpChatRepository implements IChatRepository {
           ? '/api/v1/supplier/chat/rooms/$roomId/messages'
           : '/api/v1/store/chat/rooms/$roomId/messages';
       final resp = await _client.dio.get<dynamic>(endpoint);
-      return _parseList(resp.data, ChatMessage.fromJson);
+      return HttpRepoHelpers.parseList(resp.data, ChatMessage.fromJson);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -101,7 +102,7 @@ class HttpChatRepository implements IChatRepository {
       );
       return (resp.data?['image_url'] ?? '').toString();
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -126,7 +127,7 @@ class HttpChatRepository implements IChatRepository {
       );
       return ChatMessage.fromJson(resp.data ?? <String, dynamic>{});
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -156,7 +157,7 @@ class HttpChatRepository implements IChatRepository {
       );
       return ChatMessage.fromJson(resp.data ?? <String, dynamic>{});
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -172,23 +173,9 @@ class HttpChatRepository implements IChatRepository {
       }
       throw const ApiException('Teklif yanıtı çözümlenemedi.');
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
-  List<T> _parseList<T>(
-    dynamic raw,
-    T Function(Map<String, dynamic>) mapper,
-  ) {
-    final result = <T>[];
-    if (raw is List) {
-      for (final item in raw) {
-        if (item is Map<String, dynamic>) {
-          result.add(mapper(item));
-        }
-      }
-    }
-    return result;
-  }
 }
 

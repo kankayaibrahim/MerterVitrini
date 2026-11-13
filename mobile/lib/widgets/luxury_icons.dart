@@ -693,7 +693,8 @@ class EditorialBottomNavBar extends StatelessWidget {
                               fontWeight: isSelected
                                   ? FontWeight.w800
                                   : FontWeight.w600,
-                              letterSpacing: 0.9,
+                              letterSpacing:
+                                  AppStrings.letterSpacing(languageCode, 0.9),
                               color: isSelected ? activeFg : inactiveFg,
                             ),
                           ),

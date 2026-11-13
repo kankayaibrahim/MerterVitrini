@@ -95,13 +95,7 @@ func (h *SupplierApplicationsHandler) verifyReCaptcha(token, action string) (boo
 }
 
 // SubmitApplication handles public prospective supplier submissions with 30-min email verification
-func (h *SupplierApplicationsHandler) SubmitApplication(w http.ResponseWriter, r *http.Request) {
-	var req models.CreateSupplierApplicationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Geçersiz istek formatı"}`, http.StatusBadRequest)
-		return
-	}
-
+func normalizeAndValidateSupplierApplicationRequest(req *models.CreateSupplierApplicationRequest) string {
 	req.CompanyName = strings.TrimSpace(req.CompanyName)
 	req.ContactName = strings.TrimSpace(req.ContactName)
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
@@ -110,28 +104,22 @@ func (h *SupplierApplicationsHandler) SubmitApplication(w http.ResponseWriter, r
 	req.District = strings.TrimSpace(req.District)
 
 	if req.CompanyName == "" || req.ContactName == "" || req.Email == "" || req.Phone == "" || req.City == "" || req.District == "" {
-		http.Error(w, `{"error":"Firma adı, yetkili adı, e-posta, telefon, il ve ilçe alanları zorunludur."}`, http.StatusBadRequest)
-		return
+		return "Firma adı, yetkili adı, e-posta, telefon, il ve ilçe alanları zorunludur."
 	}
 
 	if !supplierEmailRegex.MatchString(req.Email) {
-		http.Error(w, `{"error":"Lütfen geçerli bir e-posta adresi giriniz."}`, http.StatusBadRequest)
-		return
+		return "Lütfen geçerli bir e-posta adresi giriniz."
 	}
 
 	normalizedPhone, phoneErr := phoneutil.NormalizeAndValidatePhone(req.Phone)
 	if phoneErr != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, phoneErr.Error()), http.StatusBadRequest)
-		return
+		return phoneErr.Error()
 	}
 	req.Phone = normalizedPhone
+	return ""
+}
 
-	// Validate reCAPTCHA when pair is configured (or when client supplied a token)
-	if valid, err := h.verifyReCaptcha(req.ReCaptchaToken, "supplier_apply"); err != nil || !valid {
-		http.Error(w, `{"error":"Güvenlik doğrulaması (reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."}`, http.StatusBadRequest)
-		return
-	}
-
+func (h *SupplierApplicationsHandler) createSupplierApplication(w http.ResponseWriter, r *http.Request, req models.CreateSupplierApplicationRequest) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
@@ -192,6 +180,27 @@ func (h *SupplierApplicationsHandler) SubmitApplication(w http.ResponseWriter, r
 		"id":      newID,
 		"expires_in_minutes": 30,
 	})
+}
+
+func (h *SupplierApplicationsHandler) SubmitApplication(w http.ResponseWriter, r *http.Request) {
+	var req models.CreateSupplierApplicationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Geçersiz istek formatı"}`, http.StatusBadRequest)
+		return
+	}
+
+	if errMsg := normalizeAndValidateSupplierApplicationRequest(&req); errMsg != "" {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, errMsg), http.StatusBadRequest)
+		return
+	}
+
+	// Validate reCAPTCHA when pair is configured (or when client supplied a token)
+	if valid, err := h.verifyReCaptcha(req.ReCaptchaToken, "supplier_apply"); err != nil || !valid {
+		http.Error(w, `{"error":"Güvenlik doğrulaması (reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."}`, http.StatusBadRequest)
+		return
+	}
+
+	h.createSupplierApplication(w, r, req)
 }
 
 // VerifyApplicationEmail validates applicant's 30-min verification token and notifies admin

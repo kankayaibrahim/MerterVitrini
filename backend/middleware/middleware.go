@@ -214,7 +214,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Chat-Customer-Id, X-Chat-Customer-Name")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Chat-Customer-Id, X-Chat-Customer-Name, X-Visitor-Id, X-Mobile-Challenge, X-Challenge-Token")
 		w.Header().Set("Access-Control-Expose-Headers", "Content-Length, X-Total-Count")
 
 		if r.Method == http.MethodOptions {
@@ -286,6 +286,9 @@ var rateLimitedPathSuffixes = []string{
 	"/store/inquiries",
 	"/store/rfqs",
 	"/store/supplier-applications",
+	"/store/service-providers",
+	"/mobile/supplier-applications",
+	"/mobile/service-providers",
 	"/supplier/auth/setup-password",
 }
 
@@ -302,18 +305,45 @@ func isRateLimitedRequest(r *http.Request) bool {
 	return false
 }
 
+func enforceIPRateLimit(limiter *ipRateLimiter, maxPerMinute int, scope string, w http.ResponseWriter, r *http.Request) bool {
+	ip := getClientIP(r)
+	if limiter.allow(ip, maxPerMinute) {
+		return true
+	}
+	log.Printf("[RATE LIMIT EXCEEDED] scope=%s IP=%s path=%s", scope, ip, r.URL.Path)
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	w.WriteHeader(http.StatusTooManyRequests)
+	w.Write([]byte(`{"error":"Çok fazla istek gönderildi. Lütfen 1 dakika sonra tekrar deneyin."}`))
+	return false
+}
+
+// StrictRateLimitMiddleware returns an isolated per-IP sliding-window rate limiter for public mobile form and challenge routes.
+func StrictRateLimitMiddleware(scope string, maxPerMinute int) func(http.Handler) http.Handler {
+	if maxPerMinute <= 0 {
+		maxPerMinute = 10
+	}
+	scopedLimiter := &ipRateLimiter{
+		ips: make(map[string][]time.Time),
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodOptions || r.Method == http.MethodHead {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if !enforceIPRateLimit(scopedLimiter, maxPerMinute, scope, w, r) {
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // RateLimitMiddleware restricts requests to 15 per minute per IP for sensitive auth and public submission routes.
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isRateLimitedRequest(r) {
-			ip := getClientIP(r)
-			if !rateLimiter.allow(ip, 15) {
-				log.Printf("[RATE LIMIT EXCEEDED] IP: %s attempted too many sensitive requests (%s).", ip, r.URL.Path)
-				w.Header().Set(headerContentType, mimeApplicationJSON)
-				w.WriteHeader(http.StatusTooManyRequests)
-				w.Write([]byte(`{"error":"Çok fazla istek gönderildi. Lütfen 1 dakika sonra tekrar deneyin."}`))
-				return
-			}
+		if isRateLimitedRequest(r) && !enforceIPRateLimit(rateLimiter, 15, "global_sensitive", w, r) {
+			return
 		}
 
 		next.ServeHTTP(w, r)

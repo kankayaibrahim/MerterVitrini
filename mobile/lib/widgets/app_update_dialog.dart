@@ -259,7 +259,10 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        shape: const RoundedRectangleBorder(),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppColors.radiusLg),
+        ),
+        clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
@@ -512,7 +515,10 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.eerieBlack,
                             foregroundColor: Colors.white,
-                            shape: const RoundedRectangleBorder(),
+                            shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(AppColors.radiusMd),
+                            ),
                           ),
                           onPressed: _startDownloadAndInstall,
                           icon: Icon(

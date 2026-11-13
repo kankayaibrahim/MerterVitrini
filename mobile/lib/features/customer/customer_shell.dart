@@ -7,16 +7,22 @@ import '../../models/user.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/chat_provider.dart';
 import '../../providers/session_provider.dart';
-import '../../widgets/app_update_dialog.dart';
 import '../../widgets/country_flag_icon.dart';
+import '../../widgets/language_currency_modal.dart';
 import '../../widgets/luxury_icons.dart';
 import '../../widgets/notifications_sheet.dart';
 import '../auth/auth_screen.dart';
+import '../auth/phone_completion_sheet.dart';
+import '../auth/supplier_application_screen.dart';
 import '../chat/chat_rooms_screen.dart';
+import 'blog_and_cms_screen.dart';
 import 'cart_and_checkout_screen.dart';
 import 'catalog_screen.dart';
 import 'customer_profile_screen.dart';
 import 'home_screen.dart';
+import 'manufacturers_screen.dart';
+import 'rfq_board_screen.dart';
+import 'service_providers_screen.dart';
 
 class CustomerShell extends StatefulWidget {
   const CustomerShell({super.key});
@@ -26,44 +32,174 @@ class CustomerShell extends StatefulWidget {
 }
 
 class _CustomerShellState extends State<CustomerShell> {
-  int _currentIndex = 0;
-  String _catalogCategoryId = '';
-  String _catalogBrandId = '';
-  String _catalogQuery = '';
-  int _catalogFilterRevision = 0;
+  int _tabIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<CartProvider>().loadCart();
-      context.read<ChatProvider>().loadRoomsForCurrentRole();
-      AppUpdateDialog.checkOnStartupIfNeeded(context);
-    });
-  }
+  String? _catalogCategoryId;
+  String? _catalogBrandId;
+  String? _catalogBrandSlug;
+  String? _catalogQuery;
+  int _catalogFilterVersion = 0;
 
-  void _openCatalogFiltered({
+  static const List<String> _tabPaths = <String>[
+    '/',
+    '/catalog',
+    '/cart',
+    '/messages',
+    '/profile',
+  ];
+
+  void _openCatalog({
     String? categoryId,
     String? brandId,
+    String? brandSlug,
     String? query,
   }) {
     setState(() {
-      _catalogCategoryId = categoryId ?? '';
-      _catalogBrandId = brandId ?? '';
-      _catalogQuery = query ?? '';
-      _catalogFilterRevision++;
-      _currentIndex = 1;
+      _catalogCategoryId = categoryId;
+      _catalogBrandId = brandId;
+      _catalogBrandSlug = brandSlug;
+      _catalogQuery = query;
+      _catalogFilterVersion++;
+      _tabIndex = 1;
     });
+    context.read<SessionProvider>().telemetry.trackScreenView(
+          path: '/catalog',
+          pageTitle: 'Wholesale Catalog',
+        );
   }
 
-  void _openNotifications() {
-    showModalBottomSheet<void>(
+  void _selectTab(int idx) {
+    if (idx == _tabIndex) return;
+    setState(() => _tabIndex = idx);
+    final path = idx < _tabPaths.length ? _tabPaths[idx] : '/';
+    context.read<SessionProvider>().telemetry.trackScreenView(
+          path: path,
+          pageTitle: 'Customer Tab $idx',
+        );
+  }
+
+  Future<void> _openNotifications() async {
+    final session = context.read<SessionProvider>();
+    await session.refreshNotifications();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(),
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppColors.radiusLg),
+        ),
+      ),
       builder: (_) => const NotificationsBottomSheet(),
+    );
+  }
+
+  Future<void> _openB2bDirectoryMenu() async {
+    final session = context.read<SessionProvider>();
+    final lang = session.languageCode;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppColors.radiusLg),
+        ),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.warmHairline,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'B2B PORTAL',
+                style: TextStyle(
+                  fontFamily: AppColors.serifFontFamily,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: AppStrings.letterSpacing(lang, 1.1),
+                  color: AppColors.obsidian,
+                ),
+              ),
+              const Divider(height: 18),
+              _HubMenuTile(
+                icon: Icons.factory_outlined,
+                title: AppStrings.t(lang, 'manufacturers_directory'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ManufacturersScreen(),
+                    ),
+                  );
+                },
+              ),
+              _HubMenuTile(
+                icon: Icons.request_quote_outlined,
+                title: AppStrings.t(lang, 'rfq_board'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const RfqBoardScreen(),
+                    ),
+                  );
+                },
+              ),
+              _HubMenuTile(
+                icon: Icons.local_shipping_outlined,
+                title: AppStrings.t(lang, 'service_providers'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ServiceProvidersScreen(),
+                    ),
+                  );
+                },
+              ),
+              _HubMenuTile(
+                icon: Icons.article_outlined,
+                title:
+                    '${AppStrings.t(lang, 'blog_title')} & ${AppStrings.t(lang, 'legal_policies')}',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const BlogAndCmsScreen(),
+                    ),
+                  );
+                },
+              ),
+              _HubMenuTile(
+                icon: Icons.verified_user_outlined,
+                title: AppStrings.t(lang, 'supplier_apply'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SupplierApplicationScreen(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -75,289 +211,217 @@ class _CustomerShellState extends State<CustomerShell> {
     final lang = session.languageCode;
 
     final pages = <Widget>[
-      CustomerHomeScreen(onOpenCatalog: _openCatalogFiltered),
-      CustomerCatalogScreen(
-        key: ValueKey<int>(_catalogFilterRevision),
+      CustomerHomeScreen(
+        onOpenCatalog: _openCatalog,
+        onNavigateTab: _selectTab,
+      ),
+      CatalogScreen(
         initialCategoryId: _catalogCategoryId,
         initialBrandId: _catalogBrandId,
+        initialBrandSlug: _catalogBrandSlug,
         initialQuery: _catalogQuery,
+        filterVersion: _catalogFilterVersion,
       ),
-      const CustomerCartScreen(),
+      CustomerCartScreen(
+        onBrowseCatalog: () => _selectTab(1),
+      ),
       const ChatRoomsScreen(asSupplier: false),
-      const CustomerProfileScreen(),
+      CustomerProfileScreen(onNavigateTab: _selectTab),
     ];
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.warmIvory,
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(88),
-        child: Material(
-          color: Colors.white,
+        preferredSize: const Size.fromHeight(62),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: AppColors.cultured)),
+          ),
           child: SafeArea(
             bottom: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 1. Luxury Obsidian Top Bar (Wholesale Notice + Country Flag & Currency Selectors)
-                Container(
-                  height: 30,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: const BoxDecoration(
-                    color: AppColors.obsidian,
-                  ),
-                  child: Row(
-                    children: [
-                      const Text(
-                        '◆ ',
-                        style: TextStyle(
-                          fontSize: 8.5,
-                          color: AppColors.champagneGold,
-                        ),
-                      ),
-                      Expanded(
-                        child: RichText(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  const MvEditorialCrest(size: 30),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'MERTER VİTRİNİ',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          text: TextSpan(
-                            style: const TextStyle(
-                              fontSize: 9,
-                              letterSpacing: 0.7,
-                              color: Color(0xFFD4D4D4),
-                            ),
-                            children: [
-                              TextSpan(
-                                text: AppStrings.tUpper(
-                                  lang,
-                                  'wholesale_alert',
-                                ),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.champagneGold,
-                                ),
-                              ),
-                              TextSpan(
-                                text:
-                                    ' — ${AppStrings.tUpper(lang, 'alert_desc')}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                          style: TextStyle(
+                            fontFamily: AppColors.serifFontFamily,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: AppStrings.letterSpacing(lang, 1.3),
+                            color: AppColors.obsidian,
+                            height: 1.05,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      _HeaderDropdownPill(
-                        selectedValue: lang,
-                        label: lang.toUpperCase(),
-                        options: const [
-                          _DropdownOption('tr', 'TÜRKÇE'),
-                          _DropdownOption('en', 'ENGLISH'),
-                          _DropdownOption('ar', 'العربية'),
-                          _DropdownOption('ru', 'РУССКИЙ'),
-                        ],
-                        onSelected: session.setLanguage,
-                      ),
-                      const SizedBox(width: 5),
-                      _HeaderDropdownPill(
-                        selectedValue: session.currencyCode,
-                        label: session.currencyCode,
-                        options: const [
-                          _DropdownOption('TRY', 'TRY (₺)'),
-                          _DropdownOption('USD', 'USD (\$)'),
-                          _DropdownOption('EUR', 'EUR (€)'),
-                          _DropdownOption('GBP', 'GBP (£)'),
-                          _DropdownOption('RUB', 'RUB (₽)'),
-                        ],
-                        onSelected: session.setCurrency,
-                      ),
-                    ],
-                  ),
-                ),
-
-                // 2. Editorial Masthead (Crest + Serif Brand + Studio & Notification Actions)
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      border: Border(
-                        bottom: BorderSide(color: AppColors.cultured),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => setState(() => _currentIndex = 0),
-                            highlightColor: Colors.transparent,
-                            splashColor: AppColors.editorialIvory,
-                            child: Row(
-                              children: [
-                                const MvEditorialCrest(size: 32),
-                                const SizedBox(width: 10),
-                                Flexible(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        AppStrings.tUpper(lang, 'app_title'),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontFamily: AppColors.serifFontFamily,
-                                          fontSize: 16.5,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: 1.9,
-                                          color: AppColors.obsidian,
-                                          height: 1.05,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2.5),
-                                      Text(
-                                        AppStrings.tUpper(
-                                          lang,
-                                          'brand_subtitle',
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 7.8,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 2.8,
-                                          color: AppColors.editorialGold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        InkWell(
-                          onTap: () {
-                            if (session.isSupplierLoggedIn) {
-                              session.setActiveRole(AppRole.supplier);
-                            } else {
-                              Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => const AuthScreen(
-                                    initialRole: AppRole.supplier,
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                          child: Container(
-                            height: 34,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            decoration: BoxDecoration(
-                              color: AppColors.editorialIvory,
-                              border: Border.all(
-                                color: AppColors.champagneGold
-                                    .withValues(alpha: 0.55),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const LuxuryIcon(
-                                  kind: LuxuryIconKind.studioCamera,
-                                  size: 14,
-                                  color: AppColors.obsidian,
-                                  accentColor: AppColors.champagneGold,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  AppStrings.tUpper(
-                                    lang,
-                                    'supplier_portal_login',
-                                  ),
-                                  style: const TextStyle(
-                                    fontSize: 9.2,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.9,
-                                    color: AppColors.obsidian,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Tooltip(
-                          message: 'Bildirimler',
-                          child: InkWell(
-                            onTap: _openNotifications,
-                            child: Container(
-                              width: 34,
-                              height: 34,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                border: Border.all(color: AppColors.cultured),
-                              ),
-                              alignment: Alignment.center,
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  const LuxuryIcon(
-                                    kind: LuxuryIconKind.bell,
-                                    size: 17,
-                                    color: AppColors.obsidian,
-                                    accentColor: AppColors.champagneGold,
-                                  ),
-                                  if (session.unreadNotificationCount > 0)
-                                    Positioned(
-                                      top: -5,
-                                      right: -6,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 3.5,
-                                          vertical: 1.5,
-                                        ),
-                                        color: AppColors.obsidian,
-                                        child: Text(
-                                          '${session.unreadNotificationCount}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 8,
-                                            fontWeight: FontWeight.w900,
-                                            height: 1.0,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'B2B WHOLESALE',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: AppStrings.letterSpacing(lang, 1.5),
+                            color: AppColors.editorialGold,
+                            height: 1.0,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ],
+                  // 8-Language & Currency Quick Pill
+                  InkWell(
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                    onTap: () => showLanguageCurrencyModal(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.editorialOffWhite,
+                        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                        border: Border.all(color: AppColors.cultured),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CountryFlagIcon(code: lang, width: 17, height: 12),
+                          const SizedBox(width: 5),
+                          Text(
+                            '${lang.toUpperCase()} • ${session.currencyCode}',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.obsidian,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // B2B Portal Hub Shortcut Button
+                  InkWell(
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                    onTap: _openB2bDirectoryMenu,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: AppColors.editorialOffWhite,
+                        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                        border: Border.all(color: AppColors.cultured),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.apps_rounded,
+                        size: 18,
+                        color: AppColors.obsidian,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Notification Center
+                  InkWell(
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                    onTap: _openNotifications,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: AppColors.editorialOffWhite,
+                        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                        border: Border.all(color: AppColors.cultured),
+                      ),
+                      alignment: Alignment.center,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const LuxuryIcon(
+                            kind: LuxuryIconKind.bell,
+                            size: 16,
+                            color: AppColors.obsidian,
+                          ),
+                          if (session.unreadNotificationCount > 0)
+                            Positioned(
+                              right: -4,
+                              top: -4,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.discountRed,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (!session.isCustomerLoggedIn) ...[
+                    const SizedBox(width: 6),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                const AuthScreen(initialRole: AppRole.customer),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.obsidian,
+                          borderRadius:
+                              BorderRadius.circular(AppColors.radiusSm),
+                        ),
+                        child: Text(
+                          AppStrings.tUpper(lang, 'login'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
+      body: Column(
+        children: [
+          const PhoneCompletionBanner(),
+          Expanded(
+            child: IndexedStack(index: _tabIndex, children: pages),
+          ),
+        ],
       ),
       bottomNavigationBar: EditorialBottomNavBar(
-        selectedIndex: _currentIndex,
+        selectedIndex: _tabIndex,
         languageCode: lang,
-        onTap: (idx) {
-          setState(() => _currentIndex = idx);
-          if (idx == 3) {
-            context.read<ChatProvider>().loadRoomsForCurrentRole();
-          }
-        },
+        onTap: _selectTab,
         items: [
           EditorialNavItem(
             icon: LuxuryIconKind.showroom,
@@ -387,98 +451,42 @@ class _CustomerShellState extends State<CustomerShell> {
   }
 }
 
-class _DropdownOption {
-  final String value;
-  final String displayLabel;
+class _HubMenuTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
 
-  const _DropdownOption(this.value, this.displayLabel);
-}
-
-class _HeaderDropdownPill extends StatelessWidget {
-  final String selectedValue;
-  final String label;
-  final List<_DropdownOption> options;
-  final ValueChanged<String> onSelected;
-
-  const _HeaderDropdownPill({
-    required this.selectedValue,
-    required this.label,
-    required this.options,
-    required this.onSelected,
+  const _HubMenuTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      onSelected: onSelected,
-      color: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      shape: const RoundedRectangleBorder(
-        side: BorderSide(color: AppColors.cultured),
-      ),
-      itemBuilder: (_) => options.map((opt) {
-        final isActive =
-            opt.value.toLowerCase() == selectedValue.toLowerCase();
-        return PopupMenuItem<String>(
-          value: opt.value,
-          height: 36,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CountryFlagIcon(
-                code: opt.value,
-                width: 18,
-                height: 13,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                opt.displayLabel,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                  color: isActive ? AppColors.editorialGold : AppColors.onyx,
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      leading: Container(
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.18),
-          ),
+          color: AppColors.warmIvory,
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CountryFlagIcon(
-              code: selectedValue,
-              width: 15,
-              height: 11,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 9.2,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const SizedBox(width: 2),
-            const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: AppColors.champagneGold,
-              size: 11.5,
-            ),
-          ],
+        alignment: Alignment.center,
+        child: Icon(icon, size: 19, color: AppColors.obsidian),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontFamily: AppColors.serifFontFamily,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: AppColors.obsidian,
         ),
       ),
+      trailing: const Icon(Icons.chevron_right_rounded, size: 18),
+      onTap: onTap,
     );
   }
 }

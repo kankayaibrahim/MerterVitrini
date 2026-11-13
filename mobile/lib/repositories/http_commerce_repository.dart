@@ -1,7 +1,10 @@
+import 'dart:typed_data';
+
 import '../contracts/commerce_repository.dart';
 import '../models/cart_and_order.dart';
 import '../models/product.dart';
 import '../services/api_client.dart';
+import 'http_repo_helpers.dart';
 
 class HttpCommerceRepository implements ICommerceRepository {
   final ApiClient _client;
@@ -12,17 +15,9 @@ class HttpCommerceRepository implements ICommerceRepository {
   Future<List<CartItem>> fetchServerCart() async {
     try {
       final resp = await _client.dio.get<dynamic>('/api/v1/store/cart');
-      final items = <CartItem>[];
-      if (resp.data is List) {
-        for (final item in resp.data as List) {
-          if (item is Map<String, dynamic>) {
-            items.add(CartItem.fromJson(item));
-          }
-        }
-      }
-      return items;
+      return HttpRepoHelpers.parseList(resp.data, CartItem.fromJson);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -40,7 +35,7 @@ class HttpCommerceRepository implements ICommerceRepository {
         },
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -55,7 +50,7 @@ class HttpCommerceRepository implements ICommerceRepository {
         data: {'quantity': totalUnitsQuantity},
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -64,7 +59,7 @@ class HttpCommerceRepository implements ICommerceRepository {
     try {
       await _client.dio.delete<dynamic>('/api/v1/store/cart/items/$itemId');
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -73,8 +68,45 @@ class HttpCommerceRepository implements ICommerceRepository {
     try {
       await _client.dio.delete<dynamic>('/api/v1/store/cart');
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
+  }
+
+  @override
+  Future<void> syncServerCart(List<CartItem> items) async {
+    try {
+      await _client.dio.post<dynamic>(
+        '/api/v1/store/cart/sync',
+        data: {
+          'items': items
+              .map(
+                (it) => {
+                  'product_id': it.productId,
+                  'quantity': it.totalUnits,
+                },
+              )
+              .toList(),
+        },
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<Uint8List> exportCartExcel({
+    required String lang,
+    required String displayCurrency,
+    required List<CartItem> items,
+  }) {
+    return _client.postBytes(
+      '/api/v1/store/cart/export-excel',
+      data: {
+        'lang': lang,
+        'display_currency': displayCurrency,
+        'items': items.map((e) => e.toExportExcelJson()).toList(),
+      },
+    );
   }
 
   @override
@@ -94,7 +126,7 @@ class HttpCommerceRepository implements ICommerceRepository {
       );
       return resp.data ?? <String, dynamic>{};
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -102,24 +134,21 @@ class HttpCommerceRepository implements ICommerceRepository {
   Future<List<CustomerOrder>> listCustomerOrders() async {
     try {
       final resp = await _client.dio.get<dynamic>('/api/v1/store/orders');
-      final list = <CustomerOrder>[];
-      final raw = resp.data;
-      if (raw is List) {
-        for (final o in raw) {
-          if (o is Map<String, dynamic>) {
-            list.add(CustomerOrder.fromJson(o));
-          }
-        }
-      } else if (raw is Map<String, dynamic> && raw['orders'] is List) {
-        for (final o in raw['orders'] as List) {
-          if (o is Map<String, dynamic>) {
-            list.add(CustomerOrder.fromJson(o));
-          }
-        }
-      }
-      return list;
+      return HttpRepoHelpers.parseList(resp.data, CustomerOrder.fromJson);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<OrderDetailModel> fetchOrderDetail(String orderId) async {
+    try {
+      final resp = await _client.dio.get<dynamic>(
+        '/api/v1/store/orders/$orderId',
+      );
+      return OrderDetailModel.fromJson(HttpRepoHelpers.asMap(resp.data));
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -142,7 +171,7 @@ class HttpCommerceRepository implements ICommerceRepository {
         },
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -151,28 +180,44 @@ class HttpCommerceRepository implements ICommerceRepository {
     try {
       await _client.dio.post<dynamic>('/api/v1/store/orders/$orderId/cancel');
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
   @override
+  Future<void> requestOrderRefund({
+    required String orderId,
+    required OrderRefundPayload payload,
+  }) async {
+    try {
+      await _client.dio.post<dynamic>(
+        '/api/v1/store/orders/$orderId/refund',
+        data: payload.toJson(),
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<Uint8List> downloadOrderExcel(String orderId) =>
+      _client.getBytes('/api/v1/store/orders/$orderId/excel');
+
+  @override
+  Future<Uint8List> downloadOrderImagesZip(String orderId) =>
+      _client.getBytes('/api/v1/store/orders/$orderId/images');
+
+  @override
   Future<List<Product>> fetchWishlist() async {
     try {
-      final resp = await _client.dio.get<Map<String, dynamic>>(
-        '/api/v1/mobile/wishlist',
-      );
-      final list = <Product>[];
-      final raw = resp.data?['products'];
-      if (raw is List) {
-        for (final p in raw) {
-          if (p is Map<String, dynamic>) {
-            list.add(Product.fromJson(p));
-          }
-        }
+      final resp = await _client.dio.get<dynamic>('/api/v1/mobile/wishlist');
+      final data = resp.data;
+      if (data is Map && data['products'] is List) {
+        return HttpRepoHelpers.parseList(data['products'], Product.fromJson);
       }
-      return list;
+      return <Product>[];
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -181,7 +226,7 @@ class HttpCommerceRepository implements ICommerceRepository {
     try {
       await _client.dio.post<dynamic>('/api/v1/mobile/wishlist/$productId');
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -190,29 +235,28 @@ class HttpCommerceRepository implements ICommerceRepository {
     try {
       await _client.dio.delete<dynamic>('/api/v1/mobile/wishlist/$productId');
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
   @override
   Future<(List<MobileNotificationItem>, int)> fetchNotifications() async {
     try {
-      final resp = await _client.dio.get<Map<String, dynamic>>(
+      final resp = await _client.dio.get<dynamic>(
         '/api/v1/mobile/notifications',
       );
-      final data = resp.data ?? <String, dynamic>{};
-      final list = <MobileNotificationItem>[];
-      if (data['notifications'] is List) {
-        for (final item in data['notifications'] as List) {
-          if (item is Map<String, dynamic>) {
-            list.add(MobileNotificationItem.fromJson(item));
-          }
-        }
+      final data = resp.data;
+      if (data is Map) {
+        final items = HttpRepoHelpers.parseList(
+          data['items'],
+          MobileNotificationItem.fromJson,
+        );
+        final unread = (data['unread_count'] as num?)?.toInt() ?? 0;
+        return (items, unread);
       }
-      final unread = (data['unread_count'] as num?)?.toInt() ?? 0;
-      return (list, unread);
+      return (<MobileNotificationItem>[], 0);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -223,4 +267,3 @@ class HttpCommerceRepository implements ICommerceRepository {
     } catch (_) {}
   }
 }
-

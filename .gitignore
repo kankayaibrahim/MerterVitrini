@@ -134,3 +134,4 @@ audit-reports/
 # Scratch & Temporary Scripts
 scratch/
 backend/bin/backend
+backend/uploads/

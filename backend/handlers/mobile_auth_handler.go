@@ -24,6 +24,7 @@ type MobileLoginRequest struct {
 	Password   string `json:"password"`
 	Role       string `json:"role"` // "customer", "supplier", or "auto"
 	DeviceName string `json:"device_name,omitempty"`
+	VisitorID  string `json:"visitor_id,omitempty"`
 }
 
 type MobileRefreshRequest struct {
@@ -114,7 +115,8 @@ func (h *MobileHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.loginAsCustomer(ctx, w, r, email, req.Password)
+	visitorID := firstNonEmptyStr(req.VisitorID, r.Header.Get(headerVisitorID))
+	h.loginAsCustomer(ctx, w, r, email, req.Password, visitorID)
 }
 
 func (h *MobileHandler) tryAutoSupplierLogin(ctx context.Context, w http.ResponseWriter, email, password string) bool {
@@ -180,7 +182,26 @@ func (h *MobileHandler) loginAsSupplier(ctx context.Context, w http.ResponseWrit
 	})
 }
 
-func (h *MobileHandler) loginAsCustomer(ctx context.Context, w http.ResponseWriter, r *http.Request, email, password string) {
+func buildMobileCustomerLoginResponse(
+	accessToken string,
+	refreshToken string,
+	expiresIn int,
+	userInfo *UserInfo,
+	requiresPhone bool,
+	hasSupplierAccount bool,
+) map[string]any {
+	return map[string]any{
+		"role":                 "customer",
+		"token":                accessToken,
+		"refresh_token":        refreshToken,
+		"expires_in":           expiresIn,
+		"user":                 userInfo,
+		"requires_phone":       requiresPhone,
+		"has_supplier_account": hasSupplierAccount,
+	}
+}
+
+func (h *MobileHandler) loginAsCustomer(ctx context.Context, w http.ResponseWriter, r *http.Request, email, password, visitorID string) {
 	accessToken, refreshToken, expiresIn, err := h.requestKeycloakTokensWithRefresh(ctx, email, password)
 	if err != nil {
 		httpx.Error(w, http.StatusUnauthorized, errMsgInvalidCredentials)
@@ -208,37 +229,37 @@ func (h *MobileHandler) loginAsCustomer(ctx context.Context, w http.ResponseWrit
 		httpx.Error(w, http.StatusUnauthorized, "Kullanıcı bilgileri alınamadı.")
 		return
 	}
-	if requiresCustomerPhoneCompletion(userInfo, existsInDB) {
-		httpx.Error(w, http.StatusForbidden, "Üyeliğinizi kullanabilmek için geçerli bir cep telefonu numarası tanımlamanız zorunludur.")
-		return
-	}
 
-	ip := getClientIP(r)
-	safe.Go("Mobile Login History", func() {
-		recordLoginHistory(context.Background(), userInfo.ID, ip)
-	})
-	RecordMemberActivityAsync(r, MemberActivityInput{
-		UserID:        userInfo.ID,
-		EventType:     "login",
-		EventCategory: "auth",
-		Title:         "Mobil uygulamadan oturum açtı",
-		Subtitle:      "IP: " + ip,
-		DeviceType:    "mobile_app",
-		EntityType:    "user",
-		EntityID:      userInfo.ID,
-	})
+	requiresPhone := requiresCustomerPhoneCompletion(userInfo, existsInDB)
+	if !requiresPhone {
+		ip := getClientIP(r)
+		safe.Go("Mobile Login History", func() {
+			recordLoginHistory(context.Background(), userInfo.ID, ip)
+		})
+		RecordMemberActivityAsync(r, MemberActivityInput{
+			UserID:        userInfo.ID,
+			VisitorID:     visitorID,
+			EventType:     "login",
+			EventCategory: "auth",
+			Title:         "Mobil uygulamadan oturum açtı",
+			Subtitle:      "IP: " + ip,
+			DeviceType:    "mobile_app",
+			EntityType:    "user",
+			EntityID:      userInfo.ID,
+		})
+	}
 
 	var hasSupplierAccount bool
 	_ = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM catalog.supplier_users WHERE lower(email) = $1 AND is_active = true)", email).Scan(&hasSupplierAccount)
 
-	httpx.JSON(w, http.StatusOK, map[string]any{
-		"role":                 "customer",
-		"token":                accessToken,
-		"refresh_token":        refreshToken,
-		"expires_in":           expiresIn,
-		"user":                 userInfo,
-		"has_supplier_account": hasSupplierAccount,
-	})
+	httpx.JSON(w, http.StatusOK, buildMobileCustomerLoginResponse(
+		accessToken,
+		refreshToken,
+		expiresIn,
+		userInfo,
+		requiresPhone,
+		hasSupplierAccount,
+	))
 }
 
 func (h *MobileHandler) exchangeKeycloakRefreshToken(ctx context.Context, refreshToken string) (string, string, int, bool) {
@@ -428,5 +449,82 @@ func (h *MobileHandler) UnregisterDevice(w http.ResponseWriter, r *http.Request)
 	}
 
 	httpx.JSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// Register handles POST /api/v1/mobile/auth/register using HMAC challenge verification instead of browser ReCAPTCHA.
+func (h *MobileHandler) Register(w http.ResponseWriter, r *http.Request) {
+	var req RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Geçersiz istek gövdesi")
+		return
+	}
+
+	if req.WebsiteHP != "" {
+		writeFakeHoneypotRegisterResponse(w, r, req.WebsiteHP)
+		return
+	}
+
+	if !h.requireMobileChallenge(w, r, mobileChallengePurposeReg, req.ChallengeToken, req.FormChallengeToken) {
+		return
+	}
+
+	if errJSON := normalizeAndValidateRegisterInput(&req); errJSON != "" {
+		http.Error(w, errJSON, http.StatusBadRequest)
+		return
+	}
+
+	if h.StoreAuth == nil {
+		httpx.Error(w, http.StatusInternalServerError, "Kimlik servisi hazır değil.")
+		return
+	}
+	h.StoreAuth.completeCustomerRegistration(w, r, req, true)
+}
+
+// SubmitSupplierApplication handles POST /api/v1/mobile/supplier-applications using HMAC challenge verification.
+func (h *MobileHandler) SubmitSupplierApplication(w http.ResponseWriter, r *http.Request) {
+	var req models.CreateSupplierApplicationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Geçersiz istek formatı")
+		return
+	}
+
+	if !h.requireMobileChallenge(w, r, mobileChallengePurposeSupp, req.ChallengeToken, req.FormChallengeToken) {
+		return
+	}
+
+	if errMsg := normalizeAndValidateSupplierApplicationRequest(&req); errMsg != "" {
+		httpx.Error(w, http.StatusBadRequest, errMsg)
+		return
+	}
+
+	if h.SupplierApps == nil {
+		httpx.Error(w, http.StatusInternalServerError, "Tedarikçi başvuru servisi hazır değil.")
+		return
+	}
+	h.SupplierApps.createSupplierApplication(w, r, req)
+}
+
+// CreateServiceProviderApplication handles POST /api/v1/mobile/service-providers using HMAC challenge verification.
+func (h *MobileHandler) CreateServiceProviderApplication(w http.ResponseWriter, r *http.Request) {
+	var req serviceProviderApplyPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Geçersiz başvuru verisi")
+		return
+	}
+
+	if !h.requireMobileChallenge(w, r, mobileChallengePurposeService, req.ChallengeToken, req.FormChallengeToken) {
+		return
+	}
+
+	if errMsg := validateServiceProviderApplyPayload(&req); errMsg != "" {
+		httpx.Error(w, http.StatusBadRequest, errMsg)
+		return
+	}
+
+	if h.Marketplace == nil {
+		httpx.Error(w, http.StatusInternalServerError, "Hizmet sağlayıcı servisi hazır değil.")
+		return
+	}
+	h.Marketplace.createServiceProviderApplication(w, r, req)
 }
 

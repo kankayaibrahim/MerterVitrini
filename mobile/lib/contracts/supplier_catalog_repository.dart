@@ -1,6 +1,6 @@
 import '../models/product.dart';
 
-/// ISP Contract: Supplier Product Management & Camera Batch Image Upload.
+/// ISP Contract: Supplier Catalog Authoring, Studio Upload, Translations & Archive Management.
 abstract interface class ISupplierCatalogRepository {
   Future<(List<Product>, int)> listSupplierProducts({
     String query = '',
@@ -32,6 +32,21 @@ abstract interface class ISupplierCatalogRepository {
 
   Future<void> deleteSupplierProduct(String productId);
 
+  Future<void> toggleArchiveProduct({
+    required String productId,
+    required bool isArchived,
+    bool restoreActive = false,
+  });
+
+  Future<int> bulkArchiveProducts({
+    List<String> productIds = const [],
+    bool isArchived = true,
+    bool restoreActive = false,
+    String season = '',
+    int? olderThanDays,
+    bool zeroStockOnly = false,
+  });
+
   Future<String> findSupplierProductByCode(String code);
 
   Future<List<SimpleOptionItem>> fetchSupplierCategories();
@@ -41,8 +56,18 @@ abstract interface class ISupplierCatalogRepository {
 
   Future<SupplierAttributesBundle> fetchSupplierAttributeBundle();
 
-  Future<Map<String, Map<String, String>>> autoTranslateSupplierFields(
-    Map<String, String> fields,
+  Future<SupplierProductTranslationMap> fetchSupplierProductTranslations(
+    String productId,
   );
-}
 
+  Future<void> updateSupplierProductTranslations(
+    String productId,
+    Map<String, SupplierProductTranslationEntry> translations,
+  );
+
+  Future<Map<String, Map<String, String>>> autoTranslateSupplierFields(
+    Map<String, String> fields, {
+    String sourceLang = 'tr',
+    List<String>? targetLangs,
+  });
+}

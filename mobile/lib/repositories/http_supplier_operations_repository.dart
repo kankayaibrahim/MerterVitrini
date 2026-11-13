@@ -1,7 +1,10 @@
 import '../contracts/supplier_operations_repository.dart';
 import '../models/cart_and_order.dart';
 import '../models/chat.dart';
+import '../models/marketplace.dart';
+import '../models/user.dart';
 import '../services/api_client.dart';
+import 'http_repo_helpers.dart';
 
 class HttpSupplierOperationsRepository implements ISupplierOperationsRepository {
   final ApiClient _client;
@@ -16,7 +19,7 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
       );
       return resp.data ?? <String, dynamic>{};
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -29,23 +32,24 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
         '/api/v1/supplier/orders',
         queryParameters: {'status': status, 'limit': 50},
       );
-      return _parseList(resp.data?['orders'], SupplierSubOrder.fromJson);
+      return HttpRepoHelpers.parseList(
+        resp.data?['orders'],
+        SupplierSubOrder.fromJson,
+      );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
   @override
-  Future<SupplierSubOrder> fetchSupplierSubOrderDetail(
-    String subOrderId,
-  ) async {
+  Future<SupplierSubOrder> fetchSupplierSubOrderDetail(String subOrderId) async {
     try {
       final resp = await _client.dio.get<Map<String, dynamic>>(
         '/api/v1/supplier/orders/$subOrderId',
       );
       return SupplierSubOrder.fromJson(resp.data ?? <String, dynamic>{});
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -68,7 +72,89 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
         },
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<SupplierEditorialProfile> fetchSupplierEditorialProfile() async {
+    try {
+      final resp = await _client.dio.get<dynamic>('/api/v1/supplier/profile');
+      return SupplierEditorialProfile.fromJson(
+        HttpRepoHelpers.asMap(resp.data),
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<void> updateSupplierEditorialProfile(
+    SupplierEditorialProfile profile, {
+    bool quickWhatsappOnly = false,
+  }) async {
+    try {
+      await _client.dio.put<dynamic>(
+        '/api/v1/supplier/profile',
+        data: profile.toUpdateJson(quickWhatsappOnly: quickWhatsappOnly),
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<SupplierAnalyticsOverview> fetchSupplierAnalytics({
+    String period = '30d',
+  }) async {
+    try {
+      final resp = await _client.dio.get<dynamic>(
+        '/api/v1/supplier/analytics',
+        queryParameters: {'period': period},
+      );
+      return SupplierAnalyticsOverview.fromJson(
+        HttpRepoHelpers.asMap(resp.data),
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<SupplierBillingOverview> fetchSupplierBilling() async {
+    try {
+      final resp = await _client.dio.get<dynamic>('/api/v1/supplier/billing');
+      return SupplierBillingOverview.fromJson(HttpRepoHelpers.asMap(resp.data));
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<void> updateSupplierBillingTaxInfo(
+    SupplierTaxInfoPayload payload,
+  ) async {
+    try {
+      await _client.dio.put<dynamic>(
+        '/api/v1/supplier/billing/tax-info',
+        data: payload.toJson(),
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<void> submitSupplierSubscriptionPayment(
+    SupplierWirePaymentPayload payload,
+  ) async {
+    try {
+      await _client.dio.post<dynamic>(
+        '/api/v1/supplier/billing/payments',
+        data: payload.toJson(),
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -80,13 +166,16 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
         '/api/v1/supplier/wallet',
       );
       final data = resp.data ?? <String, dynamic>{};
-      final wallet = data['wallet'] is Map<String, dynamic>
-          ? SupplierWallet.fromJson(data['wallet'] as Map<String, dynamic>)
-          : const SupplierWallet();
-      final ledger = _parseList(data['ledger'], SupplierLedgerEntry.fromJson);
+      final wallet = SupplierWallet.fromJson(
+        HttpRepoHelpers.asMap(data['wallet']),
+      );
+      final ledger = HttpRepoHelpers.parseList(
+        data['ledger'],
+        SupplierLedgerEntry.fromJson,
+      );
       return (wallet, ledger);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -106,7 +195,17 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
         },
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<List<SupplierPayoutItem>> listSupplierPayoutRequests() async {
+    try {
+      final resp = await _client.dio.get<dynamic>('/api/v1/supplier/payouts');
+      return HttpRepoHelpers.parseList(resp.data, SupplierPayoutItem.fromJson);
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -118,7 +217,37 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
         data: {'amount': amount},
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<List<RfqItem>> listSupplierRfqs() async {
+    try {
+      final resp = await _client.dio.get<dynamic>('/api/v1/supplier/rfqs');
+      return HttpRepoHelpers.parseList(resp.data, RfqItem.fromJson);
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<RfqOfferItem> submitSupplierRfqOffer({
+    required String rfqId,
+    required SubmitRfqOfferPayload payload,
+  }) async {
+    try {
+      final resp = await _client.dio.post<dynamic>(
+        '/api/v1/supplier/rfqs/$rfqId/offers',
+        data: payload.toJson(),
+      );
+      final map = HttpRepoHelpers.asMap(resp.data);
+      final offerMap = map['offer'] is Map<String, dynamic>
+          ? map['offer'] as Map<String, dynamic>
+          : map;
+      return RfqOfferItem.fromJson(offerMap);
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -126,9 +255,9 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
   Future<List<SupplierAgent>> listSupplierTeam() async {
     try {
       final resp = await _client.dio.get<dynamic>('/api/v1/supplier/team');
-      return _parseList(resp.data, SupplierAgent.fromJson);
+      return HttpRepoHelpers.parseList(resp.data, SupplierAgent.fromJson);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -137,9 +266,9 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
     required String contactName,
     required String email,
     required String password,
+    String jobTitle = '',
     String phone = '',
-    String jobTitle = 'Satış Temsilcisi',
-    String spokenLanguages = 'TR',
+    String spokenLanguages = 'tr',
   }) async {
     try {
       await _client.dio.post<dynamic>(
@@ -154,7 +283,7 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
         },
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -163,23 +292,7 @@ class HttpSupplierOperationsRepository implements ISupplierOperationsRepository 
     try {
       await _client.dio.delete<dynamic>('/api/v1/supplier/team/$memberId');
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
-  }
-
-  List<T> _parseList<T>(
-    dynamic raw,
-    T Function(Map<String, dynamic>) mapper,
-  ) {
-    final result = <T>[];
-    if (raw is List) {
-      for (final item in raw) {
-        if (item is Map<String, dynamic>) {
-          result.add(mapper(item));
-        }
-      }
-    }
-    return result;
   }
 }
-

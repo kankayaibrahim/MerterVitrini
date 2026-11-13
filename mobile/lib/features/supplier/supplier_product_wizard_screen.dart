@@ -3,10 +3,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_theme.dart';
+import '../../core/localization.dart';
 import '../../models/product.dart';
 import '../../providers/session_provider.dart';
 import '../../providers/supplier_provider.dart';
 import 'camera_studio_screen.dart';
+import 'utils/supplier_l10n.dart';
+import 'widgets/supplier_editorial_widgets.dart';
 import 'wizard/wizard_model_details_card.dart';
 import 'wizard/wizard_models.dart';
 import 'wizard/wizard_photo_studio_card.dart';
@@ -31,6 +34,16 @@ class SupplierProductWizardScreen extends StatefulWidget {
 
 class _SupplierProductWizardScreenState
     extends State<SupplierProductWizardScreen> {
+  static const List<String> _targetLangCodes = [
+    'en',
+    'ru',
+    'ar',
+    'de',
+    'fr',
+    'pl',
+    'bg',
+  ];
+
   final ImagePicker _galleryPicker = ImagePicker();
 
   final _titleCtrl = TextEditingController();
@@ -48,9 +61,7 @@ class _SupplierProductWizardScreenState
   String _seriesRatio = '1-1-1-1';
 
   final Map<String, EditableTranslationLanguageSet> _translations = {
-    'en': EditableTranslationLanguageSet(),
-    'ru': EditableTranslationLanguageSet(),
-    'ar': EditableTranslationLanguageSet(),
+    for (final code in _targetLangCodes) code: EditableTranslationLanguageSet(),
   };
 
   String _selectedCategoryId = '';
@@ -67,7 +78,16 @@ class _SupplierProductWizardScreenState
   bool _loadingDetail = false;
   bool _saving = false;
   bool _autoTranslating = false;
-  String _saveStageLabel = '';
+  String _saveStageKey = '';
+
+  String _lang() {
+    if (!mounted) return 'tr';
+    try {
+      return Provider.of<SessionProvider>(context, listen: false).languageCode;
+    } catch (_) {
+      return 'tr';
+    }
+  }
 
   @override
   void initState() {
@@ -200,7 +220,7 @@ class _SupplierProductWizardScreenState
       );
     }
 
-    for (final lang in ['en', 'ru', 'ar']) {
+    for (final lang in _targetLangCodes) {
       final t = p.translations[lang];
       final set = _translations[lang];
       if (set != null && t != null) {
@@ -212,9 +232,13 @@ class _SupplierProductWizardScreenState
   }
 
   Future<void> _autoTranslateFromTurkish() async {
+    final lang = _lang();
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) {
-      _showSnack('Lütfen önce Türkçe ürün başlığını giriniz.', isError: true);
+      _showSnack(
+        SupplierL10n.t(lang, 'wizard_title_required'),
+        isError: true,
+      );
       return;
     }
     setState(() => _autoTranslating = true);
@@ -222,16 +246,20 @@ class _SupplierProductWizardScreenState
       final result = await context
           .read<SupplierProvider>()
           .catalogRepo
-          .autoTranslateSupplierFields({
-        'title': title,
-        'short_description': _shortDescCtrl.text.trim(),
-        'description': _descCtrl.text.trim(),
-      });
+          .autoTranslateSupplierFields(
+        {
+          'title': title,
+          'short_description': _shortDescCtrl.text.trim(),
+          'description': _descCtrl.text.trim(),
+        },
+        sourceLang: 'tr',
+        targetLangs: _targetLangCodes,
+      );
       if (!mounted) return;
       setState(() {
-        for (final lang in ['en', 'ru', 'ar']) {
-          final map = result[lang];
-          final set = _translations[lang];
+        for (final code in _targetLangCodes) {
+          final map = result[code];
+          final set = _translations[code];
           if (map != null && set != null) {
             if ((map['title'] ?? '').isNotEmpty) {
               set.titleCtrl.text = map['title']!;
@@ -245,9 +273,12 @@ class _SupplierProductWizardScreenState
           }
         }
       });
-      _showSnack('EN, RU ve AR çeviriler otomatik oluşturuldu.');
+      _showSnack(SupplierL10n.t(lang, 'wizard_auto_translate_done'));
     } catch (e) {
-      _showSnack('Otomatik çeviri başarısız: $e', isError: true);
+      _showSnack(
+        '${SupplierL10n.t(lang, 'wizard_auto_translate_err')}: $e',
+        isError: true,
+      );
     } finally {
       if (mounted) {
         setState(() => _autoTranslating = false);
@@ -306,9 +337,10 @@ class _SupplierProductWizardScreenState
   }
 
   Future<void> _openCameraStudio() async {
+    final lang = _lang();
     final remaining = 10 - _photos.length;
     if (remaining <= 0) {
-      _showSnack('En fazla 10 ürün fotoğrafı ekleyebilirsiniz.', isError: true);
+      _showSnack('${SupplierL10n.t(lang, 'camera_max_photos')} (10)', isError: true);
       return;
     }
 
@@ -333,9 +365,10 @@ class _SupplierProductWizardScreenState
   }
 
   Future<void> _pickFromGallery() async {
+    final lang = _lang();
     final remaining = 10 - _photos.length;
     if (remaining <= 0) {
-      _showSnack('En fazla 10 ürün fotoğrafı ekleyebilirsiniz.', isError: true);
+      _showSnack('${SupplierL10n.t(lang, 'camera_max_photos')} (10)', isError: true);
       return;
     }
 
@@ -355,7 +388,10 @@ class _SupplierProductWizardScreenState
         });
       }
     } catch (e) {
-      _showSnack('Galeri seçimi başarısız: $e', isError: true);
+      _showSnack(
+        '${SupplierL10n.t(lang, 'wizard_gallery_error')}: $e',
+        isError: true,
+      );
     }
   }
 
@@ -430,6 +466,7 @@ class _SupplierProductWizardScreenState
   }
 
   Future<void> _submitProduct() async {
+    final lang = _lang();
     final title = _titleCtrl.text.trim();
     final unitPrice =
         double.tryParse(_priceCtrl.text.replaceAll(',', '.').trim()) ?? 0.0;
@@ -445,29 +482,35 @@ class _SupplierProductWizardScreenState
 
     if (_photos.isEmpty) {
       _showSnack(
-        'Lütfen kameradan çekerek veya galeriden en az 1 ürün fotoğrafı ekleyiniz.',
+        SupplierL10n.t(lang, 'wizard_enter_photo_err'),
         isError: true,
       );
       return;
     }
     if (title.isEmpty) {
-      _showSnack('Lütfen ürün model adını giriniz.', isError: true);
+      _showSnack(
+        SupplierL10n.t(lang, 'wizard_title_required'),
+        isError: true,
+      );
       return;
     }
     if (_selectedCategoryId.isEmpty) {
-      _showSnack('Lütfen ürün kategorisini seçiniz.', isError: true);
+      _showSnack(
+        SupplierL10n.t(lang, 'wizard_category_required'),
+        isError: true,
+      );
       return;
     }
     if (unitPrice <= 0) {
       _showSnack(
-        'Lütfen geçerli bir toptan birim satış fiyatı giriniz.',
+        SupplierL10n.t(lang, 'wizard_price_required'),
         isError: true,
       );
       return;
     }
     if (_selectedSizes.isEmpty) {
       _showSnack(
-        'Lütfen beden tanım tablosundan en az 1 beden seçiniz.',
+        SupplierL10n.t(lang, 'wizard_sizes_required'),
         isError: true,
       );
       return;
@@ -475,7 +518,7 @@ class _SupplierProductWizardScreenState
 
     setState(() {
       _saving = true;
-      _saveStageLabel = 'Fotoğraflar optimize edilip yükleniyor...';
+      _saveStageKey = 'wizard_save_uploading_photos';
     });
 
     try {
@@ -493,7 +536,7 @@ class _SupplierProductWizardScreenState
         uploadedUrls =
             await catalogRepo.uploadSupplierProductPhotos(localPathsToUpload);
         if (uploadedUrls.length != localPathsToUpload.length) {
-          throw Exception('Bazı fotoğraflar sunucuya aktarılamadı.');
+          throw Exception(SupplierL10n.t(lang, 'wizard_photo_upload_err'));
         }
       }
 
@@ -507,7 +550,7 @@ class _SupplierProductWizardScreenState
 
       if (!mounted) return;
       setState(() {
-        _saveStageLabel = 'Ürün ve seri stokları vitrine kaydediliyor...';
+        _saveStageKey = 'wizard_save_committing';
       });
 
       final variantStocks = SeriesStockDistributor.computeVariantStocks(
@@ -585,8 +628,8 @@ class _SupplierProductWizardScreenState
         SnackBar(
           content: Text(
             widget.existingProduct != null
-                ? 'Ürün başarıyla güncellendi.'
-                : 'Yeni ürün vitrinde yayına alındı!',
+                ? SupplierL10n.t(lang, 'wizard_updated_msg')
+                : SupplierL10n.t(lang, 'wizard_published_msg'),
           ),
           backgroundColor: AppColors.emerald,
         ),
@@ -598,7 +641,7 @@ class _SupplierProductWizardScreenState
       if (mounted) {
         setState(() {
           _saving = false;
-          _saveStageLabel = '';
+          _saveStageKey = '';
         });
       }
     }
@@ -609,7 +652,7 @@ class _SupplierProductWizardScreenState
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: isError ? AppColors.danger : AppColors.navy,
+        backgroundColor: isError ? AppColors.danger : AppColors.obsidian,
       ),
     );
   }
@@ -618,143 +661,171 @@ class _SupplierProductWizardScreenState
   Widget build(BuildContext context) {
     final session = context.watch<SessionProvider>();
     final supProv = context.watch<SupplierProvider>();
+    final lang = session.languageCode;
     final categoryOptions = _effectiveCategoryOptions(supProv, session);
     final unitPricePreview =
         double.tryParse(_priceCtrl.text.replaceAll(',', '.').trim()) ?? 0.0;
 
     return Theme(
-      data: AppTheme.light(isSupplierMode: true),
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            widget.existingProduct != null
-                ? 'Toptan Ürünü Düzenle'
-                : 'Hızlı Toptan Ürün Ekle',
+      data: AppTheme.light(isSupplierMode: true, languageCode: lang),
+      child: Directionality(
+        textDirection: AppStrings.directionOf(lang),
+        child: Scaffold(
+          backgroundColor: AppColors.warmIvory,
+          appBar: buildSupplierSubPageAppBar(
+            context: context,
+            title: widget.existingProduct != null
+                ? SupplierL10n.t(lang, 'wizard_edit_title')
+                : SupplierL10n.t(lang, 'wizard_new_title'),
+            subtitle: SupplierL10n.t(lang, 'wizard_upload_notice'),
           ),
-        ),
-        body: _loadingDetail
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
-                children: [
-                  WizardPhotoStudioCard(
-                    photos: _photos,
-                    saving: _saving,
-                    onOpenCamera: _openCameraStudio,
-                    onPickGallery: _pickFromGallery,
-                    onMakeCover: _makeCoverPhoto,
-                    onRemovePhoto: (idx) =>
-                        setState(() => _photos.removeAt(idx)),
-                  ),
-                  const SizedBox(height: 12),
-                  WizardModelDetailsCard(
-                    titleCtrl: _titleCtrl,
-                    priceCtrl: _priceCtrl,
-                    categoryOptions: categoryOptions,
-                    selectedCategoryLabel: _selectedCategoryLabel,
-                    currency: _currency,
-                    onCategoryPicked: (picked) {
-                      setState(() {
-                        _selectedCategoryId = picked.id;
-                        _selectedCategoryLabel = picked.name;
-                      });
-                    },
-                    onCurrencyChanged: (v) => setState(() => _currency = v),
-                    onPriceEdited: () => setState(() {}),
-                  ),
-                  const SizedBox(height: 12),
-                  WizardVariantsMatrixCard(
-                    sizeDefinitions: supProv.sizeDefinitions,
-                    seriesTemplates: supProv.seriesTemplates,
-                    selectedSizes: _selectedSizes,
-                    seriesRatio: _seriesRatio,
-                    seriesStockCtrl: _seriesStockCtrl,
-                    unitPrice: unitPricePreview,
-                    currency: _currency,
-                    onToggleSize: (code) =>
-                        _toggleSelectedSize(code, supProv.sizeDefinitions),
-                    onApplyTemplate: _applySeriesTemplate,
-                    onAssortmentModeChanged: _changeAssortmentMode,
-                    onSeriesStockPresetPicked: (cnt) {
-                      setState(() => _seriesStockCtrl.text = '$cnt');
-                    },
-                    onSeriesStockEdited: () => setState(() {}),
-                  ),
-                  const SizedBox(height: 12),
-                  WizardPricingSeriesCard(
-                    colorOptions: supProv.colors,
-                    fabricOptions: supProv.fabrics,
-                    selectedColorLabel: _selectedColorLabel,
-                    selectedFabricLabel: _selectedFabricLabel,
-                    gender: _gender,
-                    season: _season,
-                    buyingPriceCtrl: _buyingPriceCtrl,
-                    minOrderCtrl: _minOrderCtrl,
-                    shortDescCtrl: _shortDescCtrl,
-                    descCtrl: _descCtrl,
-                    isActive: _isActive,
-                    translations: _translations,
-                    autoTranslating: _autoTranslating,
-                    onColorPicked: (picked) {
-                      setState(() {
-                        _selectedColorId =
-                            picked.id.isEmpty ? null : picked.id;
-                        _selectedColorLabel = picked.name;
-                      });
-                    },
-                    onFabricPicked: (picked) {
-                      setState(() {
-                        _selectedFabricId =
-                            picked.id.isEmpty ? null : picked.id;
-                        _selectedFabricLabel = picked.name;
-                      });
-                    },
-                    onGenderChanged: (v) => setState(() => _gender = v),
-                    onSeasonChanged: (v) => setState(() => _season = v),
-                    onActiveChanged: (v) => setState(() => _isActive = v),
-                    onAutoTranslate: _autoTranslateFromTurkish,
-                  ),
-                  const SizedBox(height: 18),
-                  if (_saving && _saveStageLabel.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            _saveStageLabel,
-                            style: const TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.navy,
+          body: _loadingDetail
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
+                  children: [
+                    WizardPhotoStudioCard(
+                      photos: _photos,
+                      saving: _saving,
+                      onOpenCamera: _openCameraStudio,
+                      onPickGallery: _pickFromGallery,
+                      onMakeCover: _makeCoverPhoto,
+                      onRemovePhoto: (idx) =>
+                          setState(() => _photos.removeAt(idx)),
+                      lang: lang,
+                    ),
+                    const SizedBox(height: 12),
+                    WizardModelDetailsCard(
+                      titleCtrl: _titleCtrl,
+                      priceCtrl: _priceCtrl,
+                      categoryOptions: categoryOptions,
+                      selectedCategoryLabel: _selectedCategoryLabel,
+                      currency: _currency,
+                      onCategoryPicked: (picked) {
+                        setState(() {
+                          _selectedCategoryId = picked.id;
+                          _selectedCategoryLabel = picked.name;
+                        });
+                      },
+                      onCurrencyChanged: (v) => setState(() => _currency = v),
+                      onPriceEdited: () => setState(() {}),
+                      lang: lang,
+                    ),
+                    const SizedBox(height: 12),
+                    WizardVariantsMatrixCard(
+                      sizeDefinitions: supProv.sizeDefinitions,
+                      seriesTemplates: supProv.seriesTemplates,
+                      selectedSizes: _selectedSizes,
+                      seriesRatio: _seriesRatio,
+                      seriesStockCtrl: _seriesStockCtrl,
+                      unitPrice: unitPricePreview,
+                      currency: _currency,
+                      onToggleSize: (code) =>
+                          _toggleSelectedSize(code, supProv.sizeDefinitions),
+                      onApplyTemplate: _applySeriesTemplate,
+                      onAssortmentModeChanged: _changeAssortmentMode,
+                      onSeriesStockPresetPicked: (cnt) {
+                        setState(() => _seriesStockCtrl.text = '$cnt');
+                      },
+                      onSeriesStockEdited: () => setState(() {}),
+                      lang: lang,
+                    ),
+                    const SizedBox(height: 12),
+                    WizardPricingSeriesCard(
+                      colorOptions: supProv.colors,
+                      fabricOptions: supProv.fabrics,
+                      selectedColorLabel: _selectedColorLabel,
+                      selectedFabricLabel: _selectedFabricLabel,
+                      gender: _gender,
+                      season: _season,
+                      buyingPriceCtrl: _buyingPriceCtrl,
+                      minOrderCtrl: _minOrderCtrl,
+                      shortDescCtrl: _shortDescCtrl,
+                      descCtrl: _descCtrl,
+                      isActive: _isActive,
+                      translations: _translations,
+                      autoTranslating: _autoTranslating,
+                      onColorPicked: (picked) {
+                        setState(() {
+                          _selectedColorId =
+                              picked.id.isEmpty ? null : picked.id;
+                          _selectedColorLabel = picked.name;
+                        });
+                      },
+                      onFabricPicked: (picked) {
+                        setState(() {
+                          _selectedFabricId =
+                              picked.id.isEmpty ? null : picked.id;
+                          _selectedFabricLabel = picked.name;
+                        });
+                      },
+                      onGenderChanged: (v) => setState(() => _gender = v),
+                      onSeasonChanged: (v) => setState(() => _season = v),
+                      onActiveChanged: (v) => setState(() => _isActive = v),
+                      onAutoTranslate: _autoTranslateFromTurkish,
+                      lang: lang,
+                    ),
+                    const SizedBox(height: 18),
+                    if (_saving && _saveStageKey.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                SupplierL10n.t(lang, _saveStageKey),
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.obsidian,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.obsidian,
+                          foregroundColor: AppColors.pureWhite,
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(AppColors.radiusLg),
                           ),
-                        ],
+                        ),
+                        onPressed: _saving ? null : _submitProduct,
+                        icon: const Icon(Icons.cloud_upload_outlined),
+                        label: Text(
+                          _saving
+                              ? SupplierL10n.t(lang, 'wizard_saving')
+                              : widget.existingProduct != null
+                                  ? SupplierL10n.t(
+                                      lang,
+                                      'wizard_save_changes_btn',
+                                    )
+                                  : SupplierL10n.t(
+                                      lang,
+                                      'wizard_publish_new_btn',
+                                    ),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ),
-                  SizedBox(
-                    height: 54,
-                    child: ElevatedButton.icon(
-                      onPressed: _saving ? null : _submitProduct,
-                      icon: const Icon(Icons.cloud_upload_outlined),
-                      label: Text(
-                        _saving
-                            ? 'Yükleniyor...'
-                            : widget.existingProduct != null
-                                ? 'Değişiklikleri Vitrine Kaydet'
-                                : 'Ürünü Vitrine Kaydet & Yayınla',
-                        style: const TextStyle(fontSize: 15.5),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+        ),
       ),
     );
   }

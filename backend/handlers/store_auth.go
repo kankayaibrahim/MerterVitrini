@@ -89,14 +89,16 @@ func NewStoreAuthHandler(cfg *config.Config) *StoreAuthHandler {
 }
 
 type RegisterRequest struct {
-	FirstName    string `json:"first_name"`
-	LastName     string `json:"last_name"`
-	Email        string `json:"email"`
-	Password     string `json:"password"`
-	Phone        string `json:"phone"`
-	VisitorID    string `json:"visitor_id,omitempty"`
-	CaptchaToken string `json:"captcha_token"`
-	WebsiteHP    string `json:"website_hp"`
+	FirstName          string `json:"first_name"`
+	LastName           string `json:"last_name"`
+	Email              string `json:"email"`
+	Password           string `json:"password"`
+	Phone              string `json:"phone"`
+	VisitorID          string `json:"visitor_id,omitempty"`
+	CaptchaToken       string `json:"captcha_token"`
+	ChallengeToken     string `json:"challenge_token,omitempty"`
+	FormChallengeToken string `json:"form_challenge_token,omitempty"`
+	WebsiteHP          string `json:"website_hp"`
 }
 
 type LoginRequest struct {
@@ -402,46 +404,17 @@ func (h *StoreAuthHandler) createKeycloakCustomer(ctx context.Context, adminToke
 	return parts[len(parts)-1], http.StatusCreated, ""
 }
 
-func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
+func writeFakeHoneypotRegisterResponse(w http.ResponseWriter, r *http.Request, filled string) {
+	log.Printf("[HONEYPOT DETECTED] Bot registration attempt from IP: %s (field filled: %s)", r.RemoteAddr, filled)
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]any{
+		"message": "Kayıt başarıyla oluşturuldu.",
+		"user_id": "fake-register-id-99124",
+	})
+}
 
-	var req RegisterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Geçersiz istek gövdesi"}`, http.StatusBadRequest)
-		return
-	}
-
-	// Honeypot trap: if this field is filled, it's a bot!
-	if req.WebsiteHP != "" {
-		log.Printf("[HONEYPOT DETECTED] Bot registration attempt from IP: %s (field filled: %s)", r.RemoteAddr, req.WebsiteHP)
-		w.Header().Set(headerContentType, mimeApplicationJSON)
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{
-			"message": "Kayıt başarıyla oluşturuldu.",
-			"user_id": "fake-register-id-99124",
-		})
-		return
-	}
-
-	if errJSON := normalizeAndValidateRegisterInput(&req); errJSON != "" {
-		http.Error(w, errJSON, http.StatusBadRequest)
-		return
-	}
-
-	captchaValid, captchaErr := verifyPublicFormReCaptcha(h.Cfg, req.CaptchaToken, "register", true)
-	if captchaErr != nil {
-		log.Printf("[AUTH ERROR] reCAPTCHA validation error: %v", captchaErr)
-		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, captchaErr.Error()), http.StatusBadRequest)
-		return
-	}
-	if !captchaValid {
-		http.Error(w, `{"error":"Güvenlik doğrulaması (reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."}`, http.StatusBadRequest)
-		return
-	}
-
+func (h *StoreAuthHandler) completeCustomerRegistration(w http.ResponseWriter, r *http.Request, req RegisterRequest, isMobile bool) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
@@ -488,12 +461,17 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	meta := mailer.ExtractClientMeta(r)
 	mailer.SendCustomerRegisteredNotification(h.Cfg, req.FirstName, req.LastName, req.Email, req.Phone, meta)
 
+	visitorID := firstNonEmptyStr(req.VisitorID, r.Header.Get(headerVisitorID))
+	activityTitle := "Üye oldu (B2B müşteri kaydı tamamlandı)"
+	if isMobile {
+		activityTitle = "Mobil uygulamadan üye oldu (B2B müşteri kaydı tamamlandı)"
+	}
 	RecordMemberActivityAsync(r, MemberActivityInput{
 		UserID:        keycloakUserID,
-		VisitorID:     req.VisitorID,
+		VisitorID:     visitorID,
 		EventType:     "register",
 		EventCategory: "auth",
-		Title:         "Üye oldu (B2B müşteri kaydı tamamlandı)",
+		Title:         activityTitle,
 		Subtitle:      fmt.Sprintf("%s %s • %s", req.FirstName, req.LastName, req.Email),
 		EntityType:    "user",
 		EntityID:      keycloakUserID,
@@ -522,10 +500,59 @@ func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
+	if isMobile {
+		var hasSupplierAccount bool
+		_ = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM catalog.supplier_users WHERE lower(email) = $1 AND is_active = true)", req.Email).Scan(&hasSupplierAccount)
+		json.NewEncoder(w).Encode(map[string]any{
+			"role":                 "customer",
+			"token":                loginToken,
+			"user":                 loginUser,
+			"requires_phone":       false,
+			"has_supplier_account": hasSupplierAccount,
+		})
+		return
+	}
 	json.NewEncoder(w).Encode(AuthResponse{
 		Token: loginToken,
 		User:  loginUser,
 	})
+}
+
+func (h *StoreAuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Geçersiz istek gövdesi"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Honeypot trap: if this field is filled, it's a bot!
+	if req.WebsiteHP != "" {
+		writeFakeHoneypotRegisterResponse(w, r, req.WebsiteHP)
+		return
+	}
+
+	if errJSON := normalizeAndValidateRegisterInput(&req); errJSON != "" {
+		http.Error(w, errJSON, http.StatusBadRequest)
+		return
+	}
+
+	captchaValid, captchaErr := verifyPublicFormReCaptcha(h.Cfg, req.CaptchaToken, "register", true)
+	if captchaErr != nil {
+		log.Printf("[AUTH ERROR] reCAPTCHA validation error: %v", captchaErr)
+		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, captchaErr.Error()), http.StatusBadRequest)
+		return
+	}
+	if !captchaValid {
+		http.Error(w, `{"error":"Güvenlik doğrulaması (reCAPTCHA) başarısız oldu. Lütfen tekrar deneyin."}`, http.StatusBadRequest)
+		return
+	}
+
+	h.completeCustomerRegistration(w, r, req, false)
 }
 
 func (h *StoreAuthHandler) Login(w http.ResponseWriter, r *http.Request) {

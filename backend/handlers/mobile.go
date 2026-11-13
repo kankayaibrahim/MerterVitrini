@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"mertervitrini/backend/config"
@@ -21,9 +23,11 @@ const (
 
 // MobileHandlerDeps encapsulates DIP service abstractions injected into MobileHandler.
 type MobileHandlerDeps struct {
-	Media    services.MediaProcessor
-	Tokens   services.TokenService
-	Deletion *services.AccountDeletionRegistry
+	Media        services.MediaProcessor
+	Tokens       services.TokenService
+	Deletion     *services.AccountDeletionRegistry
+	SupplierApps *SupplierApplicationsHandler
+	Marketplace  *MarketplaceHandler
 }
 
 // MobileHandler coordinates mobile B2B HTTP endpoints by delegating domain logic to injected services.
@@ -31,6 +35,8 @@ type MobileHandler struct {
 	Cfg          *config.Config
 	StoreAuth    *StoreAuthHandler
 	SupplierAuth *SupplierPortalHandler
+	SupplierApps *SupplierApplicationsHandler
+	Marketplace  *MarketplaceHandler
 	Media        services.MediaProcessor
 	Tokens       services.TokenService
 	Deletion     *services.AccountDeletionRegistry
@@ -100,10 +106,22 @@ func NewMobileHandler(
 		deletionReg = buildDefaultDeletionRegistry(cfg, storeAuth)
 	}
 
+	supplierApps := d.SupplierApps
+	if supplierApps == nil {
+		supplierApps = NewSupplierApplicationsHandler(cfg)
+	}
+
+	marketplace := d.Marketplace
+	if marketplace == nil {
+		marketplace = NewMarketplaceHandler(cfg, services.NewPostgresNotificationDispatcher(db.Pool))
+	}
+
 	return &MobileHandler{
 		Cfg:          cfg,
 		StoreAuth:    storeAuth,
 		SupplierAuth: supplierAuth,
+		SupplierApps: supplierApps,
+		Marketplace:  marketplace,
 		Media:        mediaSvc,
 		Tokens:       resolveTokenService(cfg, d.Tokens),
 		Deletion:     deletionReg,
@@ -129,6 +147,7 @@ func (h *MobileHandler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 	release := h.loadMobileReleaseManifest()
 	isAuthed := h.hasVerifiedBootstrapCaller(ctx, r.Header.Get("Authorization"))
 	hidePrices := !isAuthed && !settings.ShowPricesToGuests
+	formChallengeToken, _ := issueMobileChallengeToken(h.Cfg, mobileChallengeDefaultPurpose, time.Now().UTC())
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"app_config": map[string]any{
@@ -149,12 +168,13 @@ func (h *MobileHandler) Bootstrap(w http.ResponseWriter, r *http.Request) {
 			"terms_url":            "https://mertervitrini.com.tr/tr/pages/kullanim-kosullari",
 			"account_deletion_url": "https://mertervitrini.com.tr/account-deletion",
 			"dual_role_enabled":    true,
+			"form_challenge_token": formChallengeToken,
 		},
 		"settings":          settings,
 		"languages":         fetchBootstrapLanguages(ctx),
 		"exchange_rates":    fetchBootstrapExchangeRates(ctx),
 		"categories":        fetchBootstrapCategories(ctx),
-		"brands":            fetchBootstrapMaskedBrands(ctx),
+		"brands":            fetchBootstrapBrands(ctx),
 		"newest_products":   sanitizeMobileBootstrapProducts(fetchBootstrapProducts(ctx, "ORDER BY p.created_at DESC LIMIT 12"), hidePrices),
 		"featured_products": sanitizeMobileBootstrapProducts(fetchBootstrapProducts(ctx, "ORDER BY (p.discounted_price IS NOT NULL AND p.discounted_price > 0) DESC, p.stock DESC, p.created_at DESC LIMIT 12"), hidePrices),
 	})
@@ -255,11 +275,40 @@ func fetchBootstrapCategories(ctx context.Context) []*models.CategoryNode {
 	return buildStoreCategoryTree(flatList, nodesMap)
 }
 
-func fetchBootstrapMaskedBrands(ctx context.Context) []map[string]any {
+func extractBrandCity(locationAddress string, addresses []map[string]any) string {
+	for _, addr := range addresses {
+		if c, ok := addr["city"].(string); ok && strings.TrimSpace(c) != "" {
+			return strings.TrimSpace(c)
+		}
+		if d, ok := addr["district"].(string); ok && strings.TrimSpace(d) != "" {
+			return strings.TrimSpace(d)
+		}
+	}
+	lower := strings.ToLower(locationAddress)
+	switch {
+	case strings.Contains(lower, "istanbul") || strings.Contains(lower, "i̇stanbul") || strings.Contains(lower, "merter") || strings.Contains(lower, "güngören") || strings.Contains(lower, "osmanbey") || strings.Contains(lower, "laleli") || strings.Contains(lower, "zeytinburnu"):
+		return "İstanbul"
+	case strings.Contains(lower, "bursa"):
+		return "Bursa"
+	case strings.Contains(lower, "denizli"):
+		return "Denizli"
+	case strings.Contains(lower, "izmir") || strings.Contains(lower, "i̇zmir"):
+		return "İzmir"
+	case strings.Contains(lower, "ankara"):
+		return "Ankara"
+	default:
+		return ""
+	}
+}
+
+func fetchBootstrapBrands(ctx context.Context) []map[string]any {
 	brands := make([]map[string]any, 0, 16)
 	rows, err := db.Pool.Query(ctx, `
-		SELECT b.id::text, b.brand_name AS display_name, b.slug, COALESCE(b.alias_code, ''),
+		SELECT b.id::text, b.brand_name AS display_name, b.slug,
 		       COALESCE(b.company_type, 'uretici_toptanci'),
+		       COALESCE(b.description, ''),
+		       COALESCE(b.description_translations, '{}'::jsonb),
+		       COALESCE(b.website, ''),
 		       COALESCE(
 		           NULLIF(b.whatsapp_phone, ''),
 		           NULLIF(b.phone, ''),
@@ -267,32 +316,78 @@ func fetchBootstrapMaskedBrands(ctx context.Context) []map[string]any {
 		           ''
 		       ),
 		       COALESCE(b.phone, ''),
+		       COALESCE(b.public_email, ''),
+		       COALESCE(b.instagram_handle, ''),
 		       COALESCE(b.location_address, ''),
-		       COALESCE(b.is_verified, true)
+		       COALESCE(b.export_countries, ''),
+		       COALESCE(b.min_order_quantity, 1),
+		       COALESCE(b.supports_private_label, false),
+		       COALESCE(b.supports_fason, false),
+		       COALESCE(b.is_verified, true),
+		       (SELECT COUNT(*)::int FROM catalog.products p WHERE p.brand_id = b.id AND p.is_active = true) AS active_product_count,
+		       COALESCE(b.addresses, '[]'::jsonb)
 		FROM catalog.brands b
 		WHERE b.is_active = true
-		ORDER BY display_name ASC
+		  AND EXISTS (SELECT 1 FROM catalog.products p WHERE p.brand_id = b.id AND p.is_active = true)
+		ORDER BY b.brand_name ASC
 	`)
 	if err != nil {
 		return brands
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id, displayName, slug, aliasCode, companyType, whatsappPhone, phone, locationAddress string
-		var isVerified bool
-		if err := rows.Scan(&id, &displayName, &slug, &aliasCode, &companyType, &whatsappPhone, &phone, &locationAddress, &isVerified); err == nil {
-			brands = append(brands, map[string]any{
-				"id":               id,
-				"name":             displayName,
-				"slug":             slug,
-				"alias_code":       aliasCode,
-				"company_type":     companyType,
-				"whatsapp_phone":   whatsappPhone,
-				"phone":            phone,
-				"location_address": locationAddress,
-				"is_verified":      isVerified,
-			})
+		var (
+			id, displayName, slug, companyType, description, website string
+			whatsappPhone, phone, publicEmail, instagramHandle       string
+			locationAddress, exportCountries                         string
+			minOrderQty, activeProductCount                          int
+			supportsPrivateLabel, supportsFason, isVerified          bool
+			descTransBytes, addressesBytes                           []byte
+		)
+		if err := rows.Scan(
+			&id, &displayName, &slug, &companyType, &description, &descTransBytes,
+			&website, &whatsappPhone, &phone, &publicEmail, &instagramHandle,
+			&locationAddress, &exportCountries, &minOrderQty,
+			&supportsPrivateLabel, &supportsFason, &isVerified,
+			&activeProductCount, &addressesBytes,
+		); err != nil {
+			continue
 		}
+
+		var descTranslations map[string]string
+		if len(descTransBytes) > 0 {
+			_ = json.Unmarshal(descTransBytes, &descTranslations)
+		}
+		var addresses []map[string]any
+		if len(addressesBytes) > 0 {
+			_ = json.Unmarshal(addressesBytes, &addresses)
+		}
+
+		brands = append(brands, map[string]any{
+			"id":                       id,
+			"name":                     displayName,
+			"slug":                     slug,
+			"logo_url":                 "",
+			"city":                     extractBrandCity(locationAddress, addresses),
+			"company_type":             companyType,
+			"description":              description,
+			"description_translations": descTranslations,
+			"website":                  website,
+			"whatsapp_phone":           whatsappPhone,
+			"phone":                    phone,
+			"public_email":             publicEmail,
+			"instagram_handle":         instagramHandle,
+			"location_address":         locationAddress,
+			"export_countries":         exportCountries,
+			"min_order_qty":            minOrderQty,
+			"min_order_quantity":       minOrderQty,
+			"supports_private_label":   supportsPrivateLabel,
+			"supports_fason":           supportsFason,
+			"is_verified":              isVerified,
+			"product_count":            activeProductCount,
+			"active_product_count":     activeProductCount,
+			"addresses":                addresses,
+		})
 	}
 	return brands
 }

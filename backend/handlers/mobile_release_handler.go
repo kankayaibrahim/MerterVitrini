@@ -41,6 +41,39 @@ type MobileReleaseManifest struct {
 	ReleaseNotes   map[string]string `json:"release_notes"`
 }
 
+func defaultMobileReleaseNotes() map[string]string {
+	return map[string]string{
+		"tr": "Merter Vitrini B2B Müşteri Mağazası ve Tedarikçi Kamera Stüdyosu güncel sürümü.",
+		"en": "Merter Vitrini B2B Wholesale Storefront & Supplier Camera Studio latest release.",
+		"ru": "Актуальный релиз B2B-платформы Merter Vitrini и фотостудии поставщика.",
+		"ar": "أحدث إصدار من منصة الجملة Merter Vitrini واستوديو الموردين.",
+		"de": "Aktuelle Version des Merter Vitrini B2B-Großhandels und Lieferanten-Studios.",
+		"fr": "Dernière version de la boutique B2B Merter Vitrini et du studio fournisseur.",
+		"pl": "Najnowsza wersja hurtowni B2B Merter Vitrini i studia fotograficznego dostawcy.",
+		"bg": "Последна версия на B2B платформата Merter Vitrini и студиото за доставчици.",
+	}
+}
+
+func normalizeReleaseNotes(existing map[string]string) map[string]string {
+	defaults := defaultMobileReleaseNotes()
+	normalized := make(map[string]string, len(defaults)+len(existing))
+	for k, v := range existing {
+		cleanKey := strings.ToLower(strings.TrimSpace(k))
+		if cleanKey == "" {
+			continue
+		}
+		if cleanVal := strings.TrimSpace(v); cleanVal != "" {
+			normalized[cleanKey] = cleanVal
+		}
+	}
+	for lang, fallback := range defaults {
+		if strings.TrimSpace(normalized[lang]) == "" {
+			normalized[lang] = fallback
+		}
+	}
+	return normalized
+}
+
 func defaultReleaseManifest() MobileReleaseManifest {
 	return MobileReleaseManifest{
 		AppName:        "Merter Vitrini",
@@ -55,10 +88,7 @@ func defaultReleaseManifest() MobileReleaseManifest {
 		WebPageURL:     defaultMobileWebPageURL,
 		PublishedAt:    time.Now().UTC().Format(time.RFC3339),
 		ApkAvailable:   false,
-		ReleaseNotes: map[string]string{
-			"tr": "Merter Vitrini B2B Müşteri Mağazası ve Tedarikçi Kamera Stüdyosu güncel sürümü.",
-			"en": "Merter Vitrini B2B Wholesale Storefront & Supplier Camera Studio latest release.",
-		},
+		ReleaseNotes:   defaultMobileReleaseNotes(),
 	}
 }
 
@@ -108,6 +138,7 @@ func applyManifestFallbacks(m *MobileReleaseManifest) {
 	if strings.TrimSpace(m.DirectCdnURL) == "" {
 		m.DirectCdnURL = "https://mertervitrini.com.tr/uploads/releases/" + m.ApkFilename
 	}
+	m.ReleaseNotes = normalizeReleaseNotes(m.ReleaseNotes)
 }
 
 func (h *MobileHandler) resolveApkFilePath(relDir, preferredName string) (string, os.FileInfo) {

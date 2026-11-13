@@ -1,4 +1,6 @@
+import '../core/app_config.dart';
 import '../core/currency_formatter.dart';
+import 'model_json.dart';
 
 class ProductImage {
   final String id;
@@ -15,10 +17,12 @@ class ProductImage {
 
   factory ProductImage.fromJson(Map<String, dynamic> json) {
     return ProductImage(
-      id: (json['id'] ?? '').toString(),
-      imageUrl: (json['image_url'] ?? '').toString(),
-      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
-      isCover: json['is_cover'] == true,
+      id: ModelJson.trimmed(json['id']),
+      imageUrl: AppConfig.resolveMediaUrl(
+        ModelJson.trimmed(json['image_url'] ?? json['url']),
+      ),
+      sortOrder: ModelJson.integer(json['sort_order']),
+      isCover: ModelJson.boolean(json['is_cover']),
     );
   }
 }
@@ -40,20 +44,20 @@ class ProductVariant {
 
   factory ProductVariant.fromJson(Map<String, dynamic> json) {
     return ProductVariant(
-      id: (json['id'] ?? '').toString(),
-      size: (json['variant_size'] ?? json['size'] ?? 'STD').toString(),
-      barcode: (json['barcode'] ?? '').toString(),
-      stock: (json['stock'] as num?)?.toInt() ?? 0,
-      isSingle: json['is_single'] == true,
+      id: ModelJson.trimmed(json['id']),
+      size: ModelJson.trimmed(json['variant_size'] ?? json['size'], 'STD'),
+      barcode: ModelJson.trimmed(json['barcode']),
+      stock: ModelJson.integer(json['stock']),
+      isSingle: ModelJson.boolean(json['is_single']),
     );
   }
 
   Map<String, dynamic> toSupplierInputJson() => {
-        'size': size,
-        'barcode': barcode,
-        'stock': stock,
-        'is_single': isSingle,
-      };
+    'variant_size': size,
+    'barcode': barcode,
+    'stock': stock,
+    'is_single': isSingle,
+  };
 }
 
 class SiblingProduct {
@@ -73,11 +77,13 @@ class SiblingProduct {
 
   factory SiblingProduct.fromJson(Map<String, dynamic> json) {
     return SiblingProduct(
-      id: (json['id'] ?? '').toString(),
-      customSku: (json['custom_sku'] ?? '').toString(),
-      slug: (json['slug'] ?? '').toString(),
-      color: (json['color'] ?? 'Standart').toString(),
-      imageUrl: (json['image_url'] ?? '').toString(),
+      id: ModelJson.trimmed(json['id']),
+      customSku: ModelJson.trimmed(json['custom_sku']),
+      slug: ModelJson.trimmed(json['slug']),
+      color: ModelJson.trimmed(json['color']),
+      imageUrl: AppConfig.resolveMediaUrl(
+        ModelJson.trimmed(json['image_url'] ?? json['cover_image']),
+      ),
     );
   }
 }
@@ -95,12 +101,109 @@ class ProductTranslation {
 
   factory ProductTranslation.fromJson(Map<String, dynamic> json) {
     return ProductTranslation(
-      title: (json['title'] ?? '').toString(),
-      shortDescription: (json['short_description'] ?? '').toString(),
-      description: (json['description'] ?? '').toString(),
+      title: ModelJson.trimmed(json['title']),
+      shortDescription: ModelJson.trimmed(json['short_description']),
+      description: ModelJson.trimmed(json['description']),
     );
   }
 }
+
+/// Editorial brand showcase & directory record returned by `/api/v1/store/brands` and `/brands/{slug}`.
+class ManufacturerSummary {
+  final String id;
+  final String name;
+  final String slug;
+  final String aliasCode;
+  final String companyType;
+  final String description;
+  final Map<String, String> descriptionTranslations;
+  final String website;
+  final String phone;
+  final String whatsappPhone;
+  final String publicEmail;
+  final String instagramHandle;
+  final String locationAddress;
+  final String exportCountries;
+  final int minOrderQuantity;
+  final bool supportsPrivateLabel;
+  final bool supportsFason;
+  final bool isVerified;
+  final String bankName;
+  final String bankAccountHolder;
+  final String iban;
+  final int activeProductCount;
+  final bool isActive;
+
+  const ManufacturerSummary({
+    required this.id,
+    required this.name,
+    required this.slug,
+    this.aliasCode = '',
+    this.companyType = 'uretici_toptanci',
+    this.description = '',
+    this.descriptionTranslations = const {},
+    this.website = '',
+    this.phone = '',
+    this.whatsappPhone = '',
+    this.publicEmail = '',
+    this.instagramHandle = '',
+    this.locationAddress = '',
+    this.exportCountries = '',
+    this.minOrderQuantity = 1,
+    this.supportsPrivateLabel = false,
+    this.supportsFason = false,
+    this.isVerified = false,
+    this.bankName = '',
+    this.bankAccountHolder = '',
+    this.iban = '',
+    this.activeProductCount = 0,
+    this.isActive = true,
+  });
+
+  String get displayName =>
+      name.trim().isNotEmpty ? name.trim() : aliasCode.trim();
+
+  String localizedDescription(String langCode) =>
+      ModelJson.pickLangText(descriptionTranslations, langCode, description);
+
+  List<String> get exportCountryList => exportCountries
+      .split(',')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toList();
+
+  factory ManufacturerSummary.fromJson(Map<String, dynamic> json) {
+    return ManufacturerSummary(
+      id: ModelJson.trimmed(json['id']),
+      name: ModelJson.trimmed(json['name'] ?? json['brand_name']),
+      slug: ModelJson.trimmed(json['slug']),
+      aliasCode: ModelJson.trimmed(json['alias_code']),
+      companyType: ModelJson.trimmed(json['company_type'], 'uretici_toptanci'),
+      description: ModelJson.trimmed(json['description']),
+      descriptionTranslations: ModelJson.stringMap(
+        json['description_translations'],
+      ),
+      website: ModelJson.trimmed(json['website']),
+      phone: ModelJson.trimmed(json['phone']),
+      whatsappPhone: ModelJson.trimmed(json['whatsapp_phone']),
+      publicEmail: ModelJson.trimmed(json['public_email']),
+      instagramHandle: ModelJson.trimmed(json['instagram_handle']),
+      locationAddress: ModelJson.trimmed(json['location_address']),
+      exportCountries: ModelJson.trimmed(json['export_countries']),
+      minOrderQuantity: ModelJson.integer(json['min_order_quantity'], 1),
+      supportsPrivateLabel: ModelJson.boolean(json['supports_private_label']),
+      supportsFason: ModelJson.boolean(json['supports_fason']),
+      isVerified: ModelJson.boolean(json['is_verified']),
+      bankName: ModelJson.trimmed(json['bank_name']),
+      bankAccountHolder: ModelJson.trimmed(json['bank_account_holder']),
+      iban: ModelJson.trimmed(json['iban']),
+      activeProductCount: ModelJson.integer(json['active_product_count']),
+      isActive: ModelJson.boolean(json['is_active'], true),
+    );
+  }
+}
+
+typedef ManufacturerDetail = ManufacturerSummary;
 
 class Product {
   final String id;
@@ -135,14 +238,23 @@ class Product {
   final int minimumOrderQuantity;
   final double price;
   final double? discountedPrice;
+  final double? singlePrice;
   final double buyingPrice;
+  final double taxRate;
   final String currency;
   final int stock;
   final bool isActive;
+  final bool isArchived;
+  final DateTime? archivedAt;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
   final List<ProductImage> images;
   final List<ProductVariant> variants;
   final List<SiblingProduct> colorVariants;
   final Map<String, ProductTranslation> translations;
+  final ManufacturerSummary? brandProfile;
+  final List<String> aiHighlights;
+  final Map<String, String> metaAttributes;
 
   const Product({
     required this.id,
@@ -162,7 +274,7 @@ class Product {
     this.brandIban = '',
     this.brandBankName = '',
     this.brandBankHolder = '',
-    this.brandVerified = true,
+    this.brandVerified = false,
     required this.categoryId,
     required this.categoryTitle,
     this.colorId,
@@ -177,14 +289,23 @@ class Product {
     required this.minimumOrderQuantity,
     required this.price,
     this.discountedPrice,
+    this.singlePrice,
     required this.buyingPrice,
+    this.taxRate = 10.0,
     required this.currency,
     required this.stock,
     required this.isActive,
+    this.isArchived = false,
+    this.archivedAt,
+    this.createdAt,
+    this.updatedAt,
     required this.images,
     required this.variants,
     required this.colorVariants,
     required this.translations,
+    this.brandProfile,
+    this.aiHighlights = const [],
+    this.metaAttributes = const {},
   });
 
   double get effectiveUnitPrice {
@@ -196,65 +317,68 @@ class Product {
     return price;
   }
 
-  int get unitsPerPackage => CurrencyFormatter.parseUnitsPerPackage(
-        seriesRatio.isNotEmpty ? seriesRatio : packingRatio,
-      );
+  bool get hasDiscount =>
+      discountedPrice != null &&
+      discountedPrice! > 0 &&
+      discountedPrice! < price;
 
-  /// Minimum order quantity in packages/series.
-  /// In PostgreSQL (`catalog.products`), `minimum_order_quantity` is stored in total pieces (units),
-  /// e.g. `6` pieces for a `2-2-2` (6-unit) series = `1` package/series.
+  int get unitsPerPackage => CurrencyFormatter.parseUnitsPerPackage(
+    seriesRatio.isNotEmpty ? seriesRatio : packingRatio,
+  );
+
   int get minOrderPackages {
-    if (minimumOrderQuantity <= 1) {
-      return 1;
-    }
+    if (minimumOrderQuantity <= 1) return 1;
     final units = unitsPerPackage > 0 ? unitsPerPackage : 1;
     final pkgs = (minimumOrderQuantity / units).ceil();
-    return pkgs > 0 ? pkgs : 1;
+    return pkgs < 1 ? 1 : pkgs;
   }
 
-  /// Minimum order quantity in total pieces (units), aligned to full series packages.
   int get minOrderUnits => minOrderPackages * unitsPerPackage;
 
   double get packageTotalPrice => effectiveUnitPrice * unitsPerPackage;
 
-  /// Returns the open supplier/manufacturer brand name on the storefront (falling back to SKU prefix only if brandName is empty).
+  /// Returns the verified brand trade name (falls back to SKU prefix only if brand_name missing).
   String get maskedBrandName {
     final name = brandName.trim();
-    if (name.isNotEmpty) {
-      return name;
-    }
+    if (name.isNotEmpty) return name;
     final skuTrimmed = customSku.trim();
     final dashIdx = skuTrimmed.indexOf('-');
     if (dashIdx > 0) {
       return skuTrimmed.substring(0, dashIdx).toUpperCase();
     }
-    return 'Merter Vitrini';
+    return '';
   }
 
   String get coverImageUrl {
-    if (images.isEmpty) {
-      return '';
-    }
-    for (final img in images) {
-      if (img.isCover && img.imageUrl.isNotEmpty) {
-        return img.imageUrl;
-      }
-    }
-    return images.first.imageUrl;
+    if (images.isEmpty) return '';
+    final cover = images.firstWhere(
+      (i) => i.isCover,
+      orElse: () => images.first,
+    );
+    return cover.imageUrl;
   }
 
   String localizedTitle(String langCode) {
-    final tr = translations[langCode];
-    if (tr != null && tr.title.trim().isNotEmpty) {
-      return tr.title;
-    }
+    final tr =
+        translations[langCode] ?? translations[langCode.toLowerCase()];
+    if (tr != null && tr.title.trim().isNotEmpty) return tr.title.trim();
     return title;
   }
 
+  String localizedShortDescription(String langCode) {
+    final tr =
+        translations[langCode] ?? translations[langCode.toLowerCase()];
+    if (tr != null && tr.shortDescription.trim().isNotEmpty) {
+      return tr.shortDescription.trim();
+    }
+    return shortDescription;
+  }
+
   String localizedDescription(String langCode) {
-    final tr = translations[langCode];
+    final tr =
+        translations[langCode] ?? translations[langCode.toLowerCase()];
     if (tr != null && tr.description.trim().isNotEmpty) {
-      return tr.description;
+      return tr.description.trim();
     }
     return description;
   }
@@ -267,11 +391,11 @@ class Product {
         final item = rawImages[i];
         if (item is Map<String, dynamic>) {
           parsedImages.add(ProductImage.fromJson(item));
-        } else if (item is String && item.isNotEmpty) {
+        } else if (item is String && item.trim().isNotEmpty) {
           parsedImages.add(
             ProductImage(
               id: '$i',
-              imageUrl: item,
+              imageUrl: AppConfig.resolveMediaUrl(item.trim()),
               sortOrder: i,
               isCover: i == 0,
             ),
@@ -279,11 +403,13 @@ class Product {
         }
       }
     } else if (json['cover_image'] is String &&
-        (json['cover_image'] as String).isNotEmpty) {
+        (json['cover_image'] as String).trim().isNotEmpty) {
       parsedImages.add(
         ProductImage(
           id: '0',
-          imageUrl: json['cover_image'] as String,
+          imageUrl: AppConfig.resolveMediaUrl(
+            (json['cover_image'] as String).trim(),
+          ),
           sortOrder: 0,
           isCover: true,
         ),
@@ -309,65 +435,89 @@ class Product {
     }
 
     final parsedTranslations = <String, ProductTranslation>{};
-    if (json['translations'] is Map<String, dynamic>) {
-      (json['translations'] as Map<String, dynamic>).forEach((key, val) {
+    if (json['translations'] is Map) {
+      (json['translations'] as Map).forEach((key, val) {
         if (val is Map<String, dynamic>) {
-          parsedTranslations[key] = ProductTranslation.fromJson(val);
+          parsedTranslations[key.toString()] = ProductTranslation.fromJson(val);
+        } else if (val is Map) {
+          parsedTranslations[key.toString()] = ProductTranslation.fromJson(
+            ModelJson.map(val),
+          );
         }
       });
     }
 
-    final bp = json['brand_profile'] is Map<String, dynamic>
+    final bpMap = json['brand_profile'] is Map<String, dynamic>
         ? json['brand_profile'] as Map<String, dynamic>
-        : const <String, dynamic>{};
+        : null;
+    final bp = bpMap != null ? ManufacturerSummary.fromJson(bpMap) : null;
+
+    final rawStock = ModelJson.integer(json['stock']);
+    final rawSeriesStock = json['series_stock'] != null
+        ? ModelJson.integer(json['series_stock'])
+        : (json['stock'] != null ? rawStock : 100);
 
     return Product(
-      id: (json['id'] ?? '').toString(),
-      title: (json['title'] ?? '').toString(),
-      slug: (json['slug'] ?? '').toString(),
-      customSku: (json['custom_sku'] ?? '').toString(),
-      sku: (json['sku'] ?? '').toString(),
-      barcode: (json['barcode'] ?? '').toString(),
-      shortDescription: (json['short_description'] ?? '').toString(),
-      description: (json['description'] ?? '').toString(),
-      brandId: (json['brand_id'] ?? '').toString(),
-      brandName: (json['brand_name'] ?? bp['name'] ?? 'Merter Vitrini').toString(),
-      brandPhone: (bp['phone'] ?? '').toString(),
-      brandWhatsapp: (bp['whatsapp_phone'] ?? bp['phone'] ?? '').toString(),
-      brandEmail: (bp['public_email'] ?? '').toString(),
-      brandAddress: (bp['location_address'] ?? '').toString(),
-      brandIban: (bp['iban'] ?? '').toString(),
-      brandBankName: (bp['bank_name'] ?? '').toString(),
-      brandBankHolder: (bp['bank_account_holder'] ?? '').toString(),
-      brandVerified: bp['is_verified'] != false,
-      categoryId: (json['category_id'] ?? '').toString(),
-      categoryTitle:
-          (json['category_title'] ?? json['category_name'] ?? '').toString(),
-      colorId: json['color_id']?.toString(),
-      fabricId: json['fabric_id']?.toString(),
-      gender: (json['gender'] ?? '').toString(),
-      season: (json['season'] ?? '').toString(),
-      fabric: (json['kumas_fabric'] ?? '').toString(),
-      color: (json['color'] ?? 'Standart').toString(),
-      packingRatio: (json['packing_ratio'] ?? '').toString(),
-      seriesRatio: (json['series_ratio'] ?? '').toString(),
-      seriesStock: ((json['series_stock'] as num?)?.toInt() ?? 0) > 0
-          ? (json['series_stock'] as num).toInt()
-          : 100,
-      minimumOrderQuantity:
-          (json['minimum_order_quantity'] as num?)?.toInt() ?? 1,
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
-      discountedPrice: (json['discounted_price'] as num?)?.toDouble(),
-      buyingPrice: (json['buying_price'] as num?)?.toDouble() ?? 0.0,
-      currency: (json['currency'] ?? 'TRY').toString(),
-      stock: (json['stock'] as num?)?.toInt() ??
-          (json['total_stock'] as num?)?.toInt() ??
-          0,
-      isActive: json['is_active'] != false,
+      id: ModelJson.trimmed(json['id']),
+      title: ModelJson.trimmed(json['title']),
+      slug: ModelJson.trimmed(json['slug']),
+      customSku: ModelJson.trimmed(json['custom_sku']),
+      sku: ModelJson.trimmed(json['sku']),
+      barcode: ModelJson.trimmed(json['barcode']),
+      shortDescription: ModelJson.trimmed(json['short_description']),
+      description: ModelJson.trimmed(json['description']),
+      brandId: ModelJson.trimmed(json['brand_id'] ?? bp?.id),
+      brandName: ModelJson.trimmed(json['brand_name'] ?? bp?.name),
+      brandPhone: ModelJson.trimmed(json['brand_phone'] ?? bp?.phone),
+      brandWhatsapp: ModelJson.trimmed(
+        json['brand_whatsapp'] ?? bp?.whatsappPhone,
+      ),
+      brandEmail: ModelJson.trimmed(json['brand_email'] ?? bp?.publicEmail),
+      brandAddress: ModelJson.trimmed(
+        json['brand_address'] ?? bp?.locationAddress,
+      ),
+      brandIban: ModelJson.trimmed(json['brand_iban'] ?? bp?.iban),
+      brandBankName: ModelJson.trimmed(json['brand_bank_name'] ?? bp?.bankName),
+      brandBankHolder: ModelJson.trimmed(
+        json['brand_bank_holder'] ?? bp?.bankAccountHolder,
+      ),
+      brandVerified: ModelJson.boolean(
+        json['brand_verified'] ?? bp?.isVerified,
+      ),
+      categoryId: ModelJson.trimmed(json['category_id']),
+      categoryTitle: ModelJson.trimmed(json['category_title']),
+      colorId: ModelJson.nullableStr(json['color_id']),
+      fabricId: ModelJson.nullableStr(json['fabric_id']),
+      gender: ModelJson.trimmed(json['gender']),
+      season: ModelJson.trimmed(json['season']),
+      fabric: ModelJson.trimmed(json['kumas_fabric'] ?? json['fabric']),
+      color: ModelJson.trimmed(json['color']),
+      packingRatio: ModelJson.trimmed(json['packing_ratio']),
+      seriesRatio: ModelJson.trimmed(json['series_ratio']),
+      seriesStock: rawSeriesStock,
+      minimumOrderQuantity: ModelJson.integer(
+        json['minimum_order_quantity'],
+        1,
+      ),
+      price: ModelJson.decimal(json['price']),
+      discountedPrice: ModelJson.nullableDecimal(json['discounted_price']),
+      singlePrice: ModelJson.nullableDecimal(json['single_price']),
+      buyingPrice: ModelJson.decimal(json['buying_price']),
+      taxRate: ModelJson.decimal(json['tax_rate'], 10.0),
+      currency: ModelJson.trimmed(json['currency'], 'TRY'),
+      stock: rawStock,
+      isActive: ModelJson.boolean(json['is_active'], true),
+      isArchived: ModelJson.boolean(json['is_archived']),
+      archivedAt: ModelJson.nullableDateTime(json['archived_at']),
+      createdAt: ModelJson.nullableDateTime(json['created_at']),
+      updatedAt: ModelJson.nullableDateTime(json['updated_at']),
       images: parsedImages,
       variants: parsedVariants,
       colorVariants: parsedSiblings,
       translations: parsedTranslations,
+      brandProfile: bp,
+      aiHighlights: ModelJson.stringList(json['ai_highlights']),
+      metaAttributes: ModelJson.stringMap(json['attributes']),
     );
   }
 }
@@ -388,29 +538,33 @@ class CategoryNode {
     required this.title,
     required this.slug,
     required this.nodePath,
-    required this.activeProducts,
-    required this.localizedTitles,
-    required this.children,
+    this.activeProducts = 0,
+    this.localizedTitles = const {},
+    this.children = const [],
   });
 
   String displayTitle(String langCode) {
-    final t = localizedTitles[langCode];
-    if (t != null && t.trim().isNotEmpty) {
-      return t;
-    }
+    final code = langCode.trim().toLowerCase();
+    final t = localizedTitles[code];
+    if (t != null && t.trim().isNotEmpty) return t.trim();
+    final en = localizedTitles['en'];
+    if (en != null && en.trim().isNotEmpty) return en.trim();
     return title;
   }
 
+  String localizedTitle(String langCode) => displayTitle(langCode);
+
   factory CategoryNode.fromJson(Map<String, dynamic> json) {
     final titles = <String, String>{};
-    if (json['translations'] is Map<String, dynamic>) {
-      (json['translations'] as Map<String, dynamic>).forEach((k, v) {
-        if (v is Map<String, dynamic> && v['title'] != null) {
-          titles[k] = v['title'].toString();
+    if (json['translations'] is Map) {
+      (json['translations'] as Map).forEach((k, v) {
+        if (v is Map && v['title'] != null) {
+          titles[k.toString()] = v['title'].toString();
+        } else if (v is String) {
+          titles[k.toString()] = v;
         }
       });
     }
-
     final kids = <CategoryNode>[];
     if (json['children'] is List) {
       for (final c in json['children'] as List) {
@@ -419,14 +573,13 @@ class CategoryNode {
         }
       }
     }
-
     return CategoryNode(
-      id: (json['id'] ?? '').toString(),
-      parentId: json['parent_id']?.toString(),
-      title: (json['title'] ?? '').toString(),
-      slug: (json['slug'] ?? '').toString(),
-      nodePath: (json['node_path'] ?? '').toString(),
-      activeProducts: (json['active_products'] as num?)?.toInt() ?? 0,
+      id: ModelJson.trimmed(json['id']),
+      parentId: ModelJson.nullableStr(json['parent_id']),
+      title: ModelJson.trimmed(json['title']),
+      slug: ModelJson.trimmed(json['slug']),
+      nodePath: ModelJson.trimmed(json['node_path']),
+      activeProducts: ModelJson.integer(json['active_products']),
       localizedTitles: titles,
       children: kids,
     );
@@ -438,12 +591,30 @@ class BrandSummary {
   final String name;
   final String slug;
   final String aliasCode;
+  final String companyType;
+  final int activeProductCount;
+  final bool isVerified;
+  final bool supportsFason;
+  final bool supportsPrivateLabel;
+  final int minOrderQuantity;
+  final String exportCountries;
+  final String whatsappPhone;
+  final String locationAddress;
 
   const BrandSummary({
     required this.id,
     required this.name,
     required this.slug,
     required this.aliasCode,
+    this.companyType = 'uretici_toptanci',
+    this.activeProductCount = 0,
+    this.isVerified = false,
+    this.supportsFason = false,
+    this.supportsPrivateLabel = false,
+    this.minOrderQuantity = 1,
+    this.exportCountries = '',
+    this.whatsappPhone = '',
+    this.locationAddress = '',
   });
 
   String get maskedDisplayName =>
@@ -451,10 +622,319 @@ class BrandSummary {
 
   factory BrandSummary.fromJson(Map<String, dynamic> json) {
     return BrandSummary(
-      id: (json['id'] ?? '').toString(),
-      name: (json['name'] ?? json['brand_name'] ?? '').toString(),
-      slug: (json['slug'] ?? '').toString(),
-      aliasCode: (json['alias_code'] ?? '').toString(),
+      id: ModelJson.trimmed(json['id']),
+      name: ModelJson.trimmed(json['name'] ?? json['brand_name']),
+      slug: ModelJson.trimmed(json['slug']),
+      aliasCode: ModelJson.trimmed(json['alias_code']),
+      companyType: ModelJson.trimmed(json['company_type'], 'uretici_toptanci'),
+      activeProductCount: ModelJson.integer(json['active_product_count']),
+      isVerified: ModelJson.boolean(json['is_verified']),
+      supportsFason: ModelJson.boolean(json['supports_fason']),
+      supportsPrivateLabel: ModelJson.boolean(json['supports_private_label']),
+      minOrderQuantity: ModelJson.integer(json['min_order_quantity'], 1),
+      exportCountries: ModelJson.trimmed(json['export_countries']),
+      whatsappPhone: ModelJson.trimmed(json['whatsapp_phone']),
+      locationAddress: ModelJson.trimmed(json['location_address']),
+    );
+  }
+}
+
+/// All 7 catalog sort keys supported by `store_catalog.go#buildCatalogOrderBy`.
+enum CatalogSortOption {
+  newest('newest'),
+  priceAsc('price_asc'),
+  priceDesc('price_desc'),
+  nameAsc('name_asc'),
+  nameDesc('name_desc'),
+  skuAsc('sku_asc'),
+  skuDesc('sku_desc');
+
+  final String apiValue;
+  const CatalogSortOption(this.apiValue);
+
+  static CatalogSortOption fromApi(String? raw) {
+    for (final val in CatalogSortOption.values) {
+      if (val.apiValue == raw) return val;
+    }
+    return CatalogSortOption.newest;
+  }
+}
+
+/// Immutable filter payload matching Go `store_catalog.go` query parameters.
+class CatalogFilterParams {
+  final String? query;
+  final String? categoryId;
+  final String? brandId;
+  final String? brandSlug;
+  final CatalogSortOption sortBy;
+  final bool fasonOnly;
+  final bool privateLabelOnly;
+  final String? companyType;
+  final int? maxMoq;
+  final String? exportCountry;
+  final double? minPrice;
+  final double? maxPrice;
+  final String? displayCurrency;
+  final String? gender;
+  final String? season;
+  final Map<String, List<String>> attributeFilters;
+
+  const CatalogFilterParams({
+    this.query,
+    this.categoryId,
+    this.brandId,
+    this.brandSlug,
+    this.sortBy = CatalogSortOption.newest,
+    this.fasonOnly = false,
+    this.privateLabelOnly = false,
+    this.companyType,
+    this.maxMoq,
+    this.exportCountry,
+    this.minPrice,
+    this.maxPrice,
+    this.displayCurrency,
+    this.gender,
+    this.season,
+    this.attributeFilters = const {},
+  });
+
+  bool get hasActiveFilters =>
+      (query != null && query!.trim().isNotEmpty) ||
+      (categoryId != null && categoryId!.trim().isNotEmpty) ||
+      (brandId != null && brandId!.trim().isNotEmpty) ||
+      (brandSlug != null && brandSlug!.trim().isNotEmpty) ||
+      fasonOnly ||
+      privateLabelOnly ||
+      (companyType != null && companyType!.trim().isNotEmpty) ||
+      (maxMoq != null && maxMoq! > 0) ||
+      (exportCountry != null && exportCountry!.trim().isNotEmpty) ||
+      minPrice != null ||
+      maxPrice != null ||
+      (gender != null && gender!.trim().isNotEmpty) ||
+      (season != null && season!.trim().isNotEmpty) ||
+      attributeFilters.values.any((list) => list.isNotEmpty);
+
+  CatalogFilterParams copyWith({
+    String? query,
+    String? categoryId,
+    String? brandId,
+    String? brandSlug,
+    CatalogSortOption? sortBy,
+    bool? fasonOnly,
+    bool? privateLabelOnly,
+    String? companyType,
+    int? maxMoq,
+    String? exportCountry,
+    double? minPrice,
+    double? maxPrice,
+    String? displayCurrency,
+    String? gender,
+    String? season,
+    Map<String, List<String>>? attributeFilters,
+    bool clearCategory = false,
+    bool clearBrand = false,
+    bool clearCompanyType = false,
+    bool clearMaxMoq = false,
+    bool clearExportCountry = false,
+    bool clearPriceRange = false,
+    bool clearGender = false,
+    bool clearSeason = false,
+  }) {
+    return CatalogFilterParams(
+      query: query ?? this.query,
+      categoryId: clearCategory ? null : (categoryId ?? this.categoryId),
+      brandId: clearBrand ? null : (brandId ?? this.brandId),
+      brandSlug: clearBrand ? null : (brandSlug ?? this.brandSlug),
+      sortBy: sortBy ?? this.sortBy,
+      fasonOnly: fasonOnly ?? this.fasonOnly,
+      privateLabelOnly: privateLabelOnly ?? this.privateLabelOnly,
+      companyType: clearCompanyType ? null : (companyType ?? this.companyType),
+      maxMoq: clearMaxMoq ? null : (maxMoq ?? this.maxMoq),
+      exportCountry: clearExportCountry
+          ? null
+          : (exportCountry ?? this.exportCountry),
+      minPrice: clearPriceRange ? null : (minPrice ?? this.minPrice),
+      maxPrice: clearPriceRange ? null : (maxPrice ?? this.maxPrice),
+      displayCurrency: displayCurrency ?? this.displayCurrency,
+      gender: clearGender ? null : (gender ?? this.gender),
+      season: clearSeason ? null : (season ?? this.season),
+      attributeFilters: attributeFilters ?? this.attributeFilters,
+    );
+  }
+
+  Map<String, dynamic> toQueryParameters({
+    int limit = 24,
+    int offset = 0,
+    String? lang,
+  }) {
+    final params = <String, dynamic>{
+      'limit': limit,
+      'offset': offset,
+      'sort_by': sortBy.apiValue,
+    };
+    if (query != null && query!.trim().isNotEmpty) {
+      params['q'] = query!.trim();
+    }
+    if (categoryId != null && categoryId!.trim().isNotEmpty) {
+      params['category_id'] = categoryId!.trim();
+    }
+    if (brandId != null && brandId!.trim().isNotEmpty) {
+      params['brand_id'] = brandId!.trim();
+    }
+    if (brandSlug != null && brandSlug!.trim().isNotEmpty) {
+      params['brand_slug'] = brandSlug!.trim();
+    }
+    if (fasonOnly) params['fason'] = 'true';
+    if (privateLabelOnly) params['private_label'] = 'true';
+    if (companyType != null && companyType!.trim().isNotEmpty) {
+      params['company_type'] = companyType!.trim();
+    }
+    if (maxMoq != null && maxMoq! > 0) params['max_moq'] = maxMoq;
+    if (exportCountry != null && exportCountry!.trim().isNotEmpty) {
+      params['export_country'] = exportCountry!.trim();
+    }
+    if (minPrice != null) params['min_price'] = minPrice;
+    if (maxPrice != null) params['max_price'] = maxPrice;
+    if (displayCurrency != null && displayCurrency!.trim().isNotEmpty) {
+      params['display_currency'] = displayCurrency!.trim();
+    }
+    if (gender != null && gender!.trim().isNotEmpty) {
+      params['gender'] = gender!.trim();
+    }
+    if (season != null && season!.trim().isNotEmpty) {
+      params['season'] = season!.trim();
+    }
+    if (lang != null && lang.trim().isNotEmpty) {
+      params['lang'] = lang.trim();
+    }
+    attributeFilters.forEach((key, vals) {
+      final clean = vals.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      if (key.trim().isNotEmpty && clean.isNotEmpty) {
+        params['attr_${key.trim()}'] = clean.join(',');
+      }
+    });
+    return params;
+  }
+}
+
+/// Active distinct storefront attribute group (`GET /api/v1/store/attributes`).
+class CatalogAttributeGroup {
+  final String name;
+  final List<String> values;
+
+  const CatalogAttributeGroup({required this.name, required this.values});
+}
+
+class CatalogFacets {
+  final Map<String, int> brands;
+  final Map<String, int> genders;
+  final Map<String, int> seasons;
+  final Map<String, Map<String, int>> attributes;
+
+  const CatalogFacets({
+    this.brands = const {},
+    this.genders = const {},
+    this.seasons = const {},
+    this.attributes = const {},
+  });
+
+  factory CatalogFacets.fromJson(Map<String, dynamic> json) {
+    Map<String, int> parseIntMap(dynamic raw) {
+      if (raw is! Map) return const {};
+      final out = <String, int>{};
+      raw.forEach((k, v) {
+        final key = k.toString().trim();
+        if (key.isNotEmpty) out[key] = ModelJson.integer(v);
+      });
+      return out;
+    }
+
+    final parsedAttrs = <String, Map<String, int>>{};
+    if (json['attributes'] is Map) {
+      (json['attributes'] as Map).forEach((attrKey, val) {
+        if (val is Map) {
+          parsedAttrs[attrKey.toString()] = parseIntMap(val);
+        }
+      });
+    }
+
+    return CatalogFacets(
+      brands: parseIntMap(json['brands']),
+      genders: parseIntMap(json['genders']),
+      seasons: parseIntMap(json['seasons']),
+      attributes: parsedAttrs,
+    );
+  }
+}
+
+/// Infinite scroll / faceted catalog page result.
+class CatalogQueryResult {
+  final List<Product> products;
+  final int total;
+  final int offset;
+  final int limit;
+  final CatalogFacets facets;
+
+  const CatalogQueryResult({
+    required this.products,
+    required this.total,
+    this.offset = 0,
+    this.limit = 24,
+    this.facets = const CatalogFacets(),
+  });
+
+  bool get hasMore => offset + products.length < total;
+}
+
+/// 8-language product translation row for supplier editor & AI auto-translate.
+class SupplierProductTranslationEntry {
+  final String title;
+  final String shortDescription;
+  final String description;
+
+  const SupplierProductTranslationEntry({
+    this.title = '',
+    this.shortDescription = '',
+    this.description = '',
+  });
+
+  factory SupplierProductTranslationEntry.fromJson(Map<String, dynamic> json) {
+    return SupplierProductTranslationEntry(
+      title: ModelJson.trimmed(json['title']),
+      shortDescription: ModelJson.trimmed(json['short_description']),
+      description: ModelJson.trimmed(json['description']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    if (shortDescription.isNotEmpty) 'short_description': shortDescription,
+    if (description.isNotEmpty) 'description': description,
+  };
+}
+
+class SupplierProductTranslationMap {
+  final String productId;
+  final Map<String, SupplierProductTranslationEntry> translations;
+
+  const SupplierProductTranslationMap({
+    required this.productId,
+    required this.translations,
+  });
+
+  factory SupplierProductTranslationMap.fromJson(Map<String, dynamic> json) {
+    final parsed = <String, SupplierProductTranslationEntry>{};
+    if (json['translations'] is Map) {
+      (json['translations'] as Map).forEach((k, v) {
+        if (v is Map) {
+          parsed[k.toString().toLowerCase()] =
+              SupplierProductTranslationEntry.fromJson(ModelJson.map(v));
+        }
+      });
+    }
+    return SupplierProductTranslationMap(
+      productId: ModelJson.trimmed(json['product_id']),
+      translations: parsed,
     );
   }
 }
@@ -472,9 +952,9 @@ class SimpleOptionItem {
 
   factory SimpleOptionItem.fromJson(Map<String, dynamic> json) {
     return SimpleOptionItem(
-      id: (json['id'] ?? '').toString(),
-      name: (json['name'] ?? json['title'] ?? '').toString(),
-      code: (json['code'] ?? '').toString(),
+      id: ModelJson.trimmed(json['id']),
+      name: ModelJson.trimmed(json['name']),
+      code: ModelJson.trimmed(json['code']),
     );
   }
 }
@@ -495,14 +975,14 @@ class SizeDefinitionOption {
   });
 
   factory SizeDefinitionOption.fromJson(Map<String, dynamic> json) {
-    final codeVal = (json['code'] ?? '').toString();
-    final labelVal = (json['label'] ?? codeVal).toString();
+    final codeVal = ModelJson.trimmed(json['code']);
+    final labelVal = ModelJson.trimmed(json['label'], codeVal);
     return SizeDefinitionOption(
-      id: (json['id'] ?? codeVal).toString(),
+      id: ModelJson.trimmed(json['id']),
       code: codeVal,
-      label: labelVal.isNotEmpty ? labelVal : codeVal,
-      sizeGroup: (json['size_group'] ?? 'letter').toString(),
-      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 100,
+      label: labelVal,
+      sizeGroup: ModelJson.trimmed(json['size_group'], 'genel'),
+      sortOrder: ModelJson.integer(json['sort_order']),
     );
   }
 }
@@ -525,7 +1005,7 @@ class SeriesTemplateOption {
     required this.sizes,
     required this.seriesRatio,
     required this.unitsPerSeries,
-    this.sortOrder = 100,
+    this.sortOrder = 0,
   });
 
   factory SeriesTemplateOption.fromJson(Map<String, dynamic> json) {
@@ -537,15 +1017,14 @@ class SeriesTemplateOption {
       }
     }
     return SeriesTemplateOption(
-      id: (json['id'] ?? '').toString(),
-      templateKey: (json['template_key'] ?? '').toString(),
-      name: (json['name'] ?? '').toString(),
-      categoryHint: (json['category_hint'] ?? '').toString(),
+      id: ModelJson.trimmed(json['id']),
+      templateKey: ModelJson.trimmed(json['template_key']),
+      name: ModelJson.trimmed(json['name']),
+      categoryHint: ModelJson.trimmed(json['category_hint']),
       sizes: parsedSizes,
-      seriesRatio: (json['series_ratio'] ?? '1').toString(),
-      unitsPerSeries:
-          (json['units_per_series'] as num?)?.toInt() ?? parsedSizes.length,
-      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 100,
+      seriesRatio: ModelJson.trimmed(json['series_ratio']),
+      unitsPerSeries: ModelJson.integer(json['units_per_series'], 1),
+      sortOrder: ModelJson.integer(json['sort_order']),
     );
   }
 }
@@ -557,10 +1036,9 @@ class SupplierAttributesBundle {
   final List<SeriesTemplateOption> seriesTemplates;
 
   const SupplierAttributesBundle({
-    this.colors = const <SimpleOptionItem>[],
-    this.fabrics = const <SimpleOptionItem>[],
-    this.sizes = const <SizeDefinitionOption>[],
-    this.seriesTemplates = const <SeriesTemplateOption>[],
+    required this.colors,
+    required this.fabrics,
+    this.sizes = const [],
+    this.seriesTemplates = const [],
   });
 }
-

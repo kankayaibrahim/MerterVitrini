@@ -1,7 +1,9 @@
 import '../models/cart_and_order.dart';
 import '../models/chat.dart';
+import '../models/marketplace.dart';
+import '../models/user.dart';
 
-/// ISP Contract: Supplier KPI Dashboard, Sub-Orders, Payout Wallet & Sales Team.
+/// ISP Contract: Supplier KPI Dashboard, Sub-Orders, Analytics, Editorial Profile, Billing, Payouts, RFQs & Team.
 abstract interface class ISupplierOperationsRepository {
   Future<Map<String, dynamic>> fetchSupplierDashboard();
 
@@ -19,6 +21,25 @@ abstract interface class ISupplierOperationsRepository {
     String notes = '',
   });
 
+  Future<SupplierEditorialProfile> fetchSupplierEditorialProfile();
+
+  Future<void> updateSupplierEditorialProfile(
+    SupplierEditorialProfile profile, {
+    bool quickWhatsappOnly = false,
+  });
+
+  Future<SupplierAnalyticsOverview> fetchSupplierAnalytics({
+    String period = '30d',
+  });
+
+  Future<SupplierBillingOverview> fetchSupplierBilling();
+
+  Future<void> updateSupplierBillingTaxInfo(SupplierTaxInfoPayload payload);
+
+  Future<void> submitSupplierSubscriptionPayment(
+    SupplierWirePaymentPayload payload,
+  );
+
   Future<(SupplierWallet, List<SupplierLedgerEntry>)> fetchSupplierWallet();
 
   Future<void> updateSupplierIban({
@@ -27,7 +48,16 @@ abstract interface class ISupplierOperationsRepository {
     required String accountHolder,
   });
 
+  Future<List<SupplierPayoutItem>> listSupplierPayoutRequests();
+
   Future<void> requestSupplierPayout(double amount);
+
+  Future<List<RfqItem>> listSupplierRfqs();
+
+  Future<RfqOfferItem> submitSupplierRfqOffer({
+    required String rfqId,
+    required SubmitRfqOfferPayload payload,
+  });
 
   Future<List<SupplierAgent>> listSupplierTeam();
 
@@ -35,11 +65,10 @@ abstract interface class ISupplierOperationsRepository {
     required String contactName,
     required String email,
     required String password,
+    String jobTitle = '',
     String phone = '',
-    String jobTitle = 'Satış Temsilcisi',
-    String spokenLanguages = 'TR',
+    String spokenLanguages = 'tr',
   });
 
   Future<void> deleteSupplierTeamMember(String memberId);
 }
-

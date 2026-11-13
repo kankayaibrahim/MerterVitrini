@@ -562,17 +562,19 @@ type SupplierApplication struct {
 }
 
 type CreateSupplierApplicationRequest struct {
-	CompanyName    string `json:"company_name"`
-	ContactName    string `json:"contact_name"`
-	Email          string `json:"email"`
-	Phone          string `json:"phone"`
-	City           string `json:"city"`
-	District       string `json:"district"`
-	Category       string `json:"category,omitempty"`
-	Instagram      string `json:"instagram,omitempty"`
-	Website        string `json:"website,omitempty"`
-	Notes          string `json:"notes,omitempty"`
-	ReCaptchaToken string `json:"recaptcha_token,omitempty"`
+	CompanyName        string `json:"company_name"`
+	ContactName        string `json:"contact_name"`
+	Email              string `json:"email"`
+	Phone              string `json:"phone"`
+	City               string `json:"city"`
+	District           string `json:"district"`
+	Category           string `json:"category,omitempty"`
+	Instagram          string `json:"instagram,omitempty"`
+	Website            string `json:"website,omitempty"`
+	Notes              string `json:"notes,omitempty"`
+	ReCaptchaToken     string `json:"recaptcha_token,omitempty"`
+	ChallengeToken     string `json:"challenge_token,omitempty"`
+	FormChallengeToken string `json:"form_challenge_token,omitempty"`
 }
 
 type UpdateSupplierApplicationStatusRequest struct {

@@ -52,6 +52,8 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 
 	storeAuth := handlers.NewStoreAuthHandler(cfg)
 	supplierPortal := handlers.NewSupplierPortalHandler(cfg, mediaSvc)
+	supplierApps := handlers.NewSupplierApplicationsHandler(cfg)
+	marketplace := handlers.NewMarketplaceHandler(cfg, notifierSvc)
 
 	return &AppHandlers{
 		MediaRootDir:         mediaSvc.RootDir(),
@@ -76,14 +78,16 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 		Image:                handlers.NewImageHandler(),
 		Cron:                 handlers.NewCronHandler(),
 		Customers:            handlers.NewCustomersHandler(cfg),
-		SupplierApplications: handlers.NewSupplierApplicationsHandler(cfg),
+		SupplierApplications: supplierApps,
 		Analytics:            handlers.NewAnalyticsHandler(cfg),
 		AdminDashboard:       handlers.NewAdminDashboardHandler(cfg),
 		Chat:                 handlers.NewChatHandler(cfg, notifierSvc),
-		Marketplace:          handlers.NewMarketplaceHandler(cfg, notifierSvc),
+		Marketplace:          marketplace,
 		Mobile: handlers.NewMobileHandler(cfg, storeAuth, supplierPortal, handlers.MobileHandlerDeps{
-			Media:  mediaSvc,
-			Tokens: tokenSvc,
+			Media:        mediaSvc,
+			Tokens:       tokenSvc,
+			SupplierApps: supplierApps,
+			Marketplace:  marketplace,
 		}),
 	}
 }
@@ -428,14 +432,20 @@ func registerMobileRoutes(mux *http.ServeMux, h *AppHandlers, supplierMW func(ht
 	protectSupplier := func(fn http.HandlerFunc) http.Handler {
 		return supplierMW(fn)
 	}
+	challengeLimiter := middleware.StrictRateLimitMiddleware("mobile_challenge", 30)
+	mobileFormLimiter := middleware.StrictRateLimitMiddleware("mobile_public_forms", 8)
 
 	mux.HandleFunc("GET /api/v1/mobile/bootstrap", h.Mobile.Bootstrap)
+	mux.Handle("GET /api/v1/mobile/challenge", challengeLimiter(http.HandlerFunc(h.Mobile.GetChallenge)))
 	mux.HandleFunc("GET /api/v1/mobile/version", h.Mobile.GetVersion)
 	mux.HandleFunc("GET /api/v1/mobile/apk", h.Mobile.DownloadApk)
 	mux.HandleFunc("HEAD /api/v1/mobile/apk", h.Mobile.DownloadApk)
 	mux.HandleFunc("GET /api/v1/mobile/apk/download", h.Mobile.DownloadApk)
 	mux.HandleFunc("HEAD /api/v1/mobile/apk/download", h.Mobile.DownloadApk)
 	mux.HandleFunc("POST /api/v1/mobile/auth/login", h.Mobile.Login)
+	mux.Handle("POST /api/v1/mobile/auth/register", mobileFormLimiter(http.HandlerFunc(h.Mobile.Register)))
+	mux.Handle("POST /api/v1/mobile/supplier-applications", mobileFormLimiter(http.HandlerFunc(h.Mobile.SubmitSupplierApplication)))
+	mux.Handle("POST /api/v1/mobile/service-providers", mobileFormLimiter(http.HandlerFunc(h.Mobile.CreateServiceProviderApplication)))
 	mux.HandleFunc("POST /api/v1/mobile/auth/refresh", h.Mobile.RefreshToken)
 	mux.HandleFunc("DELETE /api/v1/mobile/auth/account", h.Mobile.DeleteAccount)
 	mux.HandleFunc("POST /api/v1/mobile/auth/delete-account", h.Mobile.DeleteAccount)

@@ -299,11 +299,17 @@ func RecordMemberActivityAsync(r *http.Request, input MemberActivityInput) {
 	if input.CountryCode == "" {
 		input.CountryCode = countryCode
 	}
-	if input.DeviceType == "" && ua != "" {
+	if ua != "" {
 		dev, br, osName := parseDeviceAndBrowser(ua, 0)
-		input.DeviceType = dev
-		input.Browser = br
-		input.OS = osName
+		if input.DeviceType == "" {
+			input.DeviceType = dev
+		}
+		if input.Browser == "" {
+			input.Browser = br
+		}
+		if input.OS == "" {
+			input.OS = osName
+		}
 	}
 
 	safe.Go("Record Member Activity", func() {

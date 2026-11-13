@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +9,7 @@ import 'package:mertervitrini_mobile/contracts/commerce_repository.dart';
 import 'package:mertervitrini_mobile/contracts/session_storage.dart';
 import 'package:mertervitrini_mobile/core/currency_formatter.dart';
 import 'package:mertervitrini_mobile/core/localization.dart';
+import 'package:mertervitrini_mobile/core/phone_validator.dart';
 import 'package:mertervitrini_mobile/features/supplier/wizard/wizard_models.dart';
 import 'package:mertervitrini_mobile/main.dart';
 import 'package:mertervitrini_mobile/models/cart_and_order.dart';
@@ -114,10 +117,26 @@ class _FakeCatalogRepository implements ICatalogRepository {
   }
 
   @override
+  Future<CatalogQueryResult> searchCatalog(
+    CatalogFilterParams filter, {
+    int limit = 24,
+    int offset = 0,
+    String? lang,
+  }) async {
+    return CatalogQueryResult(
+      products: const <Product>[],
+      total: 0,
+      offset: offset,
+      limit: limit,
+    );
+  }
+
+  @override
   Future<CatalogQueryResult> searchProducts({
     String query = '',
     String categoryId = '',
     String brandId = '',
+    String brandSlug = '',
     String gender = '',
     String season = '',
     bool fason = false,
@@ -126,14 +145,37 @@ class _FakeCatalogRepository implements ICatalogRepository {
     String maxMoq = '',
     String exportCountry = '',
     String sortBy = 'newest',
+    double? minPrice,
+    double? maxPrice,
+    String displayCurrency = '',
+    Map<String, List<String>> attributeFilters = const {},
+    String lang = '',
     int limit = 24,
     int offset = 0,
   }) async {
-    return const CatalogQueryResult(products: <Product>[], total: 0);
+    return CatalogQueryResult(
+      products: const <Product>[],
+      total: 0,
+      offset: offset,
+      limit: limit,
+    );
   }
 
   @override
   Future<Product> fetchProductDetail(String idOrSlug) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<CatalogAttributeGroup>> listStoreAttributes() async =>
+      const <CatalogAttributeGroup>[];
+
+  @override
+  Future<List<ManufacturerSummary>> listManufacturers() async =>
+      const <ManufacturerSummary>[];
+
+  @override
+  Future<ManufacturerDetail> fetchManufacturerDetail(String slugOrId) async {
     throw UnimplementedError();
   }
 }
@@ -220,6 +262,35 @@ class _FakeCommerceRepository implements ICommerceRepository {
 
   @override
   Future<void> markAllNotificationsRead() async {}
+
+  @override
+  Future<void> syncServerCart(List<CartItem> items) async {}
+
+  @override
+  Future<Uint8List> exportCartExcel({
+    required String lang,
+    required String displayCurrency,
+    required List<CartItem> items,
+  }) async =>
+      Uint8List(0);
+
+  @override
+  Future<OrderDetailModel> fetchOrderDetail(String orderId) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> requestOrderRefund({
+    required String orderId,
+    required OrderRefundPayload payload,
+  }) async {}
+
+  @override
+  Future<Uint8List> downloadOrderExcel(String orderId) async => Uint8List(0);
+
+  @override
+  Future<Uint8List> downloadOrderImagesZip(String orderId) async =>
+      Uint8List(0);
 }
 
 void main() {
@@ -520,5 +591,200 @@ void main() {
     await tester.tap(find.text('KATALOG'));
     await tester.pump();
     expect(tappedIndex, 1);
+  });
+
+  group('Phase 2 Core, i18n, Multi-Currency & DTO Contracts', () {
+    test('AppStrings supports all 8 languages, Arabic RTL direction & letterSpacing zeroing', () {
+      expect(
+        AppStrings.supportedCodes,
+        equals(const ['tr', 'en', 'ru', 'ar', 'de', 'fr', 'pl', 'bg']),
+      );
+      expect(AppStrings.directionOf('ar'), TextDirection.rtl);
+      expect(AppStrings.directionOf('tr'), TextDirection.ltr);
+      expect(AppStrings.letterSpacing('ar', 1.8), 0.0);
+      expect(AppStrings.letterSpacing('en', 1.8), 1.8);
+
+      const sampleKeys = <String>[
+        'members_only',
+        'err_token_missing',
+        'phone_err_required',
+        'phone_err_invalid',
+        'rfq_board',
+        'manufacturer_directory',
+        'billing_overview',
+        'archive_product',
+      ];
+      for (final lang in AppStrings.supportedCodes) {
+        for (final key in sampleKeys) {
+          final translated = AppStrings.t(lang, key);
+          expect(
+            translated.trim().isNotEmpty,
+            isTrue,
+            reason: 'Missing translation for ($lang, $key)',
+          );
+        }
+      }
+      expect(AppStrings.t('en', 'members_only'), isNot('Üyelere Özel'));
+    });
+
+    test('PhoneValidator normalizes Turkish/intl phones and localizes errors cleanly', () {
+      final ok = PhoneValidator.normalizeAndValidate('0532 123 45 99', lang: 'en');
+      expect(ok.valid, isTrue);
+      expect(ok.normalized, '+905321234599');
+      expect(ok.errorMessage, isNull);
+
+      final missingEn = PhoneValidator.normalizeAndValidate('', lang: 'en');
+      expect(missingEn.valid, isFalse);
+      expect(missingEn.errorKey, 'phone_err_required');
+      expect(missingEn.localizedError('en'), AppStrings.t('en', 'phone_err_required'));
+
+      final fakeAr = PhoneValidator.normalizeAndValidate('5555555555', lang: 'ar');
+      expect(fakeAr.valid, isFalse);
+      expect(fakeAr.errorKey, 'phone_err_invalid');
+      expect(fakeAr.localizedError('ar'), AppStrings.t('ar', 'phone_err_invalid'));
+    });
+
+    test('CartProvider converts mixed-currency lines to TRY and selected display currency', () async {
+      SharedPreferences.setMockInitialValues({'mv_lang': 'en'});
+      final storage = _InMemorySessionStorage();
+      final client = ApiClient();
+      final session = SessionProvider(
+        apiClient: client,
+        sessionStorage: storage,
+        catalogRepo: _FakeCatalogRepository(),
+        commerceRepo: _FakeCommerceRepository(),
+      );
+      await session.initialize();
+
+      final cart = CartProvider(
+        api: _FakeCommerceRepository(),
+        session: session,
+      );
+
+      final usdProduct = Product.fromJson({
+        'id': 'prod-usd-1',
+        'title': 'Cashmere Knitwear',
+        'custom_sku': 'MV-USD-1',
+        'price': 10.0,
+        'series_ratio': '1-2-2-1',
+        'currency': 'USD',
+        'stock': 60,
+        'is_active': true,
+      });
+      final tryProduct = Product.fromJson({
+        'id': 'prod-try-1',
+        'title': 'Pamuklu Gömlek',
+        'custom_sku': 'MV-TRY-1',
+        'price': 400.0,
+        'series_ratio': '1',
+        'currency': 'TRY',
+        'stock': 20,
+        'is_active': true,
+      });
+
+      await cart.addProductPackages(usdProduct, 1); // 6 * $10 = $60 -> 2400 TRY
+      await cart.addProductPackages(tryProduct, 1); // 1 * 400 = 400 TRY
+
+      expect(cart.totalAmountTry, closeTo(2800.0, 0.01));
+      expect(cart.totalInCurrency('USD'), closeTo(70.0, 0.01));
+      expect(cart.currencyBreakdown['USD'], closeTo(60.0, 0.01));
+      expect(cart.currencyBreakdown['TRY'], closeTo(400.0, 0.01));
+    });
+
+    test('CustomerAddress.toCreateJson and CatalogFilterParams.toQueryParameters match Go DTOs', () {
+      const addr = CustomerAddress(
+        id: '',
+        userId: 'u-1',
+        title: 'Showroom Merter',
+        addressType: 'billing',
+        firstName: 'Ahmet',
+        lastName: 'Yılmaz',
+        recipientName: 'Ahmet Yılmaz',
+        companyName: 'Vitrini Tekstil Ltd.',
+        phone: '+905321234599',
+        countryId: 'TR',
+        stateId: '34',
+        cityId: '3401',
+        addressLine: 'Fatih Cad. No:12',
+        city: 'Güngören',
+        state: 'İstanbul',
+        country: 'Türkiye',
+        postalCode: '34173',
+        taxNoTCKN: '1234567890',
+        taxOffice: 'Merter VD',
+        isDefault: true,
+      );
+      final payload = addr.toCreateJson();
+      expect(payload['address_type'], 'billing');
+      expect(payload['first_name'], 'Ahmet');
+      expect(payload['last_name'], 'Yılmaz');
+      expect(payload['country_id'], 'TR');
+      expect(payload['state_id'], '34');
+      expect(payload['city_id'], '3401');
+      expect(payload['tax_no_tckn'], '1234567890');
+      expect(payload['tax_office'], 'Merter VD');
+      expect(payload['is_default'], isTrue);
+
+      const filter = CatalogFilterParams(
+        query: 'elbise',
+        sortBy: CatalogSortOption.priceDesc,
+        fasonOnly: true,
+        privateLabelOnly: true,
+        companyType: 'manufacturer',
+        maxMoq: 50,
+        exportCountry: 'Germany',
+        displayCurrency: 'EUR',
+        attributeFilters: {
+          'Fabric': ['Cotton', 'Silk'],
+        },
+      );
+      final qp = filter.toQueryParameters(limit: 24, offset: 48, lang: 'de');
+      expect(qp['q'], 'elbise');
+      expect(qp['sort_by'], 'price_desc');
+      expect(qp['fason'], 'true');
+      expect(qp['private_label'], 'true');
+      expect(qp['company_type'], 'manufacturer');
+      expect(qp['max_moq'], 50);
+      expect(qp['export_country'], 'Germany');
+      expect(qp['display_currency'], 'EUR');
+      expect(qp['attr_Fabric'], 'Cotton,Silk');
+      expect(qp['lang'], 'de');
+      expect(qp['offset'], 48);
+    });
+
+    test('SessionProvider enforces localized members_only price lock and non-blocking phone gate', () async {
+      SharedPreferences.setMockInitialValues({'mv_lang': 'en'});
+      final storage = _InMemorySessionStorage()
+        ..lang = 'en'
+        ..customerToken = 'tok-123'
+        ..customer = const CustomerUser(
+          id: 'u-1',
+          firstName: 'Elena',
+          lastName: 'Ivanova',
+          email: 'elena@example.com',
+          phone: '',
+          role: 'customer',
+          requiresPhone: true,
+        );
+      final guestSession = SessionProvider(
+        apiClient: ApiClient(),
+        sessionStorage: _InMemorySessionStorage()..lang = 'en',
+        catalogRepo: _FakeCatalogRepository(),
+        commerceRepo: _FakeCommerceRepository(),
+      );
+      await guestSession.initialize();
+      expect(guestSession.canViewPrices, isFalse);
+      expect(guestSession.formatPrice(1200), AppStrings.t('en', 'members_only'));
+
+      final memberSession = SessionProvider(
+        apiClient: ApiClient(),
+        sessionStorage: storage,
+        catalogRepo: _FakeCatalogRepository(),
+        commerceRepo: _FakeCommerceRepository(),
+      );
+      await memberSession.initialize();
+      expect(memberSession.isCustomerLoggedIn, isTrue);
+      expect(memberSession.requiresPhoneCompletion, isTrue);
+    });
   });
 }

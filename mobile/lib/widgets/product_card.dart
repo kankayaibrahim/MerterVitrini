@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_theme.dart';
+import '../core/currency_formatter.dart';
 import '../core/localization.dart';
-import '../features/auth/auth_screen.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
 import '../providers/session_provider.dart';
+import '../features/auth/auth_screen.dart';
+import 'editorial_ui.dart';
 import 'luxury_icons.dart';
 import 'smart_network_image.dart';
 
@@ -25,524 +27,477 @@ class B2BProductCard extends StatefulWidget {
 }
 
 class _B2BProductCardState extends State<B2BProductCard> {
-  int _imgIndex = 0;
+  bool _adding = false;
 
-  @override
-  void didUpdateWidget(covariant B2BProductCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.product.id != widget.product.id) {
-      _imgIndex = 0;
-    }
-  }
-
-  void _stepImage(int delta, int count) {
-    if (count <= 1) return;
-    setState(() {
-      _imgIndex = (_imgIndex + delta + count) % count;
-    });
-  }
-
-  String _formatSeriesRatio(String ratio, String lang) {
-    final trimmed = ratio.trim();
-    if (trimmed.isEmpty || trimmed.toUpperCase() == 'STANDART') {
-      return lang == 'tr' ? 'STD' : 'STD';
-    }
-    return trimmed.replaceAll(',', '-');
-  }
-
-  String _colorVariantsLabel(int count, String lang) {
-    if (count <= 0) return '';
-    if (lang == 'tr') return '+$count Renk';
-    if (lang == 'ru') return '+$count Цветов';
-    if (lang == 'ar') return '+$count ألوان';
-    return '+$count Colors';
-  }
-
-  Future<void> _quickAddToCart(BuildContext context, Product product) async {
+  Future<void> _quickAdd() async {
     final session = context.read<SessionProvider>();
+    final lang = session.languageCode;
     if (!session.canViewPrices) {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
       );
       return;
     }
-    final minPkgs = product.minOrderPackages;
+
+    setState(() => _adding = true);
     try {
-      await context.read<CartProvider>().addProductPackages(product, minPkgs);
-      if (!context.mounted) return;
+      final minPkgs = widget.product.minOrderPackages;
+      await context.read<CartProvider>().addProductPackages(
+            widget.product,
+            minPkgs,
+          );
+      if (!mounted) return;
+      final totalUnits = minPkgs * widget.product.unitsPerPackage;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.obsidian,
           duration: const Duration(seconds: 2),
+          backgroundColor: AppColors.obsidian,
           content: Text(
-            '$minPkgs Seri (${minPkgs * product.unitsPerPackage} Adet) sepete eklendi.',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
+            UiText.seriesQuickAdded(lang, minPkgs, totalUnits),
+            style: const TextStyle(color: Colors.white),
           ),
         ),
       );
     } catch (e) {
-      if (!context.mounted) return;
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: AppColors.danger,
           content: Text(e.toString()),
+          backgroundColor: AppColors.danger,
         ),
       );
+    } finally {
+      if (mounted) setState(() => _adding = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final product = widget.product;
     final session = context.watch<SessionProvider>();
     final lang = session.languageCode;
-    final wishlisted = session.isWishlisted(product.id);
-    final units = product.unitsPerPackage;
-    final images = product.images;
-    final safeIdx = images.isEmpty ? 0 : _imgIndex.clamp(0, images.length - 1);
-    final activeUrl =
-        images.isNotEmpty ? images[safeIdx].imageUrl : product.coverImageUrl;
+    final p = widget.product;
+    final wishlisted = session.isWishlisted(p.id);
+    final inStock = p.stock > 0;
+    final hasDiscount = p.hasDiscount;
 
-    final hasDiscount = product.discountedPrice != null &&
-        product.discountedPrice! > 0 &&
-        product.discountedPrice! < product.price;
-    final discountPct = hasDiscount && product.price > 0
-        ? (((product.price - product.discountedPrice!) / product.price) * 100)
-            .round()
-        : 0;
+    final int? discountPct = hasDiscount && p.price > 0
+        ? (((p.price - p.discountedPrice!) / p.price) * 100).round().clamp(1, 95)
+        : null;
 
-    final ratioRaw = product.seriesRatio.trim().isNotEmpty
-        ? product.seriesRatio
-        : product.packingRatio;
-    final ratioLabel = _formatSeriesRatio(ratioRaw, lang);
-    final colorCountText =
-        _colorVariantsLabel(product.colorVariants.length, lang);
+    final int units = p.unitsPerPackage;
+    final String ratioLabel = p.seriesRatio.trim().isNotEmpty
+        ? p.seriesRatio.trim()
+        : (p.packingRatio.trim().isNotEmpty ? p.packingRatio.trim() : '1S-1M-1L');
+    final int colorCount = p.colorVariants.length > 1 ? p.colorVariants.length : 0;
 
-    return GestureDetector(
-      onTap: widget.onTap,
-      behavior: HitTestBehavior.opaque,
-      child: ColoredBox(
+    return Container(
+      decoration: BoxDecoration(
         color: Colors.white,
+        borderRadius: BorderRadius.circular(AppColors.radiusMd),
+        border: Border.all(color: AppColors.cultured),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.obsidian.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppColors.radiusMd),
+        onTap: widget.onTap,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Full-Bleed Tall Portrait Gallery Frame
-            Expanded(
-              child: GestureDetector(
-                onHorizontalDragEnd: images.length > 1
-                    ? (details) {
-                        final vx = details.primaryVelocity ?? 0;
-                        if (vx < -120) {
-                          _stepImage(1, images.length);
-                        } else if (vx > 120) {
-                          _stepImage(-1, images.length);
-                        }
-                      }
-                    : null,
-                child: Container(
-                  color: AppColors.editorialOffWhite,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      SmartNetworkImage(
-                        imageUrl: activeUrl,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
+            // 1. Portrait 3:4 Editorial Product Media
+            AspectRatio(
+              aspectRatio: 3 / 4,
+              child: Container(
+                color: AppColors.editorialOffWhite,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    SmartNetworkImage(
+                      imageUrl: p.coverImageUrl,
+                      fit: BoxFit.cover,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(AppColors.radiusMd - 1),
                       ),
+                    ),
 
-                      // Top-Left: Discount or Serie Badge
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: (hasDiscount && session.canViewPrices)
-                            ? Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3.5,
-                                ),
+                    // Top-Left Editorial Badges (Discount + Series + Stock)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      right: 44,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (discountPct != null)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
                                 color: AppColors.discountRed,
-                                child: Text(
-                                  '-$discountPct%',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.6,
-                                  ),
-                                ),
-                              )
-                            : Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 3.5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.90),
-                                ),
-                                child: Text(
-                                  '$units ${AppStrings.tUpper(lang, 'piece')} • $ratioLabel',
-                                  style: const TextStyle(
-                                    color: AppColors.obsidian,
-                                    fontSize: 8.5,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.7,
-                                  ),
-                                ),
+                                borderRadius:
+                                    BorderRadius.circular(AppColors.radiusSm),
                               ),
-                      ),
-
-                      // Top-Right: Floating Wishlist Heart Button
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Material(
-                          color: wishlisted
-                              ? AppColors.obsidian
-                              : Colors.white.withValues(alpha: 0.90),
-                          child: InkWell(
-                            onTap: () => session.toggleWishlist(product),
-                            child: SizedBox(
-                              width: 32,
-                              height: 32,
-                              child: Center(
-                                child: LuxuryIcon(
-                                  kind: LuxuryIconKind.heart,
-                                  size: 15,
-                                  active: wishlisted,
-                                  color: wishlisted
-                                      ? Colors.white
-                                      : AppColors.obsidian,
+                              child: Text(
+                                '-$discountPct%',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: AppStrings.letterSpacing(lang, 0.5),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-
-                      // Left / Right Chevrons for Multi-Image Browsing
-                      if (images.length > 1) ...[
-                        Positioned(
-                          left: 4,
-                          top: 0,
-                          bottom: 0,
-                          child: Center(
-                            child: _CardChevronButton(
-                              icon: Icons.chevron_left_rounded,
-                              onPressed: () => _stepImage(-1, images.length),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          right: 4,
-                          top: 0,
-                          bottom: 0,
-                          child: Center(
-                            child: _CardChevronButton(
-                              icon: Icons.chevron_right_rounded,
-                              onPressed: () => _stepImage(1, images.length),
-                            ),
-                          ),
-                        ),
-                      ],
-
-                      // Bottom-Left: Color Variants Swatch Pill
-                      if (colorCountText.isNotEmpty)
-                        Positioned(
-                          bottom: 10,
-                          left: 8,
-                          child: Container(
+                          Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 7,
                               vertical: 3.5,
                             ),
-                            color: Colors.white.withValues(alpha: 0.92),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  color: AppColors.obsidian,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.94),
+                              borderRadius:
+                                  BorderRadius.circular(AppColors.radiusSm),
+                              border: Border.all(
+                                color: AppColors.champagneGold.withValues(
+                                  alpha: 0.5,
                                 ),
-                                const SizedBox(width: 2),
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  color: AppColors.champagneGold,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  AppStrings.upper(colorCountText, lang),
-                                  style: const TextStyle(
-                                    fontSize: 8.5,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.obsidian,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
+                              ),
+                            ),
+                            child: Text(
+                              '$units ${AppStrings.tUpper(lang, 'piece')} • $ratioLabel',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.obsidian,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: AppStrings.letterSpacing(lang, 0.4),
+                              ),
                             ),
                           ),
-                        ),
-
-                      // Bottom-Right: Floating Quick-Add Bag Button
-                      Positioned(
-                        bottom: 10,
-                        right: 8,
-                        child: Material(
-                          color: AppColors.obsidian.withValues(alpha: 0.92),
-                          child: InkWell(
-                            onTap: () => _quickAddToCart(context, product),
-                            child: Container(
-                              width: 34,
-                              height: 34,
+                          if (!inStock)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
                               decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: AppColors.champagneGold
-                                      .withValues(alpha: 0.55),
-                                  width: 0.8,
+                                color: AppColors.obsidian.withValues(alpha: 0.85),
+                                borderRadius:
+                                    BorderRadius.circular(AppColors.radiusSm),
+                              ),
+                              child: Text(
+                                AppStrings.tUpper(lang, 'out_of_stock'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: AppStrings.letterSpacing(lang, 0.4),
                                 ),
                               ),
-                              alignment: Alignment.center,
-                              child: const LuxuryIcon(
-                                kind: LuxuryIconKind.bag,
-                                size: 15,
-                                color: Colors.white,
-                                accentColor: AppColors.champagneGold,
-                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    // Top-Right Wishlist Icon Button (8px radius)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.white.withValues(alpha: 0.94),
+                        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                        child: InkWell(
+                          borderRadius:
+                              BorderRadius.circular(AppColors.radiusSm),
+                          onTap: () => session.toggleWishlist(p),
+                          child: Container(
+                            width: 31,
+                            height: 31,
+                            decoration: BoxDecoration(
+                              borderRadius:
+                                  BorderRadius.circular(AppColors.radiusSm),
+                              border: Border.all(color: AppColors.cultured),
+                            ),
+                            alignment: Alignment.center,
+                            child: LuxuryIcon(
+                              kind: LuxuryIconKind.heart,
+                              size: 14,
+                              active: wishlisted,
+                              color: wishlisted
+                                  ? AppColors.discountRed
+                                  : AppColors.obsidian,
+                              accentColor: AppColors.discountRed,
                             ),
                           ),
                         ),
                       ),
+                    ),
 
-                      // Bottom Edge: Minimalist Image Progress Indicator
-                      if (images.length > 1)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
+                    // Bottom-Left Color Variants Count Pill
+                    if (colorCount > 0)
+                      Positioned(
+                        left: 8,
+                        bottom: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.94),
+                            borderRadius:
+                                BorderRadius.circular(AppColors.radiusSm),
+                            border: Border.all(color: AppColors.cultured),
+                          ),
                           child: Row(
-                            children: List<Widget>.generate(
-                              images.length > 6 ? 6 : images.length,
-                              (i) => Expanded(
-                                child: Container(
-                                  height: 2,
-                                  color: i == (safeIdx % 6)
-                                      ? AppColors.obsidian
-                                      : Colors.white.withValues(alpha: 0.55),
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppColors.editorialGold,
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 5),
+                              Text(
+                                UiText.colorVariantsLabel(lang, colorCount),
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.obsidian,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                    ],
-                  ),
+                      ),
+
+                    // Bottom-Right Quick-Add Bag Button (8px radius)
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: Material(
+                        color: inStock
+                            ? AppColors.obsidian
+                            : AppColors.sonicSilver.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                        child: InkWell(
+                          borderRadius:
+                              BorderRadius.circular(AppColors.radiusSm),
+                          onTap: _adding || !inStock ? null : _quickAdd,
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            alignment: Alignment.center,
+                            child: _adding
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.8,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const LuxuryIcon(
+                                    kind: LuxuryIconKind.bag,
+                                    size: 16,
+                                    color: Colors.white,
+                                    accentColor: AppColors.champagneGold,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
 
-            // 2. Clean Editorial Info Block (Compact & Uncluttered)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 9, 4, 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Row 1: Brand Name + SKU
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          product.maskedBrandName.toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.obsidian,
-                            letterSpacing: 1.3,
+            // 2. Editorial Metadata Section (Overflow-safe for all 8 languages)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(9, 8, 9, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Open Wholesale Brand Row + Verified Badge
+                    Row(
+                      children: [
+                        if (p.brandVerified) ...[
+                          const Icon(
+                            Icons.verified_rounded,
+                            size: 12,
+                            color: AppColors.emerald,
                           ),
+                          const SizedBox(width: 4),
+                        ],
+                        Expanded(
+                          child: Text(
+                            p.maskedBrandName.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 9.2,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: AppStrings.letterSpacing(lang, 0.9),
+                              color: AppColors.editorialGold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+
+                    // Localized Product Title
+                    Expanded(
+                      child: Text(
+                        p.localizedTitle(lang),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: AppColors.serifFontFamily,
+                          fontSize: 12.2,
+                          fontWeight: FontWeight.w600,
+                          height: 1.24,
+                          color: AppColors.eerieBlack,
                         ),
                       ),
-                      if (product.customSku.isNotEmpty)
-                        Text(
-                          product.customSku,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontSize: 8.5,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.spanishGray,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-
-                  // Row 2: Product Title
-                  Text(
-                    product.localizedTitle(lang),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12.2,
-                      fontWeight: FontWeight.w400,
-                      color: AppColors. sonicSilver,
-                      height: 1.2,
                     ),
-                  ),
-                  const SizedBox(height: 6),
+                    const SizedBox(height: 4),
 
-                  // Row 3: Unit Price + 1 Serie Total Price (or Members-Only Lock CTA)
-                  if (session.canViewPrices)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            if (hasDiscount) ...[
-                              Text(
-                                session.formatPrice(
-                                  product.price,
-                                  sourceCurrency: product.currency,
+                    // SKU + MOQ subtle line
+                    Text(
+                      p.customSku.isNotEmpty
+                          ? '${p.customSku} • ${AppStrings.t(lang, 'moq')}: ${p.minOrderPackages}'
+                          : '${AppStrings.t(lang, 'moq')}: ${p.minOrderPackages} ${AppStrings.t(lang, 'package')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 9.5,
+                        color: AppColors.sonicSilver,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+
+                    // B2B Price Area OR Localized Member-Only Gate
+                    if (session.canViewPrices) ...[
+                      Row(
+                        children: [
+                          if (hasDiscount) ...[
+                            Flexible(
+                              child: Text(
+                                CurrencyFormatter.format(
+                                  p.price * p.unitsPerPackage,
+                                  currency: session.currencyCode,
+                                  ratesToTry: session.exchangeRates,
+                                  sourceCurrency: p.currency,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 10.5,
                                   color: AppColors.spanishGray,
                                   decoration: TextDecoration.lineThrough,
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                session.formatPrice(
-                                  product.effectiveUnitPrice,
-                                  sourceCurrency: product.currency,
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppColors.discountRed,
-                                ),
-                              ),
-                            ] else
-                              Text(
-                                session.formatPrice(
-                                  product.effectiveUnitPrice,
-                                  sourceCurrency: product.currency,
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppColors.obsidian,
-                                ),
-                              ),
+                            ),
+                            const SizedBox(width: 5),
                           ],
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            '1 ${AppStrings.t(lang, 'package')}: ${session.formatPrice(product.packageTotalPrice, sourceCurrency: product.currency)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.editorialGold,
+                          Expanded(
+                            child: Text(
+                              CurrencyFormatter.format(
+                                p.packageTotalPrice,
+                                currency: session.currencyCode,
+                                ratesToTry: session.exchangeRates,
+                                sourceCurrency: p.currency,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.obsidian,
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        '${session.formatPrice(hasDiscount ? p.discountedPrice! : p.price, sourceCurrency: p.currency)} / ${AppStrings.t(lang, 'piece').toLowerCase()}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.sonicSilver,
                         ),
-                      ],
-                    )
-                  else
-                    InkWell(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const AuthScreen(),
-                          ),
-                        );
-                      },
-                      child: Container(
+                      ),
+                    ] else
+                      Container(
+                        width: double.infinity,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
-                          vertical: 4,
+                          vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.obsidian,
+                          color: AppColors.warmIvory,
+                          borderRadius:
+                              BorderRadius.circular(AppColors.radiusSm),
                           border: Border.all(
-                            color: AppColors.champagneGold.withValues(alpha: 0.55),
+                            color: AppColors.champagneGold.withValues(
+                              alpha: 0.5,
+                            ),
                           ),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.lock_outline_rounded,
                               size: 11,
-                              color: AppColors.champagneGold,
+                              color: AppColors.editorialGold,
                             ),
-                            SizedBox(width: 5),
-                            Flexible(
+                            const SizedBox(width: 5),
+                            Expanded(
                               child: Text(
-                                'ÜYELERE ÖZEL FİYAT (GİRİŞ YAP)',
+                                '${AppStrings.t(lang, 'members_only')} • ${AppStrings.t(lang, 'login')}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 9.5,
                                   fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                  letterSpacing: 0.4,
+                                  letterSpacing:
+                                      AppStrings.letterSpacing(lang, 0.3),
+                                  color: AppColors.obsidian,
                                 ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CardChevronButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  const _CardChevronButton({
-    required this.icon,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.78),
-      child: InkWell(
-        onTap: onPressed,
-        child: SizedBox(
-          width: 24,
-          height: 28,
-          child: Icon(
-            icon,
-            size: 16,
-            color: AppColors.obsidian,
-          ),
         ),
       ),
     );

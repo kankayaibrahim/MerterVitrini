@@ -1,8 +1,10 @@
 import 'package:dio/dio.dart';
 
 import '../contracts/supplier_catalog_repository.dart';
+import '../core/localization.dart';
 import '../models/product.dart';
 import '../services/api_client.dart';
+import 'http_repo_helpers.dart';
 
 class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
   final ApiClient _client;
@@ -31,11 +33,14 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
         queryParameters: params,
       );
       final data = resp.data ?? <String, dynamic>{};
-      final list = _parseList(data['products'], Product.fromJson);
+      final list = HttpRepoHelpers.parseList(
+        data['products'],
+        Product.fromJson,
+      );
       final total = (data['total'] as num?)?.toInt() ?? list.length;
       return (list, total);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -47,7 +52,7 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
       );
       return Product.fromJson(resp.data ?? <String, dynamic>{});
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -79,7 +84,7 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
       }
       return urls;
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -92,7 +97,7 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
       );
       return (resp.data?['id'] ?? '').toString();
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -107,7 +112,7 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
         data: payload,
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -127,13 +132,12 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
       if (isActive != null) body['is_active'] = isActive;
       if (stock != null) body['stock'] = stock;
       if (seriesStock != null) body['series_stock'] = seriesStock;
-
       await _client.dio.patch<dynamic>(
         '/api/v1/mobile/supplier/products/$productId/quick-update',
         data: body,
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -142,7 +146,55 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
     try {
       await _client.dio.delete<dynamic>('/api/v1/supplier/products/$productId');
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<void> toggleArchiveProduct({
+    required String productId,
+    required bool isArchived,
+    bool restoreActive = false,
+  }) async {
+    try {
+      await _client.dio.post<dynamic>(
+        '/api/v1/supplier/products/$productId/archive',
+        data: {
+          'is_archived': isArchived,
+          'restore_active': restoreActive,
+        },
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<int> bulkArchiveProducts({
+    List<String> productIds = const [],
+    bool isArchived = true,
+    bool restoreActive = false,
+    String season = '',
+    int? olderThanDays,
+    bool zeroStockOnly = false,
+  }) async {
+    try {
+      final resp = await _client.dio.post<dynamic>(
+        '/api/v1/supplier/products/bulk-archive',
+        data: {
+          if (productIds.isNotEmpty) 'product_ids': productIds,
+          'is_archived': isArchived,
+          'restore_active': restoreActive,
+          if (season.trim().isNotEmpty) 'season': season.trim(),
+          if (olderThanDays != null && olderThanDays > 0)
+            'older_than_days': olderThanDays,
+          if (zeroStockOnly) 'zero_stock_only': true,
+        },
+      );
+      final map = HttpRepoHelpers.asMap(resp.data);
+      return (map['affected'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -155,7 +207,7 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
       );
       return (resp.data?['product_id'] ?? '').toString();
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -164,9 +216,9 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
     try {
       final resp =
           await _client.dio.get<dynamic>('/api/v1/supplier/categories');
-      return _parseList(resp.data, SimpleOptionItem.fromJson);
+      return HttpRepoHelpers.parseList(resp.data, SimpleOptionItem.fromJson);
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
@@ -185,30 +237,95 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
       );
       final data = resp.data ?? <String, dynamic>{};
       return SupplierAttributesBundle(
-        colors: _parseList(data['colors'], SimpleOptionItem.fromJson),
-        fabrics: _parseList(data['fabrics'], SimpleOptionItem.fromJson),
-        sizes: _parseList(data['sizes'], SizeDefinitionOption.fromJson),
-        seriesTemplates:
-            _parseList(data['series_templates'], SeriesTemplateOption.fromJson),
+        colors: HttpRepoHelpers.parseList(
+          data['colors'],
+          SimpleOptionItem.fromJson,
+        ),
+        fabrics: HttpRepoHelpers.parseList(
+          data['fabrics'],
+          SimpleOptionItem.fromJson,
+        ),
+        sizes: HttpRepoHelpers.parseList(
+          data['sizes'],
+          SizeDefinitionOption.fromJson,
+        ),
+        seriesTemplates: HttpRepoHelpers.parseList(
+          data['series_templates'],
+          SeriesTemplateOption.fromJson,
+        ),
       );
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<SupplierProductTranslationMap> fetchSupplierProductTranslations(
+    String productId,
+  ) async {
+    try {
+      final resp = await _client.dio.get<dynamic>(
+        '/api/v1/supplier/products/$productId/translations',
+      );
+      return SupplierProductTranslationMap.fromJson(
+        HttpRepoHelpers.asMap(resp.data),
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<void> updateSupplierProductTranslations(
+    String productId,
+    Map<String, SupplierProductTranslationEntry> translations,
+  ) async {
+    try {
+      await _client.dio.put<dynamic>(
+        '/api/v1/supplier/products/$productId/translations',
+        data: {
+          'translations': translations.map((k, v) => MapEntry(k, v.toJson())),
+        },
+      );
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
 
   @override
   Future<Map<String, Map<String, String>>> autoTranslateSupplierFields(
-    Map<String, String> fields,
-  ) async {
+    Map<String, String> fields, {
+    String sourceLang = 'tr',
+    List<String>? targetLangs,
+  }) async {
     try {
-      final resp = await _client.dio.post<Map<String, dynamic>>(
-        '/api/v1/supplier/translate',
-        data: {
-          'source_lang': 'tr',
-          'target_langs': ['en', 'ru', 'ar'],
-          'fields': fields,
-        },
-      );
+      final normalizedSource = AppStrings.normalizeCode(sourceLang);
+      final targets = (targetLangs != null && targetLangs.isNotEmpty)
+          ? targetLangs
+          : AppStrings.supportedCodes
+                .where((c) => c != normalizedSource)
+                .toList();
+      final body = {
+        'source_lang': normalizedSource,
+        'target_langs': targets,
+        'fields': fields,
+      };
+      Response<Map<String, dynamic>> resp;
+      try {
+        resp = await _client.dio.post<Map<String, dynamic>>(
+          '/api/v1/supplier/translate',
+          data: body,
+        );
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404 || e.response?.statusCode == 405) {
+          resp = await _client.dio.post<Map<String, dynamic>>(
+            '/api/v1/supplier/products/translate',
+            data: body,
+          );
+        } else {
+          rethrow;
+        }
+      }
       final raw = resp.data?['translations'];
       final result = <String, Map<String, String>>{};
       if (raw is Map) {
@@ -224,23 +341,7 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
       }
       return result;
     } catch (e) {
-      throw ApiClient.mapError(e);
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
-  }
-
-  List<T> _parseList<T>(
-    dynamic raw,
-    T Function(Map<String, dynamic>) mapper,
-  ) {
-    final result = <T>[];
-    if (raw is List) {
-      for (final item in raw) {
-        if (item is Map<String, dynamic>) {
-          result.add(mapper(item));
-        }
-      }
-    }
-    return result;
   }
 }
-
