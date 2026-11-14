@@ -1,5 +1,6 @@
 import React from "react";
 import { CreditCard } from "lucide-react";
+import { normalizeCurrencyCode } from "@/utils/orderCurrency";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
 
 interface PaymentModalExtraCopy {
@@ -55,6 +56,7 @@ interface PaymentModalProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly lang: string;
+  readonly currency?: string;
   readonly payBankName: string;
   readonly setPayBankName: (v: string) => void;
   readonly paySenderName: string;
@@ -73,6 +75,7 @@ export default function PaymentModal({
   isOpen,
   onClose,
   lang,
+  currency = "TRY",
   payBankName,
   setPayBankName,
   paySenderName,
@@ -147,7 +150,7 @@ export default function PaymentModal({
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-              {getOrderT("amount")} (TRY) *
+              {getOrderT("amount")} ({normalizeCurrencyCode(currency)}) *
             </label>
             <input
               type="number"

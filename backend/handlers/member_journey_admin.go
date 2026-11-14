@@ -566,7 +566,10 @@ func appendHistoricalLogins(ctx context.Context, userID string, existing []time.
 
 func appendHistoricalOrders(ctx context.Context, userID string, tracked map[string]bool, events []MemberTimelineEvent) []MemberTimelineEvent {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT o.id::text, o.order_number, o.total_amount, o.order_status, o.created_at,
+		SELECT o.id::text, o.order_number, o.total_amount,
+		       COALESCE(NULLIF(UPPER(TRIM(o.currency)), ''), 'TRY'),
+		       COALESCE(o.currency_totals, '{}'::jsonb),
+		       o.order_status, o.created_at,
 		       COALESCE((SELECT oi.image_url_at_purchase FROM catalog.order_items oi WHERE oi.order_id = o.id LIMIT 1), '')
 		FROM catalog.orders o
 		WHERE o.user_id = $1
@@ -579,18 +582,21 @@ func appendHistoricalOrders(ctx context.Context, userID string, tracked map[stri
 	defer rows.Close()
 
 	for rows.Next() {
-		var id, orderNum, status, img string
+		var id, orderNum, curr, status, img string
 		var total float64
+		var rawTotals []byte
 		var createdAt time.Time
-		if rows.Scan(&id, &orderNum, &total, &status, &createdAt, &img) != nil || tracked[id] {
+		if rows.Scan(&id, &orderNum, &total, &curr, &rawTotals, &status, &createdAt, &img) != nil || tracked[id] {
 			continue
 		}
+		curr = normalizeOrderCurrencyCode(curr)
+		totals := parseCurrencyTotalsJSON(rawTotals, curr, total)
 		events = append(events, MemberTimelineEvent{
 			ID:            "hist-order-" + id,
 			EventType:     "order_create",
 			EventCategory: "commerce",
 			Title:         fmt.Sprintf("#%s numaralı B2B siparişi oluşturdu", orderNum),
-			Subtitle:      fmt.Sprintf("Tutar: %.2f TL • Durum: %s", total, status),
+			Subtitle:      fmt.Sprintf("Tutar: %s • Durum: %s", formatCurrencyBreakdownSummary(totals, total, curr), status),
 			EntityType:    "order",
 			EntityID:      id,
 			ImageURL:      img,
@@ -964,7 +970,7 @@ func computeMemberJourneyKPIs(
 				COALESCE((SELECT COUNT(*) FROM catalog.orders WHERE user_id = $1), 0) +
 				COALESCE((SELECT COUNT(*) FROM catalog.store_inquiries WHERE LOWER(email) = LOWER($3)), 0)
 			)::int,
-			COALESCE((SELECT SUM(total_amount) FROM catalog.orders WHERE user_id = $1), 0) +
+			COALESCE((SELECT SUM(CASE WHEN COALESCE(total_amount_try, 0) > 0 THEN total_amount_try ELSE total_amount END) FROM catalog.orders WHERE user_id = $1), 0) +
 			COALESCE((SELECT SUM(ii.quantity * ii.price) FROM catalog.store_inquiry_items ii INNER JOIN catalog.store_inquiries si ON ii.inquiry_id = si.id WHERE LOWER(si.email) = LOWER($3)), 0)
 	`, profile.ID, profile.createdAtTime, profile.Email).Scan(
 		&dbPagesRead, &dbUniqueProds, &dbCartAdds, &dbLastActive,

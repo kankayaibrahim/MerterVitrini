@@ -623,6 +623,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         billingAddress: billing,
         deliveryAddress: delivery,
         paymentMethod: 'BANK_TRANSFER',
+        customerCurrency: session.currencyCode,
       );
       await cart.loadCart();
       await session.telemetry.trackMemberEvent(eventType: 'order_created');

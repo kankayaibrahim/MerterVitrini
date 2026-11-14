@@ -14,6 +14,12 @@ import {
   RotateCcw 
 } from "lucide-react";
 
+import {
+  formatCurrencyAmount,
+  formatOrderPrimaryTotal,
+  shouldShowTryEquivalent,
+} from "@/utils/orderCurrency";
+
 interface OrdersManagerProps {
   readonly apiUrl: string;
   readonly token: string | null;
@@ -26,6 +32,7 @@ interface OrderItem {
   readonly product_sku: string;
   readonly quantity: number;
   readonly price_at_purchase: number;
+  readonly currency?: string;
   readonly image_url_at_purchase: string;
   readonly created_at: string;
 }
@@ -35,6 +42,7 @@ interface PaymentNotification {
   readonly bank_name: string;
   readonly sender_name: string;
   readonly amount: number;
+  readonly currency?: string;
   readonly notification_status: string;
   readonly notes: string;
   readonly created_at: string;
@@ -61,6 +69,11 @@ interface OrderDetail {
   readonly id: string;
   readonly order_number: string;
   readonly total_amount: number;
+  readonly currency?: string;
+  readonly customer_currency?: string;
+  readonly customer_total_amount?: number;
+  readonly total_amount_try?: number;
+  readonly currency_totals?: Record<string, number>;
   readonly payment_method: string;
   readonly order_status: string;
   readonly billing_address: string;
@@ -83,6 +96,11 @@ interface OrderSummary {
   readonly id: string;
   readonly order_number: string;
   readonly total_amount: number;
+  readonly currency?: string;
+  readonly customer_currency?: string;
+  readonly customer_total_amount?: number;
+  readonly total_amount_try?: number;
+  readonly currency_totals?: Record<string, number>;
   readonly payment_method: string;
   readonly order_status: string;
   readonly billing_address: string;
@@ -213,7 +231,12 @@ function OrdersTable({
                 </div>
               </td>
               <td className="px-6 py-4 text-xs font-bold text-zinc-900">
-                {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(o.total_amount)}
+                <div>{formatOrderPrimaryTotal(o, "tr-TR")}</div>
+                {shouldShowTryEquivalent(o) && (
+                  <div className="text-[11px] font-medium text-zinc-500">
+                    ≈ {formatCurrencyAmount(o.total_amount_try ?? 0, "TRY", "tr-TR")}
+                  </div>
+                )}
               </td>
               <td className="px-6 py-4 text-xs font-semibold text-zinc-600">
                 {o.payment_method === "BANK_TRANSFER" ? "Banka Havalesi" : o.payment_method}
@@ -307,9 +330,30 @@ function OrderDetailView({
               <span className="text-zinc-400 font-semibold">Telefon:</span>
               <span className="text-zinc-800 font-bold">{orderDetail.user.phone || "-"}</span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-start gap-1.5">
               <span className="text-zinc-400 font-semibold">Tutar:</span>
-              <span className="text-rose-600 font-extrabold">{new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(orderDetail.total_amount)}</span>
+              <div className="flex flex-col">
+                <span className="text-rose-600 font-extrabold">
+                  {formatOrderPrimaryTotal(orderDetail, "tr-TR")}
+                </span>
+                {shouldShowTryEquivalent(orderDetail) && (
+                  <span className="text-[11px] font-medium text-zinc-500">
+                    ≈ {formatCurrencyAmount(orderDetail.total_amount_try ?? 0, "TRY", "tr-TR")} (TCMB)
+                  </span>
+                )}
+                {orderDetail.customer_currency &&
+                  orderDetail.customer_currency !== orderDetail.currency &&
+                  (orderDetail.customer_total_amount ?? 0) > 0 && (
+                    <span className="text-[11px] font-medium text-zinc-500">
+                      Müşteri Seçimi:{" "}
+                      {formatCurrencyAmount(
+                        orderDetail.customer_total_amount ?? 0,
+                        orderDetail.customer_currency,
+                        "tr-TR"
+                      )}
+                    </span>
+                  )}
+              </div>
             </div>
           </div>
         </div>
@@ -361,7 +405,10 @@ function OrderDetailView({
               <div className="text-right shrink-0">
                 <span className="text-zinc-800 font-bold block">{item.quantity} Adet</span>
                 <span className="text-[10px] text-zinc-400 block">
-                  x {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(item.price_at_purchase)}
+                  x {formatCurrencyAmount(item.price_at_purchase, item.currency || orderDetail.currency, "tr-TR")}
+                </span>
+                <span className="text-[11px] text-zinc-700 font-extrabold block">
+                  {formatCurrencyAmount(item.price_at_purchase * item.quantity, item.currency || orderDetail.currency, "tr-TR")}
                 </span>
               </div>
             </div>
@@ -405,7 +452,7 @@ function OrderDetailView({
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-xs font-bold text-zinc-800">
-                    {new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" }).format(notif.amount)}
+                    {formatCurrencyAmount(notif.amount, notif.currency || orderDetail.currency, "tr-TR")}
                   </span>
                   {notif.notification_status === "PENDING" ? (
                     <div className="flex items-center gap-1.5">

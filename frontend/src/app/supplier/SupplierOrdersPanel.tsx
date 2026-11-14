@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Package,
 } from "lucide-react";
+import { formatCurrencyAmount } from "@/utils/orderCurrency";
 
 export interface SupplierOrderItem {
   id: string;
@@ -25,6 +26,7 @@ export interface SupplierOrderItem {
   quantity: number;
   price_at_purchase: number;
   total_price: number;
+  currency?: string;
   image_url?: string;
   series_ratio?: string;
 }
@@ -177,10 +179,7 @@ function SupplierOrderCard({
               Toplam Sipariş Tutarı (%0 Komisyon)
             </span>
             <span className="text-sm font-black text-emerald-700">
-              {Number(order.gross_amount).toLocaleString("tr-TR", {
-                minimumFractionDigits: 2,
-              })}{" "}
-              {order.currency || "TL"}
+              {formatCurrencyAmount(Number(order.gross_amount), order.currency || "TRY", "tr-TR")}
             </span>
           </div>
         </div>
@@ -289,10 +288,11 @@ function SupplierOrderCard({
                       {item.quantity} Seri/Paket
                     </span>
                     <span className="text-[11px] text-emerald-700 font-semibold">
-                      {Number(item.total_price).toLocaleString("tr-TR", {
-                        minimumFractionDigits: 2,
-                      })}{" "}
-                      TL
+                      {formatCurrencyAmount(
+                        Number(item.total_price),
+                        item.currency || order.currency || "TRY",
+                        "tr-TR"
+                      )}
                     </span>
                   </div>
                 </div>

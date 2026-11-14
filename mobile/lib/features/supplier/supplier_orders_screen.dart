@@ -247,7 +247,9 @@ class _SupplierOrdersScreenState extends State<SupplierOrdersScreen> {
                                 Text(
                                   CurrencyFormatter.format(
                                     it.totalPrice,
-                                    currency: detailed.currency,
+                                    currency: it.currency.isNotEmpty
+                                        ? it.currency
+                                        : detailed.currency,
                                   ),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w800,

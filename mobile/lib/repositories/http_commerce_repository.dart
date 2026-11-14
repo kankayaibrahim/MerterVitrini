@@ -114,6 +114,7 @@ class HttpCommerceRepository implements ICommerceRepository {
     required String billingAddress,
     required String deliveryAddress,
     String paymentMethod = 'BANK_TRANSFER',
+    String customerCurrency = '',
   }) async {
     try {
       final resp = await _client.dio.post<Map<String, dynamic>>(
@@ -122,6 +123,8 @@ class HttpCommerceRepository implements ICommerceRepository {
           'billing_address': billingAddress,
           'delivery_address': deliveryAddress,
           'payment_method': paymentMethod,
+          if (customerCurrency.trim().isNotEmpty)
+            'customer_currency': customerCurrency.trim().toUpperCase(),
         },
       );
       return resp.data ?? <String, dynamic>{};
@@ -158,6 +161,7 @@ class HttpCommerceRepository implements ICommerceRepository {
     required String senderName,
     required String bankName,
     required double amount,
+    String currency = '',
     String notes = '',
   }) async {
     try {
@@ -167,6 +171,8 @@ class HttpCommerceRepository implements ICommerceRepository {
           'sender_name': senderName,
           'bank_name': bankName,
           'amount': amount,
+          if (currency.trim().isNotEmpty)
+            'currency': currency.trim().toUpperCase(),
           'notes': notes,
         },
       );

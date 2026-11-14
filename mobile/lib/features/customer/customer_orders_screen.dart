@@ -254,16 +254,32 @@ class _CustomerOrdersScreenState extends State<CustomerOrdersScreen> {
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: Text(
-                                        session.formatPrice(
-                                          order.totalAmount,
-                                          sourceCurrency: order.currency,
-                                        ),
-                                        style: const TextStyle(
-                                          fontSize: 16.5,
-                                          fontWeight: FontWeight.w900,
-                                          color: AppColors.obsidian,
-                                        ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            order.formatOriginalBreakdown(),
+                                            style: const TextStyle(
+                                              fontSize: 16.5,
+                                              fontWeight: FontWeight.w900,
+                                              color: AppColors.obsidian,
+                                            ),
+                                          ),
+                                          if (order.isMultiCurrency ||
+                                              session.currencyCode
+                                                      .toUpperCase() !=
+                                                  order.currency
+                                                      .toUpperCase())
+                                            Text(
+                                              '≈ ${session.formatPrice(order.totalAmountTry > 0 ? order.totalAmountTry : order.totalAmount, sourceCurrency: order.totalAmountTry > 0 ? 'TRY' : order.currency)}',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.sonicSilver,
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                     Text(

@@ -363,11 +363,13 @@ class MobileApiService
     required String billingAddress,
     required String deliveryAddress,
     String paymentMethod = 'BANK_TRANSFER',
+    String customerCurrency = '',
   }) =>
       commerce.createOrder(
         billingAddress: billingAddress,
         deliveryAddress: deliveryAddress,
         paymentMethod: paymentMethod,
+        customerCurrency: customerCurrency,
       );
 
   @override
@@ -384,6 +386,7 @@ class MobileApiService
     required String senderName,
     required String bankName,
     required double amount,
+    String currency = '',
     String notes = '',
   }) =>
       commerce.submitPaymentNotification(
@@ -391,6 +394,7 @@ class MobileApiService
         senderName: senderName,
         bankName: bankName,
         amount: amount,
+        currency: currency,
         notes: notes,
       );
 

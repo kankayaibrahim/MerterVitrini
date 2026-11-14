@@ -272,7 +272,8 @@ async function syncAndCreateOrder(
   cart: readonly CartItem[],
   billing: string,
   delivery: string,
-  lang: SupportedSeoLang
+  lang: SupportedSeoLang,
+  displayCurrency = "TRY"
 ) {
   const copy = CART_PAGE_COPY[lang];
   const syncRes = await fetch("/api/v1/store/cart/sync", {
@@ -304,6 +305,7 @@ async function syncAndCreateOrder(
       billing_address: billing,
       delivery_address: delivery,
       payment_method: "BANK_TRANSFER",
+      customer_currency: displayCurrency || "TRY",
     }),
   });
 
@@ -549,7 +551,7 @@ export default function CartClient({
 
     setSubmittingOrder(true);
     try {
-      const data = await syncAndCreateOrder(token, cart, finalBilling, finalDelivery, safeLang);
+      const data = await syncAndCreateOrder(token, cart, finalBilling, finalDelivery, safeLang, displayCurrency);
       showToast(`${copy.orderReceivedPrefix} ${data.order_number ?? ""}\n${copy.orderReceivedSuffix}`);
       saveCart([]);
       setIsCheckout(false);

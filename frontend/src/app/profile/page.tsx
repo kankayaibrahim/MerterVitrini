@@ -7,6 +7,7 @@ import { User, Clipboard, Home, LogOut, Check, AlertCircle, AlertTriangle } from
 import { getCategoryPrefix, t } from "@/app/i18n";
 import { Category, CartItem } from "@/types/store";
 import { apiFetch, showToast } from "@/app/utils";
+import { normalizeCurrencyCode } from "@/utils/orderCurrency";
 import {
   SupportedSeoLang,
   isSupportedSeoLang,
@@ -543,6 +544,7 @@ export default function ProfilePage() {
   // --- Payment Notification Form States ---
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
   const [paymentOrderID, setPaymentOrderID] = useState<string>("");
+  const [paymentOrderCurrency, setPaymentOrderCurrency] = useState<string>("TRY");
   const [payBankName, setPayBankName] = useState<string>("");
   const [paySenderName, setPaySenderName] = useState<string>("");
   const [payAmount, setPayAmount] = useState<string>("");
@@ -876,6 +878,7 @@ export default function ProfilePage() {
 
   const openPaymentModal = (order: UserOrder) => {
     setPaymentOrderID(order.id);
+    setPaymentOrderCurrency(normalizeCurrencyCode(order.currency));
     setPayBankName("");
     setPaySenderName(`${firstName} ${lastName}`);
     setPayAmount(order.total_amount.toString());
@@ -897,6 +900,7 @@ export default function ProfilePage() {
           bank_name: payBankName,
           sender_name: paySenderName,
           amount: Number.parseFloat(payAmount),
+          currency: paymentOrderCurrency,
           notes: payNotes
         })
       });
@@ -1714,6 +1718,7 @@ export default function ProfilePage() {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         lang={lang}
+        currency={paymentOrderCurrency}
         payBankName={payBankName}
         setPayBankName={setPayBankName}
         paySenderName={paySenderName}

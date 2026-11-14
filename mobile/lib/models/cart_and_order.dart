@@ -1,4 +1,5 @@
 import '../core/app_config.dart';
+import '../core/currency_formatter.dart';
 import 'model_json.dart';
 
 class CartItem {
@@ -122,6 +123,31 @@ class CartItem {
   };
 }
 
+String normalizeOrderCurrencyCode(String? raw) {
+  final cleaned = (raw ?? '').trim().toUpperCase();
+  switch (cleaned) {
+    case '':
+    case 'TL':
+    case '₺':
+    case 'TRY':
+      return 'TRY';
+    case r'$':
+    case 'USD':
+      return 'USD';
+    case '€':
+    case 'EUR':
+      return 'EUR';
+    case '£':
+    case 'GBP':
+      return 'GBP';
+    case '₽':
+    case 'RUB':
+      return 'RUB';
+    default:
+      return cleaned.length > 3 ? cleaned.substring(0, 3) : cleaned;
+  }
+}
+
 class CustomerOrderItem {
   final String id;
   final String productId;
@@ -129,6 +155,7 @@ class CustomerOrderItem {
   final String productSku;
   final int quantity;
   final double priceAtPurchase;
+  final String currency;
   final String imageUrl;
 
   const CustomerOrderItem({
@@ -138,12 +165,20 @@ class CustomerOrderItem {
     required this.productSku,
     required this.quantity,
     required this.priceAtPurchase,
+    this.currency = 'TRY',
     required this.imageUrl,
   });
 
   double get lineTotal => priceAtPurchase * quantity;
 
-  factory CustomerOrderItem.fromJson(Map<String, dynamic> json) {
+  factory CustomerOrderItem.fromJson(
+    Map<String, dynamic> json, {
+    String fallbackCurrency = 'TRY',
+  }) {
+    final rawCurrency = ModelJson.trimmed(json['currency']);
+    final normalized = normalizeOrderCurrencyCode(
+      rawCurrency.isNotEmpty ? rawCurrency : fallbackCurrency,
+    );
     return CustomerOrderItem(
       id: ModelJson.trimmed(json['id']),
       productId: ModelJson.trimmed(json['product_id']),
@@ -151,6 +186,7 @@ class CustomerOrderItem {
       productSku: ModelJson.trimmed(json['product_sku']),
       quantity: ModelJson.integer(json['quantity'], 1),
       priceAtPurchase: ModelJson.decimal(json['price_at_purchase']),
+      currency: normalized,
       imageUrl: AppConfig.resolveMediaUrl(
         ModelJson.trimmed(json['image_url_at_purchase'] ?? json['image_url']),
       ),
@@ -159,10 +195,22 @@ class CustomerOrderItem {
 }
 
 class CustomerOrder {
+  static const Map<String, int> _currencyPriority = <String, int>{
+    'USD': 1,
+    'EUR': 2,
+    'GBP': 3,
+    'RUB': 4,
+    'TRY': 5,
+  };
+
   final String id;
   final String orderNumber;
   final double totalAmount;
   final String currency;
+  final String customerCurrency;
+  final double customerTotalAmount;
+  final double totalAmountTry;
+  final Map<String, double> currencyTotals;
   final String paymentMethod;
   final String orderStatus;
   final String billingAddress;
@@ -177,6 +225,10 @@ class CustomerOrder {
     required this.orderNumber,
     required this.totalAmount,
     this.currency = 'TRY',
+    this.customerCurrency = '',
+    this.customerTotalAmount = 0.0,
+    this.totalAmountTry = 0.0,
+    this.currencyTotals = const <String, double>{},
     required this.paymentMethod,
     required this.orderStatus,
     required this.billingAddress,
@@ -186,6 +238,52 @@ class CustomerOrder {
     required this.items,
     this.refundStatus = '',
   });
+
+  bool get isMultiCurrency => currencyTotals.length > 1;
+
+  bool get hasNonTryCurrency =>
+      currencyTotals.keys.any((c) => normalizeOrderCurrencyCode(c) != 'TRY') ||
+      normalizeOrderCurrencyCode(currency) != 'TRY';
+
+  String formatOriginalBreakdown() {
+    if (currencyTotals.isEmpty) {
+      return CurrencyFormatter.format(totalAmount, currency: currency);
+    }
+    final codes = currencyTotals.keys.toList()
+      ..sort((a, b) {
+        final pa = _currencyPriority[a] ?? 99;
+        final pb = _currencyPriority[b] ?? 99;
+        if (pa != pb) return pa.compareTo(pb);
+        return a.compareTo(b);
+      });
+    return codes
+        .map(
+          (code) => CurrencyFormatter.format(
+            currencyTotals[code] ?? 0.0,
+            currency: code,
+          ),
+        )
+        .join(' + ');
+  }
+
+  static Map<String, double> _parseCurrencyTotals(
+    dynamic raw,
+    String fallbackCurrency,
+    double fallbackTotal,
+  ) {
+    final out = <String, double>{};
+    if (raw is Map) {
+      for (final entry in raw.entries) {
+        final code = normalizeOrderCurrencyCode(entry.key?.toString());
+        final amount = ModelJson.decimal(entry.value);
+        out[code] = (out[code] ?? 0.0) + amount;
+      }
+    }
+    if (out.isEmpty) {
+      out[normalizeOrderCurrencyCode(fallbackCurrency)] = fallbackTotal;
+    }
+    return Map<String, double>.unmodifiable(out);
+  }
 
   bool get canCancel {
     final s = orderStatus.toUpperCase();
@@ -198,19 +296,36 @@ class CustomerOrder {
   }
 
   factory CustomerOrder.fromJson(Map<String, dynamic> json) {
+    final orderCurr = normalizeOrderCurrencyCode(
+      ModelJson.trimmed(json['currency'], 'TRY'),
+    );
+    final totalAmt = ModelJson.decimal(json['total_amount']);
+    final custCurrRaw = ModelJson.trimmed(json['customer_currency']);
+    final custCurr =
+        custCurrRaw.isNotEmpty ? normalizeOrderCurrencyCode(custCurrRaw) : '';
     final parsedItems = <CustomerOrderItem>[];
     if (json['items'] is List) {
       for (final it in json['items'] as List) {
         if (it is Map<String, dynamic>) {
-          parsedItems.add(CustomerOrderItem.fromJson(it));
+          parsedItems.add(
+            CustomerOrderItem.fromJson(it, fallbackCurrency: orderCurr),
+          );
         }
       }
     }
     return CustomerOrder(
       id: ModelJson.trimmed(json['id']),
       orderNumber: ModelJson.trimmed(json['order_number']),
-      totalAmount: ModelJson.decimal(json['total_amount']),
-      currency: ModelJson.trimmed(json['currency'], 'TRY'),
+      totalAmount: totalAmt,
+      currency: orderCurr,
+      customerCurrency: custCurr,
+      customerTotalAmount: ModelJson.decimal(json['customer_total_amount']),
+      totalAmountTry: ModelJson.decimal(json['total_amount_try']),
+      currencyTotals: _parseCurrencyTotals(
+        json['currency_totals'],
+        orderCurr,
+        totalAmt,
+      ),
       paymentMethod: ModelJson.trimmed(json['payment_method'], 'BANK_TRANSFER'),
       orderStatus: ModelJson.trimmed(json['order_status'], 'PENDING_PAYMENT'),
       billingAddress: ModelJson.trimmed(json['billing_address']),
@@ -234,6 +349,10 @@ class OrderDetailModel extends CustomerOrder {
     required super.orderNumber,
     required super.totalAmount,
     super.currency = 'TRY',
+    super.customerCurrency = '',
+    super.customerTotalAmount = 0.0,
+    super.totalAmountTry = 0.0,
+    super.currencyTotals = const <String, double>{},
     required super.paymentMethod,
     required super.orderStatus,
     required super.billingAddress,
@@ -254,6 +373,10 @@ class OrderDetailModel extends CustomerOrder {
       orderNumber: base.orderNumber,
       totalAmount: base.totalAmount,
       currency: base.currency,
+      customerCurrency: base.customerCurrency,
+      customerTotalAmount: base.customerTotalAmount,
+      totalAmountTry: base.totalAmountTry,
+      currencyTotals: base.currencyTotals,
       paymentMethod: base.paymentMethod,
       orderStatus: base.orderStatus,
       billingAddress: base.billingAddress,
@@ -311,6 +434,7 @@ class SupplierSubOrderItem {
   final int quantity;
   final double priceAtPurchase;
   final double totalPrice;
+  final String currency;
   final String imageUrl;
   final String seriesRatio;
 
@@ -322,11 +446,19 @@ class SupplierSubOrderItem {
     required this.quantity,
     required this.priceAtPurchase,
     required this.totalPrice,
+    this.currency = 'TRY',
     required this.imageUrl,
     required this.seriesRatio,
   });
 
-  factory SupplierSubOrderItem.fromJson(Map<String, dynamic> json) {
+  factory SupplierSubOrderItem.fromJson(
+    Map<String, dynamic> json, {
+    String fallbackCurrency = 'TRY',
+  }) {
+    final rawCurrency = ModelJson.trimmed(json['currency']);
+    final normalized = normalizeOrderCurrencyCode(
+      rawCurrency.isNotEmpty ? rawCurrency : fallbackCurrency,
+    );
     return SupplierSubOrderItem(
       id: ModelJson.trimmed(json['id']),
       productId: ModelJson.trimmed(json['product_id']),
@@ -335,6 +467,7 @@ class SupplierSubOrderItem {
       quantity: ModelJson.integer(json['quantity'], 1),
       priceAtPurchase: ModelJson.decimal(json['price_at_purchase']),
       totalPrice: ModelJson.decimal(json['total_price']),
+      currency: normalized,
       imageUrl: AppConfig.resolveMediaUrl(
         ModelJson.trimmed(json['image_url_at_purchase'] ?? json['image_url']),
       ),
@@ -389,11 +522,16 @@ class SupplierSubOrder {
   });
 
   factory SupplierSubOrder.fromJson(Map<String, dynamic> json) {
+    final subCurrency = normalizeOrderCurrencyCode(
+      ModelJson.trimmed(json['currency'], 'TRY'),
+    );
     final parsedItems = <SupplierSubOrderItem>[];
     if (json['items'] is List) {
       for (final it in json['items'] as List) {
         if (it is Map<String, dynamic>) {
-          parsedItems.add(SupplierSubOrderItem.fromJson(it));
+          parsedItems.add(
+            SupplierSubOrderItem.fromJson(it, fallbackCurrency: subCurrency),
+          );
         }
       }
     }
@@ -405,7 +543,7 @@ class SupplierSubOrder {
       commissionRate: ModelJson.decimal(json['commission_rate']),
       commissionAmount: ModelJson.decimal(json['commission_amount']),
       netPayoutAmount: ModelJson.decimal(json['net_payout_amount']),
-      currency: ModelJson.trimmed(json['currency'], 'TRY'),
+      currency: subCurrency,
       status: ModelJson.trimmed(json['status'], 'PENDING'),
       trackingCompany: ModelJson.trimmed(json['tracking_company']),
       trackingNumber: ModelJson.trimmed(json['tracking_number']),

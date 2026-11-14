@@ -562,6 +562,71 @@ void main() {
       }
       expect(AppStrings.letterSpacing('ar', -0.2), 0.0);
     });
+
+    test('CustomerOrder & OrderDetailModel preserve original product currencies and mixed breakdown', () {
+      final singleUsd = CustomerOrder.fromJson(<String, dynamic>{
+        'id': 'ord-usd',
+        'order_number': '20261113-00001',
+        'total_amount': 45.60,
+        'currency': 'USD',
+        'total_amount_try': 2006.40,
+        'currency_totals': <String, dynamic>{'USD': 45.60},
+        'payment_method': 'BANK_TRANSFER',
+        'order_status': 'PENDING_PAYMENT',
+        'created_at': '2026-11-13T01:00:18Z',
+        'items': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'oi-1',
+            'product_name': 'Erkek Kısa Kollu Polo',
+            'product_sku': 'EDUSA-7X7N',
+            'quantity': 6,
+            'price_at_purchase': 7.60,
+            'currency': 'USD',
+          },
+        ],
+      });
+      expect(singleUsd.currency, 'USD');
+      expect(singleUsd.isMultiCurrency, isFalse);
+      expect(singleUsd.hasNonTryCurrency, isTrue);
+      expect(singleUsd.formatOriginalBreakdown(), r'$45.60');
+      expect(singleUsd.items.single.currency, 'USD');
+
+      final mixed = OrderDetailModel.fromJson(<String, dynamic>{
+        'id': 'ord-mixed',
+        'order_number': '20260610-0002',
+        'total_amount': 48678.84,
+        'currency': 'TRY',
+        'customer_currency': 'EUR',
+        'customer_total_amount': 1014.14,
+        'total_amount_try': 48678.84,
+        'currency_totals': <String, dynamic>{'TRY': 5974.20, 'USD': 970.56},
+        'payment_method': 'BANK_TRANSFER',
+        'order_status': 'PENDING_PAYMENT',
+        'created_at': '2026-06-10T10:00:00Z',
+        'items': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'm-1',
+            'product_name': 'USD Item',
+            'product_sku': 'U-1',
+            'quantity': 16,
+            'price_at_purchase': 60.66,
+            'currency': r'$',
+          },
+          <String, dynamic>{
+            'id': 'm-2',
+            'product_name': 'TRY Item',
+            'product_sku': 'T-1',
+            'quantity': 10,
+            'price_at_purchase': 597.42,
+          },
+        ],
+      });
+      expect(mixed.isMultiCurrency, isTrue);
+      expect(mixed.customerCurrency, 'EUR');
+      expect(mixed.items[0].currency, 'USD');
+      expect(mixed.items[1].currency, 'TRY');
+      expect(mixed.formatOriginalBreakdown(), r'$970.56 + ₺5974.20');
+    });
   });
 }
 

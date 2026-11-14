@@ -12,6 +12,11 @@ import {
 } from "lucide-react";
 import { getResizedImageUrl } from "@/app/utils";
 import {
+  formatCurrencyAmount,
+  formatOrderPrimaryTotal,
+  shouldShowTryEquivalent,
+} from "@/utils/orderCurrency";
+import {
   INTL_LOCALE_BY_LANG,
   SupportedSeoLang,
   normalizeSeoLang,
@@ -37,6 +42,7 @@ export interface OrderItem {
   readonly product_sku: string;
   readonly quantity: number;
   readonly price_at_purchase: number;
+  readonly currency?: string;
   readonly image_url_at_purchase?: string;
 }
 
@@ -45,6 +51,11 @@ export interface UserOrder {
   readonly order_number: string;
   readonly created_at: string;
   readonly total_amount: number;
+  readonly currency?: string;
+  readonly customer_currency?: string;
+  readonly customer_total_amount?: number;
+  readonly total_amount_try?: number;
+  readonly currency_totals?: Readonly<Record<string, number>>;
   readonly order_status: string;
   readonly delivery_address?: string;
   readonly billing_address?: string;
@@ -86,24 +97,29 @@ function getOrderStatusBadgeClass(status: string): string {
 
 interface OrderItemRowProps {
   readonly item: OrderItem;
+  readonly orderCurrency?: string;
   readonly locale: string;
   readonly getOrderT: (key: string) => string;
 }
 
 function OrderItemRow({
   item,
+  orderCurrency,
   locale,
   getOrderT,
 }: Readonly<OrderItemRowProps>) {
   const coverImg = getResizedImageUrl(item.image_url_at_purchase, 80, 106);
-  const formattedUnitPrice = new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "TRY",
-  }).format(item.price_at_purchase);
-  const formattedTotalPrice = new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "TRY",
-  }).format(item.price_at_purchase * item.quantity);
+  const effectiveCurrency = item.currency || orderCurrency || "TRY";
+  const formattedUnitPrice = formatCurrencyAmount(
+    item.price_at_purchase,
+    effectiveCurrency,
+    locale
+  );
+  const formattedTotalPrice = formatCurrencyAmount(
+    item.price_at_purchase * item.quantity,
+    effectiveCurrency,
+    locale
+  );
 
   return (
     <div className="flex items-center gap-4 text-xs font-bold">
@@ -164,10 +180,8 @@ function OrderCard({
     month: "long",
     day: "numeric",
   });
-  const formattedTotal = new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "TRY",
-  }).format(order.total_amount);
+  const formattedTotal = formatOrderPrimaryTotal(order, locale);
+  const showTryEquiv = shouldShowTryEquivalent(order);
 
   return (
     <div className="border border-cultured rounded-2xl overflow-hidden shadow-sm bg-white hover:border-salmon-pink/30 transition-colors">
@@ -195,6 +209,11 @@ function OrderCard({
             <div className="text-salmon-pink font-extrabold">
               {formattedTotal}
             </div>
+            {showTryEquiv && (
+              <div className="text-[10px] font-medium text-sonic-silver">
+                ≈ {formatCurrencyAmount(order.total_amount_try ?? 0, "TRY", locale)}
+              </div>
+            )}
           </div>
         </div>
 
@@ -234,6 +253,7 @@ function OrderCard({
                   <OrderItemRow
                     key={item.id}
                     item={item}
+                    orderCurrency={order.currency}
                     locale={locale}
                     getOrderT={getOrderT}
                   />

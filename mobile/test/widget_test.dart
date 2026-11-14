@@ -228,6 +228,7 @@ class _FakeCommerceRepository implements ICommerceRepository {
     required String billingAddress,
     required String deliveryAddress,
     String paymentMethod = 'BANK_TRANSFER',
+    String customerCurrency = '',
   }) async =>
       const {'order_number': 'MV-ORD-1'};
 
@@ -241,6 +242,7 @@ class _FakeCommerceRepository implements ICommerceRepository {
     required String senderName,
     required String bankName,
     required double amount,
+    String currency = '',
     String notes = '',
   }) async {}
 

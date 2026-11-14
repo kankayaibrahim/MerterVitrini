@@ -436,6 +436,7 @@ interface SubmitB2BOrderParams {
   readonly billingAddress: string;
   readonly deliveryAddress: string;
   readonly lang: string;
+  readonly displayCurrency?: string;
 }
 
 async function submitB2BOrder({
@@ -444,6 +445,7 @@ async function submitB2BOrder({
   billingAddress,
   deliveryAddress,
   lang,
+  displayCurrency,
 }: SubmitB2BOrderParams): Promise<string> {
   const labels = pickLangText(lang, CART_DRAWER_LABELS);
   const syncRes = await fetch("/api/v1/store/cart/sync", {
@@ -475,6 +477,7 @@ async function submitB2BOrder({
       billing_address: billingAddress,
       delivery_address: deliveryAddress,
       payment_method: "BANK_TRANSFER",
+      customer_currency: displayCurrency || "TRY",
     }),
   });
 
@@ -1214,6 +1217,7 @@ export default function CartDrawer({
         billingAddress: finalBilling,
         deliveryAddress: finalDelivery,
         lang,
+        displayCurrency,
       });
 
       const successNotice = labels.orderSuccessToast.replace("{orderNo}", orderNumber);

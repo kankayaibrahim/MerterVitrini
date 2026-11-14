@@ -160,7 +160,7 @@ type Product struct {
 	PackingRatio         *string              `json:"packing_ratio,omitempty"`
 	SeriesRatio          *string              `json:"series_ratio,omitempty"`
 	MinimumOrderQty      int                  `json:"minimum_order_quantity"`
-	Price                float64              `json:"price,omitempty"`
+	Price                float64              `json:"price"`
 	DiscountedPrice      *float64             `json:"discounted_price,omitempty"`
 	SinglePrice          *float64             `json:"single_price,omitempty"`
 	BuyingPrice          *float64             `json:"buying_price,omitempty"`
@@ -245,7 +245,7 @@ type ProductVariant struct {
 	CustomSku       string     `json:"custom_sku"`
 	Barcode         *string    `json:"barcode,omitempty"`
 	Stock           int        `json:"stock"`
-	Price           float64    `json:"price,omitempty"`
+	Price           float64    `json:"price"`
 	DiscountedPrice *float64   `json:"discounted_price,omitempty"`
 	TaxRate         float64    `json:"tax_rate,omitempty"`
 	Currency        string     `json:"currency,omitempty"`
@@ -646,6 +646,7 @@ type SupplierSubOrderItem struct {
 	Quantity        int     `json:"quantity"`
 	PriceAtPurchase float64 `json:"price_at_purchase"`
 	TotalPrice      float64 `json:"total_price"`
+	Currency        string  `json:"currency"`
 	ImageURL        *string `json:"image_url,omitempty"`
 	SeriesRatio     *string `json:"series_ratio,omitempty"`
 }

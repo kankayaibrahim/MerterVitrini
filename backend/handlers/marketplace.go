@@ -39,33 +39,51 @@ func NewMarketplaceHandler(cfg *config.Config, notifiers ...services.Notificatio
 	return &MarketplaceHandler{Cfg: cfg, Notifier: notifier}
 }
 
+type supplierSubOrderGroup struct {
+	BrandID  string
+	Currency string
+	Items    []orderCartItem
+}
+
 func splitOrderIntoSupplierSubOrdersWithSummary(ctx context.Context, tx pgx.Tx, orderID, orderNumber string, items []orderCartItem) ([]models.SupplierDirectOrderSummary, error) {
-	brandGroups := groupOrderItemsByBrand(items)
+	groups := groupOrderItemsByBrandAndCurrency(items)
+	rates := loadLatestExchangeRatesMap(ctx)
 
 	var summaries []models.SupplierDirectOrderSummary
-	subOrderIdx := 1
-	for brandID, brandItems := range brandGroups {
-		summary, err := processSupplierSubOrder(ctx, tx, orderID, orderNumber, brandID, subOrderIdx, brandItems)
+	for idx, grp := range groups {
+		summary, err := processSupplierSubOrder(ctx, tx, orderID, orderNumber, grp.BrandID, grp.Currency, idx+1, grp.Items, rates)
 		if err != nil {
 			return nil, err
 		}
 		if summary != nil {
 			summaries = append(summaries, *summary)
 		}
-		subOrderIdx++
 	}
 
 	return summaries, nil
 }
 
-func groupOrderItemsByBrand(items []orderCartItem) map[string][]orderCartItem {
-	brandGroups := make(map[string][]orderCartItem)
+func groupOrderItemsByBrandAndCurrency(items []orderCartItem) []supplierSubOrderGroup {
+	var groups []supplierSubOrderGroup
+	indexByKey := make(map[string]int)
 	for _, item := range items {
-		if item.BrandID != "" {
-			brandGroups[item.BrandID] = append(brandGroups[item.BrandID], item)
+		if item.BrandID == "" {
+			continue
 		}
+		curr := normalizeOrderCurrencyCode(item.Currency)
+		key := item.BrandID + "|" + curr
+		if pos, exists := indexByKey[key]; exists {
+			groups[pos].Items = append(groups[pos].Items, item)
+			continue
+		}
+		indexByKey[key] = len(groups)
+		groups = append(groups, supplierSubOrderGroup{
+			BrandID:  item.BrandID,
+			Currency: curr,
+			Items:    []orderCartItem{item},
+		})
 	}
-	return brandGroups
+	return groups
 }
 
 func getEffectiveItemPrice(bi orderCartItem) float64 {
@@ -80,21 +98,22 @@ func calculateBrandGrossAmount(brandItems []orderCartItem) float64 {
 	for _, bi := range brandItems {
 		gross += getEffectiveItemPrice(bi) * float64(bi.Quantity)
 	}
-	return gross
+	return math.Round(gross*100) / 100
 }
 
-func getSupplierCommissionRate(ctx context.Context, tx pgx.Tx, brandID string) float64 {
+func getSupplierWalletCommissionAndCurrency(ctx context.Context, tx pgx.Tx, brandID string) (float64, string) {
 	var commissionRate float64 = 0.00
+	var walletCurrency string = "TRY"
 	err := tx.QueryRow(ctx, `
 		INSERT INTO catalog.supplier_wallets (brand_id, commission_rate)
 		VALUES ($1, 0.00)
 		ON CONFLICT (brand_id) DO UPDATE SET updated_at = CURRENT_TIMESTAMP
-		RETURNING commission_rate
-	`, brandID).Scan(&commissionRate)
+		RETURNING commission_rate, COALESCE(NULLIF(UPPER(TRIM(currency)), ''), 'TRY')
+	`, brandID).Scan(&commissionRate, &walletCurrency)
 	if err != nil {
 		log.Printf("[MARKETPLACE] Failed to get/create supplier wallet: %v", err)
 	}
-	return commissionRate
+	return commissionRate, normalizeOrderCurrencyCode(walletCurrency)
 }
 
 func normalizeWhatsappDigits(raw string) string {
@@ -118,12 +137,13 @@ func normalizeWhatsappDigits(raw string) string {
 func insertSupplierSubOrderItems(ctx context.Context, tx pgx.Tx, subOrderID string, brandItems []orderCartItem) error {
 	for _, bi := range brandItems {
 		unitPrice := getEffectiveItemPrice(bi)
-		itemTotal := unitPrice * float64(bi.Quantity)
+		itemTotal := math.Round(unitPrice*float64(bi.Quantity)*100) / 100
+		itemCurrency := normalizeOrderCurrencyCode(bi.Currency)
 		_, err := tx.Exec(ctx, `
 			INSERT INTO catalog.supplier_sub_order_items (
-				sub_order_id, product_id, product_name, product_sku, quantity, price_at_purchase, total_price, image_url, series_ratio
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`, subOrderID, bi.ProductID, bi.Title, bi.CustomSku, bi.Quantity, unitPrice, itemTotal, bi.ImageUrl, bi.SeriesRatio)
+				sub_order_id, product_id, product_name, product_sku, quantity, price_at_purchase, total_price, currency, image_url, series_ratio
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, subOrderID, bi.ProductID, bi.Title, bi.CustomSku, bi.Quantity, unitPrice, itemTotal, itemCurrency, bi.ImageUrl, bi.SeriesRatio)
 		if err != nil {
 			return fmt.Errorf("failed to insert sub order item: %w", err)
 		}
@@ -131,9 +151,10 @@ func insertSupplierSubOrderItems(ctx context.Context, tx pgx.Tx, subOrderID stri
 	return nil
 }
 
-func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumber, brandID string, subOrderIdx int, brandItems []orderCartItem) (*models.SupplierDirectOrderSummary, error) {
+func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumber, brandID, subOrderCurrency string, subOrderIdx int, brandItems []orderCartItem, rates map[string]float64) (*models.SupplierDirectOrderSummary, error) {
+	subOrderCurrency = normalizeOrderCurrencyCode(subOrderCurrency)
 	grossAmount := calculateBrandGrossAmount(brandItems)
-	commissionRate := getSupplierCommissionRate(ctx, tx, brandID)
+	commissionRate, walletCurrency := getSupplierWalletCommissionAndCurrency(ctx, tx, brandID)
 	commissionAmount := math.Round((grossAmount*commissionRate/100.0)*100) / 100
 	netPayoutAmount := math.Round((grossAmount-commissionAmount)*100) / 100
 	subOrderNumber := fmt.Sprintf("%s-S%d", orderNumber, subOrderIdx)
@@ -165,9 +186,9 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 			order_id, brand_id, sub_order_number, gross_amount, commission_rate, 
 			commission_amount, net_payout_amount, currency, status, notes,
 			customer_name, customer_company, customer_phone, customer_email, delivery_address, billing_address
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, 'TRY', 'PENDING', $8, $9, $10, $11, $12, $13, $14)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'PENDING', $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id
-	`, orderID, brandID, subOrderNumber, grossAmount, commissionRate, commissionAmount, netPayoutAmount,
+	`, orderID, brandID, subOrderNumber, grossAmount, commissionRate, commissionAmount, netPayoutAmount, subOrderCurrency,
 		notesPtr, custName, custCompany, custPhone, custEmail, delivAddr, billAddr).Scan(&subOrderID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sub order: %w", err)
@@ -177,25 +198,26 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 		return nil, err
 	}
 
-	// Update supplier wallet pending balance
+	// Update supplier wallet pending balance in the wallet's currency
+	walletDelta := convertOrderAmount(grossAmount, subOrderCurrency, walletCurrency, rates)
 	var updatedPending float64
 	err = tx.QueryRow(ctx, `
 		UPDATE catalog.supplier_wallets
 		SET pending_balance = pending_balance + $1, updated_at = CURRENT_TIMESTAMP
 		WHERE brand_id = $2
 		RETURNING pending_balance
-	`, grossAmount, brandID).Scan(&updatedPending)
+	`, walletDelta, brandID).Scan(&updatedPending)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update supplier wallet: %w", err)
 	}
 
 	// Add audit ledger entry
-	desc := fmt.Sprintf("Doğrudan Tedarikçi Siparişi (%s) - Müşteri: %s", subOrderNumber, custName)
+	desc := fmt.Sprintf("Doğrudan Tedarikçi Siparişi (%s - %s) - Müşteri: %s", subOrderNumber, formatOrderMoney(grossAmount, subOrderCurrency), custName)
 	_, _ = tx.Exec(ctx, `
 		INSERT INTO catalog.supplier_ledger (
 			brand_id, sub_order_id, transaction_type, amount, balance_after, currency, description
-		) VALUES ($1, $2, 'PENDING_ORDER_INCOME', $3, $4, 'TRY', $5)
-	`, brandID, subOrderID, grossAmount, updatedPending, desc)
+		) VALUES ($1, $2, 'PENDING_ORDER_INCOME', $3, $4, $5, $6)
+	`, brandID, subOrderID, grossAmount, updatedPending, subOrderCurrency, desc)
 
 	var brandName, whatsappPhone, phone, publicEmail, locationAddr, bankName, bankHolder, iban string
 	_ = tx.QueryRow(ctx, `
@@ -232,9 +254,9 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 	msgBuilder.WriteString("\n*Sipariş Kalemleri:*\n")
 	for _, bi := range brandItems {
 		unitPrice := getEffectiveItemPrice(bi)
-		fmt.Fprintf(&msgBuilder, "• %s (%s) x %d Seri = %.2f TL\n", bi.Title, bi.CustomSku, bi.Quantity, unitPrice*float64(bi.Quantity))
+		fmt.Fprintf(&msgBuilder, "• %s (%s) x %d Seri = %s\n", bi.Title, bi.CustomSku, bi.Quantity, formatOrderMoney(unitPrice*float64(bi.Quantity), subOrderCurrency))
 	}
-	fmt.Fprintf(&msgBuilder, "\n*Toplam Tutar:* %.2f TL", grossAmount)
+	fmt.Fprintf(&msgBuilder, "\n*Toplam Tutar:* %s", formatOrderMoney(grossAmount, subOrderCurrency))
 
 	waDigits := normalizeWhatsappDigits(whatsappPhone)
 	var waURL string
@@ -247,9 +269,9 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 	services.NewPostgresNotificationDispatcher(db.Pool).NotifySupplierBrandAsync(
 		brandID,
 		"Yeni Doğrudan Toptan Sipariş!",
-		fmt.Sprintf("%s numaralı doğrudan siparişiniz geldi (%s - ₺%.2f).", subOrderNumber, custName, grossAmount),
+		fmt.Sprintf("%s numaralı doğrudan siparişiniz geldi (%s - %s).", subOrderNumber, custName, formatOrderMoney(grossAmount, subOrderCurrency)),
 		"sub_order",
-		map[string]any{"sub_order_id": subOrderID, "sub_order_number": subOrderNumber, "customer_name": custName},
+		map[string]any{"sub_order_id": subOrderID, "sub_order_number": subOrderNumber, "customer_name": custName, "currency": subOrderCurrency},
 	)
 
 	firstProdID := ""
@@ -264,7 +286,7 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 		BrandID:           brandID,
 		BrandName:         brandName,
 		GrossAmount:       grossAmount,
-		Currency:          "TRY",
+		Currency:          subOrderCurrency,
 		WhatsappPhone:     whatsappPhone,
 		Phone:             phone,
 		PublicEmail:       publicEmail,
@@ -345,10 +367,14 @@ func preloadSupplierSubOrderItems(ctx context.Context, orders []models.SupplierS
 	}
 
 	itemRows, err := db.Pool.Query(ctx, `
-		SELECT id, sub_order_id, product_id, product_name, product_sku, quantity, price_at_purchase, total_price, image_url, series_ratio
-		FROM catalog.supplier_sub_order_items
-		WHERE sub_order_id = ANY($1)
-		ORDER BY created_at ASC
+		SELECT soi.id, soi.sub_order_id, soi.product_id, soi.product_name, soi.product_sku, soi.quantity,
+		       soi.price_at_purchase, soi.total_price,
+		       COALESCE(NULLIF(UPPER(TRIM(soi.currency)), ''), NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY') as currency,
+		       soi.image_url, soi.series_ratio
+		FROM catalog.supplier_sub_order_items soi
+		LEFT JOIN catalog.products p ON p.id = soi.product_id
+		WHERE soi.sub_order_id = ANY($1)
+		ORDER BY soi.created_at ASC
 	`, subOrderIDs)
 	if err != nil {
 		return
@@ -357,7 +383,8 @@ func preloadSupplierSubOrderItems(ctx context.Context, orders []models.SupplierS
 
 	for itemRows.Next() {
 		var it models.SupplierSubOrderItem
-		if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.ImageURL, &it.SeriesRatio); err == nil {
+		if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.Currency, &it.ImageURL, &it.SeriesRatio); err == nil {
+			it.Currency = normalizeOrderCurrencyCode(it.Currency)
 			if pos, exists := indexByID[it.SubOrderID]; exists {
 				orders[pos].Items = append(orders[pos].Items, it)
 			}
@@ -446,16 +473,21 @@ func (h *MarketplaceHandler) GetSupplierOrder(w http.ResponseWriter, r *http.Req
 
 	// Fetch items
 	itemRows, err := db.Pool.Query(ctx, `
-		SELECT id, sub_order_id, product_id, product_name, product_sku, quantity, price_at_purchase, total_price, image_url, series_ratio
-		FROM catalog.supplier_sub_order_items
-		WHERE sub_order_id = $1
-		ORDER BY created_at ASC
+		SELECT soi.id, soi.sub_order_id, soi.product_id, soi.product_name, soi.product_sku, soi.quantity,
+		       soi.price_at_purchase, soi.total_price,
+		       COALESCE(NULLIF(UPPER(TRIM(soi.currency)), ''), NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY') as currency,
+		       soi.image_url, soi.series_ratio
+		FROM catalog.supplier_sub_order_items soi
+		LEFT JOIN catalog.products p ON p.id = soi.product_id
+		WHERE soi.sub_order_id = $1
+		ORDER BY soi.created_at ASC
 	`, subOrderID)
 	if err == nil {
 		defer itemRows.Close()
 		for itemRows.Next() {
 			var it models.SupplierSubOrderItem
-			if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.ImageURL, &it.SeriesRatio); err == nil {
+			if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.Currency, &it.ImageURL, &it.SeriesRatio); err == nil {
+				it.Currency = normalizeOrderCurrencyCode(it.Currency)
 				o.Items = append(o.Items, it)
 			}
 		}
@@ -500,19 +532,24 @@ func (h *MarketplaceHandler) UpdateSupplierOrderStatus(w http.ResponseWriter, r 
 	}
 	defer tx.Rollback(ctx)
 
-	var currentStatus string
+	var currentStatus, subOrderCurrency string
 	var grossAmount, commissionAmount, netPayout float64
 	var subOrderNumber string
 	err = tx.QueryRow(ctx, `
-		SELECT status, gross_amount, commission_amount, net_payout_amount, sub_order_number
+		SELECT status, COALESCE(NULLIF(UPPER(TRIM(currency)), ''), 'TRY'), gross_amount, commission_amount, net_payout_amount, sub_order_number
 		FROM catalog.supplier_sub_orders
 		WHERE id = $1 AND brand_id = $2
 		FOR UPDATE
-	`, subOrderID, claims.BrandID).Scan(&currentStatus, &grossAmount, &commissionAmount, &netPayout, &subOrderNumber)
+	`, subOrderID, claims.BrandID).Scan(&currentStatus, &subOrderCurrency, &grossAmount, &commissionAmount, &netPayout, &subOrderNumber)
 	if err != nil {
 		http.Error(w, `{"error":"Sipariş bulunamadı"}`, http.StatusNotFound)
 		return
 	}
+	subOrderCurrency = normalizeOrderCurrencyCode(subOrderCurrency)
+	_, walletCurrency := getSupplierWalletCommissionAndCurrency(ctx, tx, claims.BrandID)
+	rates := loadLatestExchangeRatesMap(ctx)
+	grossWallet := convertOrderAmount(grossAmount, subOrderCurrency, walletCurrency, rates)
+	netWallet := convertOrderAmount(netPayout, subOrderCurrency, walletCurrency, rates)
 
 	_, err = tx.Exec(ctx, `
 		UPDATE catalog.supplier_sub_orders
@@ -536,18 +573,18 @@ func (h *MarketplaceHandler) UpdateSupplierOrderStatus(w http.ResponseWriter, r 
 			    updated_at = CURRENT_TIMESTAMP
 			WHERE brand_id = $3
 			RETURNING available_balance
-		`, grossAmount, netPayout, claims.BrandID).Scan(&newAvail)
+		`, grossWallet, netWallet, claims.BrandID).Scan(&newAvail)
 		if err != nil {
 			http.Error(w, `{"error":"Bakiye aktarımı başarısız"}`, http.StatusInternalServerError)
 			return
 		}
 
-		desc := fmt.Sprintf("Teslim Edilen Sipariş (%s) Hakediş Aktarımı (Komisyon Kesintisi: ₺%.2f)", subOrderNumber, commissionAmount)
+		desc := fmt.Sprintf("Teslim Edilen Sipariş (%s - %s) Hakediş Aktarımı (Komisyon Kesintisi: %s)", subOrderNumber, formatOrderMoney(netPayout, subOrderCurrency), formatOrderMoney(commissionAmount, subOrderCurrency))
 		_, _ = tx.Exec(ctx, `
 			INSERT INTO catalog.supplier_ledger (
 				brand_id, sub_order_id, transaction_type, amount, balance_after, currency, description
-			) VALUES ($1, $2, 'COMPLETED_ORDER_PAYOUT', $3, $4, 'TRY', $5)
-		`, claims.BrandID, subOrderID, netPayout, newAvail, desc)
+			) VALUES ($1, $2, 'COMPLETED_ORDER_PAYOUT', $3, $4, $5, $6)
+		`, claims.BrandID, subOrderID, netPayout, newAvail, subOrderCurrency, desc)
 	}
 
 	// If cancelled: deduct from pending_balance
@@ -556,7 +593,7 @@ func (h *MarketplaceHandler) UpdateSupplierOrderStatus(w http.ResponseWriter, r 
 			UPDATE catalog.supplier_wallets
 			SET pending_balance = GREATEST(0.00, pending_balance - $1), updated_at = CURRENT_TIMESTAMP
 			WHERE brand_id = $2
-		`, grossAmount, claims.BrandID)
+		`, grossWallet, claims.BrandID)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

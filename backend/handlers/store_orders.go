@@ -26,15 +26,18 @@ func NewStoreOrdersHandler() *StoreOrdersHandler {
 }
 
 type CreateOrderRequest struct {
-	BillingAddress  string `json:"billing_address"`
-	DeliveryAddress string `json:"delivery_address"`
-	PaymentMethod   string `json:"payment_method"` // Defaults to "BANK_TRANSFER"
+	BillingAddress   string `json:"billing_address"`
+	DeliveryAddress  string `json:"delivery_address"`
+	PaymentMethod    string `json:"payment_method"` // Defaults to "BANK_TRANSFER"
+	CustomerCurrency string `json:"customer_currency"`
+	DisplayCurrency  string `json:"display_currency"`
 }
 
 type PaymentNotificationRequest struct {
 	BankName   string  `json:"bank_name"`
 	SenderName string  `json:"sender_name"`
 	Amount     float64 `json:"amount"`
+	Currency   string  `json:"currency"`
 	Notes      string  `json:"notes"`
 }
 
@@ -56,21 +59,27 @@ type OrderItemResponse struct {
 	ProductSKU         string  `json:"product_sku"`
 	Quantity           int     `json:"quantity"`
 	PriceAtPurchase    float64 `json:"price_at_purchase"`
+	Currency           string  `json:"currency"`
 	ImageUrlAtPurchase string  `json:"image_url_at_purchase"`
 	CreatedAt          string  `json:"created_at"`
 }
 
 type OrderResponse struct {
-	ID              string              `json:"id"`
-	OrderNumber     string              `json:"order_number"`
-	TotalAmount     float64             `json:"total_amount"`
-	PaymentMethod   string              `json:"payment_method"`
-	OrderStatus     string              `json:"order_status"`
-	BillingAddress  string              `json:"billing_address"`
-	DeliveryAddress string              `json:"delivery_address"`
-	CreatedAt       string              `json:"created_at"`
-	UpdatedAt       string              `json:"updated_at"`
-	Items           []OrderItemResponse `json:"items"`
+	ID                  string              `json:"id"`
+	OrderNumber         string              `json:"order_number"`
+	TotalAmount         float64             `json:"total_amount"`
+	Currency            string              `json:"currency"`
+	CustomerCurrency    string              `json:"customer_currency"`
+	CustomerTotalAmount float64             `json:"customer_total_amount"`
+	TotalAmountTRY      float64             `json:"total_amount_try"`
+	CurrencyTotals      map[string]float64  `json:"currency_totals"`
+	PaymentMethod       string              `json:"payment_method"`
+	OrderStatus         string              `json:"order_status"`
+	BillingAddress      string              `json:"billing_address"`
+	DeliveryAddress     string              `json:"delivery_address"`
+	CreatedAt           string              `json:"created_at"`
+	UpdatedAt           string              `json:"updated_at"`
+	Items               []OrderItemResponse `json:"items"`
 }
 
 func fileExists(path string) bool {
@@ -131,6 +140,7 @@ type orderCartItem struct {
 	CustomSku       string
 	Price           float64
 	DiscountedPrice *float64
+	Currency        string
 	SeriesRatio     string
 	CurrentStock    int
 	ImageUrl        string
@@ -143,7 +153,9 @@ type variantStockUpdate struct {
 
 func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, float64, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT ci.product_id, COALESCE(p.brand_id::text, ''), ci.quantity, p.title, p.custom_sku, p.price, COALESCE(ci.custom_unit_price, p.discounted_price), p.series_ratio, p.stock,
+		SELECT ci.product_id, COALESCE(p.brand_id::text, ''), ci.quantity, p.title, p.custom_sku, p.price, COALESCE(ci.custom_unit_price, p.discounted_price),
+		       COALESCE(NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY') as currency,
+		       p.series_ratio, p.stock,
 		       COALESCE(
 		           (SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY sort_order ASC, is_cover DESC LIMIT 1),
 		           '/placeholder.png'
@@ -164,11 +176,12 @@ func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, fl
 		var item orderCartItem
 		err := rows.Scan(
 			&item.ProductID, &item.BrandID, &item.Quantity, &item.Title, &item.CustomSku, &item.Price, &item.DiscountedPrice,
-			&item.SeriesRatio, &item.CurrentStock, &item.ImageUrl,
+			&item.Currency, &item.SeriesRatio, &item.CurrentStock, &item.ImageUrl,
 		)
 		if err != nil {
 			continue
 		}
+		item.Currency = normalizeOrderCurrencyCode(item.Currency)
 		items = append(items, item)
 
 		unitPrice := item.Price
@@ -278,9 +291,9 @@ func executeStockDeductionAndOrderItems(ctx context.Context, tx pgx.Tx, orderID,
 		}
 
 		_, err = tx.Exec(ctx, `
-			INSERT INTO catalog.order_items (order_id, product_id, product_name, product_sku, quantity, price_at_purchase, image_url_at_purchase)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)
-		`, orderID, item.ProductID, item.Title, item.CustomSku, item.Quantity, unitPrice, item.ImageUrl)
+			INSERT INTO catalog.order_items (order_id, product_id, product_name, product_sku, quantity, price_at_purchase, currency, image_url_at_purchase)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, orderID, item.ProductID, item.Title, item.CustomSku, item.Quantity, unitPrice, normalizeOrderCurrencyCode(item.Currency), item.ImageUrl)
 		if err != nil {
 			return err
 		}
@@ -339,10 +352,18 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	items, totalAmount, err := fetchUserCartItems(ctx, cartID)
+	items, _, err := fetchUserCartItems(ctx, cartID)
 	if err != nil || len(items) == 0 {
 		http.Error(w, `{"error":"Sepetiniz boş"}`, http.StatusBadRequest)
 		return
+	}
+
+	rates := loadLatestExchangeRatesMap(ctx)
+	summary := computeOrderCurrencySummary(items, firstNonEmptyCurrencyPref(req.CustomerCurrency, req.DisplayCurrency), rates)
+	totalsJSONBytes, _ := json.Marshal(summary.CurrencyTotals)
+	totalsJSONStr := string(totalsJSONBytes)
+	if totalsJSONStr == "" || totalsJSONStr == "null" {
+		totalsJSONStr = "{}"
 	}
 
 	tx, err := db.Pool.Begin(ctx)
@@ -373,12 +394,14 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 	var orderID string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO catalog.orders (
-			order_number, user_id, total_amount, payment_method, order_status,
+			order_number, user_id, total_amount, currency, customer_currency, customer_total_amount,
+			total_amount_try, currency_totals, payment_method, order_status,
 			billing_address, delivery_address, customer_name, customer_phone, customer_email
 		)
-		VALUES ($1, $2, $3, $4, 'PENDING_PAYMENT', $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'PENDING_PAYMENT', $10, $11, $12, $13, $14)
 		RETURNING id
-	`, orderNumber, userID, totalAmount, req.PaymentMethod, req.BillingAddress, req.DeliveryAddress, custName, custPhone, custEmail).Scan(&orderID)
+	`, orderNumber, userID, summary.OrderTotalAmount, summary.OrderCurrency, summary.CustomerCurrency, summary.CustomerTotalAmount,
+		summary.TotalAmountTRY, totalsJSONStr, req.PaymentMethod, req.BillingAddress, req.DeliveryAddress, custName, custPhone, custEmail).Scan(&orderID)
 	if err != nil {
 		http.Error(w, `{"error":"Sipariş oluşturulamadı"}`, http.StatusInternalServerError)
 		return
@@ -404,35 +427,64 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 	if len(items) > 0 {
 		firstImg = items[0].ImageUrl
 	}
+	breakdownText := formatCurrencyBreakdownSummary(summary.CurrencyTotals, summary.OrderTotalAmount, summary.OrderCurrency)
 	RecordMemberActivityAsync(r, MemberActivityInput{
 		UserID:        userID,
 		EventType:     "order_create",
 		EventCategory: "commerce",
 		Title:         fmt.Sprintf("#%s numaralı B2B siparişi oluşturdu", orderNumber),
-		Subtitle:      fmt.Sprintf("%d kalem ürün • Toplam: %.2f TL", len(items), totalAmount),
+		Subtitle:      fmt.Sprintf("%d kalem ürün • Toplam: %s", len(items), breakdownText),
 		EntityType:    "order",
 		EntityID:      orderID,
 		ImageURL:      firstImg,
 		Metadata: map[string]any{
-			"order_number": orderNumber,
-			"total_amount": totalAmount,
-			"items_count":  len(items),
+			"order_number":          orderNumber,
+			"total_amount":          summary.OrderTotalAmount,
+			"currency":              summary.OrderCurrency,
+			"customer_currency":     summary.CustomerCurrency,
+			"customer_total_amount": summary.CustomerTotalAmount,
+			"total_amount_try":      summary.TotalAmountTRY,
+			"currency_totals":       summary.CurrencyTotals,
+			"items_count":           len(items),
 		},
 	})
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]any{
-		"success":         true,
-		"order_id":        orderID,
-		"order_number":    orderNumber,
-		"supplier_orders": supplierOrders,
+		"success":               true,
+		"id":                    orderID,
+		"order_id":              orderID,
+		"order_number":          orderNumber,
+		"currency":              summary.OrderCurrency,
+		"total_amount":          summary.OrderTotalAmount,
+		"customer_currency":     summary.CustomerCurrency,
+		"customer_total_amount": summary.CustomerTotalAmount,
+		"total_amount_try":      summary.TotalAmountTRY,
+		"currency_totals":       summary.CurrencyTotals,
+		"supplier_orders":       supplierOrders,
 	})
+}
+
+func hydrateOrderResponseCurrency(o *OrderResponse, rawTotals []byte) {
+	o.Currency = normalizeOrderCurrencyCode(o.Currency)
+	if strings.TrimSpace(o.CustomerCurrency) != "" {
+		o.CustomerCurrency = normalizeOrderCurrencyCode(o.CustomerCurrency)
+	} else {
+		o.CustomerCurrency = o.Currency
+	}
+	o.CurrencyTotals = parseCurrencyTotalsJSON(rawTotals, o.Currency, o.TotalAmount)
 }
 
 func fetchUserOrders(ctx context.Context, userID string) ([]OrderResponse, map[string]*OrderResponse, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT id, order_number, total_amount, payment_method, order_status, billing_address, delivery_address, created_at, updated_at
+		SELECT id, order_number, total_amount,
+		       COALESCE(NULLIF(UPPER(TRIM(currency)), ''), 'TRY'),
+		       COALESCE(NULLIF(UPPER(TRIM(customer_currency)), ''), ''),
+		       COALESCE(customer_total_amount, 0),
+		       COALESCE(total_amount_try, 0),
+		       COALESCE(currency_totals, '{}'::jsonb),
+		       payment_method, order_status, billing_address, delivery_address, created_at, updated_at
 		FROM catalog.orders
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -447,13 +499,17 @@ func fetchUserOrders(ctx context.Context, userID string) ([]OrderResponse, map[s
 
 	for rows.Next() {
 		var o OrderResponse
+		var rawTotals []byte
 		var createdAt, updatedAt time.Time
 		if err := rows.Scan(
-			&o.ID, &o.OrderNumber, &o.TotalAmount, &o.PaymentMethod, &o.OrderStatus,
+			&o.ID, &o.OrderNumber, &o.TotalAmount,
+			&o.Currency, &o.CustomerCurrency, &o.CustomerTotalAmount, &o.TotalAmountTRY, &rawTotals,
+			&o.PaymentMethod, &o.OrderStatus,
 			&o.BillingAddress, &o.DeliveryAddress, &createdAt, &updatedAt,
 		); err != nil {
 			continue
 		}
+		hydrateOrderResponseCurrency(&o, rawTotals)
 		o.CreatedAt = createdAt.Format(time.RFC3339)
 		o.UpdatedAt = updatedAt.Format(time.RFC3339)
 		o.Items = []OrderItemResponse{}
@@ -468,10 +524,13 @@ func fetchUserOrders(ctx context.Context, userID string) ([]OrderResponse, map[s
 
 func populateOrderItems(ctx context.Context, userID string, orderMap map[string]*OrderResponse) {
 	itemRows, err := db.Pool.Query(ctx, `
-		SELECT id, order_id, product_id, product_name, product_sku, quantity, price_at_purchase, image_url_at_purchase, created_at
-		FROM catalog.order_items
-		WHERE order_id IN (SELECT id FROM catalog.orders WHERE user_id = $1)
-		ORDER BY created_at ASC
+		SELECT oi.id, oi.order_id, oi.product_id, oi.product_name, oi.product_sku, oi.quantity, oi.price_at_purchase,
+		       COALESCE(NULLIF(UPPER(TRIM(oi.currency)), ''), NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY') as currency,
+		       oi.image_url_at_purchase, oi.created_at
+		FROM catalog.order_items oi
+		LEFT JOIN catalog.products p ON p.id = oi.product_id
+		WHERE oi.order_id IN (SELECT id FROM catalog.orders WHERE user_id = $1)
+		ORDER BY oi.created_at ASC
 	`, userID)
 	if err != nil {
 		return
@@ -484,13 +543,14 @@ func populateOrderItems(ctx context.Context, userID string, orderMap map[string]
 		var createdAt time.Time
 		var prodID *string
 		if err := itemRows.Scan(
-			&oi.ID, &orderID, &prodID, &oi.ProductName, &oi.ProductSKU, &oi.Quantity, &oi.PriceAtPurchase, &oi.ImageUrlAtPurchase, &createdAt,
+			&oi.ID, &orderID, &prodID, &oi.ProductName, &oi.ProductSKU, &oi.Quantity, &oi.PriceAtPurchase, &oi.Currency, &oi.ImageUrlAtPurchase, &createdAt,
 		); err != nil {
 			continue
 		}
 		if prodID != nil {
 			oi.ProductID = *prodID
 		}
+		oi.Currency = normalizeOrderCurrencyCode(oi.Currency)
 		oi.CreatedAt = createdAt.Format(time.RFC3339)
 
 		if oPtr, ok := orderMap[orderID]; ok {
@@ -546,14 +606,23 @@ func (h *StoreOrdersHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var o OrderResponse
+	var rawTotals []byte
 	var createdAt, updatedAt time.Time
 
 	err = db.Pool.QueryRow(ctx, `
-		SELECT id, order_number, total_amount, payment_method, order_status, billing_address, delivery_address, created_at, updated_at
+		SELECT id, order_number, total_amount,
+		       COALESCE(NULLIF(UPPER(TRIM(currency)), ''), 'TRY'),
+		       COALESCE(NULLIF(UPPER(TRIM(customer_currency)), ''), ''),
+		       COALESCE(customer_total_amount, 0),
+		       COALESCE(total_amount_try, 0),
+		       COALESCE(currency_totals, '{}'::jsonb),
+		       payment_method, order_status, billing_address, delivery_address, created_at, updated_at
 		FROM catalog.orders
 		WHERE id = $1 AND user_id = $2
 	`, orderID, userID).Scan(
-		&o.ID, &o.OrderNumber, &o.TotalAmount, &o.PaymentMethod, &o.OrderStatus,
+		&o.ID, &o.OrderNumber, &o.TotalAmount,
+		&o.Currency, &o.CustomerCurrency, &o.CustomerTotalAmount, &o.TotalAmountTRY, &rawTotals,
+		&o.PaymentMethod, &o.OrderStatus,
 		&o.BillingAddress, &o.DeliveryAddress, &createdAt, &updatedAt,
 	)
 	if err == pgx.ErrNoRows {
@@ -565,6 +634,7 @@ func (h *StoreOrdersHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	hydrateOrderResponseCurrency(&o, rawTotals)
 	o.CreatedAt = createdAt.Format(time.RFC3339)
 	o.UpdatedAt = updatedAt.Format(time.RFC3339)
 	o.Items = []OrderItemResponse{}
@@ -762,18 +832,23 @@ func (h *StoreOrdersHandler) SubmitPaymentNotification(w http.ResponseWriter, r 
 
 	ctx := r.Context()
 
-	var exists bool
-	err = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM catalog.orders WHERE id = $1 AND user_id = $2)", orderID, userID).Scan(&exists)
-	if err != nil || !exists {
+	var orderCurrency string
+	err = db.Pool.QueryRow(ctx, "SELECT COALESCE(NULLIF(UPPER(TRIM(currency)), ''), 'TRY') FROM catalog.orders WHERE id = $1 AND user_id = $2", orderID, userID).Scan(&orderCurrency)
+	if err != nil {
 		http.Error(w, `{"error":"Sipariş bulunamadı"}`, http.StatusNotFound)
 		return
 	}
 
+	notifCurrency := normalizeOrderCurrencyCode(orderCurrency)
+	if strings.TrimSpace(req.Currency) != "" {
+		notifCurrency = normalizeOrderCurrencyCode(req.Currency)
+	}
+
 	query := `
-		INSERT INTO catalog.payment_notifications (order_id, user_id, bank_name, sender_name, amount, notes, status)
-		VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')
+		INSERT INTO catalog.payment_notifications (order_id, user_id, bank_name, sender_name, amount, currency, notes, notification_status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')
 	`
-	_, err = db.Pool.Exec(ctx, query, orderID, userID, req.BankName, req.SenderName, req.Amount, req.Notes)
+	_, err = db.Pool.Exec(ctx, query, orderID, userID, req.BankName, req.SenderName, req.Amount, notifCurrency, req.Notes)
 	if err != nil {
 		log.Printf("[PAYMENT NOTIFICATION ERROR] Failed to insert: %v", err)
 		http.Error(w, `{"error":"Ödeme bildirimi kaydedilemedi"}`, http.StatusInternalServerError)
@@ -939,35 +1014,46 @@ type excelItem struct {
 	Quantity        int
 	PriceAtPurchase float64
 	TotalLineAmount float64
+	Currency        string
 }
 
 type excelData struct {
-	OrderNumber     string
-	CreatedAt       string
-	OrderStatus     string
-	UserFullName    string
-	UserEmail       string
-	DeliveryAddress string
-	BillingAddress  string
-	PaymentMethod   string
-	Currency        string
-	TotalAmount     float64
-	Items           []excelItem
+	OrderNumber       string
+	CreatedAt         string
+	OrderStatus       string
+	UserFullName      string
+	UserEmail         string
+	DeliveryAddress   string
+	BillingAddress    string
+	PaymentMethod     string
+	Currency          string
+	TotalAmount       float64
+	TotalAmountTRY    float64
+	CurrencyBreakdown string
+	ShowTryEquivalent bool
+	Items             []excelItem
 }
 
 func fetchOrderExcelData(ctx context.Context, orderID, userID string) (*excelData, error) {
 	var d excelData
 	var oCreatedAt time.Time
 	var firstName, lastName, email string
+	var rawTotals []byte
 
 	err := db.Pool.QueryRow(ctx, `
-		SELECT o.order_number, o.created_at, o.order_status, o.total_amount, o.payment_method, o.billing_address, o.delivery_address,
+		SELECT o.order_number, o.created_at, o.order_status, o.total_amount,
+		       COALESCE(NULLIF(UPPER(TRIM(o.currency)), ''), 'TRY'),
+		       COALESCE(o.total_amount_try, 0),
+		       COALESCE(o.currency_totals, '{}'::jsonb),
+		       o.payment_method, o.billing_address, o.delivery_address,
 		       u.first_name, u.last_name, u.email
 		FROM catalog.orders o
 		INNER JOIN identity.users u ON o.user_id = u.id
 		WHERE o.id = $1 AND o.user_id = $2
 	`, orderID, userID).Scan(
-		&d.OrderNumber, &oCreatedAt, &d.OrderStatus, &d.TotalAmount, &d.PaymentMethod, &d.BillingAddress, &d.DeliveryAddress,
+		&d.OrderNumber, &oCreatedAt, &d.OrderStatus, &d.TotalAmount,
+		&d.Currency, &d.TotalAmountTRY, &rawTotals,
+		&d.PaymentMethod, &d.BillingAddress, &d.DeliveryAddress,
 		&firstName, &lastName, &email,
 	)
 	if err != nil {
@@ -977,23 +1063,29 @@ func fetchOrderExcelData(ctx context.Context, orderID, userID string) (*excelDat
 	d.CreatedAt = oCreatedAt.Format("02.01.2006 15:04")
 	d.UserFullName = firstName + " " + lastName
 	d.UserEmail = email
-	d.Currency = "TL"
+	d.Currency = normalizeOrderCurrencyCode(d.Currency)
+	totalsMap := parseCurrencyTotalsJSON(rawTotals, d.Currency, d.TotalAmount)
+	d.CurrencyBreakdown = formatCurrencyBreakdownSummary(totalsMap, d.TotalAmount, d.Currency)
+	d.ShowTryEquivalent = d.TotalAmountTRY > 0 && (len(totalsMap) > 1 || d.Currency != "TRY")
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT product_name, product_sku, quantity, price_at_purchase
-		FROM catalog.order_items
-		WHERE order_id = $1
-		ORDER BY created_at ASC
+		SELECT oi.product_name, oi.product_sku, oi.quantity, oi.price_at_purchase,
+		       COALESCE(NULLIF(UPPER(TRIM(oi.currency)), ''), NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY') as currency
+		FROM catalog.order_items oi
+		LEFT JOIN catalog.products p ON p.id = oi.product_id
+		WHERE oi.order_id = $1
+		ORDER BY oi.created_at ASC
 	`, orderID)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var item excelItem
 			var sku *string
-			if err := rows.Scan(&item.ProductName, &sku, &item.Quantity, &item.PriceAtPurchase); err == nil {
+			if err := rows.Scan(&item.ProductName, &sku, &item.Quantity, &item.PriceAtPurchase, &item.Currency); err == nil {
 				if sku != nil {
 					item.ProductSKU = *sku
 				}
+				item.Currency = normalizeOrderCurrencyCode(item.Currency)
 				item.TotalLineAmount = item.PriceAtPurchase * float64(item.Quantity)
 				d.Items = append(d.Items, item)
 			}
@@ -1049,12 +1141,12 @@ func (h *StoreOrdersHandler) ExportExcel(w http.ResponseWriter, r *http.Request)
 				<td>{{.ProductName}}</td>
 				<td>{{.ProductSKU}}</td>
 				<td>{{.Quantity}}</td>
-				<td>{{printf "%.2f" .PriceAtPurchase}} TL</td>
+				<td>{{printf "%.2f" .PriceAtPurchase}} {{.Currency}}</td>
 			</tr>
 			{{end}}
 			<tr style="font-weight:bold;">
 				<td colspan="3" align="right">Toplam Tutar:</td>
-				<td>{{printf "%.2f" .TotalAmount}} {{.Currency}}</td>
+				<td>{{.CurrencyBreakdown}}{{if .ShowTryEquivalent}} (≈ {{printf "%.2f" .TotalAmountTRY}} TRY){{end}}</td>
 			</tr>
 		</table>
 	</body>

@@ -33,6 +33,7 @@ abstract interface class ICommerceRepository {
     required String billingAddress,
     required String deliveryAddress,
     String paymentMethod = 'BANK_TRANSFER',
+    String customerCurrency = '',
   });
 
   Future<List<CustomerOrder>> listCustomerOrders();
@@ -44,6 +45,7 @@ abstract interface class ICommerceRepository {
     required String senderName,
     required String bankName,
     required double amount,
+    String currency = '',
     String notes = '',
   });
 

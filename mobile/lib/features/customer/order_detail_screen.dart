@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/app_theme.dart';
+import '../../core/currency_formatter.dart';
 import '../../core/localization.dart';
 import '../../models/cart_and_order.dart';
 import '../../providers/session_provider.dart';
@@ -166,7 +167,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
-                labelText: AppStrings.t(lang, 'payment_amount'),
+                labelText:
+                    '${AppStrings.t(lang, 'payment_amount')} (${order.currency})',
               ),
             ),
             const SizedBox(height: 10),
@@ -191,6 +193,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       senderName: senderCtrl.text.trim(),
                       bankName: bankCtrl.text.trim(),
                       amount: amt,
+                      currency: order.currency,
                       notes: notesCtrl.text.trim(),
                     );
                     if (ctx.mounted) Navigator.of(ctx).pop(true);
@@ -447,6 +450,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           const Divider(height: 22),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 AppStrings.tUpper(lang, 'grand_total'),
@@ -456,16 +460,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   color: AppColors.sonicSilver,
                                 ),
                               ),
-                              Text(
-                                session.formatPrice(
-                                  order.totalAmount,
-                                  sourceCurrency: order.currency,
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppColors.obsidian,
-                                ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    order.formatOriginalBreakdown(),
+                                    style: const TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.obsidian,
+                                    ),
+                                  ),
+                                  if (order.isMultiCurrency ||
+                                      session.currencyCode.toUpperCase() !=
+                                          order.currency.toUpperCase())
+                                    Text(
+                                      '≈ ${session.formatPrice(order.totalAmountTry > 0 ? order.totalAmountTry : order.totalAmount, sourceCurrency: order.totalAmountTry > 0 ? 'TRY' : order.currency)}',
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.sonicSilver,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ],
                           ),
@@ -779,9 +796,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    session.formatPrice(
+                                    CurrencyFormatter.format(
                                       it.priceAtPurchase * it.quantity,
-                                      sourceCurrency: order.currency,
+                                      currency: it.currency.isNotEmpty
+                                          ? it.currency
+                                          : order.currency,
                                     ),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w800,
