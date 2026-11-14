@@ -11,7 +11,7 @@ import {
   SupportedLangCode,
   t,
 } from "@/app/i18n";
-import { convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/utils";
+import { apiFetch, convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { useRouter } from "next/navigation";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
@@ -327,6 +327,7 @@ export default function WishlistDrawer({
   exchangeRates = [],
 }: Readonly<WishlistDrawerProps>) {
   const router = useRouter();
+  const isAuthenticated = useIsStoreAuthenticated();
   const [favoritesList, setFavoritesList] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -372,18 +373,11 @@ export default function WishlistDrawer({
 
       setLoading(true);
       try {
-        const promises = favoritesList.map(async (id) => {
-          try {
-            const response = await fetch(`/api/v1/store/products/${id}`);
-            if (response.ok) {
-              const data = await response.json();
-              return data as Product;
-            }
-          } catch (e) {
-            console.error(`Failed to fetch product ${id}:`, e);
-          }
-          return null;
-        });
+        const promises = favoritesList.map((id) =>
+          apiFetch<Product>(`/products/${encodeURIComponent(id)}`, {
+            cache: "no-store",
+          })
+        );
 
         const fetched = await Promise.all(promises);
         // Filter out nulls/failures
@@ -396,7 +390,7 @@ export default function WishlistDrawer({
     };
 
     void fetchFavoriteProducts();
-  }, [favoritesList]);
+  }, [favoritesList, isAuthenticated]);
 
   // Remove a favorite product
   const handleRemoveFavorite = (e: React.MouseEvent, productId: string) => {

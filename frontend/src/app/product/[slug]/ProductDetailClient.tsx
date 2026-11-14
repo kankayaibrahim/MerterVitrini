@@ -288,6 +288,54 @@ export default function ProductDetailClient({
     index: number;
     change: number;
   } | null>(null);
+  const [hydratedAuthProduct, setHydratedAuthProduct] = useState<Product | null>(null);
+  const [authFetchAttemptedForId, setAuthFetchAttemptedForId] = useState<string | null>(null);
+
+  const activeProduct =
+    isAuthenticated &&
+    hydratedAuthProduct &&
+    product &&
+    hydratedAuthProduct.id === product.id
+      ? hydratedAuthProduct
+      : product;
+
+  const needsAuthPriceHydration = Boolean(
+    isAuthenticated &&
+      product &&
+      !(Number(product.price) > 0) &&
+      hydratedAuthProduct?.id !== product.id &&
+      authFetchAttemptedForId !== product.id
+  );
+  const isPriceLoading = needsAuthPriceHydration;
+
+  useEffect(() => {
+    if (!isAuthenticated || !product || Number(product.price) > 0) {
+      return;
+    }
+    if (hydratedAuthProduct?.id === product.id) {
+      return;
+    }
+    const targetId = product.id;
+    const slugOrId = product.slug || product.id;
+    let cancelled = false;
+
+    async function loadAuthenticatedProduct() {
+      const fresh = await apiFetch<Product>(
+        `/products/${encodeURIComponent(slugOrId)}`,
+        { cache: "no-store" }
+      );
+      if (cancelled) return;
+      if (fresh && fresh.id) {
+        setHydratedAuthProduct(fresh);
+      }
+      setAuthFetchAttemptedForId(targetId);
+    }
+
+    void loadAuthenticatedProduct();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, product, hydratedAuthProduct?.id]);
 
   useEffect(() => {
     if (typeof initialShowPricesToGuests === "boolean") {
@@ -345,7 +393,7 @@ export default function ProductDetailClient({
 
   const portalHref = `/${getCategoryPrefix(safeLang)}`;
 
-  if (!product) {
+  if (!activeProduct) {
     const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
 
     return (
@@ -394,43 +442,44 @@ export default function ProductDetailClient({
     );
   }
 
-  const title = getProductTitle(product, safeLang);
-  const desc = getProductDescription(product, safeLang);
-  const dynamicAttrs = getProductAttributes(product, safeLang).filter(
+  const title = getProductTitle(activeProduct, safeLang);
+  const desc = getProductDescription(activeProduct, safeLang);
+  const dynamicAttrs = getProductAttributes(activeProduct, safeLang).filter(
     (attr) => !EXCLUDED_ATTR_NAMES.has(attr.name.toLowerCase().trim())
   );
 
-  const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
-  const hasSeries = Boolean(product.series_ratio && unitsPerPkg > 1);
+  const unitsPerPkg = getUnitsFromSeriesRatio(activeProduct.series_ratio);
+  const hasSeries = Boolean(activeProduct.series_ratio && unitsPerPkg > 1);
 
   const { sizes, ratios } = parseProductSeriesBreakdown(
-    product.packing_ratio,
-    product.series_ratio,
-    product.variants?.map((v) => v.size)
+    activeProduct.packing_ratio,
+    activeProduct.series_ratio,
+    activeProduct.variants?.map((v) => v.size)
   );
 
-  const minPkgs = Math.ceil(product.minimum_order_quantity / unitsPerPkg);
+  const minPkgs = Math.ceil((activeProduct.minimum_order_quantity || 1) / unitsPerPkg);
   const actualMinPkgs = Math.max(minPkgs, 1);
 
+  const rawPrice = Number(activeProduct.price) || 0;
+  const rawDiscountedPrice = Number(activeProduct.discounted_price) || 0;
   const unitPrice = convertPrice(
-    product.price,
-    product.currency || "USD",
+    rawPrice,
+    activeProduct.currency || "USD",
     displayCurrency,
     exchangeRates
   );
-  const hasDiscount =
-    product.discounted_price > 0 && product.discounted_price < product.price;
+  const hasDiscount = rawDiscountedPrice > 0 && rawDiscountedPrice < rawPrice;
   const discountedPrice = hasDiscount
     ? convertPrice(
-        product.discounted_price,
-        product.currency || "USD",
+        rawDiscountedPrice,
+        activeProduct.currency || "USD",
         displayCurrency,
         exchangeRates
       )
     : unitPrice;
 
   const totalPieces = pkgQty * unitsPerPkg;
-  const singleItemWeight = Number(product.shipping_weight_kg) || 0.25;
+  const singleItemWeight = Number(activeProduct.shipping_weight_kg) || 0.25;
   const totalWeight = Number((totalPieces * singleItemWeight).toFixed(2));
   const finalPricePerUnit = hasDiscount ? discountedPrice : unitPrice;
   const totalPrice = finalPricePerUnit * totalPieces;
@@ -445,22 +494,25 @@ export default function ProductDetailClient({
       openStoreAuthModal("login");
       return;
     }
+    if (isPriceLoading) {
+      return;
+    }
     if (pkgQty < actualMinPkgs) {
       triggerToast(
-        `${t("min_order_warning", safeLang)}: ${product.minimum_order_quantity} ${t("piece", safeLang)} (${actualMinPkgs} ${t("package", safeLang)})`
+        `${t("min_order_warning", safeLang)}: ${activeProduct.minimum_order_quantity} ${t("piece", safeLang)} (${actualMinPkgs} ${t("package", safeLang)})`
       );
       return;
     }
 
     const coverImg =
-      product.images?.find((img) => img.is_cover)?.image_url ||
-      product.images?.[0]?.image_url ||
+      activeProduct.images?.find((img) => img.is_cover)?.image_url ||
+      activeProduct.images?.[0]?.image_url ||
       "/placeholder.png";
 
     const newItem: CartItem = {
-      product_id: product.id,
+      product_id: activeProduct.id,
       title,
-      custom_sku: product.custom_sku || product.source_product_id || "",
+      custom_sku: activeProduct.custom_sku || activeProduct.source_product_id || "",
       color: selectedColor,
       packages_qty: pkgQty,
       units_per_package: unitsPerPkg,
@@ -468,7 +520,7 @@ export default function ProductDetailClient({
       weight_per_unit: singleItemWeight,
       image_url: coverImg,
       currency,
-      slug: product.slug,
+      slug: activeProduct.slug,
     };
 
     setCart((prev) => {
@@ -497,7 +549,7 @@ export default function ProductDetailClient({
       title: `${title} (${pkgQty} pack)`,
       subtitle: `SKU: ${newItem.custom_sku || "-"} • ${pkgQty * unitsPerPkg} pcs`,
       entity_type: "product",
-      entity_id: product.id,
+      entity_id: activeProduct.id,
       image_url: coverImg,
     });
 
@@ -507,25 +559,25 @@ export default function ProductDetailClient({
 
   const handleAcceptOfferToCart = (offer: ChatOfferMetadata) => {
     const offeredUnitConv = convertPrice(
-      offer.offered_unit_price || product.price,
-      offer.currency || product.currency || "TRY",
+      offer.offered_unit_price || rawPrice,
+      offer.currency || activeProduct.currency || "TRY",
       displayCurrency,
       exchangeRates
     );
 
     const newItem: CartItem = {
-      product_id: offer.product_id || product.id,
+      product_id: offer.product_id || activeProduct.id,
       title: offer.title || title,
-      custom_sku: offer.custom_sku || product.custom_sku || "",
+      custom_sku: offer.custom_sku || activeProduct.custom_sku || "",
       color: offer.color || selectedColor,
       packages_qty: offer.packages_qty || 1,
       units_per_package: offer.units_per_package || unitsPerPkg,
       price_per_unit: offeredUnitConv,
       weight_per_unit: offer.weight_per_unit || singleItemWeight,
       image_url:
-        offer.image_url || product.images?.[0]?.image_url || "/placeholder.png",
+        offer.image_url || activeProduct.images?.[0]?.image_url || "/placeholder.png",
       currency: displayCurrency,
-      slug: offer.slug || product.slug,
+      slug: offer.slug || activeProduct.slug,
     };
 
     setCart((prev) => {
@@ -680,8 +732,8 @@ export default function ProductDetailClient({
           waMsg += `----------------------------\n${copy.waNote}: ${formData.customerMessage}`;
         }
         const supplierWaDigits = (
-          product.brand_profile?.whatsapp_phone ||
-          product.brand_profile?.phone ||
+          activeProduct.brand_profile?.whatsapp_phone ||
+          activeProduct.brand_profile?.phone ||
           ""
         ).replace(/\D/g, "");
         const encodedWa = supplierWaDigits
@@ -701,7 +753,7 @@ export default function ProductDetailClient({
     }
   };
 
-  const supplierSlug = product.brand_profile?.slug || product.brand_id;
+  const supplierSlug = activeProduct.brand_profile?.slug || activeProduct.brand_id;
   const supplierHref =
     safeLang === "tr"
       ? `/ureticiler/${encodeURIComponent(supplierSlug)}`
@@ -740,8 +792,8 @@ export default function ProductDetailClient({
             <Home className="w-3.5 h-3.5" />
             <span>{t("home", safeLang)}</span>
           </Link>
-          {product.category_id &&
-            getCategoryTrail(categories, product.category_id)?.map((cat) => (
+          {activeProduct.category_id &&
+            getCategoryTrail(categories, activeProduct.category_id)?.map((cat) => (
               <React.Fragment key={cat.id}>
                 <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
                 <Link
@@ -752,14 +804,14 @@ export default function ProductDetailClient({
                 </Link>
               </React.Fragment>
             ))}
-          {product.brand_name && (
+          {activeProduct.brand_name && (
             <>
               <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
               <Link
                 href={supplierHref}
                 className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver font-bold"
               >
-                {product.brand_name}
+                {activeProduct.brand_name}
               </Link>
             </>
           )}
@@ -773,7 +825,7 @@ export default function ProductDetailClient({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
             <div className="md:sticky md:top-24 lg:top-28 self-start">
               <ProductImageGallery
-                images={product.images}
+                images={activeProduct.images}
                 title={title}
                 lang={safeLang}
                 t={t}
@@ -782,7 +834,7 @@ export default function ProductDetailClient({
 
             <div className="flex flex-col gap-6">
               <ProductSpecs
-                product={product}
+                product={activeProduct}
                 title={title}
                 lang={safeLang}
                 t={t}
@@ -792,9 +844,10 @@ export default function ProductDetailClient({
                 currency={currency}
                 dynamicAttrs={dynamicAttrs}
                 mode="header"
+                isPriceLoading={isPriceLoading}
               />
 
-              <ColorVariants product={product} lang={safeLang} t={t} />
+              <ColorVariants product={activeProduct} lang={safeLang} t={t} />
 
               <OrderCalculator
                 hasSeries={hasSeries}
@@ -810,6 +863,7 @@ export default function ProductDetailClient({
                 lang={safeLang}
                 t={t}
                 handleAddToCart={handleAddToCart}
+                isPriceLoading={isPriceLoading}
                 onOpenSupplierChat={() => {
                   if (!isAuthenticated) {
                     openStoreAuthModal("login");
@@ -820,7 +874,7 @@ export default function ProductDetailClient({
               />
 
               <ProductSpecs
-                product={product}
+                product={activeProduct}
                 title={title}
                 lang={safeLang}
                 t={t}
@@ -833,7 +887,7 @@ export default function ProductDetailClient({
               />
 
               <SupplierDirectCard
-                product={product}
+                product={activeProduct}
                 pkgQty={pkgQty}
                 totalPieces={totalPieces}
                 totalPrice={totalPrice}
@@ -852,7 +906,7 @@ export default function ProductDetailClient({
                 title={title}
                 lang={safeLang}
                 t={t}
-                productSlug={product.slug || product.id}
+                productSlug={activeProduct.slug || activeProduct.id}
               />
             </div>
           </div>
@@ -909,9 +963,9 @@ export default function ProductDetailClient({
       <StoreChatDrawer
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
-        initialBrandId={product.brand_id}
-        initialProductId={product.id}
-        supplierDisplayName={product.brand_name || copy.defaultBrand}
+        initialBrandId={activeProduct.brand_id}
+        initialProductId={activeProduct.id}
+        supplierDisplayName={activeProduct.brand_name || copy.defaultBrand}
         lang={safeLang}
         displayCurrency={displayCurrency}
         exchangeRates={exchangeRates}

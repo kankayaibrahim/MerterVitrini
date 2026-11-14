@@ -750,7 +750,13 @@ export default function SupplierShowcaseClient({
       await Promise.resolve();
       if (cancelled) return;
 
-      if (!trimmed && initialProducts.length > 0 && brandId === initialBrand?.id) {
+      const ssrHasPrices = initialProducts.some((p) => Number(p.price) > 0);
+      if (
+        !trimmed &&
+        initialProducts.length > 0 &&
+        brandId === initialBrand?.id &&
+        (!isMemberLoggedIn || ssrHasPrices)
+      ) {
         setProducts([...initialProducts]);
         setTotalProducts(initialTotalProducts);
         setLoadingProducts(false);
@@ -780,6 +786,7 @@ export default function SupplierShowcaseClient({
     initialProducts,
     initialTotalProducts,
     initialBrand?.id,
+    isMemberLoggedIn,
   ]);
 
   const handleLangChange = (nextLang: string) => {

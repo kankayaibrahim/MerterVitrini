@@ -690,6 +690,7 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	showPrices := isStorePriceVisibleToCaller(ctx, r)
 	sanitizePublicStoreProducts(products, showPrices)
 
+	w.Header().Add("Vary", "Authorization")
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(map[string]any{
 		"products": products,
@@ -1035,6 +1036,7 @@ func (h *StoreCatalogHandler) GetProductByID(w http.ResponseWriter, r *http.Requ
 	showPrices := isStorePriceVisibleToCaller(ctx, r)
 	sanitizePublicStoreProduct(p, showPrices)
 
+	w.Header().Add("Vary", "Authorization")
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(p)
 }
@@ -2606,6 +2608,7 @@ func (h *StoreCatalogHandler) CatalogDelta(w http.ResponseWriter, r *http.Reques
 		items = append(items, item)
 	}
 
+	w.Header().Add("Vary", "Authorization")
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(CatalogDeltaResponse{

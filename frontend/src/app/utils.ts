@@ -52,6 +52,7 @@ export const SSR_PREFETCH_HEADERS: Record<string, string> = {
   "X-SSR-Prefetch": "1",
 };
 
+import { getValidStoreBearerToken } from "@/app/storeAuth";
 import {
   sanitizePublicStoreAddress,
   sanitizePublicStoreEmail,
@@ -152,6 +153,7 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
     // On the server (SSR / Metadata generation), we query the backend API.
     // In the browser, we use relative paths mapped via reverse proxy.
     const isServer = typeof window === "undefined";
+    const storeToken = !isServer ? getValidStoreBearerToken() : null;
     const defaultInternalUrl =
       process.env.NODE_ENV === "development"
         ? "http://127.0.0.1:8080"
@@ -164,10 +166,12 @@ export async function apiFetch<T>(endpoint: string, options: ApiFetchOptions = {
 
     const response = await fetch(url, {
       ...fetchOptions,
+      cache: fetchOptions.cache ?? (!isServer && storeToken ? "no-store" : undefined),
       next: nextConfig,
       headers: {
         Accept: "application/json",
         ...(isServer ? SSR_PREFETCH_HEADERS : {}),
+        ...(storeToken ? { Authorization: `Bearer ${storeToken}` } : {}),
         ...fetchOptions.headers,
       },
     });
@@ -196,21 +200,23 @@ export interface ExchangeRate {
 }
 
 export function convertPrice(
-  price: number,
+  price: number | null | undefined,
   baseCurrency: string | undefined,
   targetCurrency: string,
-  rates: ExchangeRate[]
+  rates: readonly ExchangeRate[]
 ): number {
+  const numeric = typeof price === "number" ? price : Number(price);
+  const safePrice = Number.isFinite(numeric) ? numeric : 0;
   const base = (baseCurrency || "TRY").toUpperCase();
   const target = targetCurrency.toUpperCase();
-  if (base === target) return price;
+  if (base === target) return safePrice;
 
   // 1. Convert base to TRY
-  let priceInTRY = price;
+  let priceInTRY = safePrice;
   if (base !== "TRY" && base !== "TL") {
     const baseRate = rates.find(r => r.currency_code.toUpperCase() === base);
     if (baseRate && baseRate.buying_rate > 0) {
-      priceInTRY = price * baseRate.buying_rate;
+      priceInTRY = safePrice * baseRate.buying_rate;
     }
   }
 
@@ -224,7 +230,7 @@ export function convertPrice(
     return priceInTRY / targetRate.buying_rate;
   }
 
-  return price;
+  return safePrice;
 }
 
 export function getResizedImageUrl(url?: string, width: number = 288, height: number = 385): string {

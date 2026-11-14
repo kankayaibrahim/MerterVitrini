@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
 	"mertervitrini/backend/config"
+	"mertervitrini/backend/models"
 )
 
 func TestReCaptchaPolicyPreventsLoginAndFormDeadlock(t *testing.T) {
@@ -168,5 +170,92 @@ func TestRegisterAndAuthRequireRealisticPhone(t *testing.T) {
 	}
 	if requiresCustomerPhoneCompletion(&UserInfo{Role: "admin", Phone: ""}, true) {
 		t.Fatalf("expected admin role not to be blocked by customer phone gate")
+	}
+}
+
+func TestSanitizePublicStoreProductAlwaysSerializesNumericPrice(t *testing.T) {
+	disc := 85.5
+	buy := 45.0
+	single := 120.0
+	varDisc := 80.0
+
+	guestProduct := models.Product{
+		ID:              "prod-1",
+		Title:           "Test Polo",
+		Price:           100.0,
+		DiscountedPrice: &disc,
+		SinglePrice:     &single,
+		BuyingPrice:     &buy,
+		Variants: []*models.ProductVariant{
+			{
+				ID:              "var-1",
+				ProductID:       "prod-1",
+				SourceVariantID: "src-1",
+				Price:           100.0,
+				DiscountedPrice: &varDisc,
+			},
+		},
+	}
+
+	sanitizePublicStoreProduct(&guestProduct, false)
+
+	rawGuest, err := json.Marshal(guestProduct)
+	if err != nil {
+		t.Fatalf("failed to marshal sanitized guest product: %v", err)
+	}
+	var guestMap map[string]any
+	if err := json.Unmarshal(rawGuest, &guestMap); err != nil {
+		t.Fatalf("failed to unmarshal guest product JSON: %v", err)
+	}
+	priceVal, hasPrice := guestMap["price"]
+	if !hasPrice || priceVal != float64(0) {
+		t.Fatalf("expected guest product JSON to contain numeric price=0, got hasPrice=%v val=%v", hasPrice, priceVal)
+	}
+	if _, hasDisc := guestMap["discounted_price"]; hasDisc {
+		t.Fatalf("expected guest product JSON to omit discounted_price")
+	}
+	if _, hasBuy := guestMap["buying_price"]; hasBuy {
+		t.Fatalf("expected guest product JSON to omit buying_price")
+	}
+	variants, ok := guestMap["variants"].([]any)
+	if !ok || len(variants) != 1 {
+		t.Fatalf("expected 1 serialized variant, got %T (%d)", guestMap["variants"], len(variants))
+	}
+	varMap, ok := variants[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected variant JSON object, got %T", variants[0])
+	}
+	if vPrice, hasVarPrice := varMap["price"]; !hasVarPrice || vPrice != float64(0) {
+		t.Fatalf("expected guest variant JSON to contain numeric price=0, got has=%v val=%v", hasVarPrice, vPrice)
+	}
+	if _, hasVarDisc := varMap["discounted_price"]; hasVarDisc {
+		t.Fatalf("expected guest variant JSON to omit discounted_price")
+	}
+
+	memberProduct := models.Product{
+		ID:              "prod-2",
+		Title:           "Member Polo",
+		Price:           100.0,
+		DiscountedPrice: &disc,
+		BuyingPrice:     &buy,
+	}
+	sanitizePublicStoreProduct(&memberProduct, true)
+
+	rawMember, err := json.Marshal(memberProduct)
+	if err != nil {
+		t.Fatalf("failed to marshal member product: %v", err)
+	}
+	var memberMap map[string]any
+	if err := json.Unmarshal(rawMember, &memberMap); err != nil {
+		t.Fatalf("failed to unmarshal member product JSON: %v", err)
+	}
+	if memberMap["price"] != float64(100) {
+		t.Fatalf("expected member product price=100, got %v", memberMap["price"])
+	}
+	if memberMap["discounted_price"] != float64(85.5) {
+		t.Fatalf("expected member product discounted_price=85.5, got %v", memberMap["discounted_price"])
+	}
+	if _, hasBuy := memberMap["buying_price"]; hasBuy {
+		t.Fatalf("expected member product JSON to omit buying_price")
 	}
 }

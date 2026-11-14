@@ -29,6 +29,27 @@ interface CallbackUserInfo {
   role?: string;
 }
 
+function consumeSafeReturnToPath(): string {
+  if (typeof window === "undefined") {
+    return "/profile/";
+  }
+  const raw = sessionStorage.getItem("merter_auth_return_to");
+  sessionStorage.removeItem("merter_auth_return_to");
+  if (!raw) {
+    return "/profile/";
+  }
+  const trimmed = raw.trim();
+  if (
+    !trimmed.startsWith("/") ||
+    trimmed.startsWith("//") ||
+    trimmed.startsWith("/\\") ||
+    trimmed.startsWith("/google-callback")
+  ) {
+    return "/profile/";
+  }
+  return trimmed;
+}
+
 function GoogleCallbackHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -144,10 +165,10 @@ function GoogleCallbackHandler() {
         window.dispatchEvent(new Event("auth-change"));
 
         setSuccess(true);
-        
-        // Redirect to homepage or profile
+
+        const targetPath = consumeSafeReturnToPath();
         setTimeout(() => {
-          router.push("/profile/");
+          router.push(targetPath);
         }, 1500);
 
       } catch (err: unknown) {
@@ -229,8 +250,9 @@ function GoogleCallbackHandler() {
 
       setNeedsPhone(false);
       setSuccess(true);
+      const targetPath = consumeSafeReturnToPath();
       setTimeout(() => {
-        router.push("/profile/");
+        router.push(targetPath);
       }, 1500);
     } catch (err: unknown) {
       setPhoneError((err as Error).message);

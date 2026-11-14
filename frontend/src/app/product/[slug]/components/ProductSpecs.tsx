@@ -22,6 +22,7 @@ interface ProductSpecsProps {
   readonly currency: string;
   readonly dynamicAttrs: readonly DynamicAttr[];
   readonly mode?: "all" | "header" | "specs";
+  readonly isPriceLoading?: boolean;
 }
 
 function ProductSpecsHeader({
@@ -34,6 +35,7 @@ function ProductSpecsHeader({
   discountedPrice,
   currency,
   isAuthenticated,
+  isPriceLoading,
 }: Readonly<{
   product: Product;
   title: string;
@@ -44,7 +46,11 @@ function ProductSpecsHeader({
   discountedPrice: number;
   currency: string;
   isAuthenticated: boolean;
+  isPriceLoading?: boolean;
 }>) {
+  const safeUnitPrice = Number.isFinite(unitPrice) ? unitPrice : 0;
+  const safeDiscountedPrice = Number.isFinite(discountedPrice) ? discountedPrice : 0;
+
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -64,22 +70,29 @@ function ProductSpecsHeader({
           {t("unit_price_label", lang)}
         </span>
         {isAuthenticated ? (
-          <div className="flex items-baseline gap-2.5">
-            {hasDiscount ? (
-              <>
-                <span className="text-xs text-[#6B6B6B] line-through">
-                  {unitPrice.toFixed(2)} {currency}
+          isPriceLoading ? (
+            <span
+              className="inline-block h-6 w-24 rounded bg-[#E5E0D8] animate-pulse"
+              aria-busy="true"
+            />
+          ) : (
+            <div className="flex items-baseline gap-2.5">
+              {hasDiscount ? (
+                <>
+                  <span className="text-xs text-[#6B6B6B] line-through">
+                    {safeUnitPrice.toFixed(2)} {currency}
+                  </span>
+                  <span className="text-xl font-extrabold text-[#A30000]">
+                    {safeDiscountedPrice.toFixed(2)} {currency}
+                  </span>
+                </>
+              ) : (
+                <span className="text-xl font-extrabold text-[#1C1C1C]">
+                  {safeUnitPrice.toFixed(2)} {currency}
                 </span>
-                <span className="text-xl font-extrabold text-[#A30000]">
-                  {discountedPrice.toFixed(2)} {currency}
-                </span>
-              </>
-            ) : (
-              <span className="text-xl font-extrabold text-[#1C1C1C]">
-                {unitPrice.toFixed(2)} {currency}
-              </span>
-            )}
-          </div>
+              )}
+            </div>
+          )
         ) : (
           <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#6E542E]">
             <Lock className="w-3.5 h-3.5 text-[#8C6D3F] shrink-0" />
@@ -163,6 +176,7 @@ export default function ProductSpecs({
   currency,
   dynamicAttrs,
   mode = "all",
+  isPriceLoading,
 }: ProductSpecsProps) {
   const isAuthenticated = useIsStoreAuthenticated();
 
@@ -178,6 +192,7 @@ export default function ProductSpecs({
         discountedPrice={discountedPrice}
         currency={currency}
         isAuthenticated={isAuthenticated}
+        isPriceLoading={isPriceLoading}
       />
     );
   }
@@ -205,6 +220,7 @@ export default function ProductSpecs({
         discountedPrice={discountedPrice}
         currency={currency}
         isAuthenticated={isAuthenticated}
+        isPriceLoading={isPriceLoading}
       />
       <ProductSpecsGrid
         product={product}

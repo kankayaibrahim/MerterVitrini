@@ -1249,12 +1249,20 @@ export default function SupplierEditorialProfileClient({
 
       if (brandData) {
         setBrand(brandData);
-        if (initialFeaturedProducts.length === 0) {
+        const featuredHasPrices = initialFeaturedProducts.some(
+          (p) => Number(p.price) > 0
+        );
+        if (
+          initialFeaturedProducts.length === 0 ||
+          (isMemberLoggedIn && !featuredHasPrices)
+        ) {
           const prodRes = await apiFetch<ProductsApiResponse>(
             `/products?brand_id=${encodeURIComponent(brandData.id)}&limit=8&offset=0`
           );
-          setFeaturedProducts(prodRes?.products || []);
-          setTotalProducts(prodRes?.total ?? brandData.active_product_count ?? 0);
+          if (prodRes?.products) {
+            setFeaturedProducts(prodRes.products);
+            setTotalProducts(prodRes.total ?? brandData.active_product_count ?? 0);
+          }
         }
 
         const candidates = resolveCandidateBlogSlugs(brandData);
@@ -1278,7 +1286,14 @@ export default function SupplierEditorialProfileClient({
       setLoading(false);
     }
     void loadEditorialPage();
-  }, [slug, safeLang, initialBrand, initialCategories.length, initialFeaturedProducts.length]);
+  }, [
+    slug,
+    safeLang,
+    initialBrand,
+    initialCategories.length,
+    initialFeaturedProducts,
+    isMemberLoggedIn,
+  ]);
 
   const handleLangChange = (nextLang: string) => {
     const normalized = normalizeSeoLang(nextLang, "tr");

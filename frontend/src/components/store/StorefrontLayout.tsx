@@ -4,7 +4,10 @@ import React, { useState, useEffect, useRef, Suspense } from "react";
 import { Product, Brand, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getCategoryPrefix } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, apiFetch, showToast, ExchangeRate } from "@/app/utils";
-import { syncShowPricesToGuestsSetting } from "@/app/storeAuth";
+import {
+  syncShowPricesToGuestsSetting,
+  useIsStoreMemberLoggedIn,
+} from "@/app/storeAuth";
 
 // Import modular, premium Tailwind E-Commerce subcomponents
 import Header from "@/components/store/Header";
@@ -175,6 +178,7 @@ export default function StorefrontLayout({
   categoryFaqs,
 }: Readonly<StorefrontLayoutProps>) {
   // --- UI States ---
+  const isMemberLoggedIn = useIsStoreMemberLoggedIn();
   const [lang, setLang] = useState<string>(() => getInitialLang(defaultLang));
   const [prevDefaultLang, setPrevDefaultLang] = useState(defaultLang);
   if (defaultLang !== prevDefaultLang) {
@@ -462,7 +466,15 @@ export default function StorefrontLayout({
 
     const loadProducts = async () => {
       if (mode === "portal") {
-        if (isFirstMount && initialPortalProducts && initialPortalProducts.length > 0) {
+        const portalHasPrices = Boolean(
+          initialPortalProducts?.some((p) => Number(p.price) > 0)
+        );
+        if (
+          isFirstMount &&
+          initialPortalProducts &&
+          initialPortalProducts.length > 0 &&
+          (!isMemberLoggedIn || portalHasPrices)
+        ) {
           setLoadingProducts(false);
           return;
         }
@@ -520,7 +532,24 @@ export default function StorefrontLayout({
     };
     
     void loadProducts();
-  }, [currentPage, itemsPerPage, activeCategoryId, activeBrandIds, searchQuery, sortBy, activeSpecs, b2bFilters, activeAttributes, minPrice, maxPrice, mode, displayCurrency, initialPortalProducts, initialProducts]);
+  }, [
+    currentPage,
+    itemsPerPage,
+    activeCategoryId,
+    activeBrandIds,
+    searchQuery,
+    sortBy,
+    activeSpecs,
+    b2bFilters,
+    activeAttributes,
+    minPrice,
+    maxPrice,
+    mode,
+    displayCurrency,
+    initialPortalProducts,
+    initialProducts,
+    isMemberLoggedIn,
+  ]);
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);

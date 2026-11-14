@@ -26,6 +26,7 @@ interface OrderCalculatorProps {
   readonly t: (key: string, lang: string) => string;
   readonly handleAddToCart: () => void;
   readonly onOpenSupplierChat?: () => void;
+  readonly isPriceLoading?: boolean;
 }
 
 const CHAT_CTA_COPY: Record<
@@ -120,11 +121,14 @@ export default function OrderCalculator({
   t,
   handleAddToCart,
   onOpenSupplierChat,
+  isPriceLoading,
 }: OrderCalculatorProps) {
   const isAuthenticated = useIsStoreAuthenticated();
   const isMemberLoggedIn = useIsStoreMemberLoggedIn();
   const safeLang = normalizeSeoLang(lang, "tr");
   const cta = CHAT_CTA_COPY[safeLang];
+  const safeTotalWeight = Number.isFinite(totalWeight) ? totalWeight : 0;
+  const safeTotalPrice = Number.isFinite(totalPrice) ? totalPrice : 0;
 
   return (
     <>
@@ -210,7 +214,7 @@ export default function OrderCalculator({
           <div className="flex justify-between">
             <span className="select-none text-[#525252]">{t("total_weight_calc", lang)}:</span>
             <span className="text-[#1C1C1C]">
-              {totalWeight.toFixed(2)} {t("kg_unit", lang)}
+              {safeTotalWeight.toFixed(2)} {t("kg_unit", lang)}
             </span>
           </div>
           <div className="flex justify-between items-center text-sm font-extrabold pt-2.5 border-t border-[#E5E0D8] mt-1">
@@ -218,9 +222,16 @@ export default function OrderCalculator({
               {t("total_price_calc", lang)} ({t("excluding_vat", lang)}):
             </span>
             {isAuthenticated ? (
-              <span className="text-[#1C1C1C]">
-                {totalPrice.toFixed(2)} {currency}
-              </span>
+              isPriceLoading ? (
+                <span
+                  className="inline-block h-5 w-20 rounded bg-[#E5E0D8] animate-pulse"
+                  aria-busy="true"
+                />
+              ) : (
+                <span className="text-[#1C1C1C]">
+                  {safeTotalPrice.toFixed(2)} {currency}
+                </span>
+              )
             ) : (
               <span className="text-xs font-bold text-[#6E542E]">
                 {getShortMemberPriceLabel(lang)}
@@ -234,8 +245,9 @@ export default function OrderCalculator({
         <div className="flex flex-col gap-2.5">
           <button
             type="button"
+            disabled={Boolean(isPriceLoading)}
             onClick={handleAddToCart}
-            className="w-full py-3.5 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border-none flex items-center justify-center gap-2.5 cursor-pointer select-none active:scale-[0.99]"
+            className="w-full py-3.5 bg-[#1C1C1C] hover:bg-[#333333] disabled:opacity-60 disabled:cursor-wait text-white rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border-none flex items-center justify-center gap-2.5 cursor-pointer select-none active:scale-[0.99]"
           >
             <ShoppingBag className="w-4 h-4 text-white" />
             <span>{t("add_to_cart", lang)}</span>

@@ -201,6 +201,22 @@ function readValidStoreUserPure<T = Record<string, unknown>>(): T | null {
   return parsed ? (parsed as T) : null;
 }
 
+/**
+ * Pure reader returning the unexpired bearer token for a valid customer
+ * session, or null on SSR / guests / incomplete profiles.
+ */
+export function getValidStoreBearerToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  if (readValidStoreUserPure() === null) {
+    return null;
+  }
+  const token = localStorage.getItem("store_user_token");
+  const trimmed = token ? token.trim() : "";
+  return trimmed !== "" ? trimmed : null;
+}
+
 function hydrateStoreAuthSideEffects(): void {
   if (typeof window === "undefined") {
     return;

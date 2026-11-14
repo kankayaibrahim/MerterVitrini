@@ -162,6 +162,15 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
 
   const handleGoogleLogin = () => {
     if (typeof window !== "undefined") {
+      const currentRel = `${window.location.pathname}${window.location.search}`;
+      if (
+        currentRel.startsWith("/") &&
+        !currentRel.startsWith("//") &&
+        !currentRel.startsWith("/\\") &&
+        !currentRel.startsWith("/google-callback")
+      ) {
+        sessionStorage.setItem("merter_auth_return_to", currentRel);
+      }
       const origin = window.location.origin;
       const keycloakUrl = "https://auth.mertervitrini.com.tr";
       const realm = "merter";

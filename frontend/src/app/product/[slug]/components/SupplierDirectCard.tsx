@@ -485,7 +485,9 @@ export default function SupplierDirectCard({
   const companyTypeLabel =
     copy.companyTypes[companyTypeKey] || copy.companyTypes.uretici_toptanci;
   const formattedTotalPrice =
-    typeof totalPrice === "number" ? totalPrice.toFixed(2) : totalPrice;
+    typeof totalPrice === "number"
+      ? (Number.isFinite(totalPrice) ? totalPrice : 0).toFixed(2)
+      : String(totalPrice || "0.00");
   const numericUnitPrice = computeNumericUnitPrice(product, totalPieces, totalPrice);
 
   const skuCode = product.custom_sku || "-";

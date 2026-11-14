@@ -882,7 +882,7 @@ export default function Header({
   const router = useRouter();
 
   const [activeLanguages, setActiveLanguages] = useState<LanguageItem[]>(languages);
-  const [user, setUser] = useState<StoreUser | null>(() => getValidStoreUser<StoreUser>());
+  const [user, setUser] = useState<StoreUser | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
 
@@ -909,6 +909,9 @@ export default function Header({
   };
 
   useEffect(() => {
+    queueMicrotask(() => {
+      setUser(getValidStoreUser<StoreUser>());
+    });
     window.addEventListener("auth-change", checkAuth);
 
     const handleOpenAuth = (e: Event) => {
