@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mertervitrini_mobile/contracts/supplier_catalog_repository.dart';
+import 'package:mertervitrini_mobile/contracts/supplier_operations_repository.dart';
 import 'package:mertervitrini_mobile/core/app_theme.dart';
 import 'package:mertervitrini_mobile/core/localization.dart';
+import 'package:mertervitrini_mobile/features/supplier/utils/supplier_l10n.dart';
+import 'package:mertervitrini_mobile/features/supplier/wizard/wizard_draft_storage.dart';
+import 'package:mertervitrini_mobile/features/supplier/wizard/wizard_models.dart';
 import 'package:mertervitrini_mobile/models/cart_and_order.dart';
+import 'package:mertervitrini_mobile/models/chat.dart';
 import 'package:mertervitrini_mobile/models/marketplace.dart';
 import 'package:mertervitrini_mobile/models/product.dart';
 import 'package:mertervitrini_mobile/models/user.dart';
+import 'package:mertervitrini_mobile/providers/supplier_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('v1.1.0 Corporate Light Theme & 8-Language RTL Standards', () {
@@ -356,4 +364,461 @@ void main() {
       expect(challengeJson['form_challenge_token'], 'signed-hmac-token');
     });
   });
+
+  group('Step 3 Supplier Quick-Listing, Sibling Variants & Draft Storage', () {
+    test('SiblingProduct & Product parse sourceProductGroupId, siblingCount & supplierSiblings', () {
+      const compatSibling = SiblingProduct(
+        id: 'sib-compat',
+        customSku: 'MV-01',
+        slug: 'mv-01',
+        color: 'Siyah',
+        imageUrl: '',
+      );
+      expect(compatSibling.title, '');
+      expect(compatSibling.isActive, isTrue);
+      expect(compatSibling.currency, 'TRY');
+
+      final product = Product.fromJson(<String, dynamic>{
+        'id': 'prod-1',
+        'title': 'Keten Takım',
+        'slug': 'keten-takim',
+        'custom_sku': 'KET-01',
+        'category_id': 'cat-1',
+        'price': 450,
+        'currency': 'TRY',
+        'is_active': false,
+        'source_product_group_id': 'grp-100',
+        'sibling_count': 2,
+        'supplier_siblings': [
+          {
+            'id': 'prod-2',
+            'title': 'Keten Takım Ekru',
+            'custom_sku': 'KET-02',
+            'slug': 'keten-takim-ekru',
+            'color_id': 'col-ekru',
+            'color': 'Ekru',
+            'image_url': '/uploads/ekru.webp',
+            'price': 450.5,
+            'currency': 'USD',
+            'is_active': false,
+            'source_product_group_id': 'grp-100',
+          },
+        ],
+      });
+
+      expect(product.sourceProductGroupId, 'grp-100');
+      expect(product.siblingCount, 2);
+      expect(product.supplierSiblings, hasLength(1));
+      final sib = product.supplierSiblings.single;
+      expect(sib.id, 'prod-2');
+      expect(sib.title, 'Keten Takım Ekru');
+      expect(sib.colorId, 'col-ekru');
+      expect(sib.color, 'Ekru');
+      expect(sib.price, 450.5);
+      expect(sib.currency, 'USD');
+      expect(sib.isActive, isFalse);
+      expect(sib.sourceProductGroupId, 'grp-100');
+
+      final fallbackProduct = Product.fromJson(<String, dynamic>{
+        'id': 'prod-fallback',
+        'title': 'Bluz',
+        'price': 200,
+        'color_variants': [
+          {
+            'id': 'sib-a',
+            'custom_sku': 'BLZ-A',
+            'slug': 'blz-a',
+            'color': 'Bordo',
+            'image_url': '/uploads/a.webp',
+          },
+        ],
+      });
+      expect(fallbackProduct.siblingCount, 1);
+      expect(fallbackProduct.supplierSiblings.single.id, 'sib-a');
+    });
+
+    test('WizardDraftStorage persists and restores smart defaults and unsaved drafts', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+
+      const defaults = WizardSmartDefaults(
+        categoryId: 'cat-elbise',
+        currency: 'USD',
+        selectedSizes: ['36', '38', '40', '42'],
+        seriesRatio: '1-2-2-1',
+        seriesStock: 50,
+        gender: 'Kadın',
+        season: '2026 Sonbahar/Kış',
+        fabricId: 'fab-keten',
+      );
+      await WizardDraftStorage.saveDefaults(defaults);
+      final loadedDefaults = await WizardDraftStorage.loadDefaults();
+      expect(loadedDefaults.categoryId, 'cat-elbise');
+      expect(loadedDefaults.currency, 'USD');
+      expect(loadedDefaults.selectedSizes, ['36', '38', '40', '42']);
+      expect(loadedDefaults.seriesRatio, '1-2-2-1');
+      expect(loadedDefaults.seriesStock, 50);
+      expect(loadedDefaults.fabricId, 'fab-keten');
+
+      const draft = WizardUnsavedDraft(
+        title: 'Saten Elbise',
+        priceText: '520',
+        buyingPriceText: '300',
+        currency: 'EUR',
+        categoryId: 'cat-elbise',
+        colorId: 'col-siyah',
+        fabricId: 'fab-saten',
+        photoItems: [
+          WizardPhotoItem.remote('https://cdn.example/1.webp'),
+          WizardPhotoItem.local('/tmp/photo2.jpg'),
+        ],
+        selectedSizes: ['S', 'M', 'L', 'XL'],
+        seriesRatio: '1-1-1-1',
+        seriesStock: 25,
+        linkWithProductId: 'parent-9',
+      );
+      expect(draft.isMeaningful, isTrue);
+      await WizardDraftStorage.saveUnsavedDraft(draft);
+      final loadedDraft = await WizardDraftStorage.loadUnsavedDraft();
+      expect(loadedDraft, isNotNull);
+      expect(loadedDraft!.title, 'Saten Elbise');
+      expect(loadedDraft.currency, 'EUR');
+      expect(loadedDraft.photoItems, hasLength(2));
+      expect(loadedDraft.photoItems.first.isRemote, isTrue);
+      expect(loadedDraft.photoItems.last.localPath, '/tmp/photo2.jpg');
+      expect(loadedDraft.linkWithProductId, 'parent-9');
+
+      await WizardDraftStorage.clearUnsavedDraft();
+      expect(await WizardDraftStorage.loadUnsavedDraft(), isNull);
+    });
+
+    test('SupplierProvider exposes draftProductsCount & delegates sibling + batchDraft APIs', () async {
+      final fakeCatalog = _FakeSupplierCatalogRepo();
+      final fakeOps = _StubSupplierOpsRepo();
+      final provider = SupplierProvider(
+        catalogRepo: fakeCatalog,
+        operationsRepo: fakeOps,
+      );
+
+      await provider.loadDashboard();
+      expect(provider.draftProductsCount, 4);
+
+      final linked = await provider.linkProductSiblings(
+        productId: 'p1',
+        targetProductIds: const ['p2', 'p3'],
+      );
+      expect(linked.map((s) => s.id), ['p2', 'p3']);
+
+      final remaining = await provider.unlinkProductSibling(
+        productId: 'p1',
+        targetProductId: 'p2',
+      );
+      expect(remaining.map((s) => s.id), ['p3']);
+
+      final created = await provider.batchCreateDraftProducts(
+        imageUrls: const ['https://cdn.example/a.webp', 'https://cdn.example/b.webp'],
+        mode: 'per_photo',
+      );
+      expect(created, 2);
+      expect(fakeCatalog.listCalls, greaterThanOrEqualTo(3));
+    });
+
+    test('All 8 languages have Step 3 keys and Arabic keeps letterSpacing == 0', () {
+      const requiredKeys = [
+        'drag_reorder_hint',
+        'color_variants_title',
+        'link_existing_product',
+        'add_another_color_now',
+        'quick_mode',
+        'detailed_mode',
+        'restore_draft_title',
+        'save_draft_btn',
+        'save_and_next_color_btn',
+        'publish_btn',
+        'status_drafts',
+        'status_draft',
+        'batch_draft_btn',
+        'batch_mode_per_photo',
+        'batch_mode_color_siblings',
+        'batch_mode_single_product',
+        'publish_chip',
+        'new_color_chip',
+        'link_sibling_chip',
+      ];
+      for (final lang in AppStrings.supportedCodes) {
+        for (final key in requiredKeys) {
+          final text = SupplierL10n.t(lang, key);
+          expect(
+            text,
+            isNotEmpty,
+            reason: 'Missing $key for language $lang',
+          );
+          expect(
+            text,
+            isNot(equals(key)),
+            reason: 'Untranslated fallback $key for language $lang',
+          );
+        }
+      }
+      expect(AppStrings.letterSpacing('ar', -0.2), 0.0);
+    });
+  });
+}
+
+class _FakeSupplierCatalogRepo implements ISupplierCatalogRepository {
+  int listCalls = 0;
+  List<SiblingProduct> _siblings = const [];
+
+  @override
+  Future<(List<Product>, int)> listSupplierProducts({
+    String query = '',
+    String status = 'all',
+    String categoryId = '',
+    int limit = 30,
+    int offset = 0,
+  }) async {
+    listCalls++;
+    return (const <Product>[], 0);
+  }
+
+  @override
+  Future<List<SiblingProduct>> fetchProductSiblings(String productId) async =>
+      _siblings;
+
+  @override
+  Future<List<SiblingProduct>> linkProductSiblings({
+    required String productId,
+    required List<String> targetProductIds,
+  }) async {
+    _siblings = targetProductIds
+        .map(
+          (id) => SiblingProduct(
+            id: id,
+            customSku: 'SKU-$id',
+            slug: id,
+            color: 'Renk',
+            imageUrl: '',
+          ),
+        )
+        .toList();
+    return _siblings;
+  }
+
+  @override
+  Future<List<SiblingProduct>> unlinkProductSibling({
+    required String productId,
+    required String targetProductId,
+  }) async {
+    _siblings = _siblings.where((s) => s.id != targetProductId).toList();
+    return _siblings;
+  }
+
+  @override
+  Future<int> batchCreateDraftProducts({
+    required List<String> imageUrls,
+    String mode = 'per_photo',
+    String titlePrefix = '',
+    String categoryId = '',
+    double price = 0,
+    String currency = 'TRY',
+    List<String> selectedSizes = const [],
+    String seriesRatio = '',
+    int? seriesStock,
+    String? linkWithProductId,
+  }) async =>
+      imageUrls.length;
+
+  @override
+  Future<Map<String, Map<String, String>>> autoTranslateSupplierFields(
+    Map<String, String> fields, {
+    String sourceLang = 'tr',
+    List<String>? targetLangs,
+  }) async =>
+      const {};
+
+  @override
+  Future<int> bulkArchiveProducts({
+    List<String> productIds = const [],
+    bool isArchived = true,
+    bool restoreActive = false,
+    String season = '',
+    int? olderThanDays,
+    bool zeroStockOnly = false,
+  }) async =>
+      0;
+
+  @override
+  Future<String> createSupplierProduct(Map<String, dynamic> payload) async =>
+      'created-1';
+
+  @override
+  Future<void> deleteSupplierProduct(String productId) async {}
+
+  @override
+  Future<SupplierAttributesBundle> fetchSupplierAttributeBundle() async =>
+      const SupplierAttributesBundle(
+        colors: [],
+        fabrics: [],
+        sizes: [],
+        seriesTemplates: [],
+      );
+
+  @override
+  Future<(List<SimpleOptionItem>, List<SimpleOptionItem>)>
+      fetchSupplierAttributes() async =>
+          (const <SimpleOptionItem>[], const <SimpleOptionItem>[]);
+
+  @override
+  Future<List<SimpleOptionItem>> fetchSupplierCategories() async => const [];
+
+  @override
+  Future<Product> fetchSupplierProductDetail(String productId) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<SupplierProductTranslationMap> fetchSupplierProductTranslations(
+    String productId,
+  ) async =>
+      SupplierProductTranslationMap(
+        productId: productId,
+        translations: const {},
+      );
+
+  @override
+  Future<String> findSupplierProductByCode(String code) async => '';
+
+  @override
+  Future<void> quickUpdateSupplierProduct({
+    required String productId,
+    double? price,
+    double? buyingPrice,
+    bool? isActive,
+    int? stock,
+    int? seriesStock,
+  }) async {}
+
+  @override
+  Future<void> toggleArchiveProduct({
+    required String productId,
+    required bool isArchived,
+    bool restoreActive = false,
+  }) async {}
+
+  @override
+  Future<void> updateSupplierProduct(
+    String productId,
+    Map<String, dynamic> payload,
+  ) async {}
+
+  @override
+  Future<void> updateSupplierProductTranslations(
+    String productId,
+    Map<String, SupplierProductTranslationEntry> translations,
+  ) async {}
+
+  @override
+  Future<List<String>> uploadSupplierProductPhotos(
+    List<String> localPaths,
+  ) async =>
+      localPaths;
+}
+
+class _StubSupplierOpsRepo implements ISupplierOperationsRepository {
+  @override
+  Future<Map<String, dynamic>> fetchSupplierDashboard() async => {
+        'kpis': {'draft_products': 4},
+      };
+
+  @override
+  Future<void> createSupplierTeamMember({
+    required String contactName,
+    required String email,
+    required String password,
+    String jobTitle = '',
+    String phone = '',
+    String spokenLanguages = 'tr',
+  }) async {}
+
+  @override
+  Future<void> deleteSupplierTeamMember(String memberId) async {}
+
+  @override
+  Future<SupplierAnalyticsOverview> fetchSupplierAnalytics({
+    String period = '30d',
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<SupplierBillingOverview> fetchSupplierBilling() async =>
+      throw UnimplementedError();
+
+  @override
+  Future<SupplierEditorialProfile> fetchSupplierEditorialProfile() async =>
+      throw UnimplementedError();
+
+  @override
+  Future<SupplierSubOrder> fetchSupplierSubOrderDetail(String subOrderId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<(SupplierWallet, List<SupplierLedgerEntry>)> fetchSupplierWallet() =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<SupplierPayoutItem>> listSupplierPayoutRequests() async =>
+      const [];
+
+  @override
+  Future<List<RfqItem>> listSupplierRfqs() async => const [];
+
+  @override
+  Future<List<SupplierSubOrder>> listSupplierSubOrders({
+    String status = 'ALL',
+  }) async =>
+      const [];
+
+  @override
+  Future<List<SupplierAgent>> listSupplierTeam() async => const [];
+
+  @override
+  Future<void> requestSupplierPayout(double amount) async {}
+
+  @override
+  Future<RfqOfferItem> submitSupplierRfqOffer({
+    required String rfqId,
+    required SubmitRfqOfferPayload payload,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> submitSupplierSubscriptionPayment(
+    SupplierWirePaymentPayload payload,
+  ) async {}
+
+  @override
+  Future<void> updateSupplierBillingTaxInfo(
+    SupplierTaxInfoPayload payload,
+  ) async {}
+
+  @override
+  Future<void> updateSupplierEditorialProfile(
+    SupplierEditorialProfile profile, {
+    bool quickWhatsappOnly = false,
+  }) async {}
+
+  @override
+  Future<void> updateSupplierIban({
+    required String iban,
+    required String bankName,
+    required String accountHolder,
+  }) async {}
+
+  @override
+  Future<void> updateSupplierSubOrderStatus({
+    required String subOrderId,
+    required String status,
+    String trackingCompany = '',
+    String trackingNumber = '',
+    String notes = '',
+  }) async {}
 }

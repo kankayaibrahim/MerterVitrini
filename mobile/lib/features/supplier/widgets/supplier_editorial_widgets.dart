@@ -240,6 +240,14 @@ class EditorialStatusBadge extends StatelessWidget {
         icon: icon,
       );
 
+  factory EditorialStatusBadge.warning(String label, {IconData? icon}) =>
+      EditorialStatusBadge(
+        label: label,
+        color: const Color(0xFFB45309),
+        backgroundColor: const Color(0xFFFEF3C7),
+        icon: icon,
+      );
+
   factory EditorialStatusBadge.danger(String label, {IconData? icon}) =>
       EditorialStatusBadge(
         label: label,

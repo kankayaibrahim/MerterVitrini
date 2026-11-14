@@ -190,7 +190,12 @@ export interface SupplierProductRow {
   id: string;
   title: string;
   custom_sku: string;
+  category_id?: string;
   category_title: string;
+  color_id?: string | null;
+  color?: string;
+  source_product_group_id?: string | null;
+  sibling_count?: number;
   buying_price: number;
   price: number;
   currency: string;
@@ -206,6 +211,28 @@ export interface SupplierProductRow {
   cover_image: string;
   total_stock: number;
   variants_count: number;
+}
+
+export interface SupplierSiblingItemDTO {
+  id: string;
+  title: string;
+  custom_sku: string;
+  slug: string;
+  color_id?: string | null;
+  color: string;
+  image_url: string;
+  price: number;
+  currency: string;
+  is_active: boolean;
+  source_product_group_id: string;
+}
+
+export interface InlineColorVariantDraft {
+  localId: string;
+  colorId: string;
+  title: string;
+  price: number;
+  images: string[];
 }
 
 export interface CountryGroup {

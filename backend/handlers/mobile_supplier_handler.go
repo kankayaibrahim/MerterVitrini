@@ -32,13 +32,14 @@ func (h *MobileHandler) GetSupplierDashboard(w http.ResponseWriter, r *http.Requ
 
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
+	ensureProductArchiveSchema(ctx)
 
 	var totalProducts, activeProducts, passiveProducts, totalStock, lowStockCount int
 	_ = db.Pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE is_active = true),
-			COUNT(*) FILTER (WHERE is_active = false),
+			COUNT(*) FILTER (WHERE is_active = false AND COALESCE(is_archived, false) = false),
 			COALESCE(SUM(stock), 0),
 			COUNT(*) FILTER (WHERE is_active = true AND stock <= 12)
 		FROM catalog.products
@@ -74,6 +75,7 @@ func (h *MobileHandler) GetSupplierDashboard(w http.ResponseWriter, r *http.Requ
 			"total_products":         totalProducts,
 			"active_products":        activeProducts,
 			"passive_products":       passiveProducts,
+			"draft_products":         passiveProducts,
 			"total_stock":            totalStock,
 			"low_stock_count":        lowStockCount,
 			"pending_orders_count":   pendingOrders,
@@ -224,6 +226,35 @@ func (h *MobileHandler) QuickUpdateSupplierProduct(w http.ResponseWriter, r *htt
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	ensureSizeDefinitionsSchema(ctx)
+
+	if req.Price != nil && *req.Price < 0 {
+		httpx.Error(w, http.StatusBadRequest, "Satış fiyatı negatif olamaz.")
+		return
+	}
+
+	if req.IsActive != nil && *req.IsActive {
+		var hasValidPrice, hasCategory, hasPhoto bool
+		checkErr := db.Pool.QueryRow(ctx, `
+			SELECT
+				(COALESCE($1, price) > 0),
+				(category_id IS NOT NULL),
+				EXISTS(SELECT 1 FROM catalog.product_images WHERE product_id = $2)
+			FROM catalog.products
+			WHERE id = $2 AND brand_id = $3
+		`, req.Price, productID, claims.BrandID).Scan(&hasValidPrice, &hasCategory, &hasPhoto)
+		if checkErr != nil {
+			if errors.Is(checkErr, pgx.ErrNoRows) {
+				httpx.Error(w, http.StatusNotFound, "Ürün bulunamadı veya yetkiniz yok.")
+				return
+			}
+			httpx.Error(w, http.StatusInternalServerError, "Ürün doğrulaması yapılamadı.")
+			return
+		}
+		if !hasValidPrice || !hasCategory || !hasPhoto {
+			httpx.Error(w, http.StatusBadRequest, "Ürünü yayına almadan önce satış fiyatı, kategori ve en az 1 ürün fotoğrafı eklemelisiniz.")
+			return
+		}
+	}
 
 	if req.SeriesStock != nil && *req.SeriesStock >= 0 && req.Stock == nil {
 		var ratioStr string

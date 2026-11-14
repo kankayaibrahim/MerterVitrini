@@ -417,17 +417,38 @@ func scanCatalogProducts(rows pgx.Rows) ([]*models.Product, error) {
 	return products, nil
 }
 
+func buildSiblingGroupMapKey(brandID *string, feedID *string, groupID *string) string {
+	if groupID == nil {
+		return ""
+	}
+	g := strings.TrimSpace(*groupID)
+	if g == "" {
+		return ""
+	}
+	if brandID != nil {
+		if b := strings.TrimSpace(*brandID); b != "" {
+			return "b:" + b + "|" + g
+		}
+	}
+	if feedID != nil {
+		if f := strings.TrimSpace(*feedID); f != "" {
+			return "f:" + f + "|" + g
+		}
+	}
+	return ""
+}
+
 func collectProductGroupIDs(products []*models.Product) []string {
 	var groupIDs []string
 	seenGroups := make(map[string]bool)
 	for _, p := range products {
-		if p.SourceProductGroupID == nil || *p.SourceProductGroupID == "" || p.FeedID == nil || *p.FeedID == "" {
+		if p == nil || buildSiblingGroupMapKey(p.BrandID, p.FeedID, p.SourceProductGroupID) == "" {
 			continue
 		}
-		k := *p.FeedID + "_" + *p.SourceProductGroupID
-		if !seenGroups[k] {
-			seenGroups[k] = true
-			groupIDs = append(groupIDs, *p.SourceProductGroupID)
+		g := strings.TrimSpace(*p.SourceProductGroupID)
+		if !seenGroups[g] {
+			seenGroups[g] = true
+			groupIDs = append(groupIDs, g)
 		}
 	}
 	return groupIDs
@@ -435,13 +456,19 @@ func collectProductGroupIDs(products []*models.Product) []string {
 
 func querySiblingProductMap(ctx context.Context, groupIDs []string) map[string][]*models.SiblingProduct {
 	siblingsMap := make(map[string][]*models.SiblingProduct)
+	if len(groupIDs) == 0 || db.Pool == nil {
+		return siblingsMap
+	}
 	siblingsQuery := `
-		SELECT p.id, COALESCE(p.feed_id, '') as feed_id, COALESCE(p.source_product_group_id, '') as source_product_group_id, 
+		SELECT p.id, COALESCE(p.brand_id::text, '') as brand_id, COALESCE(p.feed_id, '') as feed_id,
+		       COALESCE(p.source_product_group_id, '') as source_product_group_id,
 		       p.custom_sku, p.slug, p.slug_id, COALESCE(col.color_name, 'Standart') as color,
-		       COALESCE((SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY sort_order ASC, is_cover DESC LIMIT 1), '') as image_url
+		       COALESCE((SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY is_cover DESC, sort_order ASC LIMIT 1), '') as image_url
 		FROM catalog.products p
 		LEFT JOIN catalog.colors col ON p.color_id = col.id
-		WHERE p.source_product_group_id = ANY($1) AND p.is_active = true
+		WHERE p.source_product_group_id = ANY($1)
+		  AND p.is_active = true
+		  AND COALESCE(p.is_archived, false) = false
 		ORDER BY col.color_name ASC`
 
 	sRows, err := db.Pool.Query(ctx, siblingsQuery, groupIDs)
@@ -453,9 +480,20 @@ func querySiblingProductMap(ctx context.Context, groupIDs []string) map[string][
 
 	for sRows.Next() {
 		var sib models.SiblingProduct
-		var feedID, groupID string
-		if err := sRows.Scan(&sib.ID, &feedID, &groupID, &sib.CustomSku, &sib.Slug, &sib.SlugID, &sib.Color, &sib.ImageUrl); err == nil {
-			key := feedID + "_" + groupID
+		var brandID, feedID, groupID string
+		if err := sRows.Scan(&sib.ID, &brandID, &feedID, &groupID, &sib.CustomSku, &sib.Slug, &sib.SlugID, &sib.Color, &sib.ImageUrl); err != nil {
+			continue
+		}
+		g := strings.TrimSpace(groupID)
+		if g == "" {
+			continue
+		}
+		if b := strings.TrimSpace(brandID); b != "" {
+			key := "b:" + b + "|" + g
+			siblingsMap[key] = append(siblingsMap[key], &sib)
+		}
+		if f := strings.TrimSpace(feedID); f != "" {
+			key := "f:" + f + "|" + g
 			siblingsMap[key] = append(siblingsMap[key], &sib)
 		}
 	}
@@ -467,10 +505,13 @@ func querySiblingProductMap(ctx context.Context, groupIDs []string) map[string][
 
 func assignProductSiblings(products []*models.Product, siblingsMap map[string][]*models.SiblingProduct) {
 	for _, p := range products {
-		if p.SourceProductGroupID == nil || *p.SourceProductGroupID == "" || p.FeedID == nil || *p.FeedID == "" {
+		if p == nil {
 			continue
 		}
-		key := *p.FeedID + "_" + *p.SourceProductGroupID
+		key := buildSiblingGroupMapKey(p.BrandID, p.FeedID, p.SourceProductGroupID)
+		if key == "" {
+			continue
+		}
 		allSiblings := siblingsMap[key]
 		var filtered []*models.SiblingProduct
 		for _, sib := range allSiblings {
@@ -906,18 +947,36 @@ func fetchAndInjectAttributeTranslations(ctx context.Context, p *models.Product)
 }
 
 func fetchProductSiblings(ctx context.Context, p *models.Product) {
-	if p.SourceProductGroupID == nil || *p.SourceProductGroupID == "" {
+	if p == nil || p.SourceProductGroupID == nil || db.Pool == nil {
 		return
 	}
+	groupID := strings.TrimSpace(*p.SourceProductGroupID)
+	if groupID == "" {
+		return
+	}
+	brandID := strings.TrimSpace(derefStringOr(p.BrandID, ""))
+	feedID := strings.TrimSpace(derefStringOr(p.FeedID, ""))
+	if brandID == "" && feedID == "" {
+		return
+	}
+
 	siblingsQuery := `
 		SELECT p.id, p.custom_sku, p.slug, p.slug_id, COALESCE(col.color_name, 'Standart') as color,
-		       COALESCE((SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY sort_order ASC, is_cover DESC LIMIT 1), '') as image_url
+		       COALESCE((SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY is_cover DESC, sort_order ASC LIMIT 1), '') as image_url
 		FROM catalog.products p
 		LEFT JOIN catalog.colors col ON p.color_id = col.id
-		WHERE p.source_product_group_id = $1 AND p.feed_id = $2 AND p.id != $3 AND p.is_active = true
+		WHERE p.source_product_group_id = $1
+		  AND (
+		    ($2 <> '' AND p.brand_id::text = $2)
+		    OR ($2 = '' AND COALESCE(p.feed_id, '') = $3)
+		  )
+		  AND p.id != $4
+		  AND p.is_active = true
+		  AND COALESCE(p.is_archived, false) = false
 		ORDER BY col.color_name ASC`
-	sRows, err := db.Pool.Query(ctx, siblingsQuery, p.SourceProductGroupID, p.FeedID, p.ID)
+	sRows, err := db.Pool.Query(ctx, siblingsQuery, groupID, brandID, feedID, p.ID)
 	if err != nil {
+		log.Printf("[STORE API WARNING] Product siblings query error for product %s: %v", p.ID, err)
 		return
 	}
 	defer sRows.Close()

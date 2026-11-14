@@ -23,7 +23,7 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  static const String appVersion = '1.1.0';
+  static const String appVersion = '1.2.0';
   static const String _visitorPrefKey = 'mv_visitor_id_v1';
 
   /// Updated by [SessionProvider] so static [mapError] calls honor active locale.

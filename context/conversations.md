@@ -2814,3 +2814,53 @@
      - `HEAD /uploads/releases/mertervitrini-v1.1.0+5.apk` → `200` (`Content-Length: 66418945`)
      - `GET /api/v1/mobile/apk` (`Range: bytes=0-15`) → `206` (`16` byte)
 - **Sonuç:** Güncellenmiş Go backend ve `mertervitrini-v1.1.0+5.apk` OTA dağıtımı canlı sunucuda doğrulandı; yerel `backend/uploads/releases/version.json` manifesti de v1.1.0+5 ile eşitlendi (`git push` yapılmadı).
+
+
+---
+
+### [2026-11-14 03:11:00] - Oturum #150 (Tedarikçi Hızlı Ürün Girişi, Sürükle-Bırak Fotoğraf Stüdyosu, Taslak Akışı & Renk Varyantı Eşleştirme — Go Backend + Web + Mobil)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:**
+  > `"tedarikçinin ürün girişi çok kolay olmalı öyle kolay olmalı ki çok hızlı ürün açabilmeli isterse detay olmalı böyle sürükle bırak resimleri atıp gerekirse taslak yapsın ürünlerin diğer varyantlarını eşleştirebilsin falan çok kolay olmalı senin anlayacağın mobil uygulamada öyle"`
+- **Yapılan İşlemler ve Mimari Özet:**
+  1. **Go Backend (`backend/`):**
+     - `backend/handlers/store_catalog.go`: Manuel tedarikçi ürünlerinde (`feed_id = NULL`) renk/model grubu eşleşmesinin kırık olmasına yol açan `p.FeedID == nil` kontrolü giderildi; `buildSiblingGroupMapKey` ile hem `brand_id + source_product_group_id` hem `feed_id + source_product_group_id` desteği getirildi (`collectProductGroupIDs`, `querySiblingProductMap`, `assignProductSiblings`, `fetchProductSiblings`).
+     - `backend/models/models.go`: `SupplierProductInput` içine `is_draft`, `source_product_group_id`, `link_with_product_id` ve `additional_color_variants` (`SupplierColorVariantDraftInput`) eklendi; `SupplierSiblingItem` yapısı tanımlandı.
+     - `backend/handlers/supplier_sibling_variants.go` (Yeni) & `backend/router.go`:
+       - `normalizeSupplierDraftOrPublishInput`: Taslak modunda (`is_active: false` / `is_draft: true`) `price >= 0` ve yalnızca fotoğraf(lar) veya başlık ile kayıt izni, otomatik kategori/başlık tamamlama; yayında (`is_active: true`) ise fotoğraf + ad + kategori + fiyat > 0 zorunluluğu sağlandı.
+       - Yeni uç noktalar: `GET /api/v1/supplier/products/{id}/siblings`, `POST /api/v1/supplier/products/{id}/siblings`, `DELETE /api/v1/supplier/products/{id}/siblings/{targetId}`, `POST /api/v1/supplier/products/batch-drafts` (`per_photo`, `color_siblings`, `single_product`).
+     - `backend/handlers/supplier_portal.go` & `backend/handlers/mobile_supplier_handler.go`: `GetProfile` & `GetSupplierDashboard` içine `draft_products` sayacı, `ListProducts` içine `category_id`, `color_id`, `color`, `source_product_group_id` ve `sibling_count`, `CreateProduct` / `UpdateProduct` içine tek işlemde çoklu renk varyantı + grup bağlama, `QuickUpdateSupplierProduct` içine ise eksik fiyat/fotoğraflı taslakların doğrudan yayına alınmasını önleyen doğrulama eklendi.
+     - `backend/handlers/supplier_workflow_test.go` (Yeni): Kardeş varyant eşleştirme (`FeedID == nil`), taslak/yayın doğrulaması ve toplu taslak yardımcıları için birim testleri eklendi.
+  2. **Web Tedarikçi Portalı (`frontend/src/app/supplier/` & `frontend/src/types/integration.ts`):**
+     - `SupplierPhotoDropzone.tsx` (Yeni): HTML5 sürükle-bırak yükleme alanı, pano yapıştırma (`Ctrl+V`) desteği, çoklu WebP yükleme ve sürükleyip bırakarak fotoğraf sıralama (`#1 = KAPAK`).
+     - `SupplierSiblingVariantSection.tsx` (Yeni): Mevcut ürünler arasından arama yaparak tek tıkla renk/model eşleştirme (`Link` / `Ayır`) ve ürün eklerken aynı anda **"+ Başka Renk Varyantı Ekle"** mini çoklu-renk oluşturucu.
+     - `SupplierQuickDraftModal.tsx` (Yeni): **"📸 Fotoğraftan Hızlı Taslak"** modalı — tek seferde 30'a kadar fotoğraf sürükleyip *"Her Fotoğraftan Ayrı Taslak"*, *"Hepsini Tek Modelin Renkleri Yap"* veya *"Tek Taslak Ürün"* olarak saniyeler içinde açma.
+     - `SupplierProductModal.tsx` & `SupplierDashboardClient.tsx`: **⚡ Hızlı Giriş / 🎛️ Detaylı Mod & Çeviri** görünüm anahtarı, 7 yabancı dil (`en, ru, ar, de, fr, pl, bg`) AI otomatik çeviri + düzenleme, `localStorage` akıllı son seçimler ve yarım kalan taslak kurtarma banner'ı, sabit alt çubuk (`Taslak Kaydet`, `Kaydet & Yeni Rengini Aç`, `Vitrine Yayınla`), **Taslaklar** filtresi ve satırlarda tek tık **Yayınla** / **+ Yeni Rengini Aç** / **🎨 +N Renk** rozetleri eklendi.
+  3. **Flutter Mobil Tedarikçi Stüdyosu (`mobile/`):**
+     - `models/product.dart`, `contracts/supplier_catalog_repository.dart`, `repositories/http_supplier_catalog_repository.dart`, `services/mobile_api_service.dart`, `providers/supplier_provider.dart`: `sourceProductGroupId`, `siblingCount`, `supplierSiblings`, kardeş varyant API'leri, `batchCreateDraftProducts` ve `draftProductsCount` entegre edildi.
+     - `wizard/wizard_photo_studio_card.dart`: Yatay fotoğraf şeridi `ReorderableListView.builder` + uzun basma/tutamak sürükle-bırak sıralamaya yükseltildi (`#1 = KAPAK`, `HapticFeedback.selectionClick()`).
+     - `wizard/wizard_draft_storage.dart`, `wizard/supplier_sibling_linker_sheet.dart`, `wizard/wizard_sibling_variants_card.dart`: `SharedPreferences` tabanlı akıllı varsayılanlar ve yarım kalan taslak kurtarma; aranabilir kardeş ürün bağlama alt penceresi ve eş zamanlı çoklu renk varyantı ekleyici oluşturuldu.
+     - `supplier_product_wizard_screen.dart` & `supplier_products_screen.dart` & `supplier_l10n.dart`: **⚡ Hızlı Giriş / 🎛️ Detaylı Mod** geçişi, **Taslak / +Yeni Renk / Yayınla** alt aksiyon çubuğu, **Taslaklar** sekmesi, **"📸 Fotoğraftan Taslak"** toplu sihirbazı, satırlarda tek tık **Yayınla** / **+ Yeni Renk** / **Eşleştir** çipleri ve 8 dil (`tr, en, ru, ar, de, fr, pl, bg`) + Arapça RTL desteği tamamlandı.
+  4. **Bağımsız Doğrulama Sonuçları:**
+     - `backend`: `go vet ./...` (`0` uyarı), `go test -count=1 ./...` (`handlers`, `pkg/phoneutil`, `services` PASS) ve Windows (`backend.exe`) + Linux AMD64 (`backend`) ikili dosyaları temiz derlendi.
+     - `frontend`: `npx tsc --noEmit` ve `npm run lint` (`0` hata / `0` uyarı; `AGENTS.md` Kural #7 gereği yerelde `npm run build` çalıştırılmadı).
+     - `mobile`: `flutter analyze` (`No issues found!`) ve `flutter test` (`29/29` test geçti).
+     - `AGENTS.md` Kural #1 uyarınca henüz `git commit`, `git push` veya canlı sunucu dağıtımı yapılmadı; değişiklikler çalışma dizininde incelemeye hazır bırakıldı.
+
+
+---
+
+### [2026-11-14 03:32:30] - Oturum #151 (Tedarikçi Hızlı Ürün Girişi Stüdyosu + Mobil v1.2.0+6 Commit ve Canlı Sunucu Yayını)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle yayınla onaylıyorum"`
+- **Yapılan İşlemler:**
+  1. **Mobil Sürüm Artışı & İmzalı Release Derlemesi (`v1.2.0+6`):** `mobile/pubspec.yaml` (`1.2.0+6`) ve `mobile/lib/services/api_client.dart` (`1.2.0`) güncellendi. `scripts/build_mobile_release.ps1` ile `flutter analyze` (`No issues found!`), `flutter test` (`29/29` test geçti), Play Store imzalı `app-release.aab` (`63.51 MB`) ve `app-release.apk` (`64.09 MB` / `67.206.209` byte, SHA-256: `1b21f19232616dca6a70e5b7aaaa587927bd8e8240b158075f88fc8d7ba2ac4a`) üretildi.
+  2. **Birleşik Go Backend & Next.js SSR Frontend Canlı Dağıtımı (`213.202.255.80`):** `python -u scripts/unified_deployer.py -p unified -c all -a all` (`277.26 sn`, exit `0`) ile Linux AMD64 Go binary (`42.42 MB`, `merter-backend.service`, `PID 1217073`) ve Next.js SSR frontend (sunucu üzerinde `npm install + build`, `merter-frontend.service` + `nginx`) yayınlandı.
+  3. **İmzalı Mobil OTA (`v1.2.0+6`) & 8 Dilli `version.json` Yayını:** `scripts/publish_mobile_apk.py` tekil SSH zaman aşımlarını aşmak için `DeployPipeline._connect_ssh(max_attempts=6)` yeniden deneme/keepalive mekanizmasına geçirildi; ardından `mertervitrini-v1.2.0+6.apk` (`64.09 MB`) ve 8 dilli (`tr, en, ru, ar, de, fr, pl, bg`) OTA manifesti `/var/www/media/releases/` dizinine atomik olarak yayınlandı (`60.5 sn`, exit `0`).
+  4. **Canlı HTTPS Doğrulamaları (`https://mertervitrini.com.tr`):**
+     - `GET /api/v1/health` → `200` (`{"status":"healthy","database":"connected","service":"unified-backend"}`)
+     - `HEAD /`, `HEAD /supplier`, `HEAD /admin` → `200`
+     - `GET /api/v1/mobile/version` → `version: "1.2.0"`, `build_number: 6`, `apk_available: true`, `file_size_bytes: 67206209`, `sha256: 1b21f19232616dca6a70e5b7aaaa587927bd8e8240b158075f88fc8d7ba2ac4a`
+     - `HEAD /uploads/releases/mertervitrini-v1.2.0+6.apk` → `200` (`Content-Length: 67206209`)
+  5. **Yerel Conventional Commit:** Tüm backend, web frontend, Flutter mobil `v1.2.0+6`, OTA script güncellemesi, `backend/uploads/releases/version.json` ve konuşma günlükleri tek temiz yerel commit altında toplandı (`AGENTS.md` Kural #1 gereği `git push` yapılmadı).
+- **Sonuç:** Tedarikçi hızlı ürün girişi, sürükle-bırak fotoğraf stüdyosu, taslak akışı ve renk/kardeş varyant eşleştirme özellikleri backend, web SSR ve mobil `v1.2.0+6` OTA olarak canlıda yayınlandı ve yerel repo'da commit'lendi (`git push` yapılmadı).

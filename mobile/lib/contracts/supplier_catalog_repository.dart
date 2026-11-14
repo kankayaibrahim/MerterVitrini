@@ -70,4 +70,29 @@ abstract interface class ISupplierCatalogRepository {
     String sourceLang = 'tr',
     List<String>? targetLangs,
   });
+
+  Future<List<SiblingProduct>> fetchProductSiblings(String productId);
+
+  Future<List<SiblingProduct>> linkProductSiblings({
+    required String productId,
+    required List<String> targetProductIds,
+  });
+
+  Future<List<SiblingProduct>> unlinkProductSibling({
+    required String productId,
+    required String targetProductId,
+  });
+
+  Future<int> batchCreateDraftProducts({
+    required List<String> imageUrls,
+    String mode = 'per_photo',
+    String titlePrefix = '',
+    String categoryId = '',
+    double price = 0,
+    String currency = 'TRY',
+    List<String> selectedSizes = const [],
+    String seriesRatio = '',
+    int? seriesStock,
+    String? linkWithProductId,
+  });
 }

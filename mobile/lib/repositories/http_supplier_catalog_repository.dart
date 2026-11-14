@@ -344,4 +344,92 @@ class HttpSupplierCatalogRepository implements ISupplierCatalogRepository {
       throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }
   }
+
+  List<SiblingProduct> _parseSiblingsResponse(dynamic rawData) {
+    final map = HttpRepoHelpers.asMap(rawData);
+    return HttpRepoHelpers.parseList(map['siblings'], SiblingProduct.fromJson);
+  }
+
+  @override
+  Future<List<SiblingProduct>> fetchProductSiblings(String productId) async {
+    try {
+      final resp = await _client.dio.get<dynamic>(
+        '/api/v1/supplier/products/$productId/siblings',
+      );
+      return _parseSiblingsResponse(resp.data);
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<List<SiblingProduct>> linkProductSiblings({
+    required String productId,
+    required List<String> targetProductIds,
+  }) async {
+    try {
+      final resp = await _client.dio.post<dynamic>(
+        '/api/v1/supplier/products/$productId/siblings',
+        data: {'target_product_ids': targetProductIds},
+      );
+      return _parseSiblingsResponse(resp.data);
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<List<SiblingProduct>> unlinkProductSibling({
+    required String productId,
+    required String targetProductId,
+  }) async {
+    try {
+      final resp = await _client.dio.delete<dynamic>(
+        '/api/v1/supplier/products/$productId/siblings/$targetProductId',
+      );
+      return _parseSiblingsResponse(resp.data);
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
+
+  @override
+  Future<int> batchCreateDraftProducts({
+    required List<String> imageUrls,
+    String mode = 'per_photo',
+    String titlePrefix = '',
+    String categoryId = '',
+    double price = 0,
+    String currency = 'TRY',
+    List<String> selectedSizes = const [],
+    String seriesRatio = '',
+    int? seriesStock,
+    String? linkWithProductId,
+  }) async {
+    try {
+      final resp = await _client.dio.post<dynamic>(
+        '/api/v1/supplier/products/batch-drafts',
+        data: {
+          'mode': mode,
+          'image_urls': imageUrls,
+          if (titlePrefix.trim().isNotEmpty)
+            'title_prefix': titlePrefix.trim(),
+          if (categoryId.trim().isNotEmpty) 'category_id': categoryId.trim(),
+          if (price > 0) 'price': price,
+          if (currency.trim().isNotEmpty) 'currency': currency.trim(),
+          if (selectedSizes.isNotEmpty) 'selected_sizes': selectedSizes,
+          if (seriesRatio.trim().isNotEmpty)
+            'series_ratio': seriesRatio.trim(),
+          if (seriesStock != null && seriesStock > 0)
+            'series_stock': seriesStock,
+          if (linkWithProductId != null && linkWithProductId.trim().isNotEmpty)
+            'link_with_product_id': linkWithProductId.trim(),
+        },
+      );
+      final map = HttpRepoHelpers.asMap(resp.data);
+      return (map['created_count'] as num?)?.toInt() ?? 0;
+    } catch (e) {
+      throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
+    }
+  }
 }

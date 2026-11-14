@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_theme.dart';
@@ -10,10 +11,13 @@ import '../../models/product.dart';
 import '../../providers/session_provider.dart';
 import '../../providers/supplier_provider.dart';
 import '../../widgets/smart_network_image.dart';
+import 'camera_studio_screen.dart';
 import 'supplier_product_translations_sheet.dart';
 import 'supplier_product_wizard_screen.dart';
 import 'utils/supplier_l10n.dart';
 import 'widgets/supplier_editorial_widgets.dart';
+import 'wizard/supplier_sibling_linker_sheet.dart';
+import 'wizard/wizard_draft_storage.dart';
 
 class SupplierProductsScreen extends StatefulWidget {
   const SupplierProductsScreen({super.key});
@@ -24,8 +28,10 @@ class SupplierProductsScreen extends StatefulWidget {
 
 class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
+  final ImagePicker _batchPicker = ImagePicker();
   String _statusFilter = 'all';
   bool _multiSelectMode = false;
+  bool _batchDrafting = false;
   final Set<String> _selectedIds = <String>{};
 
   @override
@@ -516,6 +522,385 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
     );
   }
 
+  Future<void> _openBatchDraftFromPhotosSheet() async {
+    if (_batchDrafting) return;
+    final lang = context.read<SessionProvider>().languageCode;
+    var selectedMode = 'per_photo';
+
+    final pickedPaths = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.pureWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppColors.radiusLg),
+        ),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            Widget modeTile({
+              required String value,
+              required IconData icon,
+              required String title,
+              required String subtitle,
+            }) {
+              final selected = selectedMode == value;
+              return InkWell(
+                borderRadius: BorderRadius.circular(AppColors.radiusMd),
+                onTap: () => setSheetState(() => selectedMode = value),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.accentGoldLight
+                        : AppColors.warmSurface,
+                    borderRadius: BorderRadius.circular(AppColors.radiusMd),
+                    border: Border.all(
+                      color: selected
+                          ? AppColors.luxuryBronze
+                          : AppColors.warmHairline,
+                      width: selected ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        icon,
+                        size: 20,
+                        color: selected
+                            ? AppColors.luxuryBronze
+                            : AppColors.charcoal,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.obsidian,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitle,
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.mutedAccessible,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        selected
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_off_rounded,
+                        size: 20,
+                        color: selected
+                            ? AppColors.luxuryBronze
+                            : AppColors.mutedAccessible,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            return Directionality(
+              textDirection: AppStrings.directionOf(lang),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.warmHairline,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        SupplierL10n.t(lang, 'batch_draft_title'),
+                        style: TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: AppStrings.letterSpacing(lang, -0.2),
+                          color: AppColors.obsidian,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        SupplierL10n.t(lang, 'batch_draft_sub'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.mutedAccessible,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      modeTile(
+                        value: 'per_photo',
+                        icon: Icons.photo_library_outlined,
+                        title: SupplierL10n.t(lang, 'batch_mode_per_photo'),
+                        subtitle:
+                            SupplierL10n.t(lang, 'batch_mode_per_photo_sub'),
+                      ),
+                      const SizedBox(height: 8),
+                      modeTile(
+                        value: 'color_siblings',
+                        icon: Icons.palette_outlined,
+                        title:
+                            SupplierL10n.t(lang, 'batch_mode_color_siblings'),
+                        subtitle: SupplierL10n.t(
+                          lang,
+                          'batch_mode_color_siblings_sub',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      modeTile(
+                        value: 'single_product',
+                        icon: Icons.collections_bookmark_outlined,
+                        title:
+                            SupplierL10n.t(lang, 'batch_mode_single_product'),
+                        subtitle: SupplierL10n.t(
+                          lang,
+                          'batch_mode_single_product_sub',
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.obsidian,
+                                side: const BorderSide(
+                                  color: AppColors.warmHairline,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                  horizontal: 8,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppColors.radiusMd,
+                                  ),
+                                ),
+                              ),
+                              onPressed: () async {
+                                try {
+                                  final files =
+                                      await _batchPicker.pickMultiImage(
+                                    imageQuality: 88,
+                                    maxWidth: 1600,
+                                    maxHeight: 1600,
+                                  );
+                                  if (!ctx.mounted) return;
+                                  Navigator.of(ctx).pop(
+                                    files
+                                        .map((f) => f.path)
+                                        .where((p) => p.isNotEmpty)
+                                        .toList(),
+                                  );
+                                } catch (_) {
+                                  if (ctx.mounted) Navigator.of(ctx).pop();
+                                }
+                              },
+                              icon: const Icon(
+                                Icons.photo_library_outlined,
+                                size: 18,
+                              ),
+                              label: Text(
+                                SupplierL10n.t(lang, 'batch_source_gallery'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.luxuryBronze,
+                                foregroundColor: AppColors.pureWhite,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                  horizontal: 8,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppColors.radiusMd,
+                                  ),
+                                ),
+                              ),
+                              onPressed: () async {
+                                final captured =
+                                    await Navigator.of(ctx).push<List<String>>(
+                                  MaterialPageRoute<List<String>>(
+                                    builder: (_) => const CameraStudioScreen(
+                                      allowMultiple: true,
+                                      maxPhotos: 10,
+                                    ),
+                                  ),
+                                );
+                                if (!ctx.mounted) return;
+                                Navigator.of(ctx).pop(captured);
+                              },
+                              icon: const Icon(
+                                Icons.camera_alt_outlined,
+                                size: 18,
+                              ),
+                              label: Text(
+                                SupplierL10n.t(lang, 'batch_source_camera'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || pickedPaths == null || pickedPaths.isEmpty) return;
+
+    setState(() => _batchDrafting = true);
+    try {
+      final sup = context.read<SupplierProvider>();
+      final defaults = await WizardDraftStorage.loadDefaults();
+      final uploadedUrls =
+          await sup.catalogRepo.uploadSupplierProductPhotos(pickedPaths);
+      if (uploadedUrls.isEmpty) {
+        throw Exception(SupplierL10n.t(lang, 'wizard_photo_upload_err'));
+      }
+      final created = await sup.batchCreateDraftProducts(
+        imageUrls: uploadedUrls,
+        mode: selectedMode,
+        categoryId: defaults.categoryId,
+        currency: defaults.currency,
+        selectedSizes: defaults.selectedSizes,
+        seriesRatio: defaults.seriesRatio,
+        seriesStock: defaults.seriesStock,
+        reloadProducts: false,
+      );
+      if (!mounted) return;
+      setState(() {
+        _statusFilter = 'passive';
+        _selectedIds.clear();
+      });
+      await _reload();
+      if (!mounted) return;
+      _showToast(
+        '$created ${SupplierL10n.t(lang, 'batch_drafts_created')}',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(e.toString().replaceFirst('Exception: ', ''), isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _batchDrafting = false);
+      }
+    }
+  }
+
+  Future<void> _quickPublishDraft(Product p) async {
+    final lang = context.read<SessionProvider>().languageCode;
+    final canQuickPublish = p.price > 0 &&
+        p.coverImageUrl.isNotEmpty &&
+        p.title.trim().isNotEmpty;
+    if (!canQuickPublish) {
+      _showToast(
+        SupplierL10n.t(lang, 'complete_draft_to_publish'),
+        isError: true,
+      );
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SupplierProductWizardScreen(existingProduct: p),
+        ),
+      );
+      if (mounted) await _reload();
+      return;
+    }
+
+    try {
+      final sup = context.read<SupplierProvider>();
+      await sup.quickUpdateProduct(productId: p.id, isActive: true);
+      await sup.loadDashboard();
+      if (!mounted) return;
+      await _reload();
+      if (!mounted) return;
+      _showToast(SupplierL10n.t(lang, 'published_ok'));
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(e.toString().replaceFirst('Exception: ', ''), isError: true);
+    }
+  }
+
+  Future<void> _openNewColorWizardForProduct(Product p) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SupplierProductWizardScreen(
+          cloneFromProduct: p,
+          linkWithProductId: p.id,
+        ),
+      ),
+    );
+    if (mounted) await _reload();
+  }
+
+  Future<void> _openSiblingLinkerForProduct(Product p) async {
+    final lang = context.read<SessionProvider>().languageCode;
+    final alreadyLinked = p.supplierSiblings.map((s) => s.id).toSet();
+    final picked = await showSupplierSiblingLinkerSheet(
+      context,
+      excludeProductId: p.id,
+      alreadyLinkedIds: alreadyLinked,
+      languageCode: lang,
+    );
+    if (!mounted || picked == null || picked.isEmpty) return;
+
+    try {
+      await context.read<SupplierProvider>().linkProductSiblings(
+            productId: p.id,
+            targetProductIds: picked.map((e) => e.id).toList(),
+          );
+      if (!mounted) return;
+      await _reload();
+      if (!mounted) return;
+      _showToast(SupplierL10n.t(lang, 'siblings_linked_ok'));
+    } catch (e) {
+      if (!mounted) return;
+      _showToast(e.toString().replaceFirst('Exception: ', ''), isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lang = context.watch<SessionProvider>().languageCode;
@@ -525,7 +910,12 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
     final filters = [
       ('all', SupplierL10n.t(lang, 'filter_all')),
       ('active', SupplierL10n.t(lang, 'status_active')),
-      ('passive', SupplierL10n.t(lang, 'status_passive')),
+      (
+        'passive',
+        sup.draftProductsCount > 0
+            ? '${SupplierL10n.t(lang, 'status_drafts')} (${sup.draftProductsCount})'
+            : SupplierL10n.t(lang, 'status_drafts'),
+      ),
       ('archived', AppStrings.t(lang, 'archived_status')),
     ];
 
@@ -599,6 +989,33 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
                     ),
                     const SizedBox(width: 6),
                     IconButton(
+                      onPressed:
+                          _batchDrafting ? null : _openBatchDraftFromPhotosSheet,
+                      tooltip: SupplierL10n.t(lang, 'batch_draft_btn'),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.accentGoldLight,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppColors.radiusMd,
+                          ),
+                        ),
+                      ),
+                      icon: _batchDrafting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.luxuryBronze,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.add_photo_alternate_outlined,
+                              color: AppColors.luxuryBronze,
+                            ),
+                    ),
+                    const SizedBox(width: 6),
+                    IconButton(
                       onPressed: _openSmartBulkArchiveSheet,
                       tooltip: SupplierL10n.t(lang, 'smart_bulk_archive'),
                       style: IconButton.styleFrom(
@@ -616,7 +1033,60 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      InkWell(
+                        borderRadius:
+                            BorderRadius.circular(AppColors.radiusMd),
+                        onTap: _batchDrafting
+                            ? null
+                            : _openBatchDraftFromPhotosSheet,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentGoldLight,
+                            borderRadius: BorderRadius.circular(
+                              AppColors.radiusMd,
+                            ),
+                            border: Border.all(
+                              color: AppColors.luxuryBronze
+                                  .withValues(alpha: 0.45),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.add_a_photo_outlined,
+                                size: 15,
+                                color: AppColors.luxuryBronze,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                SupplierL10n.t(lang, 'batch_draft_btn'),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.luxuryBronze,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Row(
                   children: [
                     Expanded(
@@ -716,6 +1186,11 @@ class _SupplierProductsScreenState extends State<SupplierProductsScreen> {
                           multiSelectMode: _multiSelectMode,
                           selected: _selectedIds.contains(p.id),
                           onToggleSelect: () => _toggleSelectItem(p.id),
+                          onPublishDraft: (!p.isActive && !p.isArchived)
+                              ? () => _quickPublishDraft(p)
+                              : null,
+                          onAddNewColor: () => _openNewColorWizardForProduct(p),
+                          onLinkSiblings: () => _openSiblingLinkerForProduct(p),
                           onQuickEdit: () => _openQuickUpdateSheet(p),
                           onTranslations: () => _openTranslationsSheet(p),
                           onToggleArchive: () => _toggleArchiveSingle(p),
@@ -835,6 +1310,9 @@ class _ProductStudioCard extends StatelessWidget {
   final bool multiSelectMode;
   final bool selected;
   final VoidCallback onToggleSelect;
+  final VoidCallback? onPublishDraft;
+  final VoidCallback onAddNewColor;
+  final VoidCallback onLinkSiblings;
   final VoidCallback onQuickEdit;
   final VoidCallback onTranslations;
   final VoidCallback onToggleArchive;
@@ -847,6 +1325,9 @@ class _ProductStudioCard extends StatelessWidget {
     required this.multiSelectMode,
     required this.selected,
     required this.onToggleSelect,
+    this.onPublishDraft,
+    required this.onAddNewColor,
+    required this.onLinkSiblings,
     required this.onQuickEdit,
     required this.onTranslations,
     required this.onToggleArchive,
@@ -888,6 +1369,7 @@ class _ProductStudioCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
@@ -902,23 +1384,36 @@ class _ProductStudioCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    p.isArchived
-                        ? EditorialStatusBadge.neutral(
-                            AppStrings.t(lang, 'archived_status'),
-                          )
-                        : (p.isActive
-                              ? EditorialStatusBadge.positive(
-                                  SupplierL10n.t(lang, 'status_active'),
-                                )
-                              : EditorialStatusBadge.danger(
-                                  SupplierL10n.t(lang, 'status_passive'),
-                                )),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        p.isArchived
+                            ? EditorialStatusBadge.neutral(
+                                AppStrings.t(lang, 'archived_status'),
+                              )
+                            : (p.isActive
+                                  ? EditorialStatusBadge.positive(
+                                      SupplierL10n.t(lang, 'status_active'),
+                                    )
+                                  : EditorialStatusBadge.warning(
+                                      SupplierL10n.t(lang, 'status_draft'),
+                                    )),
+                        if (p.siblingCount > 0) ...[
+                          const SizedBox(height: 4),
+                          EditorialStatusBadge.bronze(
+                            '${p.siblingCount + 1} ${SupplierL10n.t(lang, 'colors_badge_suffix')}',
+                            icon: Icons.palette_outlined,
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   [
                     if (sku.isNotEmpty) sku,
+                    if (p.color.isNotEmpty) p.color,
                     '${p.seriesStock} ${SupplierL10n.t(lang, 'series_unit_short')}',
                     '${p.stock} ${SupplierL10n.t(lang, 'unit_pcs_short')}',
                   ].join(' · '),
@@ -964,6 +1459,23 @@ class _ProductStudioCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
+                    if (onPublishDraft != null)
+                      _MiniActionChip(
+                        icon: Icons.rocket_launch_outlined,
+                        label: SupplierL10n.t(lang, 'publish_chip'),
+                        highlight: true,
+                        onTap: onPublishDraft!,
+                      ),
+                    _MiniActionChip(
+                      icon: Icons.palette_outlined,
+                      label: SupplierL10n.t(lang, 'new_color_chip'),
+                      onTap: onAddNewColor,
+                    ),
+                    _MiniActionChip(
+                      icon: Icons.link_rounded,
+                      label: SupplierL10n.t(lang, 'link_sibling_chip'),
+                      onTap: onLinkSiblings,
+                    ),
                     _MiniActionChip(
                       icon: Icons.bolt_outlined,
                       label: SupplierL10n.t(lang, 'quick_price_stock'),

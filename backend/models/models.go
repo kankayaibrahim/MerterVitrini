@@ -188,6 +188,7 @@ type Product struct {
 	AiHighlights         []string             `json:"ai_highlights,omitempty"`
 	Translations         map[string]any       `json:"translations,omitempty"`
 	ColorVariants        []*SiblingProduct    `json:"color_variants,omitempty"`
+	SupplierSiblings     []SupplierSiblingItem `json:"supplier_siblings,omitempty"`
 	GroupProducts        []*GroupProductColor `json:"group_products,omitempty"`
 }
 
@@ -198,6 +199,28 @@ type SiblingProduct struct {
 	SlugID    string `json:"slug_id"`
 	Color     string `json:"color"`
 	ImageUrl  string `json:"image_url"`
+}
+
+type SupplierColorVariantDraftInput struct {
+	ColorID  *string  `json:"color_id,omitempty"`
+	Title    string   `json:"title,omitempty"`
+	Price    *float64 `json:"price,omitempty"`
+	Images   []string `json:"images"`
+	IsActive *bool    `json:"is_active,omitempty"`
+}
+
+type SupplierSiblingItem struct {
+	ID                   string  `json:"id"`
+	Title                string  `json:"title"`
+	CustomSKU            string  `json:"custom_sku"`
+	Slug                 string  `json:"slug"`
+	ColorID              *string `json:"color_id,omitempty"`
+	Color                string  `json:"color"`
+	ImageUrl             string  `json:"image_url"`
+	Price                float64 `json:"price"`
+	Currency             string  `json:"currency"`
+	IsActive             bool    `json:"is_active"`
+	SourceProductGroupID string  `json:"source_product_group_id"`
 }
 
 type ProductAttribute struct {
@@ -516,27 +539,31 @@ type SeriesTemplate struct {
 }
 
 type SupplierProductInput struct {
-	Title                string                              `json:"title"`
-	ShortDescription     string                              `json:"short_description,omitempty"`
-	Description          string                              `json:"description,omitempty"`
-	CategoryID           string                              `json:"category_id"`
-	ColorID              *string                             `json:"color_id,omitempty"`
-	FabricID             *string                             `json:"fabric_id,omitempty"`
-	Gender               string                              `json:"gender,omitempty"`
-	Season               string                              `json:"season,omitempty"`
-	BuyingPrice          float64                             `json:"buying_price"`
-	Price                float64                             `json:"price"`
-	Currency             string                              `json:"currency"`
-	PackingRatio         string                              `json:"packing_ratio,omitempty"`
-	SeriesRatio          string                              `json:"series_ratio,omitempty"`
-	MinimumOrderQuantity int                                 `json:"minimum_order_quantity"`
-	MinOrderSeries       int                                 `json:"min_order_series,omitempty"`
-	SeriesStock          int                                 `json:"series_stock,omitempty"`
-	SelectedSizes        []string                            `json:"selected_sizes,omitempty"`
-	IsActive             bool                                `json:"is_active"`
-	Images               []string                            `json:"images,omitempty"`
-	Variants             []SupplierProductVariantInput       `json:"variants,omitempty"`
-	Translations         map[string]SupplierTranslationInput `json:"translations,omitempty"`
+	Title                   string                              `json:"title"`
+	ShortDescription        string                              `json:"short_description,omitempty"`
+	Description             string                              `json:"description,omitempty"`
+	CategoryID              string                              `json:"category_id"`
+	ColorID                 *string                             `json:"color_id,omitempty"`
+	FabricID                *string                             `json:"fabric_id,omitempty"`
+	Gender                  string                              `json:"gender,omitempty"`
+	Season                  string                              `json:"season,omitempty"`
+	BuyingPrice             float64                             `json:"buying_price"`
+	Price                   float64                             `json:"price"`
+	Currency                string                              `json:"currency"`
+	PackingRatio            string                              `json:"packing_ratio,omitempty"`
+	SeriesRatio             string                              `json:"series_ratio,omitempty"`
+	MinimumOrderQuantity    int                                 `json:"minimum_order_quantity"`
+	MinOrderSeries          int                                 `json:"min_order_series,omitempty"`
+	SeriesStock             int                                 `json:"series_stock,omitempty"`
+	SelectedSizes           []string                            `json:"selected_sizes,omitempty"`
+	IsActive                bool                                `json:"is_active"`
+	IsDraft                 *bool                               `json:"is_draft,omitempty"`
+	SourceProductGroupID    *string                             `json:"source_product_group_id,omitempty"`
+	LinkWithProductID       *string                             `json:"link_with_product_id,omitempty"`
+	Images                  []string                            `json:"images,omitempty"`
+	Variants                []SupplierProductVariantInput       `json:"variants,omitempty"`
+	AdditionalColorVariants []SupplierColorVariantDraftInput    `json:"additional_color_variants,omitempty"`
+	Translations            map[string]SupplierTranslationInput `json:"translations,omitempty"`
 }
 
 type SupplierApplication struct {

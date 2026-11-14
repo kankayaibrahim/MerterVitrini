@@ -8,6 +8,47 @@ class WizardPhotoItem {
   const WizardPhotoItem.local(this.localPath) : remoteUrl = null;
 
   bool get isRemote => remoteUrl != null && remoteUrl!.isNotEmpty;
+
+  String get identityKey => isRemote ? 'r:${remoteUrl!}' : 'l:${localPath ?? ''}';
+
+  Map<String, dynamic> toJson() => {
+        if (remoteUrl != null && remoteUrl!.isNotEmpty) 'remote_url': remoteUrl,
+        if (localPath != null && localPath!.isNotEmpty) 'local_path': localPath,
+      };
+
+  static WizardPhotoItem? fromJson(Map<String, dynamic> json) {
+    final remote = (json['remote_url'] ?? '').toString().trim();
+    if (remote.isNotEmpty) return WizardPhotoItem.remote(remote);
+    final local = (json['local_path'] ?? '').toString().trim();
+    if (local.isNotEmpty) return WizardPhotoItem.local(local);
+    return null;
+  }
+}
+
+/// Inline extra color variant queued inside the wizard to be submitted as
+/// `additional_color_variants` upon save.
+class WizardAdditionalColorDraft {
+  final String? colorId;
+  final String colorName;
+  final List<WizardPhotoItem> photos;
+
+  const WizardAdditionalColorDraft({
+    this.colorId,
+    required this.colorName,
+    this.photos = const [],
+  });
+
+  WizardAdditionalColorDraft copyWith({
+    String? colorId,
+    String? colorName,
+    List<WizardPhotoItem>? photos,
+  }) {
+    return WizardAdditionalColorDraft(
+      colorId: colorId ?? this.colorId,
+      colorName: colorName ?? this.colorName,
+      photos: photos ?? this.photos,
+    );
+  }
 }
 
 /// Pure B2B domain calculator & predefined size catalog for Merter wholesale series.

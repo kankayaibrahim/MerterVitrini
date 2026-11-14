@@ -58,15 +58,8 @@ def ensure_remote_dir(ssh: paramiko.SSHClient, remote_dir: str) -> None:
 def upload_release_to_server(apk_path: str, apk_filename: str, manifest_bytes: bytes) -> None:
     cfg = deployer.SERVER_CONFIG
     print(f"[OTA] Sunucuya baglaniliyor: {cfg['username']}@{cfg['hostname']}:{cfg['port']} ...")
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(
-        hostname=cfg["hostname"],
-        port=cfg["port"],
-        username=cfg["username"],
-        password=cfg["password"],
-        timeout=20,
-    )
+    pipeline = deployer.DeployPipeline(log_callback=print)
+    ssh = pipeline._connect_ssh(max_attempts=6)
 
     try:
         ensure_remote_dir(ssh, REMOTE_RELEASES_DIR)

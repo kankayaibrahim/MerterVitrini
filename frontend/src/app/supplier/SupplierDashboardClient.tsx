@@ -23,16 +23,25 @@ import {
   Globe,
   FileSpreadsheet,
   Archive,
-  ArchiveRestore
+  ArchiveRestore,
+  Camera,
+  CopyPlus,
+  Rocket,
+  Loader2,
+  AlertCircle,
+  X
 } from "lucide-react";
 import {
   SupplierProductRow,
   SizeDefinitionDTO,
   SeriesTemplateDTO,
+  SupplierSiblingItemDTO,
+  InlineColorVariantDraft,
 } from "@/types/integration";
 import {
   SupplierProductModal,
   FALLBACK_SIZE_DEFINITIONS,
+  SUPPORTED_TRANSLATION_LANGS,
   buildHierarchicalCategoryOptions,
   buildSeriesRatioForMode,
   detectAssortmentMode,
@@ -41,6 +50,7 @@ import {
   type SupportedTranslationLang,
   type TranslationFieldKey,
   type SupplierModalMode,
+  type ProductModalViewMode,
   type AssortmentMode,
 } from "./SupplierProductModal";
 import {
@@ -48,6 +58,12 @@ import {
   SupplierCollectionArchiveModal,
   toggleSupplierProductArchiveApi,
 } from "./SupplierBulkAndArchiveModals";
+import {
+  performMultiImageUpload,
+  reorderImageList,
+} from "./SupplierPhotoDropzone";
+import { cleanAttributeName } from "./SupplierSiblingVariantSection";
+import { SupplierQuickDraftModal } from "./SupplierQuickDraftModal";
 import SupplierChatPanel from "./SupplierChatPanel";
 import SupplierOrdersPanel from "./SupplierOrdersPanel";
 import SupplierProfilePanel from "./SupplierProfilePanel";
@@ -82,17 +98,22 @@ export interface ProductTranslationFormItem {
   description: string;
 }
 
-export interface ProductTranslationsFormMap {
-  en: ProductTranslationFormItem;
-  ru: ProductTranslationFormItem;
-  ar: ProductTranslationFormItem;
-}
+export type ProductTranslationsFormMap = Record<
+  SupportedTranslationLang,
+  ProductTranslationFormItem
+>;
 
-const DEFAULT_EMPTY_TRANSLATIONS: ProductTranslationsFormMap = {
-  en: { title: "", short_description: "", description: "" },
-  ru: { title: "", short_description: "", description: "" },
-  ar: { title: "", short_description: "", description: "" },
-};
+export function createEmptyTranslations(): ProductTranslationsFormMap {
+  return {
+    en: { title: "", short_description: "", description: "" },
+    ru: { title: "", short_description: "", description: "" },
+    ar: { title: "", short_description: "", description: "" },
+    de: { title: "", short_description: "", description: "" },
+    fr: { title: "", short_description: "", description: "" },
+    pl: { title: "", short_description: "", description: "" },
+    bg: { title: "", short_description: "", description: "" },
+  };
+}
 
 export interface SupplierProfile {
   sub: string;
@@ -107,6 +128,7 @@ export interface SupplierProfile {
 interface DashboardStats {
   total_products: number;
   active_products: number;
+  draft_products?: number;
   total_stock: number;
   total_variants: number;
   total_orders?: number;
@@ -116,6 +138,143 @@ const DEFAULT_SELECTED_SIZES = ["S", "M", "L", "XL"];
 const DEFAULT_SERIES_RATIO = "1-1-1-1";
 const DEFAULT_SERIES_STOCK = 100;
 
+const LAST_DEFAULTS_STORAGE_KEY = "mv_supplier_last_defaults_v1";
+const UNSAVED_DRAFT_STORAGE_KEY = "mv_supplier_unsaved_draft_v1";
+
+interface SupplierLastDefaults {
+  categoryId: string;
+  currency: string;
+  selectedSizes: string[];
+  seriesRatio: string;
+  seriesStock: number;
+  gender: string;
+  season: string;
+}
+
+interface SupplierUnsavedDraft {
+  savedAt: string;
+  title: string;
+  shortDesc: string;
+  description: string;
+  categoryId: string;
+  colorId: string;
+  fabricId: string;
+  gender: string;
+  season: string;
+  buyingPrice: number;
+  price: number;
+  currency: string;
+  selectedSizes: string[];
+  seriesRatio: string;
+  seriesStock: number;
+  minOrderSeries: number;
+  isActive: boolean;
+  images: string[];
+  translations: ProductTranslationsFormMap;
+  linkWithProduct: SupplierSiblingItemDTO | null;
+  additionalColorVariants: InlineColorVariantDraft[];
+}
+
+function readSupplierLastDefaults(): Partial<SupplierLastDefaults> | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(LAST_DEFAULTS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SupplierLastDefaults>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSupplierLastDefaults(defaults: SupplierLastDefaults): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LAST_DEFAULTS_STORAGE_KEY, JSON.stringify(defaults));
+  } catch {
+    // Ignore storage quota / privacy mode errors
+  }
+}
+
+function readSupplierUnsavedDraft(): SupplierUnsavedDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(UNSAVED_DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SupplierUnsavedDraft>;
+    if (!parsed || typeof parsed !== "object" || !parsed.savedAt) return null;
+    const hasData =
+      Boolean(parsed.title?.trim()) ||
+      (Array.isArray(parsed.images) && parsed.images.length > 0) ||
+      Number(parsed.price || 0) > 0 ||
+      Boolean(parsed.linkWithProduct) ||
+      (Array.isArray(parsed.additionalColorVariants) &&
+        parsed.additionalColorVariants.length > 0);
+    if (!hasData) return null;
+    return {
+      savedAt: parsed.savedAt,
+      title: parsed.title || "",
+      shortDesc: parsed.shortDesc || "",
+      description: parsed.description || "",
+      categoryId: parsed.categoryId || "",
+      colorId: parsed.colorId || "",
+      fabricId: parsed.fabricId || "",
+      gender: parsed.gender || "Kadın",
+      season: parsed.season || "İlkbahar/Yaz",
+      buyingPrice: Number(parsed.buyingPrice) || 0,
+      price: Number(parsed.price) || 0,
+      currency: parsed.currency || "TRY",
+      selectedSizes:
+        Array.isArray(parsed.selectedSizes) && parsed.selectedSizes.length > 0
+          ? parsed.selectedSizes
+          : [...DEFAULT_SELECTED_SIZES],
+      seriesRatio: parsed.seriesRatio || DEFAULT_SERIES_RATIO,
+      seriesStock: Number(parsed.seriesStock) || DEFAULT_SERIES_STOCK,
+      minOrderSeries: Number(parsed.minOrderSeries) || 1,
+      isActive: typeof parsed.isActive === "boolean" ? parsed.isActive : true,
+      images: Array.isArray(parsed.images) ? parsed.images : [],
+      translations: parsed.translations || createEmptyTranslations(),
+      linkWithProduct: parsed.linkWithProduct ?? null,
+      additionalColorVariants: Array.isArray(parsed.additionalColorVariants)
+        ? parsed.additionalColorVariants
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveSupplierUnsavedDraft(draft: SupplierUnsavedDraft): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(UNSAVED_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearSupplierUnsavedDraft(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(UNSAVED_DRAFT_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function formatDraftTimestamp(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat("tr-TR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return "";
+  }
+}
+
 function isAuthStatusError(status: number): boolean {
   return status === 401 || status === 403;
 }
@@ -124,8 +283,16 @@ function validateProductForm(
   title: string,
   categoryId: string,
   price: number,
-  selectedSizes: string[]
+  selectedSizes: string[],
+  isDraft: boolean,
+  images: readonly string[]
 ): string {
+  if (isDraft) {
+    if (images.length === 0 && !title.trim()) {
+      return "Taslak kaydetmek için en az 1 fotoğraf yükleyin veya ürün adı girin.";
+    }
+    return "";
+  }
   if (!title.trim()) {
     return "Ürün adı zorunludur.";
   }
@@ -168,6 +335,10 @@ interface ProductPayloadParams {
   seriesStock: number;
   minOrderSeries: number;
   isActive: boolean;
+  isDraft: boolean;
+  sourceProductGroupId?: string;
+  linkWithProductId?: string;
+  additionalColorVariants?: readonly InlineColorVariantDraft[];
   images: string[];
   translations: ProductTranslationsFormMap;
 }
@@ -181,17 +352,39 @@ function buildProductPayload(params: ProductPayloadParams) {
     weights.reduce((acc, w) => acc + w, 0)
   );
 
+  const mappedAdditionalColors = (params.additionalColorVariants || [])
+    .filter((v) => v.colorId !== "" || v.images.length > 0)
+    .map((v) => ({
+      color_id: v.colorId || undefined,
+      title: v.title.trim() || undefined,
+      price: v.price > 0 ? Number(v.price) : undefined,
+      images: v.images.filter((img) => img.trim() !== ""),
+      is_active: params.isActive,
+    }));
+
+  const translationsPayload = SUPPORTED_TRANSLATION_LANGS.reduce(
+    (acc, lang) => {
+      acc[lang] = {
+        title: params.translations[lang].title.trim(),
+        short_description: params.translations[lang].short_description.trim(),
+        description: params.translations[lang].description.trim(),
+      };
+      return acc;
+    },
+    {} as ProductTranslationsFormMap
+  );
+
   return {
     title: params.title.trim(),
     short_description: params.shortDesc.trim() || undefined,
     description: params.description.trim() || undefined,
-    category_id: params.categoryId,
+    category_id: params.categoryId || undefined,
     color_id: params.colorId || undefined,
     fabric_id: params.fabricId || undefined,
     gender: params.gender || undefined,
     season: params.season || undefined,
     buying_price: Number(params.buyingPrice) || 0,
-    price: Number(params.price),
+    price: Number(params.price) || 0,
     currency: params.currency,
     selected_sizes: params.selectedSizes,
     packing_ratio: params.selectedSizes.join(","),
@@ -200,6 +393,11 @@ function buildProductPayload(params: ProductPayloadParams) {
     min_order_series: safeMinSeries,
     minimum_order_quantity: unitsPerSeries * safeMinSeries,
     is_active: params.isActive,
+    is_draft: params.isDraft,
+    source_product_group_id: params.sourceProductGroupId || undefined,
+    link_with_product_id: params.linkWithProductId || undefined,
+    additional_color_variants:
+      mappedAdditionalColors.length > 0 ? mappedAdditionalColors : undefined,
     images: params.images.filter((img) => img.trim() !== ""),
     variants: params.selectedSizes.map((sz, idx) => ({
       size: sz,
@@ -207,23 +405,7 @@ function buildProductPayload(params: ProductPayloadParams) {
       stock: (weights[idx] ?? 1) * safeSeriesStock,
       is_single: false,
     })),
-    translations: {
-      en: {
-        title: params.translations.en.title.trim(),
-        short_description: params.translations.en.short_description.trim(),
-        description: params.translations.en.description.trim(),
-      },
-      ru: {
-        title: params.translations.ru.title.trim(),
-        short_description: params.translations.ru.short_description.trim(),
-        description: params.translations.ru.description.trim(),
-      },
-      ar: {
-        title: params.translations.ar.title.trim(),
-        short_description: params.translations.ar.short_description.trim(),
-        description: params.translations.ar.description.trim(),
-      },
-    },
+    translations: translationsPayload,
   };
 }
 
@@ -322,27 +504,19 @@ async function fetchInitialSupplierData(token: string): Promise<{
   }
 }
 
-async function uploadSupplierImageFile(token: string, file: File): Promise<string> {
-  const fd = new FormData();
-  fd.append("image", file);
-  const res = await fetch("/api/v1/supplier/upload-image", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${token}` },
-    body: fd,
-  });
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.error || "Görsel yüklenemedi.");
-  }
-  const data = await res.json();
-  return data.image_url || "";
+interface SaveSupplierProductResponse {
+  id?: string;
+  custom_sku?: string;
+  slug?: string;
+  source_product_group_id?: string;
+  message?: string;
 }
 
 async function saveSupplierProductApi(
   token: string,
   payload: ReturnType<typeof buildProductPayload>,
   editingProductId: string | null
-): Promise<void> {
+): Promise<SaveSupplierProductResponse> {
   const url = editingProductId
     ? `/api/v1/supplier/products/${editingProductId}`
     : "/api/v1/supplier/products";
@@ -355,10 +529,66 @@ async function saveSupplierProductApi(
     },
     body: JSON.stringify(payload),
   });
+  const data = (await res.json().catch(() => ({}))) as SaveSupplierProductResponse & {
+    error?: string;
+  };
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
     throw new Error(data.error || "İşlem kaydedilemedi.");
   }
+  return data;
+}
+
+async function quickPublishSupplierProductApi(
+  token: string,
+  productId: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(
+      `/api/v1/mobile/supplier/products/${encodeURIComponent(productId)}/quick-update`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ is_active: true }),
+      }
+    );
+    if (res.ok) {
+      return { ok: true };
+    }
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    return {
+      ok: false,
+      error: data.error || "Ürün yayına alınamadı; lütfen zorunlu alanları kontrol edin.",
+    };
+  } catch {
+    return { ok: false, error: "Sunucu bağlantı hatası oluştu." };
+  }
+}
+
+async function fetchProductSiblingsApi(
+  token: string,
+  productId: string
+): Promise<{ source_product_group_id: string; siblings: SupplierSiblingItemDTO[] }> {
+  try {
+    const res = await fetch(`/api/v1/supplier/products/${productId}/siblings`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        source_product_group_id?: string;
+        siblings?: SupplierSiblingItemDTO[];
+      };
+      return {
+        source_product_group_id: data.source_product_group_id || "",
+        siblings: Array.isArray(data.siblings) ? data.siblings : [],
+      };
+    }
+  } catch {
+    // Fallback silently
+  }
+  return { source_product_group_id: "", siblings: [] };
 }
 
 async function deleteSupplierProductApi(token: string, productId: string): Promise<void> {
@@ -402,7 +632,7 @@ async function autoTranslateSupplierProductApi(
       },
       body: JSON.stringify({
         source_lang: "tr",
-        target_langs: ["en", "ru", "ar"],
+        target_langs: [...SUPPORTED_TRANSLATION_LANGS],
         fields: {
           title: title.trim(),
           short_description: shortDesc.trim(),
@@ -411,25 +641,20 @@ async function autoTranslateSupplierProductApi(
       }),
     });
     if (res.ok) {
-      const data = await res.json();
-      const t = data.translations || {};
-      return {
-        en: {
-          title: t.en?.title || current.en.title,
-          short_description: t.en?.short_description || current.en.short_description,
-          description: t.en?.description || current.en.description,
-        },
-        ru: {
-          title: t.ru?.title || current.ru.title,
-          short_description: t.ru?.short_description || current.ru.short_description,
-          description: t.ru?.description || current.ru.description,
-        },
-        ar: {
-          title: t.ar?.title || current.ar.title,
-          short_description: t.ar?.short_description || current.ar.short_description,
-          description: t.ar?.description || current.ar.description,
-        },
+      const data = (await res.json()) as {
+        translations?: Partial<Record<SupportedTranslationLang, Partial<ProductTranslationFormItem>>>;
       };
+      const t = data.translations || {};
+      const next = { ...current };
+      for (const lang of SUPPORTED_TRANSLATION_LANGS) {
+        const incoming = t[lang];
+        next[lang] = {
+          title: incoming?.title || current[lang].title,
+          short_description: incoming?.short_description || current[lang].short_description,
+          description: incoming?.description || current[lang].description,
+        };
+      }
+      return next;
     }
   } catch (err) {
     console.error("Otomatik çeviri hatası:", err);
@@ -469,14 +694,6 @@ function clearStoredSupplierSession(): void {
   }
 }
 
-function promoteCoverImageAtIndex(list: string[], index: number): string[] {
-  if (index === 0) return list;
-  const copy = [...list];
-  const [item] = copy.splice(index, 1);
-  copy.unshift(item);
-  return copy;
-}
-
 function strVal(val: unknown, fallback = ""): string {
   return typeof val === "string" && val.length > 0 ? val : fallback;
 }
@@ -487,19 +704,16 @@ function numVal(val: unknown, fallback = 0): number {
 }
 
 function parseDetailTranslations(raw?: Record<string, unknown>): ProductTranslationsFormMap {
-  const getLang = (code: "en" | "ru" | "ar"): ProductTranslationFormItem => {
+  const result = createEmptyTranslations();
+  for (const code of SUPPORTED_TRANSLATION_LANGS) {
     const obj = (raw?.[code] as Record<string, unknown> | undefined) || {};
-    return {
+    result[code] = {
       title: strVal(obj.title),
       short_description: strVal(obj.short_description),
       description: strVal(obj.description),
     };
-  };
-  return {
-    en: getLang("en"),
-    ru: getLang("ru"),
-    ar: getLang("ar"),
-  };
+  }
+  return result;
 }
 
 function normalizeKnownSizeCode(raw: string, knownCodes: Set<string>): string {
@@ -565,13 +779,16 @@ function normalizeEditableProductDetail(
   const seriesStock = numVal(data.series_stock, prod.series_stock || DEFAULT_SERIES_STOCK);
   const moqUnits = numVal(data.minimum_order_quantity, unitsPerSeries);
   const minOrderSeries = Math.max(1, Math.round(moqUnits / unitsPerSeries));
+  const rawSiblings = Array.isArray(data.supplier_siblings)
+    ? (data.supplier_siblings as SupplierSiblingItemDTO[])
+    : null;
 
   return {
     title: strVal(data.title),
     shortDesc: strVal(data.short_description),
     description: strVal(data.description),
-    categoryId: strVal(data.category_id),
-    colorId: strVal(data.color_id),
+    categoryId: strVal(data.category_id, prod.category_id || ""),
+    colorId: strVal(data.color_id, prod.color_id || ""),
     fabricId: strVal(data.fabric_id),
     gender: strVal(data.gender, "Kadın"),
     season: strVal(data.season, "İlkbahar/Yaz"),
@@ -583,6 +800,11 @@ function normalizeEditableProductDetail(
     seriesStock,
     minOrderSeries,
     isActive: typeof data.is_active === "boolean" ? data.is_active : true,
+    sourceProductGroupId: strVal(
+      data.source_product_group_id,
+      prod.source_product_group_id || ""
+    ),
+    supplierSiblings: rawSiblings,
     images: parseDetailImages(
       data.images as Array<{ image_url?: string; ImageUrl?: string }> | undefined,
       prod.cover_image
@@ -712,8 +934,8 @@ function getProductRowStatusBadge(p: SupplierProductRow) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-bold">
-      <span>Pasif</span>
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-extrabold">
+      <span>📝 Taslak</span>
     </span>
   );
 }
@@ -721,6 +943,9 @@ function getProductRowStatusBadge(p: SupplierProductRow) {
 function SupplierProductTable({
   products,
   loading,
+  quickPublishingId,
+  onQuickPublish,
+  onOpenNewColorFromProduct,
   onOpenEdit,
   onOpenTranslations,
   onToggleArchive,
@@ -728,6 +953,9 @@ function SupplierProductTable({
 }: Readonly<{
   products: SupplierProductRow[];
   loading: boolean;
+  quickPublishingId: string | null;
+  onQuickPublish: (prod: SupplierProductRow) => void;
+  onOpenNewColorFromProduct: (prod: SupplierProductRow) => void;
   onOpenEdit: (prod: SupplierProductRow) => void;
   onOpenTranslations: (prod: SupplierProductRow) => void;
   onToggleArchive: (prod: SupplierProductRow) => void;
@@ -756,115 +984,172 @@ function SupplierProductTable({
                 </td>
               </tr>
             ) : (
-              products.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="py-2.5 px-4 text-center">
-                    <div className="w-12 h-14 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden relative mx-auto flex items-center justify-center shadow-xs">
-                      {p.cover_image ? (
-                        <Image
-                          src={p.cover_image}
-                          alt={p.title}
-                          fill
-                          sizes="48px"
-                          className="object-cover"
-                        />
-                      ) : (
-                        <Package size={20} className="text-slate-300" />
-                      )}
-                    </div>
-                  </td>
+              products.map((p) => {
+                const isDraft = !p.is_active && !p.is_archived;
+                const isQuickPublishing = quickPublishingId === p.id;
+                const siblingCount = p.sibling_count ?? 0;
 
-                  <td className="py-2.5 px-4">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-slate-900 line-clamp-1">{p.title}</span>
-                      <span className="font-mono text-[11px] text-slate-500 font-semibold mt-0.5">
-                        {p.custom_sku}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="py-2.5 px-4 text-slate-600">
-                    {p.category_title || "-"}
-                  </td>
-
-                  <td className="py-2.5 px-4">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-slate-900">
-                        {p.price.toLocaleString("tr-TR", { minimumFractionDigits: 2 })} {p.currency}
-                      </span>
-                      {p.packing_ratio && (
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          Paket: {p.packing_ratio}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td className="py-2.5 px-4 text-center">
-                    <div className="flex flex-col items-center">
-                      <span className="font-extrabold text-emerald-700">
-                        ~{p.series_stock || DEFAULT_SERIES_STOCK} Seri
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-semibold">
-                        ({p.total_stock} adet)
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="py-2.5 px-4 text-center">
-                    {getProductRowStatusBadge(p)}
-                  </td>
-
-                  <td className="py-2.5 px-4 text-right">
-                    <div className="inline-flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => onOpenTranslations(p)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[11px] font-bold transition-colors cursor-pointer"
-                        title="Çok Dilli Çevirileri Düzenle (TR / EN / RU / AR)"
-                      >
-                        <Globe size={13} />
-                        <span className="hidden xl:inline">Çeviri</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onToggleArchive(p)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[11px] font-bold transition-colors cursor-pointer"
-                        title={
-                          p.is_archived
-                            ? "Arşivden Çıkar ve Yayına Al"
-                            : "Eski Koleksiyon Arşivine Taşı"
-                        }
-                      >
-                        {p.is_archived ? (
-                          <ArchiveRestore size={13} />
+                return (
+                  <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-2.5 px-4 text-center">
+                      <div className="w-12 h-14 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden relative mx-auto flex items-center justify-center shadow-xs">
+                        {p.cover_image ? (
+                          <Image
+                            src={p.cover_image}
+                            alt={p.title || p.custom_sku}
+                            fill
+                            sizes="48px"
+                            className="object-cover"
+                          />
                         ) : (
-                          <Archive size={13} />
+                          <Package size={20} className="text-slate-300" />
                         )}
-                        <span className="hidden xl:inline">
-                          {p.is_archived ? "Arşivden Çıkar" : "Arşivle"}
+                      </div>
+                    </td>
+
+                    <td className="py-2.5 px-4">
+                      <div className="flex flex-col">
+                        <span
+                          className={`font-bold line-clamp-1 ${
+                            p.title ? "text-slate-900" : "text-slate-400 italic"
+                          }`}
+                        >
+                          {p.title || "İsimsiz Taslak Model"}
                         </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onOpenEdit(p)}
-                        className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer"
-                        title="Düzenle"
-                      >
-                        <Edit3 size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onOpenDelete(p)}
-                        className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors cursor-pointer"
-                        title="Sil"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className="font-mono text-[11px] text-slate-500 font-semibold">
+                            {p.custom_sku}
+                          </span>
+                          {p.color && (
+                            <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold">
+                              {p.color}
+                            </span>
+                          )}
+                        </div>
+                        {siblingCount > 0 && (
+                          <span className="mt-1 self-start inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
+                            🎨 +{siblingCount} Renk
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="py-2.5 px-4 text-slate-600">
+                      {p.category_title || "-"}
+                    </td>
+
+                    <td className="py-2.5 px-4">
+                      <div className="flex flex-col">
+                        <span className={`font-bold ${p.price > 0 ? "text-slate-900" : "text-amber-700"}`}>
+                          {p.price > 0
+                            ? `${p.price.toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ${p.currency}`
+                            : "Fiyat Girilmedi"}
+                        </span>
+                        {p.packing_ratio && (
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            Paket: {p.packing_ratio}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="py-2.5 px-4 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="font-extrabold text-emerald-700">
+                          ~{p.series_stock || DEFAULT_SERIES_STOCK} Seri
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-semibold">
+                          ({p.total_stock} adet)
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="py-2.5 px-4 text-center">
+                      <div className="inline-flex flex-col items-center gap-1.5">
+                        {getProductRowStatusBadge(p)}
+                        {isDraft && (
+                          <button
+                            type="button"
+                            onClick={() => onQuickPublish(p)}
+                            disabled={isQuickPublishing}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                            title={
+                              p.price > 0 && p.cover_image
+                                ? "Tek tıkla vitrine yayınla"
+                                : "Fiyat veya fotoğrafı tamamlayıp yayınla"
+                            }
+                          >
+                            {isQuickPublishing ? (
+                              <Loader2 size={10} className="animate-spin" />
+                            ) : (
+                              <Rocket size={10} />
+                            )}
+                            <span>{isQuickPublishing ? "Yayınlanıyor" : "🚀 Yayınla"}</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="py-2.5 px-4 text-right">
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => onOpenNewColorFromProduct(p)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 hover:bg-slate-900 hover:text-white hover:border-slate-900 text-[11px] font-bold transition-colors cursor-pointer"
+                          title="Bu modelin yeni rengini aç"
+                        >
+                          <CopyPlus size={13} />
+                          <span className="hidden xl:inline">+ Yeni Rengini Aç</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenTranslations(p)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[11px] font-bold transition-colors cursor-pointer"
+                          title="Çok Dilli Çevirileri Düzenle (TR / EN / RU / AR / DE / FR / PL / BG)"
+                        >
+                          <Globe size={13} />
+                          <span className="hidden xl:inline">Çeviri</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onToggleArchive(p)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 text-[11px] font-bold transition-colors cursor-pointer"
+                          title={
+                            p.is_archived
+                              ? "Arşivden Çıkar ve Yayına Al"
+                              : "Eski Koleksiyon Arşivine Taşı"
+                          }
+                        >
+                          {p.is_archived ? (
+                            <ArchiveRestore size={13} />
+                          ) : (
+                            <Archive size={13} />
+                          )}
+                          <span className="hidden xl:inline">
+                            {p.is_archived ? "Arşivden Çıkar" : "Arşivle"}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenEdit(p)}
+                          className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors cursor-pointer"
+                          title="Düzenle"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenDelete(p)}
+                          className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors cursor-pointer"
+                          title="Sil"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -1008,6 +1293,7 @@ interface SupplierDashboardNavTabsProps {
   readonly stats: DashboardStats;
   readonly unreadChatCount: number;
   readonly onOpenCreate: () => void;
+  readonly onOpenQuickDraft: () => void;
   readonly onOpenExcelImport: () => void;
   readonly onOpenBulkArchive: () => void;
 }
@@ -1018,6 +1304,7 @@ function SupplierDashboardNavTabs({
   stats,
   unreadChatCount,
   onOpenCreate,
+  onOpenQuickDraft,
   onOpenExcelImport,
   onOpenBulkArchive,
 }: SupplierDashboardNavTabsProps) {
@@ -1129,6 +1416,15 @@ function SupplierDashboardNavTabs({
 
             <button
               type="button"
+              onClick={onOpenQuickDraft}
+              className="h-9 px-3.5 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 text-xs font-extrabold transition-colors cursor-pointer shrink-0"
+            >
+              <Camera size={14} />
+              <span>📸 Fotoğraftan Hızlı Taslak</span>
+            </button>
+
+            <button
+              type="button"
               onClick={onOpenCreate}
               className="h-9 px-4 inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-[0.99] shrink-0"
             >
@@ -1150,6 +1446,7 @@ interface SupplierCatalogToolbarProps {
   readonly categories: CategoryOption[];
   readonly statusFilter: SupplierStatusFilter;
   readonly setStatusFilter: (v: SupplierStatusFilter) => void;
+  readonly draftCount: number;
   readonly loading: boolean;
   readonly onRefresh: () => void;
 }
@@ -1162,6 +1459,7 @@ function SupplierCatalogToolbar({
   categories,
   statusFilter,
   setStatusFilter,
+  draftCount,
   loading,
   onRefresh,
 }: SupplierCatalogToolbarProps) {
@@ -1197,11 +1495,11 @@ function SupplierCatalogToolbar({
           ))}
         </select>
 
-        <div className="flex rounded-lg bg-slate-100 p-1 border border-slate-200 w-full sm:w-auto">
+        <div className="flex rounded-lg bg-slate-100 p-1 border border-slate-200 w-full sm:w-auto overflow-x-auto">
           <button
             type="button"
             onClick={() => setStatusFilter("all")}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               statusFilter === "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -1210,7 +1508,7 @@ function SupplierCatalogToolbar({
           <button
             type="button"
             onClick={() => setStatusFilter("active")}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               statusFilter === "active" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -1219,16 +1517,18 @@ function SupplierCatalogToolbar({
           <button
             type="button"
             onClick={() => setStatusFilter("passive")}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-              statusFilter === "passive" ? "bg-white text-slate-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              statusFilter === "passive"
+                ? "bg-white text-amber-800 shadow-xs"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            Pasif
+            Taslaklar ({draftCount})
           </button>
           <button
             type="button"
             onClick={() => setStatusFilter("archived")}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
               statusFilter === "archived" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
             }`}
           >
@@ -1268,8 +1568,14 @@ function SupplierSectionContent({
   categories,
   statusFilter,
   setStatusFilter,
+  draftCount,
   loading,
   onRefresh,
+  catalogBanner,
+  onDismissCatalogBanner,
+  quickPublishingId,
+  onQuickPublish,
+  onOpenNewColorFromProduct,
   onOpenEdit,
   onOpenTranslations,
   onToggleArchive,
@@ -1289,8 +1595,14 @@ function SupplierSectionContent({
   categories: CategoryOption[];
   statusFilter: SupplierStatusFilter;
   setStatusFilter: (v: SupplierStatusFilter) => void;
+  draftCount: number;
   loading: boolean;
   onRefresh: () => void;
+  catalogBanner: { type: "success" | "error"; text: string } | null;
+  onDismissCatalogBanner: () => void;
+  quickPublishingId: string | null;
+  onQuickPublish: (p: SupplierProductRow) => void;
+  onOpenNewColorFromProduct: (p: SupplierProductRow) => void;
   onOpenEdit: (p: SupplierProductRow) => void;
   onOpenTranslations: (p: SupplierProductRow) => void;
   onToggleArchive: (p: SupplierProductRow) => void;
@@ -1348,13 +1660,44 @@ function SupplierSectionContent({
         categories={categories}
         statusFilter={statusFilter}
         setStatusFilter={setStatusFilter}
+        draftCount={draftCount}
         loading={loading}
         onRefresh={onRefresh}
       />
 
+      {catalogBanner && (
+        <div
+          className={`px-4 py-3 rounded-xl border flex items-center justify-between gap-3 text-xs font-bold ${
+            catalogBanner.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+              : "bg-red-50 border-red-200 text-red-800"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {catalogBanner.type === "success" ? (
+              <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle size={15} className="text-red-600 shrink-0" />
+            )}
+            <span>{catalogBanner.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={onDismissCatalogBanner}
+            className="p-1 rounded-md hover:bg-black/5 cursor-pointer"
+            aria-label="Bildirimi kapat"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <SupplierProductTable
         products={products}
         loading={loading}
+        quickPublishingId={quickPublishingId}
+        onQuickPublish={onQuickPublish}
+        onOpenNewColorFromProduct={onOpenNewColorFromProduct}
         onOpenEdit={onOpenEdit}
         onOpenTranslations={onOpenTranslations}
         onToggleArchive={onToggleArchive}
@@ -1550,43 +1893,21 @@ function useSupplierProductCatalog(
   return { products, loading, loadProducts };
 }
 
-async function performMultiImageUpload(
-  files: File[],
-  token: string | null,
-  setLoading: (v: boolean) => void,
-  onUploaded: (urls: string[]) => void
-) {
-  if (files.length === 0 || !token) return;
-  setLoading(true);
-  try {
-    const uploadedResults = await Promise.all(
-      files.map((file) => uploadSupplierImageFile(token, file))
-    );
-    const uploadedUrls = uploadedResults.filter((url): url is string => Boolean(url));
-    if (uploadedUrls.length > 0) onUploaded(uploadedUrls);
-  } catch (err: unknown) {
-    alert((err as Error).message);
-  } finally {
-    setLoading(false);
-  }
-}
-
 async function performProductSave(
   token: string | null,
   payload: ReturnType<typeof buildProductPayload>,
   editingProductId: string | null,
   setSubmitting: (v: boolean) => void,
-  setFormError: (msg: string) => void,
-  onSuccess: () => void
-) {
-  if (!token) return;
+  setFormError: (msg: string) => void
+): Promise<SaveSupplierProductResponse | null> {
+  if (!token) return null;
   setSubmitting(true);
   setFormError("");
   try {
-    await saveSupplierProductApi(token, payload, editingProductId);
-    onSuccess();
+    return await saveSupplierProductApi(token, payload, editingProductId);
   } catch (err: unknown) {
     setFormError(strVal((err as Error).message, "Kayıt sırasında bir hata oluştu."));
+    return null;
   } finally {
     setSubmitting(false);
   }
@@ -1610,6 +1931,14 @@ async function performProductDelete(
   }
 }
 
+interface QuickDraftDefaultsState {
+  categoryId: string;
+  currency: string;
+  selectedSizes: string[];
+  seriesRatio: string;
+  seriesStock: number;
+}
+
 export default function SupplierDashboardClient() {
   const router = useRouter();
   const {
@@ -1631,7 +1960,7 @@ export default function SupplierDashboardClient() {
     handleSaveQuickWhatsapp,
   } = useSupplierAuthAndProfile(router);
 
-  // Filter state
+  // Filter & navigation state
   const [activeSection, setActiveSection] = useState<SupplierDashboardSection>("catalog");
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1639,6 +1968,21 @@ export default function SupplierDashboardClient() {
   const [statusFilter, setStatusFilter] = useState<SupplierStatusFilter>("all");
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isQuickDraftModalOpen, setIsQuickDraftModalOpen] = useState(false);
+  const [quickDraftDefaults, setQuickDraftDefaults] = useState<QuickDraftDefaultsState>({
+    categoryId: "",
+    currency: "TRY",
+    selectedSizes: [...DEFAULT_SELECTED_SIZES],
+    seriesRatio: DEFAULT_SERIES_RATIO,
+    seriesStock: DEFAULT_SERIES_STOCK,
+  });
+
+  // Catalog banner & quick-publish state
+  const [catalogBanner, setCatalogBanner] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [quickPublishingId, setQuickPublishingId] = useState<string | null>(null);
 
   const { products, loading, loadProducts } = useSupplierProductCatalog(
     getToken,
@@ -1662,9 +2006,11 @@ export default function SupplierDashboardClient() {
   const [activeModal, setActiveModal] = useState<SupplierModalMode>(null);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<SupplierProductRow | null>(null);
-  const [expandOptionalSection, setExpandOptionalSection] = useState(false);
+  const [modalViewMode, setModalViewMode] = useState<ProductModalViewMode>("express");
+  const [pendingLocalDraft, setPendingLocalDraft] = useState<SupplierUnsavedDraft | null>(null);
+  const [formNotice, setFormNotice] = useState("");
 
-  // Product Form State (Express Single-Screen)
+  // Product Form State (Express & Detailed Unified)
   const [formTitle, setFormTitle] = useState("");
   const [formShortDesc, setFormShortDesc] = useState("");
   const [formDescription, setFormDescription] = useState("");
@@ -1682,11 +2028,81 @@ export default function SupplierDashboardClient() {
   const [formMinOrderSeries, setFormMinOrderSeries] = useState<number>(1);
   const [formIsActive, setFormIsActive] = useState(true);
   const [formImages, setFormImages] = useState<string[]>([]);
-  const [formTranslations, setFormTranslations] = useState<ProductTranslationsFormMap>(DEFAULT_EMPTY_TRANSLATIONS);
+  const [formTranslations, setFormTranslations] = useState<ProductTranslationsFormMap>(
+    () => createEmptyTranslations()
+  );
+  const [sourceProductGroupId, setSourceProductGroupId] = useState("");
+  const [supplierSiblings, setSupplierSiblings] = useState<SupplierSiblingItemDTO[]>([]);
+  const [linkWithProduct, setLinkWithProduct] = useState<SupplierSiblingItemDTO | null>(null);
+  const [additionalColorVariants, setAdditionalColorVariants] = useState<InlineColorVariantDraft[]>([]);
+
   const [autoTranslating, setAutoTranslating] = useState(false);
   const [imageUploadLoading, setImageUploadLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // Debounced auto-save for in-progress Create modal state
+  useEffect(() => {
+    if (activeModal !== "create" || pendingLocalDraft !== null) return;
+    const hasMeaningfulContent =
+      formTitle.trim().length > 0 ||
+      formImages.length > 0 ||
+      formPrice > 0 ||
+      linkWithProduct !== null ||
+      additionalColorVariants.length > 0;
+    if (!hasMeaningfulContent) return;
+
+    const timer = window.setTimeout(() => {
+      saveSupplierUnsavedDraft({
+        savedAt: new Date().toISOString(),
+        title: formTitle,
+        shortDesc: formShortDesc,
+        description: formDescription,
+        categoryId: formCategoryId,
+        colorId: formColorId,
+        fabricId: formFabricId,
+        gender: formGender,
+        season: formSeason,
+        buyingPrice: formBuyingPrice,
+        price: formPrice,
+        currency: formCurrency,
+        selectedSizes: formSelectedSizes,
+        seriesRatio: formSeriesRatio,
+        seriesStock: formSeriesStock,
+        minOrderSeries: formMinOrderSeries,
+        isActive: formIsActive,
+        images: formImages,
+        translations: formTranslations,
+        linkWithProduct,
+        additionalColorVariants,
+      });
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    activeModal,
+    pendingLocalDraft,
+    formTitle,
+    formShortDesc,
+    formDescription,
+    formCategoryId,
+    formColorId,
+    formFabricId,
+    formGender,
+    formSeason,
+    formBuyingPrice,
+    formPrice,
+    formCurrency,
+    formSelectedSizes,
+    formSeriesRatio,
+    formSeriesStock,
+    formMinOrderSeries,
+    formIsActive,
+    formImages,
+    formTranslations,
+    linkWithProduct,
+    additionalColorVariants,
+  ]);
 
   const handleToggleSize = (code: string) => {
     const defs = sizeDefinitions.length > 0 ? sizeDefinitions : FALLBACK_SIZE_DEFINITIONS;
@@ -1712,47 +2128,151 @@ export default function SupplierDashboardClient() {
     setFormSeriesRatio(buildSeriesRatioForMode(formSelectedSizes.length, mode));
   };
 
-  // Multi-image upload
-  const handleUploadImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    await performMultiImageUpload(files, getToken(), setImageUploadLoading, (urls) => {
-      setFormImages((prev) => [...prev, ...urls]);
-    });
-    e.target.value = "";
-  };
+  // Multi-image dropzone handlers (Drag-Drop, Paste, Reorder, Click)
+  const handleUploadImageFiles = useCallback(
+    async (files: File[]) => {
+      await performMultiImageUpload(
+        files,
+        getToken(),
+        setImageUploadLoading,
+        (urls) => {
+          setFormImages((prev) => [...prev, ...urls]);
+        },
+        (errMsg) => setFormError(errMsg)
+      );
+    },
+    [getToken]
+  );
 
-  const handleRemoveImage = (index: number) => {
+  const handleReorderImages = useCallback((fromIdx: number, toIdx: number) => {
+    setFormImages((prev) => reorderImageList(prev, fromIdx, toIdx));
+  }, []);
+
+  const handleRemoveImage = useCallback((index: number) => {
     setFormImages((prev) => prev.filter((_, i) => i !== index));
-  };
+  }, []);
 
-  const handleSetCoverImage = (index: number) => {
-    setFormImages((prev) => promoteCoverImageAtIndex(prev, index));
-  };
+  const handleSetCoverImage = useCallback((index: number) => {
+    setFormImages((prev) => reorderImageList(prev, index, 0));
+  }, []);
 
-  // Open Create Modal (Express Defaults: S-M-L-XL + 100 Series)
+  // Resolve defaults from localStorage for new entries
+  const resolveRememberedCreateDefaults = useCallback((): QuickDraftDefaultsState & {
+    gender: string;
+    season: string;
+  } => {
+    const saved = readSupplierLastDefaults();
+    const validSavedCategory =
+      saved?.categoryId && categories.some((c) => c.id === saved.categoryId)
+        ? saved.categoryId
+        : categories[0]?.id ?? "";
+    const savedSizes =
+      Array.isArray(saved?.selectedSizes) && saved.selectedSizes.length > 0
+        ? saved.selectedSizes
+        : [...DEFAULT_SELECTED_SIZES];
+
+    return {
+      categoryId: validSavedCategory,
+      currency: saved?.currency || "TRY",
+      selectedSizes: savedSizes,
+      seriesRatio: saved?.seriesRatio || DEFAULT_SERIES_RATIO,
+      seriesStock:
+        saved?.seriesStock && saved.seriesStock > 0
+          ? saved.seriesStock
+          : DEFAULT_SERIES_STOCK,
+      gender: saved?.gender || "Kadın",
+      season: saved?.season || "İlkbahar/Yaz",
+    };
+  }, [categories]);
+
+  // Open Create Modal (Smart Defaults + Unsaved Local Draft Recovery Check)
   const handleOpenCreate = () => {
+    const defaults = resolveRememberedCreateDefaults();
+    const unsavedDraft = readSupplierUnsavedDraft();
+
     setEditingProductId(null);
     setFormTitle("");
     setFormShortDesc("");
     setFormDescription("");
-    setFormCategoryId(categories[0]?.id ?? "");
+    setFormCategoryId(defaults.categoryId);
     setFormColorId("");
     setFormFabricId("");
-    setFormGender("Kadın");
-    setFormSeason("İlkbahar/Yaz");
+    setFormGender(defaults.gender);
+    setFormSeason(defaults.season);
     setFormBuyingPrice(0);
     setFormPrice(0);
-    setFormCurrency("TRY");
-    setFormSelectedSizes([...DEFAULT_SELECTED_SIZES]);
-    setFormSeriesRatio(DEFAULT_SERIES_RATIO);
-    setFormSeriesStock(DEFAULT_SERIES_STOCK);
+    setFormCurrency(defaults.currency);
+    setFormSelectedSizes(defaults.selectedSizes);
+    setFormSeriesRatio(defaults.seriesRatio);
+    setFormSeriesStock(defaults.seriesStock);
     setFormMinOrderSeries(1);
     setFormIsActive(true);
     setFormImages([]);
-    setFormTranslations(DEFAULT_EMPTY_TRANSLATIONS);
-    setExpandOptionalSection(false);
+    setFormTranslations(createEmptyTranslations());
+    setSourceProductGroupId("");
+    setSupplierSiblings([]);
+    setLinkWithProduct(null);
+    setAdditionalColorVariants([]);
+    setPendingLocalDraft(unsavedDraft);
+    setModalViewMode("express");
+    setFormNotice("");
     setFormError("");
     setActiveModal("create");
+  };
+
+  const handleOpenQuickDraft = () => {
+    const defaults = resolveRememberedCreateDefaults();
+    setQuickDraftDefaults({
+      categoryId: defaults.categoryId,
+      currency: defaults.currency,
+      selectedSizes: defaults.selectedSizes,
+      seriesRatio: defaults.seriesRatio,
+      seriesStock: defaults.seriesStock,
+    });
+    setIsQuickDraftModalOpen(true);
+  };
+
+  const handleRestoreLocalDraft = () => {
+    if (!pendingLocalDraft) return;
+    const d = pendingLocalDraft;
+    setFormTitle(d.title);
+    setFormShortDesc(d.shortDesc);
+    setFormDescription(d.description);
+    setFormCategoryId(
+      d.categoryId && categories.some((c) => c.id === d.categoryId)
+        ? d.categoryId
+        : categories[0]?.id ?? ""
+    );
+    setFormColorId(d.colorId);
+    setFormFabricId(d.fabricId);
+    setFormGender(d.gender);
+    setFormSeason(d.season);
+    setFormBuyingPrice(d.buyingPrice);
+    setFormPrice(d.price);
+    setFormCurrency(d.currency);
+    setFormSelectedSizes(d.selectedSizes);
+    setFormSeriesRatio(d.seriesRatio);
+    setFormSeriesStock(d.seriesStock);
+    setFormMinOrderSeries(d.minOrderSeries);
+    setFormIsActive(d.isActive);
+    setFormImages(d.images);
+    setFormTranslations(d.translations);
+    setLinkWithProduct(d.linkWithProduct);
+    setAdditionalColorVariants(d.additionalColorVariants);
+    setPendingLocalDraft(null);
+    setFormNotice("Yarım kalmış ürün taslağı geri yüklendi.");
+  };
+
+  const handleDiscardLocalDraft = () => {
+    clearSupplierUnsavedDraft();
+    setPendingLocalDraft(null);
+  };
+
+  const handleCloseProductModal = () => {
+    setActiveModal(null);
+    setFormError("");
+    setFormNotice("");
+    setPendingLocalDraft(null);
   };
 
   const handleUpdateTranslationField = (
@@ -1787,11 +2307,18 @@ export default function SupplierDashboardClient() {
     expandTranslations: boolean
   ) => {
     setEditingProductId(prod.id);
-    setExpandOptionalSection(expandTranslations);
+    setModalViewMode(expandTranslations ? "detailed" : "express");
+    setPendingLocalDraft(null);
+    setLinkWithProduct(null);
+    setAdditionalColorVariants([]);
+    setSourceProductGroupId(prod.source_product_group_id || "");
+    setSupplierSiblings([]);
+    setFormNotice("");
     setFormError("");
     setActiveModal("edit");
 
-    const data = await fetchProductDetailApi(getToken() ?? "", prod.id);
+    const token = getToken() ?? "";
+    const data = await fetchProductDetailApi(token, prod.id);
     if (!data) return;
 
     const normalized = normalizeEditableProductDetail(
@@ -1817,6 +2344,101 @@ export default function SupplierDashboardClient() {
     setFormIsActive(normalized.isActive);
     setFormImages(normalized.images);
     setFormTranslations(normalized.translations);
+    setSourceProductGroupId(normalized.sourceProductGroupId);
+
+    if (normalized.supplierSiblings !== null) {
+      setSupplierSiblings(normalized.supplierSiblings);
+    } else if (token) {
+      const siblingInfo = await fetchProductSiblingsApi(token, prod.id);
+      if (siblingInfo.source_product_group_id) {
+        setSourceProductGroupId(siblingInfo.source_product_group_id);
+      }
+      setSupplierSiblings(siblingInfo.siblings);
+    }
+  };
+
+  // Open Create Modal cloned from an existing product for a brand-new color sibling
+  const handleOpenNewColorFromProduct = async (prod: SupplierProductRow) => {
+    const defaults = resolveRememberedCreateDefaults();
+    setEditingProductId(null);
+    setModalViewMode("express");
+    setPendingLocalDraft(null);
+    setFormNotice(
+      `"${prod.title || prod.custom_sku}" modeli baz alınarak yeni renk açılıyor. Sadece yeni rengin fotoğrafını ve rengini seçin.`
+    );
+    setFormError("");
+
+    const initialLinkTarget: SupplierSiblingItemDTO = {
+      id: prod.id,
+      title: prod.title,
+      custom_sku: prod.custom_sku,
+      slug: "",
+      color_id: prod.color_id ?? undefined,
+      color: prod.color || "",
+      image_url: prod.cover_image || "",
+      price: prod.price,
+      currency: prod.currency,
+      is_active: prod.is_active,
+      source_product_group_id: prod.source_product_group_id || "",
+    };
+
+    const prodSeriesStock = prod.series_stock ?? 0;
+    setFormTitle(prod.title || "");
+    setFormShortDesc("");
+    setFormDescription("");
+    setFormCategoryId(prod.category_id || defaults.categoryId);
+    setFormColorId("");
+    setFormFabricId("");
+    setFormGender(defaults.gender);
+    setFormSeason(defaults.season);
+    setFormBuyingPrice(0);
+    setFormPrice(prod.price > 0 ? prod.price : 0);
+    setFormCurrency(prod.currency || defaults.currency);
+    setFormSelectedSizes(defaults.selectedSizes);
+    setFormSeriesRatio(defaults.seriesRatio);
+    setFormSeriesStock(prodSeriesStock > 0 ? prodSeriesStock : defaults.seriesStock);
+    setFormMinOrderSeries(1);
+    setFormIsActive(true);
+    setFormImages([]);
+    setFormTranslations(createEmptyTranslations());
+    setSourceProductGroupId(prod.source_product_group_id || "");
+    setSupplierSiblings([]);
+    setLinkWithProduct(initialLinkTarget);
+    setAdditionalColorVariants([]);
+    setActiveModal("create");
+
+    const token = getToken();
+    if (!token) return;
+    const data = await fetchProductDetailApi(token, prod.id);
+    if (!data) return;
+
+    const normalized = normalizeEditableProductDetail(
+      data as Record<string, unknown>,
+      prod,
+      sizeDefinitions
+    );
+    setFormTitle(normalized.title || prod.title);
+    setFormShortDesc(normalized.shortDesc);
+    setFormDescription(normalized.description);
+    if (normalized.categoryId) setFormCategoryId(normalized.categoryId);
+    setFormFabricId(normalized.fabricId);
+    setFormGender(normalized.gender);
+    setFormSeason(normalized.season);
+    setFormBuyingPrice(normalized.buyingPrice);
+    setFormPrice(normalized.price);
+    setFormCurrency(normalized.currency);
+    setFormSelectedSizes(normalized.selectedSizes);
+    setFormSeriesRatio(normalized.seriesRatio);
+    setFormSeriesStock(normalized.seriesStock);
+    setFormMinOrderSeries(normalized.minOrderSeries);
+    if (normalized.sourceProductGroupId) {
+      setSourceProductGroupId(normalized.sourceProductGroupId);
+      setLinkWithProduct((prev) =>
+        prev
+          ? { ...prev, source_product_group_id: normalized.sourceProductGroupId }
+          : prev
+      );
+    }
   };
 
   const handleOpenEdit = async (prod: SupplierProductRow) => {
@@ -1827,13 +2449,34 @@ export default function SupplierDashboardClient() {
     await openProductEditModal(prod, true);
   };
 
-  // Save Product (Create or Edit)
-  const handleSubmitProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errMsg = validateProductForm(formTitle, formCategoryId, formPrice, formSelectedSizes);
+  const persistSmartDefaultsIfValid = () => {
+    if (!formCategoryId) return;
+    saveSupplierLastDefaults({
+      categoryId: formCategoryId,
+      currency: formCurrency,
+      selectedSizes: formSelectedSizes,
+      seriesRatio: formSeriesRatio,
+      seriesStock: formSeriesStock,
+      gender: formGender,
+      season: formSeason,
+    });
+  };
+
+  const executeProductSubmit = async (
+    targetIsActive: boolean,
+    isDraft: boolean
+  ): Promise<SaveSupplierProductResponse | null> => {
+    const errMsg = validateProductForm(
+      formTitle,
+      formCategoryId,
+      formPrice,
+      formSelectedSizes,
+      isDraft,
+      formImages
+    );
     if (errMsg) {
       setFormError(errMsg);
-      return;
+      return null;
     }
 
     const payload = buildProductPayload({
@@ -1852,16 +2495,143 @@ export default function SupplierDashboardClient() {
       seriesRatio: formSeriesRatio,
       seriesStock: formSeriesStock,
       minOrderSeries: formMinOrderSeries,
-      isActive: formIsActive,
+      isActive: targetIsActive,
+      isDraft,
+      sourceProductGroupId: sourceProductGroupId || undefined,
+      linkWithProductId:
+        activeModal === "create" && linkWithProduct ? linkWithProduct.id : undefined,
+      additionalColorVariants:
+        activeModal === "create" ? additionalColorVariants : undefined,
       images: formImages,
       translations: formTranslations,
     });
 
-    await performProductSave(getToken(), payload, editingProductId, setSubmitting, setFormError, () => {
-      setActiveModal(null);
+    const saved = await performProductSave(
+      getToken(),
+      payload,
+      editingProductId,
+      setSubmitting,
+      setFormError
+    );
+    if (!saved) return null;
+
+    persistSmartDefaultsIfValid();
+    clearSupplierUnsavedDraft();
+    setPendingLocalDraft(null);
+    return saved;
+  };
+
+  // Primary CTA: Publish live (create or draft) or Update existing active model
+  const handlePublishOrUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormNotice("");
+    const saved = await executeProductSubmit(true, false);
+    if (!saved) return;
+
+    handleCloseProductModal();
+    setCatalogBanner({
+      type: "success",
+      text:
+        editingProductId && formIsActive
+          ? `"${formTitle.trim()}" güncellendi.`
+          : `"${formTitle.trim()}" vitrinde yayına alındı.`,
+    });
+    void loadProducts();
+    void loadProfile();
+  };
+
+  // Secondary CTA: Save as Draft (accepts partial fields as long as photo or title exists)
+  const handleSaveDraft = async () => {
+    setFormNotice("");
+    const saved = await executeProductSubmit(false, true);
+    if (!saved) return;
+
+    handleCloseProductModal();
+    setStatusFilter("passive");
+    setCatalogBanner({
+      type: "success",
+      text: `"${formTitle.trim() || saved.custom_sku || "Yeni ürün"}" taslak olarak kaydedildi.`,
+    });
+    void loadProducts();
+    void loadProfile();
+  };
+
+  // Speed CTA: Save current product, keep shared metadata, link next color to just-saved product
+  const handleSaveAndNextColor = async () => {
+    setFormNotice("");
+    const savedIsActive = activeModal === "edit" ? formIsActive : true;
+    const savedIsDraft = activeModal === "edit" ? !formIsActive : false;
+    const saved = await executeProductSubmit(savedIsActive, savedIsDraft);
+    if (!saved) return;
+
+    const savedId = saved.id || editingProductId || "";
+    const matchedColor = colors.find((c) => c.id === formColorId);
+    const colorDisplay = matchedColor ? cleanAttributeName(matchedColor.name) : "";
+    const groupId = saved.source_product_group_id || sourceProductGroupId;
+
+    if (savedId) {
+      setLinkWithProduct({
+        id: savedId,
+        title: formTitle.trim() || saved.custom_sku || "Kayıtlı Model",
+        custom_sku: saved.custom_sku || "",
+        slug: saved.slug || "",
+        color_id: formColorId || undefined,
+        color: colorDisplay,
+        image_url: formImages[0] || "",
+        price: formPrice,
+        currency: formCurrency,
+        is_active: savedIsActive,
+        source_product_group_id: groupId || "",
+      });
+    }
+
+    setEditingProductId(null);
+    setActiveModal("create");
+    setSourceProductGroupId(groupId || "");
+    setSupplierSiblings([]);
+    setAdditionalColorVariants([]);
+    setFormImages([]);
+    setFormColorId("");
+    setFormIsActive(true);
+    setFormTranslations(createEmptyTranslations());
+    setFormError("");
+    setFormNotice(
+      `"${formTitle.trim() || saved.custom_sku || "Ürün"}" kaydedildi ve yeni renk bağlantısı kuruldu. Şimdi sıradaki rengin fotoğraflarını bırakıp rengini seçin.`
+    );
+    void loadProducts();
+    void loadProfile();
+  };
+
+  // One-click quick publish from Taslaklar / Catalog table
+  const handleQuickPublish = async (prod: SupplierProductRow) => {
+    if (prod.price <= 0 || !prod.cover_image) {
+      await openProductEditModal(prod, false);
+      setFormError(
+        "Vitrine yayınlamak için lütfen geçerli bir toptan fiyat ve en az 1 fotoğraf ekleyin."
+      );
+      return;
+    }
+
+    const token = getToken();
+    if (!token) return;
+    setQuickPublishingId(prod.id);
+    setCatalogBanner(null);
+    const result = await quickPublishSupplierProductApi(token, prod.id);
+    setQuickPublishingId(null);
+
+    if (result.ok) {
+      setCatalogBanner({
+        type: "success",
+        text: `"${prod.title || prod.custom_sku}" vitrinde yayına alındı.`,
+      });
       void loadProducts();
       void loadProfile();
-    });
+    } else {
+      await openProductEditModal(prod, false);
+      setFormError(
+        result.error || "Ürün yayına alınamadı; lütfen eksik alanları tamamlayın."
+      );
+    }
   };
 
   // Delete Product
@@ -1891,6 +2661,7 @@ export default function SupplierDashboardClient() {
   }, [loadProducts]);
 
   const isProductModalOpen = activeModal === "create" || activeModal === "edit";
+  const draftCount = stats.draft_products ?? 0;
 
   return (
     <div className="min-h-screen bg-[#f0f2f5] text-slate-800 flex flex-col">
@@ -1916,6 +2687,7 @@ export default function SupplierDashboardClient() {
           stats={stats}
           unreadChatCount={unreadChatCount}
           onOpenCreate={handleOpenCreate}
+          onOpenQuickDraft={handleOpenQuickDraft}
           onOpenExcelImport={() => setIsExcelModalOpen(true)}
           onOpenBulkArchive={() => setIsArchiveModalOpen(true)}
         />
@@ -1935,8 +2707,14 @@ export default function SupplierDashboardClient() {
           categories={categories}
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
+          draftCount={draftCount}
           loading={loading}
           onRefresh={handleCatalogRefresh}
+          catalogBanner={catalogBanner}
+          onDismissCatalogBanner={() => setCatalogBanner(null)}
+          quickPublishingId={quickPublishingId}
+          onQuickPublish={(p) => void handleQuickPublish(p)}
+          onOpenNewColorFromProduct={(p) => void handleOpenNewColorFromProduct(p)}
           onOpenEdit={handleOpenEdit}
           onOpenTranslations={handleOpenTranslations}
           onToggleArchive={(p) => void handleToggleProductArchive(p)}
@@ -1967,18 +2745,52 @@ export default function SupplierDashboardClient() {
         }}
       />
 
-      {/* CREATE & EDIT PRODUCT MODAL (SINGLE-SCREEN EXPRESS FORM) */}
+      {isQuickDraftModalOpen && (
+        <SupplierQuickDraftModal
+          isOpen={isQuickDraftModalOpen}
+          getToken={getToken}
+          categories={categories}
+          defaultCategoryId={quickDraftDefaults.categoryId}
+          defaultCurrency={quickDraftDefaults.currency}
+          defaultSizes={quickDraftDefaults.selectedSizes}
+          defaultSeriesRatio={quickDraftDefaults.seriesRatio}
+          defaultSeriesStock={quickDraftDefaults.seriesStock}
+          onClose={() => setIsQuickDraftModalOpen(false)}
+          onCreated={(createdCount) => {
+            setIsQuickDraftModalOpen(false);
+            setActiveSection("catalog");
+            setStatusFilter("passive");
+            setCatalogBanner({
+              type: "success",
+              text: `${createdCount} adet hızlı ürün taslağı oluşturuldu. Fiyat ve model adı girip "Yayınla" ile vitrine açabilirsiniz.`,
+            });
+            void loadProducts();
+            void loadProfile();
+          }}
+        />
+      )}
+
+      {/* CREATE & EDIT PRODUCT MODAL (EXPRESS + DETAILED + SIBLINGS) */}
       {isProductModalOpen && (
         <SupplierProductModal
           activeModal={activeModal}
           editingProductId={editingProductId}
           profile={profile}
-          onClose={() => setActiveModal(null)}
-          onSubmit={handleSubmitProduct}
+          getToken={getToken}
+          onClose={handleCloseProductModal}
+          onPublishOrUpdate={handlePublishOrUpdate}
+          onSaveDraft={() => void handleSaveDraft()}
+          onSaveAndNextColor={() => void handleSaveAndNextColor()}
           submitting={submitting}
           formError={formError}
-          expandOptionalByDefault={expandOptionalSection}
-          setExpandOptionalByDefault={setExpandOptionalSection}
+          formNotice={formNotice}
+          modalViewMode={modalViewMode}
+          setModalViewMode={setModalViewMode}
+          localDraftSavedAt={
+            pendingLocalDraft ? formatDraftTimestamp(pendingLocalDraft.savedAt) : null
+          }
+          onRestoreLocalDraft={handleRestoreLocalDraft}
+          onDiscardLocalDraft={handleDiscardLocalDraft}
           formTitle={formTitle}
           setFormTitle={setFormTitle}
           formCategoryId={formCategoryId}
@@ -1986,6 +2798,8 @@ export default function SupplierDashboardClient() {
           categories={categories}
           formGender={formGender}
           setFormGender={setFormGender}
+          formSeason={formSeason}
+          setFormSeason={setFormSeason}
           formFabricId={formFabricId}
           setFormFabricId={setFormFabricId}
           fabrics={fabrics}
@@ -2017,9 +2831,20 @@ export default function SupplierDashboardClient() {
           setSeriesStock={setFormSeriesStock}
           formImages={formImages}
           imageUploadLoading={imageUploadLoading}
-          onUploadImageFile={handleUploadImageFile}
+          onUploadImageFiles={handleUploadImageFiles}
+          onReorderImages={handleReorderImages}
           onSetCoverImage={handleSetCoverImage}
           onRemoveImage={handleRemoveImage}
+          sourceProductGroupId={sourceProductGroupId}
+          supplierSiblings={supplierSiblings}
+          onSiblingsUpdated={(groupId, updatedSiblings) => {
+            setSourceProductGroupId(groupId);
+            setSupplierSiblings(updatedSiblings);
+          }}
+          linkWithProduct={linkWithProduct}
+          onChangeLinkWithProduct={setLinkWithProduct}
+          additionalColorVariants={additionalColorVariants}
+          onChangeAdditionalColorVariants={setAdditionalColorVariants}
           formTranslations={formTranslations}
           onUpdateTranslationField={handleUpdateTranslationField}
           autoTranslating={autoTranslating}

@@ -77,6 +77,10 @@ class SupplierProvider extends ChangeNotifier {
 
   List<Product> get products => _products;
   int get totalProducts => _totalProducts;
+  int get draftProductsCount =>
+      (_kpis['draft_products'] as num?)?.toInt() ??
+      (_kpis['passive_products'] as num?)?.toInt() ??
+      0;
 
   List<SimpleOptionItem> get categories => _categories;
   List<SimpleOptionItem> get colors => _colors;
@@ -227,6 +231,68 @@ class SupplierProvider extends ChangeNotifier {
     String productId,
   ) =>
       catalogRepo.fetchSupplierProductTranslations(productId);
+
+  Future<List<SiblingProduct>> fetchProductSiblings(String productId) =>
+      catalogRepo.fetchProductSiblings(productId);
+
+  Future<List<SiblingProduct>> linkProductSiblings({
+    required String productId,
+    required List<String> targetProductIds,
+  }) async {
+    final siblings = await catalogRepo.linkProductSiblings(
+      productId: productId,
+      targetProductIds: targetProductIds,
+    );
+    await loadProducts();
+    return siblings;
+  }
+
+  Future<List<SiblingProduct>> unlinkProductSibling({
+    required String productId,
+    required String targetProductId,
+  }) async {
+    final siblings = await catalogRepo.unlinkProductSibling(
+      productId: productId,
+      targetProductId: targetProductId,
+    );
+    await loadProducts();
+    return siblings;
+  }
+
+  Future<int> batchCreateDraftProducts({
+    required List<String> imageUrls,
+    String mode = 'per_photo',
+    String titlePrefix = '',
+    String categoryId = '',
+    double price = 0,
+    String currency = 'TRY',
+    List<String> selectedSizes = const [],
+    String seriesRatio = '',
+    int? seriesStock,
+    String? linkWithProductId,
+    bool reloadProducts = true,
+  }) async {
+    final created = await catalogRepo.batchCreateDraftProducts(
+      imageUrls: imageUrls,
+      mode: mode,
+      titlePrefix: titlePrefix,
+      categoryId: categoryId,
+      price: price,
+      currency: currency,
+      selectedSizes: selectedSizes,
+      seriesRatio: seriesRatio,
+      seriesStock: seriesStock,
+      linkWithProductId: linkWithProductId,
+    );
+    if (created > 0) {
+      if (reloadProducts) {
+        await Future.wait([loadProducts(), loadDashboard()]);
+      } else {
+        await loadDashboard();
+      }
+    }
+    return created;
+  }
 
   Future<void> saveProductTranslations(
     String productId,

@@ -649,6 +649,56 @@ class MobileApiService
         targetLangs: targetLangs,
       );
 
+  @override
+  Future<List<SiblingProduct>> fetchProductSiblings(String productId) =>
+      supplierCatalog.fetchProductSiblings(productId);
+
+  @override
+  Future<List<SiblingProduct>> linkProductSiblings({
+    required String productId,
+    required List<String> targetProductIds,
+  }) =>
+      supplierCatalog.linkProductSiblings(
+        productId: productId,
+        targetProductIds: targetProductIds,
+      );
+
+  @override
+  Future<List<SiblingProduct>> unlinkProductSibling({
+    required String productId,
+    required String targetProductId,
+  }) =>
+      supplierCatalog.unlinkProductSibling(
+        productId: productId,
+        targetProductId: targetProductId,
+      );
+
+  @override
+  Future<int> batchCreateDraftProducts({
+    required List<String> imageUrls,
+    String mode = 'per_photo',
+    String titlePrefix = '',
+    String categoryId = '',
+    double price = 0,
+    String currency = 'TRY',
+    List<String> selectedSizes = const [],
+    String seriesRatio = '',
+    int? seriesStock,
+    String? linkWithProductId,
+  }) =>
+      supplierCatalog.batchCreateDraftProducts(
+        imageUrls: imageUrls,
+        mode: mode,
+        titlePrefix: titlePrefix,
+        categoryId: categoryId,
+        price: price,
+        currency: currency,
+        selectedSizes: selectedSizes,
+        seriesRatio: seriesRatio,
+        seriesStock: seriesStock,
+        linkWithProductId: linkWithProductId,
+      );
+
   // --- ISupplierOperationsRepository ---
   @override
   Future<Map<String, dynamic>> fetchSupplierDashboard() =>

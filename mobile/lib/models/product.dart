@@ -62,28 +62,47 @@ class ProductVariant {
 
 class SiblingProduct {
   final String id;
+  final String title;
   final String customSku;
   final String slug;
+  final String? colorId;
   final String color;
   final String imageUrl;
+  final double price;
+  final String currency;
+  final bool isActive;
+  final String sourceProductGroupId;
 
   const SiblingProduct({
     required this.id,
+    this.title = '',
     required this.customSku,
     required this.slug,
+    this.colorId,
     required this.color,
     required this.imageUrl,
+    this.price = 0,
+    this.currency = 'TRY',
+    this.isActive = true,
+    this.sourceProductGroupId = '',
   });
 
   factory SiblingProduct.fromJson(Map<String, dynamic> json) {
+    final rawCurrency = ModelJson.trimmed(json['currency'], 'TRY');
     return SiblingProduct(
       id: ModelJson.trimmed(json['id']),
+      title: ModelJson.trimmed(json['title']),
       customSku: ModelJson.trimmed(json['custom_sku']),
       slug: ModelJson.trimmed(json['slug']),
+      colorId: ModelJson.nullableStr(json['color_id']),
       color: ModelJson.trimmed(json['color']),
       imageUrl: AppConfig.resolveMediaUrl(
         ModelJson.trimmed(json['image_url'] ?? json['cover_image']),
       ),
+      price: ModelJson.decimal(json['price']),
+      currency: rawCurrency.isEmpty ? 'TRY' : rawCurrency,
+      isActive: ModelJson.boolean(json['is_active'], true),
+      sourceProductGroupId: ModelJson.trimmed(json['source_product_group_id']),
     );
   }
 }
@@ -251,6 +270,9 @@ class Product {
   final List<ProductImage> images;
   final List<ProductVariant> variants;
   final List<SiblingProduct> colorVariants;
+  final String sourceProductGroupId;
+  final int siblingCount;
+  final List<SiblingProduct> supplierSiblings;
   final Map<String, ProductTranslation> translations;
   final ManufacturerSummary? brandProfile;
   final List<String> aiHighlights;
@@ -302,6 +324,9 @@ class Product {
     required this.images,
     required this.variants,
     required this.colorVariants,
+    this.sourceProductGroupId = '',
+    this.siblingCount = 0,
+    this.supplierSiblings = const [],
     required this.translations,
     this.brandProfile,
     this.aiHighlights = const [],
@@ -430,9 +455,28 @@ class Product {
       for (final s in json['color_variants'] as List) {
         if (s is Map<String, dynamic>) {
           parsedSiblings.add(SiblingProduct.fromJson(s));
+        } else if (s is Map) {
+          parsedSiblings.add(SiblingProduct.fromJson(ModelJson.map(s)));
         }
       }
     }
+
+    final parsedSupplierSiblings = <SiblingProduct>[];
+    if (json['supplier_siblings'] is List) {
+      for (final s in json['supplier_siblings'] as List) {
+        if (s is Map<String, dynamic>) {
+          parsedSupplierSiblings.add(SiblingProduct.fromJson(s));
+        } else if (s is Map) {
+          parsedSupplierSiblings.add(SiblingProduct.fromJson(ModelJson.map(s)));
+        }
+      }
+    } else if (parsedSiblings.isNotEmpty) {
+      parsedSupplierSiblings.addAll(parsedSiblings);
+    }
+
+    final parsedSiblingCount = json['sibling_count'] != null
+        ? ModelJson.integer(json['sibling_count'])
+        : parsedSupplierSiblings.length;
 
     final parsedTranslations = <String, ProductTranslation>{};
     if (json['translations'] is Map) {
@@ -514,6 +558,9 @@ class Product {
       images: parsedImages,
       variants: parsedVariants,
       colorVariants: parsedSiblings,
+      sourceProductGroupId: ModelJson.trimmed(json['source_product_group_id']),
+      siblingCount: parsedSiblingCount,
+      supplierSiblings: parsedSupplierSiblings,
       translations: parsedTranslations,
       brandProfile: bp,
       aiHighlights: ModelJson.stringList(json['ai_highlights']),

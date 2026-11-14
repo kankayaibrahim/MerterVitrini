@@ -75,7 +75,7 @@ func buildProductFilterConditions(brandID, q, categoryID, status string) ([]stri
 	switch status {
 	case "active":
 		conditions = append(conditions, "p.is_active = true AND COALESCE(p.is_archived, false) = false")
-	case "passive":
+	case "passive", "draft":
 		conditions = append(conditions, "p.is_active = false AND COALESCE(p.is_archived, false) = false")
 	case "archived":
 		conditions = append(conditions, "COALESCE(p.is_archived, false) = true")
@@ -343,19 +343,21 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	ensureProductArchiveSchema(ctx)
 
-	var totalProducts, activeProducts, totalStock, totalVariants, totalOrders int
+	var totalProducts, activeProducts, draftProducts, totalStock, totalVariants, totalOrders int
 	statsQuery := `
 		SELECT 
 			count(DISTINCT p.id),
 			count(DISTINCT p.id) FILTER (WHERE p.is_active = true),
+			count(DISTINCT p.id) FILTER (WHERE p.is_active = false AND COALESCE(p.is_archived, false) = false),
 			coalesce(sum(v.stock), 0),
 			count(v.id)
 		FROM catalog.products p
 		LEFT JOIN catalog.product_variants v ON p.id = v.product_id
 		WHERE p.brand_id = $1`
 
-	_ = db.Pool.QueryRow(ctx, statsQuery, claims.BrandID).Scan(&totalProducts, &activeProducts, &totalStock, &totalVariants)
+	_ = db.Pool.QueryRow(ctx, statsQuery, claims.BrandID).Scan(&totalProducts, &activeProducts, &draftProducts, &totalStock, &totalVariants)
 	_ = db.Pool.QueryRow(ctx, `SELECT count(*) FROM catalog.supplier_sub_orders WHERE brand_id = $1`, claims.BrandID).Scan(&totalOrders)
 
 	var brandProfile models.Brand
@@ -411,6 +413,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 		"stats": map[string]int{
 			"total_products":  totalProducts,
 			"active_products": activeProducts,
+			"draft_products":  draftProducts,
 			"total_stock":     totalStock,
 			"total_variants":  totalVariants,
 			"total_orders":    totalOrders,
@@ -623,6 +626,7 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 	defer cancel()
 	ensureProductArchiveSchema(ctx)
 	ensureSizeDefinitionsSchema(ctx)
+	ensureSupplierSiblingSchema(ctx)
 
 	conditions, args, argIdx := buildProductFilterConditions(claims.BrandID, q, categoryID, status)
 	whereClause := "WHERE " + strings.Join(conditions, " AND ")
@@ -639,7 +643,11 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 			p.id,
 			p.title,
 			p.custom_sku,
+			coalesce(p.category_id::text, '') as category_id,
 			coalesce(c.title, '') as category_title,
+			p.color_id::text,
+			coalesce(col.color_name, '') as color,
+			p.source_product_group_id,
 			p.buying_price,
 			p.price,
 			p.currency,
@@ -657,12 +665,20 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 				''
 			) as cover_image,
 			coalesce(sum(v.stock), 0) as total_stock,
-			count(v.id) as variants_count
+			count(v.id) as variants_count,
+			(SELECT count(*) FROM catalog.products p2
+			 WHERE p2.brand_id = p.brand_id
+			   AND p2.source_product_group_id IS NOT NULL
+			   AND p2.source_product_group_id <> ''
+			   AND p2.source_product_group_id = p.source_product_group_id
+			   AND p2.id <> p.id
+			   AND COALESCE(p2.is_archived, false) = false) as sibling_count
 		FROM catalog.products p
 		LEFT JOIN catalog.categories c ON p.category_id = c.id
+		LEFT JOIN catalog.colors col ON p.color_id = col.id
 		LEFT JOIN catalog.product_variants v ON p.id = v.product_id
 		%s
-		GROUP BY p.id, c.title
+		GROUP BY p.id, c.title, col.color_name
 		ORDER BY p.created_at DESC
 		LIMIT $%d OFFSET $%d`, whereClause, argIdx, argIdx+1)
 
@@ -678,7 +694,11 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 		ID                   string    `json:"id"`
 		Title                string    `json:"title"`
 		CustomSKU            string    `json:"custom_sku"`
+		CategoryID           string    `json:"category_id"`
 		CategoryTitle        string    `json:"category_title"`
+		ColorID              *string   `json:"color_id,omitempty"`
+		Color                string    `json:"color,omitempty"`
+		SourceProductGroupID *string   `json:"source_product_group_id,omitempty"`
 		BuyingPrice          float64   `json:"buying_price"`
 		Price                float64   `json:"price"`
 		Currency             string    `json:"currency"`
@@ -694,6 +714,7 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 		CoverImage           string    `json:"cover_image"`
 		TotalStock           int       `json:"total_stock"`
 		VariantsCount        int       `json:"variants_count"`
+		SiblingCount         int       `json:"sibling_count"`
 	}
 
 	products := make([]ProductRow, 0)
@@ -703,7 +724,11 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 			&pr.ID,
 			&pr.Title,
 			&pr.CustomSKU,
+			&pr.CategoryID,
 			&pr.CategoryTitle,
+			&pr.ColorID,
+			&pr.Color,
+			&pr.SourceProductGroupID,
 			&pr.BuyingPrice,
 			&pr.Price,
 			&pr.Currency,
@@ -719,6 +744,7 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 			&pr.CoverImage,
 			&pr.TotalStock,
 			&pr.VariantsCount,
+			&pr.SiblingCount,
 		); err != nil {
 			log.Printf("[SUPPLIER PRODUCTS] Scan error: %v", err)
 			continue
@@ -755,7 +781,7 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 	var p models.Product
 	query := `
 		SELECT 
-			id, title, slug, custom_sku, short_description, description, 
+			id, title, slug, custom_sku, source_product_group_id, short_description, description, 
 			category_id, color_id, fabric_id, gender, season, 
 			buying_price, price, currency, packing_ratio, series_ratio, 
 			coalesce(series_stock, 100), minimum_order_quantity, is_active, created_at, updated_at
@@ -770,6 +796,7 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 		&p.Title,
 		&p.Slug,
 		&p.CustomSku,
+		&p.SourceProductGroupID,
 		&p.ShortDescription,
 		&p.Description,
 		&p.CategoryID,
@@ -828,11 +855,44 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 
 	// Fetch multi-language translations (tr, en, ru, ar)
 	p.Translations = loadSupplierProductTranslations(ctx, p.ID, p.Title, p.ShortDescription, p.Description)
+	if p.SourceProductGroupID != nil && strings.TrimSpace(*p.SourceProductGroupID) != "" {
+		supSiblings, colorVars := fetchSupplierSiblings(ctx, claims.BrandID, p.ID, strings.TrimSpace(*p.SourceProductGroupID))
+		p.SupplierSiblings = supSiblings
+		p.ColorVariants = colorVars
+	}
 
 	writeSupplierJSON(w, http.StatusOK, p)
 }
 
-// CreateProduct adds a new supplier product directly to catalog.products
+func buildSupplierInsertParams(brandID, sourceProductID string, groupID *string, req *models.SupplierProductInput, initialStock int) supplierProductInsertParams {
+	return supplierProductInsertParams{
+		BrandID:              brandID,
+		SourceProductID:      sourceProductID,
+		SourceProductGroupID: groupID,
+		Title:                req.Title,
+		ShortDescription:     req.ShortDescription,
+		Description:          req.Description,
+		CategoryID:           req.CategoryID,
+		ColorID:              req.ColorID,
+		FabricID:             req.FabricID,
+		Gender:               req.Gender,
+		Season:               req.Season,
+		BuyingPrice:          req.BuyingPrice,
+		Price:                req.Price,
+		Currency:             req.Currency,
+		PackingRatio:         req.PackingRatio,
+		SeriesRatio:          req.SeriesRatio,
+		MinimumOrderQuantity: req.MinimumOrderQuantity,
+		SeriesStock:          req.SeriesStock,
+		InitialStock:         initialStock,
+		IsActive:             req.IsActive,
+		Images:               req.Images,
+		Variants:             req.Variants,
+		Translations:         req.Translations,
+	}
+}
+
+// CreateProduct adds a new supplier product (or draft with optional color siblings) directly to catalog.products
 func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
 	if !ok {
@@ -841,112 +901,88 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 	}
 
 	var req models.SupplierProductInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Geçersiz veri biçimi"}`, http.StatusBadRequest)
+	if err := httpx.DecodeJSON(r, &req, httpx.DefaultMaxJSONBytes); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Geçersiz veri biçimi")
 		return
-	}
-
-	req.Title = strings.TrimSpace(req.Title)
-	if req.Title == "" || req.CategoryID == "" || req.Price <= 0 {
-		http.Error(w, `{"error":"Ürün adı, kategori ve satış fiyatı zorunludur"}`, http.StatusBadRequest)
-		return
-	}
-
-	if req.Currency == "" {
-		req.Currency = "TRY"
-	}
-	if req.MinimumOrderQuantity <= 0 {
-		req.MinimumOrderQuantity = 1
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
+	ensureSupplierSiblingSchema(ctx)
 
+	if err := normalizeSupplierDraftOrPublishInput(ctx, claims.BrandID, &req, false); err != nil {
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	initialStock, normErr := resolveSupplierSeriesAndVariants(ctx, &req, "")
 	if normErr != nil {
-		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": normErr.Error()})
+		httpx.Error(w, http.StatusBadRequest, normErr.Error())
 		return
 	}
 
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		http.Error(w, `{"error":"Veritabanı işlemi başlatılamadı"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "Veritabanı işlemi başlatılamadı")
 		return
 	}
 	defer tx.Rollback(ctx)
 
-	// Generate source_product_id
-	sourceProductID := fmt.Sprintf("SUP-%d", time.Now().UnixNano())
-
-	var newProductID string
-	var customSKU string
-	var slug string
-
-	insertProductSQL := `
-		INSERT INTO catalog.products (
-			brand_id, feed_id, source_product_id, title, short_description, description,
-			category_id, color_id, fabric_id, gender, season,
-			buying_price, price, currency, packing_ratio, series_ratio,
-			minimum_order_quantity, series_stock, stock, is_active
-		) VALUES (
-			$1, NULL, $2, $3, $4, $5,
-			$6, $7, $8, $9, $10,
-			$11, $12, $13, $14, $15,
-			$16, $17, $18, $19
-		) RETURNING id, custom_sku, slug`
-
-	err = tx.QueryRow(
-		ctx,
-		insertProductSQL,
-		claims.BrandID,
-		sourceProductID,
-		req.Title,
-		req.ShortDescription,
-		req.Description,
-		req.CategoryID,
-		req.ColorID,
-		req.FabricID,
-		req.Gender,
-		req.Season,
-		req.BuyingPrice,
-		req.Price,
-		req.Currency,
-		req.PackingRatio,
-		req.SeriesRatio,
-		req.MinimumOrderQuantity,
-		req.SeriesStock,
-		initialStock,
-		req.IsActive,
-	).Scan(&newProductID, &customSKU, &slug)
-
-	if err != nil {
-		log.Printf("[SUPPLIER PRODUCT] Create error: %v", err)
-		http.Error(w, fmt.Sprintf(`{"error":"Ürün kaydedilemedi: %v"}`, err), http.StatusInternalServerError)
+	needGroup := hasNonEmptyColorVariantDrafts(req.AdditionalColorVariants)
+	groupID, grpErr := resolveOrLinkGroupIDTx(ctx, tx, claims.BrandID, req.SourceProductGroupID, req.LinkWithProductID, needGroup)
+	if grpErr != nil {
+		httpx.Error(w, http.StatusBadRequest, grpErr.Error())
 		return
 	}
 
-	// Upsert Turkish and any provided multi-language translations (en, ru, ar)
-	upsertSupplierProductTranslations(ctx, tx, newProductID, req.Title, req.ShortDescription, req.Description, req.Translations)
+	mainSourceID := fmt.Sprintf("SUP-%d-0", time.Now().UnixNano())
+	mainItem, mainSlug, err := insertSupplierProductRowTx(ctx, tx, buildSupplierInsertParams(claims.BrandID, mainSourceID, groupID, &req, initialStock))
+	if err != nil {
+		log.Printf("[SUPPLIER PRODUCT] Create error: %v", err)
+		httpx.Error(w, http.StatusInternalServerError, fmt.Sprintf("Ürün kaydedilemedi: %v", err))
+		return
+	}
 
-	insertProductVariants(ctx, tx, newProductID, sourceProductID, req.Variants, initialStock)
-	insertProductImages(ctx, tx, newProductID, req.Images)
-
+	siblingIDs, activeSiblingSlugs, sibErr := insertAdditionalColorVariantsTx(ctx, tx, claims.BrandID, &req, groupID, initialStock)
+	if sibErr != nil {
+		httpx.Error(w, http.StatusBadRequest, sibErr.Error())
+		return
+	}
 	if err := tx.Commit(ctx); err != nil {
-		http.Error(w, `{"error":"İşlem onaylanamadı"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "İşlem onaylanamadı")
 		return
 	}
 
 	triggerProductMVRefresh()
 	if req.IsActive {
-		NotifyIndexNowProductSlug(slug)
+		NotifyIndexNowProductSlug(mainSlug)
+	}
+	for _, s := range activeSiblingSlugs {
+		NotifyIndexNowProductSlug(s)
 	}
 
+	msg := "Ürün taslak olarak kaydedildi."
+	if req.IsActive {
+		msg = "Ürün başarıyla oluşturuldu ve vitrinde yayına alındı."
+	}
 	writeSupplierJSON(w, http.StatusCreated, map[string]any{
-		"message":    "Ürün başarıyla oluşturuldu ve vitrinde yayına alındı.",
-		"id":         newProductID,
-		"custom_sku": customSKU,
-		"slug":       slug,
+		"message":                 msg,
+		"id":                      mainItem.ID,
+		"custom_sku":              mainItem.CustomSKU,
+		"slug":                    mainSlug,
+		"is_active":               req.IsActive,
+		"source_product_group_id": derefStringOr(groupID, ""),
+		"created_sibling_ids":     siblingIDs,
 	})
+}
+
+func resolveUpdatedProductGroupIDTx(ctx context.Context, tx pgx.Tx, brandID string, existingGroupID *string, req *models.SupplierProductInput) (*string, error) {
+	if normalizeOptionalIDPtr(req.LinkWithProductID) != nil {
+		return resolveOrLinkGroupIDTx(ctx, tx, brandID, req.SourceProductGroupID, req.LinkWithProductID, false)
+	}
+	if req.SourceProductGroupID != nil {
+		return normalizeOptionalIDPtr(req.SourceProductGroupID), nil
+	}
+	return existingGroupID, nil
 }
 
 // UpdateProduct updates product details and variants
@@ -957,39 +993,49 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	id := r.PathValue("id")
+	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		http.Error(w, errJSONMissingID, http.StatusBadRequest)
 		return
 	}
 
 	var req models.SupplierProductInput
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, `{"error":"Geçersiz veri biçimi"}`, http.StatusBadRequest)
+	if err := httpx.DecodeJSON(r, &req, httpx.DefaultMaxJSONBytes); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Geçersiz veri biçimi")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
+	ensureSupplierSiblingSchema(ctx)
 
+	hasExisting := len(cleanNonEmptyStrings(req.Images)) == 0 && hasExistingProductImages(ctx, id)
+	if err := normalizeSupplierDraftOrPublishInput(ctx, claims.BrandID, &req, hasExisting); err != nil {
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	initialStock, normErr := resolveSupplierSeriesAndVariants(ctx, &req, id)
 	if normErr != nil {
-		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": normErr.Error()})
+		httpx.Error(w, http.StatusBadRequest, normErr.Error())
 		return
 	}
 
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		http.Error(w, `{"error":"Veritabanı işlemi başlatılamadı"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "Veritabanı işlemi başlatılamadı")
 		return
 	}
 	defer tx.Rollback(ctx)
 
-	// Verify ownership
-	var exists bool
-	_ = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM catalog.products WHERE id = $1 AND brand_id = $2)", id, claims.BrandID).Scan(&exists)
-	if !exists {
-		http.Error(w, `{"error":"Ürün bulunamadı veya güncelleme yetkiniz yok"}`, http.StatusNotFound)
+	var existingGroupID *string
+	if err := tx.QueryRow(ctx, "SELECT source_product_group_id FROM catalog.products WHERE id = $1 AND brand_id = $2", id, claims.BrandID).Scan(&existingGroupID); err != nil {
+		httpx.Error(w, http.StatusNotFound, "Ürün bulunamadı veya güncelleme yetkiniz yok")
+		return
+	}
+
+	groupID, grpErr := resolveUpdatedProductGroupIDTx(ctx, tx, claims.BrandID, existingGroupID, &req)
+	if grpErr != nil {
+		httpx.Error(w, http.StatusBadRequest, grpErr.Error())
 		return
 	}
 
@@ -1000,52 +1046,39 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 			gender = $7, season = $8, buying_price = $9, price = $10,
 			currency = $11, packing_ratio = $12, series_ratio = $13,
 			minimum_order_quantity = $14, series_stock = $15, stock = $16, is_active = $17,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $18 AND brand_id = $19`
+			source_product_group_id = $18, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $19 AND brand_id = $20`
 
 	_, err = tx.Exec(
-		ctx,
-		updateSQL,
-		req.Title,
-		req.ShortDescription,
-		req.Description,
-		req.CategoryID,
-		req.ColorID,
-		req.FabricID,
-		req.Gender,
-		req.Season,
-		req.BuyingPrice,
-		req.Price,
-		req.Currency,
-		req.PackingRatio,
-		req.SeriesRatio,
-		req.MinimumOrderQuantity,
-		req.SeriesStock,
-		initialStock,
-		req.IsActive,
-		id,
-		claims.BrandID,
+		ctx, updateSQL,
+		req.Title, req.ShortDescription, req.Description,
+		req.CategoryID, req.ColorID, req.FabricID,
+		req.Gender, req.Season, req.BuyingPrice, req.Price,
+		req.Currency, req.PackingRatio, req.SeriesRatio,
+		req.MinimumOrderQuantity, req.SeriesStock, initialStock, req.IsActive,
+		groupID, id, claims.BrandID,
 	)
 	if err != nil {
 		log.Printf("[SUPPLIER PRODUCT] Update error: %v", err)
-		http.Error(w, `{"error":"Ürün güncellenemedi"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "Ürün güncellenemedi")
 		return
 	}
 
-	// Upsert Turkish and any provided multi-language translations (en, ru, ar)
 	upsertSupplierProductTranslations(ctx, tx, id, req.Title, req.ShortDescription, req.Description, req.Translations)
-
 	updateProductVariants(ctx, tx, id, req.Variants)
 	updateProductImages(ctx, tx, id, req.Images)
 
 	if err := tx.Commit(ctx); err != nil {
-		http.Error(w, `{"error":"İşlem kaydedilemedi"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "İşlem kaydedilemedi")
 		return
 	}
 
 	triggerProductMVRefresh()
-
-	writeSupplierJSON(w, http.StatusOK, map[string]string{"message": "Ürün başarıyla güncellendi."})
+	writeSupplierJSON(w, http.StatusOK, map[string]any{
+		"message":                 "Ürün başarıyla güncellendi.",
+		"is_active":               req.IsActive,
+		"source_product_group_id": derefStringOr(groupID, ""),
+	})
 }
 
 // DeleteProduct deletes a supplier product
