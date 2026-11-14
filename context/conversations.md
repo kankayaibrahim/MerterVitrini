@@ -2864,3 +2864,101 @@
      - `HEAD /uploads/releases/mertervitrini-v1.2.0+6.apk` → `200` (`Content-Length: 67206209`)
   5. **Yerel Conventional Commit:** Tüm backend, web frontend, Flutter mobil `v1.2.0+6`, OTA script güncellemesi, `backend/uploads/releases/version.json` ve konuşma günlükleri tek temiz yerel commit altında toplandı (`AGENTS.md` Kural #1 gereği `git push` yapılmadı).
 - **Sonuç:** Tedarikçi hızlı ürün girişi, sürükle-bırak fotoğraf stüdyosu, taslak akışı ve renk/kardeş varyant eşleştirme özellikleri backend, web SSR ve mobil `v1.2.0+6` OTA olarak canlıda yayınlandı ve yerel repo'da commit'lendi (`git push` yapılmadı).
+
+
+---
+
+### [2026-11-14 04:25:00] - Oturum #152 (Admin Sipariş Para Birimi Hatası Teşhisi — Canlı DB & Kod Denetimi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"adminde sipariş verdiği para birimi yanlış görünmüyor mu?"` + Admin Sipariş Yönetimi ekran görüntüsü (`20261113-00001` — `Tutar: ₺45,60`, `EDUSA-7X7N` `6 Adet x ₺7,60`)
+- **Tespit Edilen Kök Nedenler (Canlı PostgreSQL + Kaynak Kod):**
+  1. **Canlı Veritabanı Kanıtı (`catalog.orders`, `catalog.order_items`, `catalog.products`, `catalog.supplier_sub_orders`):**
+     - `20261113-00001` siparişindeki `EDUSA-7X7N` ürününün katalogdaki para birimi **`USD`** (`7.6000 USD`), `price_at_purchase = 7.60`, `total_amount = 45.60`, ancak `orders.currency = 'TRY'` ve alt sipariş `20261113-00001-S1` de `45.60 TRY` olarak kaydedilmiş.
+     - Eski `20260610-0001` ve `20260610-0002` siparişlerinde ise aynı sepetteki `USD` (`EDUSA-*`) ve `TRY` (`FLORA-*`) ürünler kur çevrimi yapılmadan doğrudan sayısal olarak toplanmış (`15958.58 TRY` ve `6944.76 TRY`).
+  2. **Sipariş Oluşturma Katmanı:**
+     - `backend/handlers/store_orders.go` (`fetchUserCartItems`, `CreateOrder`, `executeStockDeductionAndOrderItems`): `catalog.products.currency` alanını okumuyor, kur dönüşümü yapmıyor, `catalog.orders.currency` kolonuna yazmıyor (DB default `'TRY'` kalıyor) ve `catalog.order_items` tablosunda kalem döviz kolonu bulunmuyor.
+     - `backend/handlers/store_inquiry.go` (`storeInquiryItems` & doğrudan sipariş) ve `backend/handlers/marketplace.go` (`processSupplierSubOrder`, ledger insert) aynı şekilde `'TRY'` sabit değeri yazıyor.
+  3. **Admin API & UI + Müşteri Geçmişi & Excel:**
+     - `backend/handlers/admin_orders.go` (`ListOrders`, `fetchOrderItems`, `GetOrder`): Sipariş veya kalem para birimini JSON çıktısına hiç dahil etmiyor.
+     - `frontend/src/components/admin/orders/OrdersManager.tsx`: Liste toplamı (`L216`), detay tutarı (`L312`), kalem birim fiyatı (`L364`) ve ödeme bildirimi (`L408`) alanlarında `currency: "TRY"` sabit kodlu.
+     - `frontend/src/app/profile/components/OrderHistory.tsx` ve `backend/handlers/store_orders.go` (`ExportExcel` / `fetchOrderExcelData`) içinde de `TRY` / `TL` sabit kodlu.
+- **Sonuç:** Bulgular kullanıcıya özetlendi ve düzeltme yönü (orijinal ürün/tedarikçi dövizi korunarak çoklu döviz kırılımı + TL/seçili döviz karşılığı mı, yoksa sipariş anında müşterinin seçtiği vitrin dövizine TCMB kuruyla sabit çevrim mi istendiği) için netleştirme sorusu yöneltildi.
+
+
+---
+
+### [2026-11-14 04:48:00] - Oturum #153 (Çoklu Para Birimi Sipariş Bütünlüğü: Go Backend + SQL Migration + Next.js Admin/Vitrin/Tedarikçi + Flutter Mobil)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı Seçimi / Kapsam:** Seçenek 1 ("Ürün/tedarikçi orijinal dövizi korunsun (Örn. $7.60 USD -> $45.60 USD), karma sepette alt siparişler dövize göre ayrılsın, TL/seçili döviz karşılığı alt bilgi olsun ve mevcut DB kayıtları geri dönük onarılsın").
+- **Yapılan İşlemler:**
+  1. **Veritabanı Migrasyonu & Başlangıç Onarımı ([`0033_fix_multi_currency_orders.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0033_fix_multi_currency_orders.sql), [`db.go`](file:///c:/Projects/mertervitrini.com.tr/backend/db/db.go)):**
+     - `catalog.orders` tablosuna `currency`, `customer_currency`, `customer_total_amount`, `total_amount_try`, `currency_totals (JSONB)`, `catalog.order_items`, `catalog.supplier_sub_order_items` ve `catalog.payment_notifications` tablolarına `currency` (ve `notification_status`) kolonları eklendi.
+     - İdempotent backfill mantığı (`repairHistoricalOrderCurrencies` ve `0033_fix_multi_currency_orders.sql`) ile geçmiş siparişlerin (`20261113-00001`, `20260610-0001`, `20260610-0002`, `20261113-00001-S1`) ürün/kalem dövizleri, alt sipariş ve defter (`supplier_ledger`) dövizleri ve TCMB karşılıkları hesaplanacak şekilde kurgulandı.
+  2. **Go Backend Sipariş, Alt Sipariş & Admin API ([`order_currency_helpers.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/order_currency_helpers.go), [`store_orders.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_orders.go), [`marketplace.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/marketplace.go), [`store_inquiry.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_inquiry.go), [`admin_orders.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_orders.go), [`member_journey_admin.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/member_journey_admin.go), [`models.go`](file:///c:/Projects/mertervitrini.com.tr/backend/models/models.go), [`order_currency_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/order_currency_test.go)):**
+     - Sepetten ve doğrudan taleplerden (`CreateOrder`, `SubmitInquiry`) ürünün gerçek `p.currency` değeri alınıp `order_items.currency` alanına kaydedildi; karma sepetlerde `currency_totals` + TCMB `total_amount_try` + `customer_currency` / `customer_total_amount` hesaplandı.
+     - `splitOrderIntoSupplierSubOrdersWithSummary` alt siparişleri `(brand_id, currency)` çiftine göre ayırarak tek dövizli alt siparişler üretti ve tedarikçi cüzdan hareketlerini `walletCurrency` birimine çevirerek işledi.
+     - `SubmitPaymentNotification` içindeki gizli `status` kolon hatası (`notification_status`) düzeltildi ve ödeme bildirimi varsayılanı siparişin dövizine bağlandı; `ExportExcel` ve Admin/Müşteri API'leri döviz kırılımını eksiksiz döndürdü.
+  3. **Next.js SSR Frontend ([`orderCurrency.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/orderCurrency.ts), [`OrdersManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/orders/OrdersManager.tsx), [`CartDrawer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/CartDrawer.tsx), [`CartClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/cart/CartClient.tsx), [`OrderHistory.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/profile/components/OrderHistory.tsx), [`PaymentModal.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/profile/components/PaymentModal.tsx), [`page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/profile/page.tsx), [`SupplierOrdersPanel.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/supplier/SupplierOrdersPanel.tsx)):**
+     - Admin Sipariş Yönetimi, Müşteri Sipariş Geçmişi, Ödeme Bildirimi Modalı ve Tedarikçi Siparişleri ekranlarındaki sabit `"TRY"` / `"TL"` gösterimleri kaldırılarak orijinal döviz kırılımı + `≈ ₺... (TCMB)` alt bilgisi eklendi; sepetten `customer_currency` iletilmesi sağlandı.
+  4. **Flutter Mobil ([`cart_and_order.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/models/cart_and_order.dart), [`commerce_repository.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/contracts/commerce_repository.dart), [`http_commerce_repository.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/repositories/http_commerce_repository.dart), [`mobile_api_service.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/services/mobile_api_service.dart), [`cart_and_checkout_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/cart_and_checkout_screen.dart), [`customer_orders_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/customer_orders_screen.dart), [`order_detail_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/order_detail_screen.dart), [`supplier_orders_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/supplier/supplier_orders_screen.dart), [`modernization_test.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/test/modernization_test.dart), [`widget_test.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/test/widget_test.dart)):**
+     - `CustomerOrder`, `CustomerOrderItem`, `OrderDetailModel`, `SupplierSubOrderItem` modelleri ve UI ekranları çoklu döviz kırılımı + `session.currencyCode` / TCMB karşılığı ve kalem dövizini destekleyecek şekilde güncellendi.
+- **Doğrulamalar:**
+  - Go Backend: `go vet ./...`, `go test -count=1 ./...` (`handlers`, `pkg/phoneutil`, `services` geçti), Windows (`backend.exe`) ve Linux AMD64 (`backend`) binary derlemeleri hatasız tamamlandı.
+  - Frontend: `npx tsc --noEmit` ve `npm run lint` hatasız geçti (`AGENTS.md` Kural #7 gereği yerelde `npm run build` çalıştırılmadı).
+  - Mobil: `flutter analyze` (`No issues found!`) ve `flutter test` (`30/30` test geçti).
+  - Not: Yerel ortamda PostgreSQL `5432` dinlemediği için `0033_fix_multi_currency_orders.sql` yerel DB üzerinde çalıştırılmadı; canlı sunucuda backend başlatıldığında `ConnectDB()` ile otomatik uygulanacak ve tüm değişiklikler kullanıcı incelemesi için commit'lenmeden çalışma dizininde bırakıldı (`AGENTS.md` Kural #1).
+- **Sonuç:** Sipariş oluşturma, alt sipariş bölme, admin/müşteri/tedarikçi web ve Flutter mobil katmanlarında para birimi hatası kökten giderildi ve tüm doğrulamalar geçti.
+
+
+---
+
+### [2026-11-14 05:13:00] - Oturum #154 (Üye Girişli `/product/[slug]` İstemci Çökme Hatası ve SSR Fiyat Hidrasyonu Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `https://mertervitrini.com.tr/product/erkek-kisa-kollu-polo-yakali-blok-desenli-triko-bluz-yesil-7x7n` sayfasına üye girişi (`login`) yapıldığında siyah `"This page couldn’t load"` hata ekranının çıkması sorununun kök nedeninin bulunup giderilmesi.
+- **Kök Neden:**
+  - `frontend/src/app/product/[slug]/page.tsx` SSR aşamasında tarayıcı `localStorage` içindeki `store_user_token` olmadan `/api/v1/store/products/{slug}` çağrısı yaptığından backend `isStorePriceVisibleToCaller` `false` dönüyor, `sanitizePublicStoreProduct` ise `p.Price = 0` atıyordu.
+  - `models.Product.Price` ve `models.ProductVariant.Price` üzerindeki `json:"price,omitempty"` etiketi sebebiyle `0` değerindeki fiyat JSON'dan düşüyor (`undefined`), istemcide `convertPrice(product.price, ...)` sonucu `undefined` kaldığında üye girişi aktifken `ProductSpecs.tsx` içinde `unitPrice.toFixed(2)` çağrısı runtime crash üreterek kök error boundary'yi tetikliyordu. Ayrıca `apiFetch` içinde `store_user_token` `Authorization` başlığı eksikti, üye oturumunda SSR sonrası yetkili fiyat re-hidrasyonu yoktu, `Header.tsx` ilk state'te senkron `localStorage` okuyordu, Google OAuth her zaman `/profile/`'a yönlendiriyordu ve özel bir `app/error.tsx` bulunmuyordu.
+- **Yapılan İşlemler:**
+  1. **Go Backend ([`models.go`](file:///c:/Projects/mertervitrini.com.tr/backend/models/models.go), [`store_catalog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_catalog.go), [`audit_fixes_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/audit_fixes_test.go)):**
+     - `Product.Price` ve `ProductVariant.Price` JSON etiketleri `json:"price,omitempty"` yerine `json:"price"` yapılarak `0` maskeli fiyatların JSON'dan düşmesi engellendi (`TestSanitizePublicStoreProductAlwaysSerializesNumericPrice` birim testi eklendi).
+     - `GetProducts`, `GetProductByID` ve `GetCatalogDelta` yanıtlarına `Vary: Authorization` başlığı eklendi.
+  2. **Frontend Auth, Fetch ve Fiyat Guard Sertleştirmesi ([`storeAuth.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/storeAuth.ts), [`utils.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/utils.ts)):**
+     - `getValidStoreBearerToken()` eklendi; `apiFetch` istemci tarafında geçerli token varsa `Authorization: Bearer <token>` ve varsayılan `cache: "no-store"` gönderecek şekilde güncellendi.
+     - `convertPrice` fonksiyonu `Number.isFinite` guard'ı ve `0` fallback'i ile `undefined`/`NaN` güvenliğine alındı.
+  3. **Ürün Detay ve SSR Fiyat Re-Hidrasyonu ([`ProductDetailClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/ProductDetailClient.tsx), [`ProductSpecs.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/components/ProductSpecs.tsx), [`OrderCalculator.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/components/OrderCalculator.tsx), [`SupplierDirectCard.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/components/SupplierDirectCard.tsx)):**
+     - Üye girişliyken SSR'dan `0`/eksik fiyatla gelen üründe istemcide `/products/${slugOrId}` (`cache: "no-store"`) otomatik yeniden çekilip `activeProduct` ile hidrate edildi; yükleme sırasında fiyat skeleton'ı gösterildi ve sepete ekleme butonu `isPriceLoading` iken kilitlendi. Tüm `.toFixed(2)` ve tutar hesapları `Number.isFinite` ile korundu.
+  4. **Vitrin, Favoriler, Üretici Sayfaları, Header ve OAuth Return Path ([`StorefrontLayout.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/StorefrontLayout.tsx), [`WishlistDrawer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/WishlistDrawer.tsx), [`SupplierShowcaseClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/ureticiler/%5Bslug%5D/SupplierShowcaseClient.tsx), [`SupplierEditorialProfileClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/ureticiler/%5Bslug%5D/tanitim/SupplierEditorialProfileClient.tsx), [`Header.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/Header.tsx), [`AuthModal.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/AuthModal.tsx), [`page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/google-callback/page.tsx), [`error.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/error.tsx)):**
+     - `StorefrontLayout`, `SupplierShowcaseClient`, `SupplierEditorialProfileClient` ve `WishlistDrawer` oturum durumuna bağlı yetkili fiyat/veri yenilemesine geçirildi.
+     - `Header.tsx` hydration uyuşmazlığını önlemek için `user` başlangıç state'ini `null` yapıp mount'ta `queueMicrotask` ile okudu.
+     - Google OAuth akışında güvenli dönüş yolu `sessionStorage` (`merter_auth_return_to`) + `consumeSafeReturnToPath()` ile korundu.
+     - 8 dilli RTL uyumlu ve Sentry raporlamalı `frontend/src/app/error.tsx` hata sınırı oluşturuldu.
+- **Doğrulamalar:**
+  - Backend: `go vet ./...` ve `go test ./handlers/...` hatasız geçti (`ok mertervitrini/backend/handlers 0.696s`).
+  - Frontend: `npx tsc --noEmit` ve `npm run lint` çıkış kodu `0` ile hatasız tamamlandı (`AGENTS.md` Kural #7 gereği yerelde `npm run build` çalıştırılmadı).
+- **Sonuç:** Giriş yapmış üyelerin ürün detay sayfasında karşılaştığı çökme ve yetkili fiyat görünürlüğü sorunu kökten çözüldü; tüm değişiklikler (`Oturum #153` ile birlikte) kullanıcı onayı beklenerek commit'lenmeden çalışma dizininde bırakıldı (`AGENTS.md` Kural #1).
+
+
+---
+
+### [2026-11-14 05:29:00] - Oturum #155 (Çoklu Para Birimi Sipariş Bütünlüğü, Üye Girişli `/product/[slug]` Hidrasyon Düzeltmesi ve Mobil `v1.2.1+7` — Yerel Commitler ve Canlı Sunucu Yayını)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle ve yayınla"`
+- **Yapılan İşlemler:**
+  1. **Mobil Sürüm Artışı & İmzalı Release Derlemesi (`v1.2.1+7`):** [`pubspec.yaml`](file:///c:/Projects/mertervitrini.com.tr/mobile/pubspec.yaml) (`1.2.1+7`) ve [`api_client.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/services/api_client.dart) (`1.2.1`) güncellendi. [`build_mobile_release.ps1`](file:///c:/Projects/mertervitrini.com.tr/scripts/build_mobile_release.ps1) ile `flutter analyze` (`No issues found!`), `flutter test` (`30/30` test geçti), Play Store imzalı `app-release.aab` (`63.52 MB`) ve imzalı `app-release.apk` (`64.1 MB` / `67238977` byte, SHA-256: `ba64749f39ca32c294a5045655f9dd790c16ea18d522685ac80408762d3adf88`) üretildi.
+  2. **Birleşik Go Backend & Next.js SSR Frontend Canlı Dağıtımı (`213.202.255.80`):** `python -u scripts/unified_deployer.py -p unified -c all -a all` (`183.00 sn`, exit `0`) ile Linux AMD64 Go binary (`42.46 MB`, `merter-backend.service`, `PID 1223115`) ve Next.js SSR frontend (sunucu üzerinde `npm run build` — `97.49 sn`, `merter-frontend.service` + `nginx`) yayınlandı. Backend açılışındaki `ConnectDB()` migration + `repairHistoricalOrderCurrencies` çalıştırıldı.
+  3. **İmzalı Mobil OTA (`v1.2.1+7`) & 8 Dilli [`version.json`](file:///c:/Projects/mertervitrini.com.tr/backend/uploads/releases/version.json) Yayını:** [`publish_mobile_apk.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/publish_mobile_apk.py) (`72.3 sn`, exit `0`) ile `mertervitrini-v1.2.1+7.apk` (`64.12 MB`) ve 8 dilli (`tr, en, ru, ar, de, fr, pl, bg`) OTA manifesti canlı sunucuya atomik olarak yüklendi.
+  4. **Canlı Üretim Doğrulamaları (`https://mertervitrini.com.tr`):**
+     - `GET /api/v1/health` → `{"status":"healthy","database":"connected","service":"unified-backend"}`
+     - `GET /api/v1/store/products/erkek-kisa-kollu-polo-yakali-blok-desenli-triko-bluz-yesil-7x7n` → HTTP `200`, `hasPriceZero=True`, `Vary: Accept-Encoding Authorization`
+     - `HEAD /`, `HEAD /admin`, `HEAD /product/erkek-kisa-kollu-polo-yakali-blok-desenli-triko-bluz-yesil-7x7n` → HTTP `200`
+     - `GET /api/v1/mobile/version` → `version: "1.2.1"`, `build_number: 7`, `apk_available: true`, `file_size_bytes: 67238977`, `sha256: ba64749f39ca32c294a5045655f9dd790c16ea18d522685ac80408762d3adf88`
+     - `HEAD /uploads/releases/mertervitrini-v1.2.1+7.apk` → HTTP `200` (`Content-Length: 67238977`)
+     - Canlı PostgreSQL (`merterdevdb`) geri dönük onarım sorgusu:
+       - `20261113-00001`: `total_amount = 45.60`, `currency = USD`, `customer_currency = USD`, `total_amount_try = 2288.78`, `currency_totals = {"USD": 45.60}`
+       - `20260610-0002`: `currency = TRY`, `currency_totals = {"TRY": 5974.20, "USD": 970.56}`
+       - `20260610-0001`: `currency = TRY`, `currency_totals = {"TRY": 15599.28, "USD": 359.28}`
+  5. **Yerel Conventional Commitler (`AGENTS.md` Kural #1 uyarınca `git push` yapılmadı):**
+     - `9266b89`: `fix: preserve original supplier currencies across B2B orders, sub-orders, web, and mobile (v1.2.1+7)` (31 dosya)
+     - `e80ac38`: `fix: resolve logged-in product page crash and hydrate authenticated SSR prices` (16 dosya)
+     - `docs: record sessions #152-#155 multi-currency orders, product SSR hydration, and live deployment` (`context/conversations.md`)
+- **Sonuç:** Tüm web, API, veritabanı ve mobil `v1.2.1+7` değişiklikleri yerel atomic commitlere ayrıldı ve canlı sunucuda doğrulandı.
