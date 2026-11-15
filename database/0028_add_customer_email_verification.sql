@@ -1,7 +1,7 @@
 -- =========================================================================
 -- 0028_add_customer_email_verification.sql
 -- Merter Vitrini B2B E-Ticaret Platformu
--- Müşteri / Bayi E-Posta Doğrulama ve Tedarikçi Görünürlük Şeması
+-- Müşteri E-Posta Doğrulama ve Tedarikçi Görünürlük Şeması
 -- =========================================================================
 
 ALTER TABLE identity.users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;

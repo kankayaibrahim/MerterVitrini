@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS catalog.supplier_payout_requests (
 CREATE INDEX IF NOT EXISTS idx_supplier_payout_requests_brand_id ON catalog.supplier_payout_requests(brand_id);
 CREATE INDEX IF NOT EXISTS idx_supplier_payout_requests_status ON catalog.supplier_payout_requests(status);
 
--- 6. Dışa Aktarılan B2B XML & Bayilik Feed API Anahtarları (Outbound Feeds)
+-- 6. Dışa Aktarılan B2B XML & Müşteri Feed API Anahtarları (Outbound Feeds)
 CREATE TABLE IF NOT EXISTS catalog.b2b_api_keys (
     id uuid DEFAULT extensions.uuidv7() PRIMARY KEY,
     client_name VARCHAR(255) NOT NULL,

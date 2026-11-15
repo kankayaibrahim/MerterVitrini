@@ -219,7 +219,7 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
     step4Title: "Kapınıza Teslim Alın",
     step4Desc:
       "Özenle paketlenen siparişiniz en kısa sürede kargoya verilsin veya acentenize ulaştırılsın.",
-    formTitle: "Toptan Müşteri / Bayi Başvuru Formu",
+    formTitle: "Toptan Müşteri Başvuru Formu",
     formSubtitle:
       "Butiğiniz veya mağazanız için özel fiyat listesi ve asorti detayları almak üzere formu iletin.",
     formFullName: "Adınız Soyadınız *",

@@ -21,7 +21,7 @@ INSERT INTO identity.notification_settings (
 VALUES
     (
         'new_customer',
-        'Yeni Müşteri / Bayi Kaydı Bildirimi',
+        'Yeni Müşteri Kaydı Bildirimi',
         'Vitrin veya mobil uygulama üzerinden yeni B2B müşteri kaydı oluştuğunda To/CC listelerine anında e-posta gönderir.',
         true,
         ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'],
@@ -60,6 +60,10 @@ VALUES
         0
     )
 ON CONFLICT (event_key) DO NOTHING;
+
+UPDATE identity.notification_settings
+SET title = 'Yeni Müşteri Kaydı Bildirimi'
+WHERE event_key = 'new_customer' AND title = 'Yeni Müşteri / Bayi Kaydı Bildirimi';
 
 CREATE TABLE IF NOT EXISTS identity.notification_logs (
     id UUID PRIMARY KEY DEFAULT uuidv7(),

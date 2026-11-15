@@ -100,3 +100,24 @@ func TestBuildDailyDigestEmailBodies(t *testing.T) {
 		t.Fatalf("digest body missing expected metric sections")
 	}
 }
+
+func TestBuildTestEventEmailBodiesNoBayiWording(t *testing.T) {
+	events := []string{EventNewCustomer, EventNewOrder, EventSupplierOnboarding}
+	for _, ev := range events {
+		subj, htmlBody, textBody := BuildTestEventEmailBodies(ev)
+		combined := strings.ToLower(subj + "\n" + htmlBody + "\n" + textBody)
+		if strings.Contains(combined, "bayi") {
+			t.Fatalf("event %q test email still contains forbidden 'bayi' wording:\n%s", ev, combined)
+		}
+	}
+
+	_, custHTML, _ := BuildTestEventEmailBodies(EventNewCustomer)
+	if !strings.Contains(custHTML, "Hesap Türü: Müşteri") {
+		t.Fatalf("expected customer test email HTML to explicitly contain 'Hesap Türü: Müşteri'")
+	}
+
+	_, supHTML, supText := BuildTestEventEmailBodies(EventSupplierOnboarding)
+	if !strings.Contains(supHTML, "Tedarikçi") || !strings.Contains(supText, "Tedarikçi") {
+		t.Fatalf("expected supplier test email to explicitly contain 'Tedarikçi'")
+	}
+}

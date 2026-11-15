@@ -437,7 +437,7 @@ func BuildTestEventEmailBodies(eventKey string) (subject, htmlBody, textBody str
 			PaymentMethod:    "BANK_TRANSFER",
 			CustomerName:     "Örnek Butik (Test Müşteri)",
 			CustomerCompany:  "Örnek Tekstil Ltd.",
-			CustomerEmail:    "ornek-bayi@mertervitrini.com.tr",
+			CustomerEmail:    "ornek-musteri@mertervitrini.com.tr",
 			CustomerPhone:    "+90 533 000 00 00",
 			DeliveryAddress:  "Mehmet Nesih Özmen Mah. Merter / İstanbul",
 			TotalAmountTRY:   24500,
@@ -470,7 +470,8 @@ func BuildTestEventEmailBodies(eventKey string) (subject, htmlBody, textBody str
 		textBody = fmt.Sprintf("Bu e-posta Merter Vitrini Admin Bildirim Merkezi üzerinden 'Yeni Müşteri Kaydı' test gönderimidir.\nIPv6 Örnek: 2a02:4e0:2d14::1\nTarih: %s", nowTR)
 		htmlBody = fmt.Sprintf(`<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px;border:1px solid #e2e8f0;border-radius:12px;">
           <h2 style="margin:0 0 8px 0;color:#0f172a;">[TEST] Yeni Müşteri Kaydı Bildirimi</h2>
-          <p style="color:#475569;font-size:14px;">Bu e-posta <strong>Yeni Müşteri / Bayi Kaydı</strong> kanalının To/CC alıcı ayarlarını doğrulamak için gönderilmiştir.</p>
+          <p style="color:#475569;font-size:14px;">Bu e-posta <strong>Yeni Müşteri Kaydı</strong> kanalının To/CC alıcı ayarlarını doğrulamak için gönderilmiştir.</p>
+          <p style="color:#0369a1;font-size:13px;font-weight:700;">Hesap Türü: Müşteri</p>
           %s
           <p style="color:#64748b;font-size:12px;margin-top:16px;">Zaman: %s</p>
         </div>`, formatGeoLocationHTML(ClientMeta{

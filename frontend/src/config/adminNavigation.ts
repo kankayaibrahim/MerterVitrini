@@ -154,7 +154,7 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
       },
       {
         id: "customers",
-        title: "Müşteriler & Bayiler",
+        title: "Müşteriler",
         href: "/admin/customers",
         icon: Users,
         description: "Kurumsal B2B müşteri hesapları ve onay talepleri"

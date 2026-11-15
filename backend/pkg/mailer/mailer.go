@@ -144,6 +144,7 @@ func SendSupplierApplicationNotification(cfg *config.Config, app SupplierApplica
 
 Web sitesi üzerinden yeni bir Tedarikçi Başvuru Formu dolduruldu:
 
+• Hesap Türü: Tedarikçi (Başvuru)
 • Firma Adı: %s
 • Yetkili: %s
 • E-Posta: %s
@@ -192,6 +193,10 @@ Merter Vitrini Bildirim Servisi`,
     <!-- Details Card -->
     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-bottom: 20px;">
       <table style="width: 100%%; font-size: 13px; line-height: 1.8; border-collapse: collapse;">
+        <tr>
+          <td style="color: #64748b; width: 32%%; padding: 4px 0;"><strong>🏷️ Hesap Türü:</strong></td>
+          <td style="color: #92400e; font-weight: 800; padding: 4px 0;">Tedarikçi (Başvuru)</td>
+        </tr>
         <tr>
           <td style="color: #64748b; width: 32%%; padding: 4px 0;"><strong>🏢 Firma Adı:</strong></td>
           <td style="color: #0f172a; font-weight: 700; padding: 4px 0;">%s</td>
@@ -276,7 +281,7 @@ Merter Vitrini Bildirim Servisi`,
 // SendSupplierRegisteredNotification notifies admin when a supplier user is created with full geo details
 func SendSupplierRegisteredNotification(cfg *config.Config, brandName, brandCode, contactName, email, phone string, meta ClientMeta) {
 	safe.Go("NotifyAdminSupplierRegistration", func() {
-		subject := fmt.Sprintf("🔔 Yeni Tedarikçi Hesabı: %s (%s)", brandName, contactName)
+		subject := fmt.Sprintf("🏢 Yeni Tedarikçi Kaydı: %s (%s)", brandName, contactName)
 		nowStr := time.Now().Format(dateTimeFormatTR)
 		geoHTML := formatGeoLocationHTML(meta)
 		cleanPhone := cleanPhoneForWhatsApp(phone)
@@ -290,6 +295,7 @@ func SendSupplierRegisteredNotification(cfg *config.Config, brandName, brandCode
 
 Merter Vitrini sisteminde yeni bir tedarikçi kullanıcısı tanımlandı:
 
+• Hesap Türü: Tedarikçi
 • Tedarikçi Firma: %s (Kod: %s)
 • Yetkili Kişi: %s
 • E-Posta: %s
@@ -318,17 +324,21 @@ Merter Vitrini Bildirim Servisi`, brandName, brandCode, contactName, email, phon
 
     <div style="margin-bottom: 20px;">
       <span style="display: inline-block; background-color: #fef3c7; color: #92400e; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 9999px; border: 1px solid #fde68a;">
-        ✨ Yeni Tedarikçi Kullanıcısı Tanımlandı
+        🏢 Yeni Tedarikçi Kaydı
       </span>
     </div>
 
-    <h3 style="color: #0f172a; margin: 0 0 16px 0; font-size: 18px;">Tedarikçi Portalı Hesabı Açıldı</h3>
+    <h3 style="color: #0f172a; margin: 0 0 16px 0; font-size: 18px;">Yeni Tedarikçi Portalı Hesabı Açıldı</h3>
     <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 20px 0;">
       Aşağıdaki detaylara sahip tedarikçi kullanıcısı sisteme tanımlanmış ve Keycloak IAM erişimi sağlanmıştır:
     </p>
 
     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; margin-bottom: 20px;">
       <table style="width: 100%%; font-size: 13px; line-height: 1.8; border-collapse: collapse;">
+        <tr>
+          <td style="color: #64748b; width: 35%%;"><strong>Hesap Türü:</strong></td>
+          <td style="color: #92400e; font-weight: 800;">Tedarikçi</td>
+        </tr>
         <tr>
           <td style="color: #64748b; width: 35%%;"><strong>Firma Adı:</strong></td>
           <td style="color: #0f172a; font-weight: 700;">%s (%s)</td>
@@ -459,7 +469,7 @@ Merter Vitrini Ekibi`, contactName, brandName, email, loginURL)
 func SendCustomerRegisteredNotification(cfg *config.Config, firstName, lastName, email, phone string, meta ClientMeta) {
 	safe.Go("NotifyAdminCustomerRegistration", func() {
 		fullName := strings.TrimSpace(firstName + " " + lastName)
-		subject := fmt.Sprintf("👤 Yeni Müşteri / Bayi Kaydı: %s", fullName)
+		subject := fmt.Sprintf("👤 Yeni Müşteri Kaydı: %s", fullName)
 		nowStr := time.Now().Format(dateTimeFormatTR)
 		geoHTML := formatGeoLocationHTML(meta)
 		cleanPhone := cleanPhoneForWhatsApp(phone)
@@ -471,8 +481,9 @@ func SendCustomerRegisteredNotification(cfg *config.Config, firstName, lastName,
 
 		textBody := fmt.Sprintf(`Sayın Yönetici,
 
-Mağaza vitrininde yeni bir müşteri / bayi kaydı yapıldı:
+Mağaza vitrininde yeni bir müşteri kaydı yapıldı:
 
+• Hesap Türü: Müşteri
 • İsim Soyisim: %s
 • E-Posta: %s
 • Telefon: %s
@@ -500,17 +511,21 @@ Merter Vitrini Bildirim Servisi`, fullName, email, phoneDisplay, nowStr, meta.IP
 
     <div style="margin-bottom: 20px;">
       <span style="display: inline-block; background-color: #e0f2fe; color: #0369a1; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 9999px; border: 1px solid #bae6fd;">
-        👤 Yeni Müşteri / Bayi Kaydı
+        👤 Yeni Müşteri Kaydı
       </span>
     </div>
 
-    <h3 style="color: #0f172a; margin: 0 0 16px 0; font-size: 18px;">Mağaza Vitrininden Yeni Kayıt Geldi</h3>
+    <h3 style="color: #0f172a; margin: 0 0 16px 0; font-size: 18px;">Mağaza Vitrininden Yeni Müşteri Kaydı Geldi</h3>
     <p style="font-size: 14px; line-height: 1.6; color: #475569; margin: 0 0 20px 0;">
-      Aşağıdaki kullanıcı sisteme başarıyla üye olmuştur:
+      Aşağıdaki müşteri sisteme başarıyla üye olmuştur:
     </p>
 
     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; margin-bottom: 20px;">
       <table style="width: 100%%; font-size: 13px; line-height: 1.8; border-collapse: collapse;">
+        <tr>
+          <td style="color: #64748b; width: 35%%;"><strong>Hesap Türü:</strong></td>
+          <td style="color: #0369a1; font-weight: 800;">Müşteri</td>
+        </tr>
         <tr>
           <td style="color: #64748b; width: 35%%;"><strong>Müşteri Adı:</strong></td>
           <td style="color: #0f172a; font-weight: 700;">%s</td>

@@ -139,11 +139,15 @@ func EnsureNotificationSettingsSchema(ctx context.Context) error {
 			event_key, title, description, enabled, to_emails, cc_emails, schedule_hour, schedule_minute
 		)
 		VALUES
-			('new_customer', 'Yeni Müşteri / Bayi Kaydı Bildirimi', 'Vitrin veya mobil uygulama üzerinden yeni B2B müşteri kaydı oluştuğunda To/CC listelerine anında e-posta gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0),
+			('new_customer', 'Yeni Müşteri Kaydı Bildirimi', 'Vitrin veya mobil uygulama üzerinden yeni B2B müşteri kaydı oluştuğunda To/CC listelerine anında e-posta gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0),
 			('new_order', 'Yeni Sipariş & Doğrudan Talep Bildirimi', 'Müşteri sepetinden sipariş onaylandığında veya doğrudan toptan teklif/sipariş talebi oluşturulduğunda bildirim gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0),
 			('daily_digest', 'Günlük B2B Operasyon Özet Raporu', 'Belirlenen saatte (İstanbul saati) o gün kaydolan üyeler, siparişler, eklenen/kapatılan/arşivlenen/silinen ürünler hakkında özet rapor gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0),
 			('supplier_onboarding', 'Tedarikçi & Hizmet Sağlayıcı Başvuru Bildirimi', 'Yeni tedarikçi hesabı açıldığında, tedarikçi başvurusu veya hizmet sağlayıcı başvurusu doğrulandığında yönetici ekibe mail gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0)
 		ON CONFLICT (event_key) DO NOTHING;
+
+		UPDATE identity.notification_settings
+		SET title = 'Yeni Müşteri Kaydı Bildirimi'
+		WHERE event_key = 'new_customer' AND title = 'Yeni Müşteri / Bayi Kaydı Bildirimi';
 
 		CREATE TABLE IF NOT EXISTS identity.notification_logs (
 			id UUID PRIMARY KEY DEFAULT uuidv7(),
