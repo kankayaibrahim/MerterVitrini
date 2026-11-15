@@ -230,6 +230,11 @@ export function AdminProvider({
     email: "",
     show_single_price: false,
     show_prices_to_guests: false,
+    recaptcha_enabled: true,
+    recaptcha_site_key: "",
+    recaptcha_secret_key: "",
+    recaptcha_has_secret: false,
+    clear_recaptcha_secret: false,
   });
   const [loadingSettings, setLoadingSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -370,7 +375,8 @@ export function AdminProvider({
       setSettingsSuccess(false);
 
       try {
-        await adminService.updateStoreSettings(storeSettings);
+        const savedSettings = await adminService.updateStoreSettings(storeSettings);
+        setStoreSettings(savedSettings);
         invalidateStoreSettingsCache();
         if (typeof window !== "undefined") {
           localStorage.setItem(

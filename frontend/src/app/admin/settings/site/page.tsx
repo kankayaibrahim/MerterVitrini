@@ -16,7 +16,9 @@ import {
   Eye,
   Lock,
   Bell,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
+  KeyRound
 } from "lucide-react";
 import { useAdmin } from "@/context/AdminContext";
 
@@ -219,6 +221,119 @@ export default function AdminSettingsSitePage() {
                   />
                   <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-hidden rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600" />
                 </label>
+              </div>
+            </div>
+
+            {/* Google reCAPTCHA v3 Bot & Fake Order Protection */}
+            <div className="pt-2 space-y-4 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/30">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                      storeSettings.recaptcha_enabled
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : "bg-zinc-500/10 text-zinc-500"
+                    }`}
+                  >
+                    <ShieldCheck size={16} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-zinc-900 dark:text-white block">
+                      Google reCAPTCHA v3 Bot &amp; Sahte Sipariş Koruması
+                    </span>
+                    <span className="text-[11px] text-zinc-500">
+                      {storeSettings.recaptcha_enabled
+                        ? "AÇIK: Site Key ve Secret Key tanımlıysa sipariş, teklif, kayıt ve başvuru adımlarında görünmez bot koruması çalışır."
+                        : "KAPALI: Google reCAPTCHA v3 doğrulaması devre dışı bırakıldı."}
+                    </span>
+                  </div>
+                </div>
+
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <span className="sr-only">Google reCAPTCHA v3 Bot Koruması</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(storeSettings.recaptcha_enabled)}
+                    onChange={(e) =>
+                      setStoreSettings((prev) => ({
+                        ...prev,
+                        recaptcha_enabled: e.target.checked,
+                      }))
+                    }
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-zinc-200 peer-focus:outline-hidden rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600" />
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-2 flex items-center gap-2">
+                    <KeyRound size={14} className="text-zinc-400" />
+                    Google reCAPTCHA v3 Site Key (Genel Anahtar)
+                  </label>
+                  <input
+                    type="text"
+                    value={storeSettings.recaptcha_site_key || ""}
+                    onChange={(e) =>
+                      setStoreSettings((prev) => ({
+                        ...prev,
+                        recaptcha_site_key: e.target.value,
+                      }))
+                    }
+                    placeholder="6Lc..."
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-zinc-900 dark:focus:ring-white transition-all"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                      <Lock size={14} className="text-zinc-400" />
+                      Google reCAPTCHA v3 Secret Key (Gizli Anahtar)
+                    </label>
+                    {storeSettings.recaptcha_has_secret && !storeSettings.clear_recaptcha_secret && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Kayıtlı gizli anahtar aktif
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={storeSettings.recaptcha_secret_key || ""}
+                    onChange={(e) =>
+                      setStoreSettings((prev) => ({
+                        ...prev,
+                        recaptcha_secret_key: e.target.value,
+                        clear_recaptcha_secret: false,
+                      }))
+                    }
+                    placeholder={
+                      storeSettings.recaptcha_has_secret
+                        ? "Değiştirmek için yeni Secret Key girin (boş bırakılırsa mevcut korunur)"
+                        : "6Lc... gizli anahtarını girin"
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-zinc-900 dark:focus:ring-white transition-all"
+                  />
+                  {storeSettings.recaptcha_has_secret && (
+                    <label className="mt-2 inline-flex items-center gap-2 text-[11px] font-semibold text-zinc-500 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(storeSettings.clear_recaptcha_secret)}
+                        onChange={(e) =>
+                          setStoreSettings((prev) => ({
+                            ...prev,
+                            clear_recaptcha_secret: e.target.checked,
+                            recaptcha_secret_key: e.target.checked ? "" : prev.recaptcha_secret_key,
+                          }))
+                        }
+                        className="rounded border-zinc-300"
+                      />
+                      Kayıtlı gizli anahtarı veritabanından temizle
+                    </label>
+                  )}
+                </div>
               </div>
             </div>
 

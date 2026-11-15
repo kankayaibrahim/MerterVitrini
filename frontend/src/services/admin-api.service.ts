@@ -15,6 +15,11 @@ export interface StoreSettingsDTO {
   email: string;
   show_single_price: boolean;
   show_prices_to_guests: boolean;
+  recaptcha_enabled: boolean;
+  recaptcha_site_key: string;
+  recaptcha_secret_key?: string;
+  recaptcha_has_secret?: boolean;
+  clear_recaptcha_secret?: boolean;
 }
 
 export interface AdminProductsPage {
@@ -62,7 +67,7 @@ export interface IAdminCatalogService {
 
 export interface IAdminSettingsService {
   getStoreSettings(): Promise<StoreSettingsDTO>;
-  updateStoreSettings(settings: StoreSettingsDTO): Promise<void>;
+  updateStoreSettings(settings: StoreSettingsDTO): Promise<StoreSettingsDTO>;
 }
 
 const UUID_PATTERN =
@@ -137,6 +142,22 @@ function normalizeSyncRunsPayload(payload: unknown): SyncRun[] {
     if (Array.isArray(record.items)) return record.items as SyncRun[];
   }
   return [];
+}
+
+function normalizeStoreSettingsDTO(data: Partial<StoreSettingsDTO>): StoreSettingsDTO {
+  return {
+    address: data.address ?? "",
+    phone: data.phone ?? "",
+    whatsapp: data.whatsapp ?? "",
+    email: data.email ?? "",
+    show_single_price: Boolean(data.show_single_price),
+    show_prices_to_guests: Boolean(data.show_prices_to_guests),
+    recaptcha_enabled: data.recaptcha_enabled ?? true,
+    recaptcha_site_key: data.recaptcha_site_key ?? "",
+    recaptcha_has_secret: Boolean(data.recaptcha_has_secret),
+    recaptcha_secret_key: "",
+    clear_recaptcha_secret: false,
+  };
 }
 
 export class AdminApiService
@@ -367,18 +388,26 @@ export class AdminApiService
 
   async getStoreSettings(): Promise<StoreSettingsDTO> {
     const data = await this.http.get<Partial<StoreSettingsDTO>>("/api/v1/settings");
-    return {
-      address: data.address ?? "",
-      phone: data.phone ?? "",
-      whatsapp: data.whatsapp ?? "",
-      email: data.email ?? "",
-      show_single_price: Boolean(data.show_single_price),
-      show_prices_to_guests: Boolean(data.show_prices_to_guests),
-    };
+    return normalizeStoreSettingsDTO(data);
   }
 
-  async updateStoreSettings(settings: StoreSettingsDTO): Promise<void> {
-    await this.http.put<Record<string, unknown>>("/api/v1/settings", settings);
+  async updateStoreSettings(settings: StoreSettingsDTO): Promise<StoreSettingsDTO> {
+    const payload = {
+      address: settings.address,
+      phone: settings.phone,
+      whatsapp: settings.whatsapp,
+      email: settings.email,
+      show_single_price: settings.show_single_price,
+      show_prices_to_guests: settings.show_prices_to_guests,
+      recaptcha_enabled: settings.recaptcha_enabled,
+      recaptcha_site_key: (settings.recaptcha_site_key || "").trim(),
+      ...(settings.recaptcha_secret_key?.trim()
+        ? { recaptcha_secret_key: settings.recaptcha_secret_key.trim() }
+        : {}),
+      ...(settings.clear_recaptcha_secret ? { clear_recaptcha_secret: true } : {}),
+    };
+    const data = await this.http.put<Partial<StoreSettingsDTO>>("/api/v1/settings", payload);
+    return normalizeStoreSettingsDTO(data);
   }
 }
 

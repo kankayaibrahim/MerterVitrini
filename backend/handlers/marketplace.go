@@ -608,6 +608,106 @@ func (h *MarketplaceHandler) UpdateSupplierOrderStatus(w http.ResponseWriter, r 
 	})
 }
 
+// cancelSupplierSubOrdersForOrder cancels all non-cancelled supplier sub-orders belonging to a master order
+// and reverses pending supplier wallet balances for sub-orders not yet delivered.
+func cancelSupplierSubOrdersForOrder(ctx context.Context, tx pgx.Tx, orderID, reason string) error {
+	type subOrderRow struct {
+		id             string
+		brandID        string
+		subOrderNumber string
+		status         string
+		currency       string
+		grossAmount    float64
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT id, brand_id, sub_order_number, status,
+		       COALESCE(NULLIF(UPPER(TRIM(currency)), ''), 'TRY'),
+		       gross_amount
+		FROM catalog.supplier_sub_orders
+		WHERE order_id = $1
+		FOR UPDATE
+	`, orderID)
+	if err != nil {
+		return fmt.Errorf("query supplier sub-orders for cancel: %w", err)
+	}
+
+	var subs []subOrderRow
+	for rows.Next() {
+		var sub subOrderRow
+		if scanErr := rows.Scan(&sub.id, &sub.brandID, &sub.subOrderNumber, &sub.status, &sub.currency, &sub.grossAmount); scanErr != nil {
+			rows.Close()
+			return fmt.Errorf("scan supplier sub-order for cancel: %w", scanErr)
+		}
+		subs = append(subs, sub)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate supplier sub-orders for cancel: %w", err)
+	}
+
+	if len(subs) == 0 {
+		return nil
+	}
+
+	rates := loadLatestExchangeRatesMap(ctx)
+	reasonNote := strings.TrimSpace(reason)
+
+	for _, sub := range subs {
+		prevStatus := strings.ToUpper(strings.TrimSpace(sub.status))
+		if prevStatus == "CANCELLED" {
+			continue
+		}
+
+		_, err := tx.Exec(ctx, `
+			UPDATE catalog.supplier_sub_orders
+			SET status = 'CANCELLED',
+			    notes = CASE
+			        WHEN $2 = '' THEN notes
+			        WHEN COALESCE(notes, '') = '' THEN $2
+			        ELSE notes || ' | ' || $2
+			    END,
+			    updated_at = CURRENT_TIMESTAMP
+			WHERE id = $1
+		`, sub.id, reasonNote)
+		if err != nil {
+			return fmt.Errorf("cancel supplier sub-order %s: %w", sub.id, err)
+		}
+
+		if prevStatus == "DELIVERED" {
+			continue
+		}
+
+		subCurrency := normalizeOrderCurrencyCode(sub.currency)
+		_, walletCurrency := getSupplierWalletCommissionAndCurrency(ctx, tx, sub.brandID)
+		grossWallet := convertOrderAmount(sub.grossAmount, subCurrency, walletCurrency, rates)
+
+		var newPending float64
+		err = tx.QueryRow(ctx, `
+			UPDATE catalog.supplier_wallets
+			SET pending_balance = GREATEST(0.00, pending_balance - $1),
+			    updated_at = CURRENT_TIMESTAMP
+			WHERE brand_id = $2
+			RETURNING pending_balance
+		`, grossWallet, sub.brandID).Scan(&newPending)
+		if err != nil {
+			return fmt.Errorf("deduct supplier pending balance for brand %s: %w", sub.brandID, err)
+		}
+
+		desc := fmt.Sprintf("İptal Edilen Sipariş (%s - %s)", sub.subOrderNumber, formatOrderMoney(sub.grossAmount, subCurrency))
+		if reasonNote != "" {
+			desc = desc + " — " + reasonNote
+		}
+		_, _ = tx.Exec(ctx, `
+			INSERT INTO catalog.supplier_ledger (
+				brand_id, sub_order_id, transaction_type, amount, balance_after, currency, description
+			) VALUES ($1, $2, 'ORDER_CANCELLED_REVERSAL', $3, $4, $5, $6)
+		`, sub.brandID, sub.id, grossWallet, newPending, walletCurrency, desc)
+	}
+
+	return nil
+}
+
 // GetSupplierWallet retrieves current wallet balances and recent ledger activity
 func (h *MarketplaceHandler) GetSupplierWallet(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
@@ -1092,7 +1192,7 @@ func (h *MarketplaceHandler) ListB2BApiKeys(w http.ResponseWriter, r *http.Reque
 func (h *MarketplaceHandler) CreateB2BApiKey(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateB2BApiKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.ClientName) == "" {
-		http.Error(w, `{"error":"Bayi veya Müşteri adı zorunludur"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"Müşteri veya firma adı zorunludur"}`, http.StatusBadRequest)
 		return
 	}
 

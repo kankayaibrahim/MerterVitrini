@@ -78,7 +78,10 @@ func buildOrdersFilter(search, status string) (whereClause string, args []any, p
 	paramIdx = 1
 
 	if search != "" {
-		whereClause += fmt.Sprintf(" AND (o.order_number ILIKE $%d OR u.first_name ILIKE $%d OR u.last_name ILIKE $%d OR u.email ILIKE $%d)", paramIdx, paramIdx, paramIdx, paramIdx)
+		whereClause += fmt.Sprintf(
+			" AND (o.order_number ILIKE $%d OR COALESCE(u.first_name, '') ILIKE $%d OR COALESCE(u.last_name, '') ILIKE $%d OR COALESCE(u.email, '') ILIKE $%d OR COALESCE(o.customer_name, '') ILIKE $%d OR COALESCE(o.customer_email, '') ILIKE $%d OR COALESCE(o.customer_phone, '') ILIKE $%d)",
+			paramIdx, paramIdx, paramIdx, paramIdx, paramIdx, paramIdx, paramIdx,
+		)
 		args = append(args, "%"+search+"%")
 		paramIdx++
 	}
@@ -107,7 +110,7 @@ func (h *AdminOrdersHandler) ListOrders(w http.ResponseWriter, r *http.Request) 
 	countQuery := fmt.Sprintf(`
 		SELECT COUNT(*) 
 		FROM catalog.orders o
-		INNER JOIN identity.users u ON o.user_id = u.id
+		LEFT JOIN identity.users u ON o.user_id = u.id
 		%s
 	`, whereClause)
 
@@ -129,9 +132,12 @@ func (h *AdminOrdersHandler) ListOrders(w http.ResponseWriter, r *http.Request) 
 		       o.payment_method, o.order_status, 
 		       COALESCE(o.billing_address, '') as billing_address, COALESCE(o.delivery_address, '') as delivery_address, 
 		       o.created_at, o.updated_at,
-		       u.id as user_id, u.first_name, u.last_name, u.email
+		       COALESCE(u.id::text, '') as user_id,
+		       COALESCE(NULLIF(TRIM(u.first_name), ''), NULLIF(TRIM(o.customer_name), ''), 'Misafir Müşteri') as first_name,
+		       COALESCE(u.last_name, '') as last_name,
+		       COALESCE(NULLIF(TRIM(u.email), ''), COALESCE(o.customer_email, '')) as email
 		FROM catalog.orders o
-		INNER JOIN identity.users u ON o.user_id = u.id
+		LEFT JOIN identity.users u ON o.user_id = u.id
 		%s
 		ORDER BY o.created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -488,9 +494,13 @@ func (h *AdminOrdersHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
 		       o.payment_method, o.order_status, 
 		       COALESCE(o.billing_address, '') as billing_address, COALESCE(o.delivery_address, '') as delivery_address, 
 		       o.created_at, o.updated_at,
-		       u.id, u.first_name, u.last_name, u.email, COALESCE(u.phone, '') as phone
+		       COALESCE(u.id::text, ''),
+		       COALESCE(NULLIF(TRIM(u.first_name), ''), NULLIF(TRIM(o.customer_name), ''), 'Misafir Müşteri'),
+		       COALESCE(u.last_name, ''),
+		       COALESCE(NULLIF(TRIM(u.email), ''), COALESCE(o.customer_email, '')),
+		       COALESCE(NULLIF(TRIM(u.phone), ''), COALESCE(o.customer_phone, '')) as phone
 		FROM catalog.orders o
-		INNER JOIN identity.users u ON o.user_id = u.id
+		LEFT JOIN identity.users u ON o.user_id = u.id
 		WHERE o.id = $1
 	`, orderID).Scan(
 		&d.ID, &d.OrderNumber, &d.TotalAmount,
@@ -575,11 +585,16 @@ func (h *AdminOrdersHandler) UpdateOrderStatus(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Stock restoration if transitioning to CANCELLED from a non-cancelled status
+	// Stock & sub-order cancellation restoration if transitioning to CANCELLED from a non-cancelled status
 	if newStatus == "CANCELLED" && currentStatus != "CANCELLED" {
 		if err := restoreOrderStock(ctx, tx, orderID); err != nil {
 			log.Printf("[ADMIN ORDERS ERROR] Failed to restore stock: %v", err)
 			http.Error(w, `{"error":"Stok güncellemesi başarısız"}`, http.StatusInternalServerError)
+			return
+		}
+		if err := cancelSupplierSubOrdersForOrder(ctx, tx, orderID, "Yönetici tarafından sipariş iptal edildi"); err != nil {
+			log.Printf("[ADMIN ORDERS ERROR] Failed to cancel supplier sub-orders: %v", err)
+			http.Error(w, `{"error":"Tedarikçi alt siparişleri iptal edilemedi"}`, http.StatusInternalServerError)
 			return
 		}
 	}
@@ -773,5 +788,94 @@ func (h *AdminOrdersHandler) VerifyRefund(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Write(fmt.Appendf(nil, `{"success":true,"message":"İade talebi başarıyla %s olarak güncellendi."}`, targetStatus))
+}
+
+// DeleteOrder permanently removes a CANCELLED or PENDING_PAYMENT test/fake order after safely restoring stock and supplier balances.
+func (h *AdminOrdersHandler) DeleteOrder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	orderID := strings.TrimSpace(r.PathValue("id"))
+	if orderID == "" {
+		http.Error(w, `{"error":"Order ID is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		log.Printf("[ADMIN ORDERS ERROR] DeleteOrder begin tx failed: %v", err)
+		http.Error(w, `{"error":"İşlem başlatılamadı"}`, http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	var orderNumber, orderStatus string
+	err = tx.QueryRow(ctx, `
+		SELECT COALESCE(order_number, ''), order_status
+		FROM catalog.orders
+		WHERE id = $1
+		FOR UPDATE
+	`, orderID).Scan(&orderNumber, &orderStatus)
+	if err == pgx.ErrNoRows {
+		http.Error(w, `{"error":"Sipariş bulunamadı"}`, http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("[ADMIN ORDERS ERROR] DeleteOrder query order failed: %v", err)
+		http.Error(w, `{"error":"Sipariş sorgulanamadı"}`, http.StatusInternalServerError)
+		return
+	}
+
+	statusUpper := strings.ToUpper(strings.TrimSpace(orderStatus))
+	if statusUpper != "CANCELLED" && statusUpper != "PENDING_PAYMENT" {
+		http.Error(w, `{"error":"Yalnızca 'Ödeme Bekliyor' veya 'İptal Edildi' durumundaki test/sahte siparişler kalıcı olarak silinebilir. Önce siparişi iptal edin."}`, http.StatusBadRequest)
+		return
+	}
+
+	if statusUpper != "CANCELLED" {
+		if err := restoreOrderStock(ctx, tx, orderID); err != nil {
+			log.Printf("[ADMIN ORDERS ERROR] DeleteOrder restore stock failed: %v", err)
+			http.Error(w, `{"error":"Stok güncellemesi başarısız"}`, http.StatusInternalServerError)
+			return
+		}
+		if err := cancelSupplierSubOrdersForOrder(ctx, tx, orderID, "Test/sahte sipariş kalıcı olarak silindi"); err != nil {
+			log.Printf("[ADMIN ORDERS ERROR] DeleteOrder cancel sub-orders failed: %v", err)
+			http.Error(w, `{"error":"Tedarikçi alt siparişleri iptal edilemedi"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	cleanupQueries := []string{
+		`DELETE FROM catalog.refund_items WHERE refund_id IN (SELECT id FROM catalog.refunds WHERE order_id = $1)`,
+		`DELETE FROM catalog.refunds WHERE order_id = $1`,
+		`DELETE FROM catalog.payment_notifications WHERE order_id = $1`,
+		`DELETE FROM catalog.supplier_sub_orders WHERE order_id = $1`,
+		`DELETE FROM catalog.order_items WHERE order_id = $1`,
+		`DELETE FROM catalog.orders WHERE id = $1`,
+	}
+	for _, q := range cleanupQueries {
+		if _, err := tx.Exec(ctx, q, orderID); err != nil {
+			log.Printf("[ADMIN ORDERS ERROR] DeleteOrder cleanup failed (%s): %v", q, err)
+			http.Error(w, `{"error":"Sipariş kayıtları silinemedi"}`, http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("[ADMIN ORDERS ERROR] DeleteOrder commit failed: %v", err)
+		http.Error(w, `{"error":"Sipariş silme işlemi tamamlanamadı"}`, http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[ADMIN ORDERS] Permanently deleted test/fake order %s (id=%s)", orderNumber, orderID)
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	json.NewEncoder(w).Encode(map[string]any{
+		"success": true,
+		"message": "Sipariş kalıcı olarak silindi.",
+	})
 }
 

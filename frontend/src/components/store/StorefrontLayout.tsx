@@ -9,6 +9,13 @@ import {
   useIsStoreMemberLoggedIn,
 } from "@/app/storeAuth";
 import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
+import { validateStructuredLocationMeta } from "@/components/store/StructuredLocationFields";
+import {
+  validateHumanAddressClient,
+  validateHumanPersonNameClient,
+} from "@/utils/addressValidation";
+import { validateAndNormalizeRealisticPhone } from "@/utils/phoneValidation";
+import { executeRecaptchaAction } from "@/utils/recaptcha";
 
 // Import modular, premium Tailwind E-Commerce subcomponents
 import Header from "@/components/store/Header";
@@ -764,9 +771,54 @@ export default function StorefrontLayout({
   const totalWeight = cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package * item.weight_per_unit), 0);
   const totalPrice = cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package * item.price_per_unit), 0);
 
+const validateDrawerInquiryData = (
+  formData: InquiryFormData,
+  lang: string
+): { readonly ok: true; readonly normalizedPhone: string } | { readonly ok: false; readonly error: string } => {
+  const nameErr = validateHumanPersonNameClient(formData.fullName, lang);
+  if (nameErr) return { ok: false, error: nameErr };
+
+  const rawPhone = formData.phoneNumber.trim();
+  const dialPrefix = `+${formData.locationMeta.countryPhoneCode || 90}`;
+  const candidatePhone = rawPhone.startsWith("+") ? rawPhone : `${dialPrefix}${rawPhone.replace(/^0+/, "")}`;
+  const phoneCheck = validateAndNormalizeRealisticPhone(candidatePhone);
+  if (!phoneCheck.valid) {
+    return {
+      ok: false,
+      error: lang === "tr"
+        ? "Lütfen ülke kodunu içeren geçerli bir telefon numarası girin."
+        : "Please enter a valid contact phone number.",
+    };
+  }
+
+  const locErr = validateStructuredLocationMeta(
+    {
+      countryId: formData.countryId,
+      stateId: formData.stateId,
+      cityId: formData.cityId,
+      addressLine: formData.addressLine,
+      postalCode: formData.postalCode,
+    },
+    formData.locationMeta,
+    lang
+  );
+  if (locErr) return { ok: false, error: locErr };
+
+  const addrErr = validateHumanAddressClient(formData.addressLine, lang);
+  if (addrErr) return { ok: false, error: addrErr };
+
+  return { ok: true, normalizedPhone: phoneCheck.normalized };
+};
+
   // --- Quote Inquiry Form Submission ---
   const handleSubmitInquiry = async (formData: InquiryFormData) => {
     if (cart.length === 0) return;
+
+    const validated = validateDrawerInquiryData(formData, lang);
+    if (!validated.ok) {
+      showToast(validated.error);
+      return;
+    }
 
     setSubmittingInquiry(true);
 
@@ -781,16 +833,25 @@ export default function StorefrontLayout({
       };
     });
 
-    const payload = {
-      full_name: formData.fullName,
-      company: formData.companyName || null,
-      phone: formData.phoneNumber,
-      email: formData.emailAddress,
-      message: formData.customerMessage || null,
-      items: inquiryItems,
-    };
-
     try {
+      const recaptchaToken = await executeRecaptchaAction("submit_inquiry", lang);
+      const payload = {
+        full_name: formData.fullName.trim(),
+        company: formData.companyName.trim() || null,
+        phone: validated.normalizedPhone,
+        email: formData.emailAddress.trim(),
+        message: formData.customerMessage.trim() || null,
+        country_id: formData.countryId,
+        state_id: formData.stateId || null,
+        city_id: formData.cityId || null,
+        postal_code: formData.postalCode.trim(),
+        address_line: formData.addressLine.trim(),
+        delivery_address: formData.addressLine.trim(),
+        customer_currency: displayCurrency,
+        recaptcha_token: recaptchaToken,
+        items: inquiryItems,
+      };
+
       const response = await fetch("/api/v1/store/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -798,9 +859,8 @@ export default function StorefrontLayout({
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        showToast(`Error: ${errData.error || "Failed to submit inquiry"}`);
-        setSubmittingInquiry(false);
+        const errData = await response.json().catch(() => ({}));
+        showToast(errData.error || "Failed to submit inquiry");
         return;
       }
 
@@ -815,7 +875,8 @@ export default function StorefrontLayout({
 
     } catch (err) {
       console.error("Failed to submit B2B inquiry", err);
-      showToast("Connection error! Failed to register your quote request.");
+      const errMsg = err instanceof Error ? err.message : "";
+      showToast(errMsg || "Connection error! Failed to register your quote request.");
     } finally {
       setSubmittingInquiry(false);
     }

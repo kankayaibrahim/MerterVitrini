@@ -49,7 +49,7 @@ CREATE TABLE identity.users (
 
 CREATE INDEX idx_users_email ON identity.users(email);
 
-COMMENT ON TABLE identity.users IS 'Keycloak üzerinde kimlik doğrulaması yapılan tüm yöneticiler, bayiler ve personel bilgilerini tutan senkronize kullanıcı tablosu';
+COMMENT ON TABLE identity.users IS 'Keycloak üzerinde kimlik doğrulaması yapılan tüm yöneticiler, müşteriler, tedarikçiler ve personel bilgilerini tutan senkronize kullanıcı tablosu';
 COMMENT ON COLUMN identity.users.id IS 'Keycloak OIDC tarafından üretilen kullanıcı ID değeri (örn. f:58ba9c54...)';
 COMMENT ON COLUMN identity.users.first_name IS 'Kullanıcının adı';
 COMMENT ON COLUMN identity.users.last_name IS 'Kullanıcının soyadı';
@@ -657,6 +657,9 @@ CREATE TABLE catalog.settings (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     singleton_guard BOOLEAN DEFAULT true,
     show_single_price BOOLEAN NOT NULL DEFAULT true,
+    recaptcha_enabled BOOLEAN NOT NULL DEFAULT true,
+    recaptcha_site_key TEXT NOT NULL DEFAULT '',
+    recaptcha_secret_key TEXT NOT NULL DEFAULT '',
     CONSTRAINT settings_singleton_guard_key UNIQUE (singleton_guard)
 );
 

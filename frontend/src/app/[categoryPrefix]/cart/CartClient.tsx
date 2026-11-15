@@ -14,6 +14,21 @@ import ConfirmModal from "@/components/store/ConfirmModal";
 import { UserAddress } from "@/app/profile/components/types";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
 import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
+import {
+  StructuredLocationMeta,
+  StructuredLocationValue,
+  validateStructuredLocationMeta,
+} from "@/components/store/StructuredLocationFields";
+import {
+  formatCheckoutAddressDisplay,
+  isAddressRecordComplete,
+} from "@/components/store/StructuredCheckoutAddressPicker";
+import {
+  validateHumanAddressClient,
+  validateHumanPersonNameClient,
+} from "@/utils/addressValidation";
+import { validateAndNormalizeRealisticPhone } from "@/utils/phoneValidation";
+import { executeRecaptchaAction } from "@/utils/recaptcha";
 import CartDesktopTable from "./components/CartDesktopTable";
 import CartMobileList from "./components/CartMobileList";
 import CartSummaryBreakdown from "./components/CartSummaryBreakdown";
@@ -202,22 +217,73 @@ function getCartSummarySubtitle(
   return `${totalPkgs} ${copy.pkgUnit} | ${totalItemsCount} ${copy.itemUnit} | ~${totalWeight.toFixed(1)} kg`;
 }
 
-function formatAddressText(addr?: UserAddress): string {
-  if (!addr) return "";
-  const cityPart = addr.city_name ? `${addr.city_name}, ` : "";
-  return `${addr.first_name} ${addr.last_name} - ${addr.company_name || ""}\n${addr.address_line}\n${cityPart}${addr.state_name || ""}/${addr.country_name || ""}\nTel: ${addr.phone}`;
+interface CartCheckoutDefaults {
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly phone: string;
 }
 
-function resolveAddressText(
-  selectedId: string,
-  customText: string,
-  addrList: readonly UserAddress[]
-): string {
-  if (selectedId === "custom" || addrList.length === 0) {
-    return customText.trim();
+function readCartCheckoutDefaults(): CartCheckoutDefaults {
+  if (typeof window === "undefined") {
+    return { firstName: "", lastName: "", phone: "" };
   }
-  const addr = addrList.find((a) => a.id === selectedId);
-  return formatAddressText(addr);
+  try {
+    const stored = JSON.parse(localStorage.getItem("store_user_info") || "{}") as {
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+    };
+    return {
+      firstName: stored.first_name || "",
+      lastName: stored.last_name || "",
+      phone: stored.phone || "",
+    };
+  } catch {
+    return { firstName: "", lastName: "", phone: "" };
+  }
+}
+
+async function fetchCartUserAddresses(token: string): Promise<UserAddress[]> {
+  const res = await fetch("/api/v1/store/profile/addresses", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    return [];
+  }
+  const data = (await res.json().catch(() => [])) as unknown;
+  return Array.isArray(data) ? (data as UserAddress[]) : [];
+}
+
+function validateCartInquiryInputs(
+  fullName: string,
+  phoneNumber: string,
+  location: StructuredLocationValue,
+  locMeta: StructuredLocationMeta,
+  lang: SupportedSeoLang
+): { readonly ok: true; readonly normalizedPhone: string } | { readonly ok: false; readonly error: string } {
+  const nameErr = validateHumanPersonNameClient(fullName, lang);
+  if (nameErr) return { ok: false, error: nameErr };
+
+  const rawPhone = phoneNumber.trim();
+  const dialPrefix = `+${locMeta.countryPhoneCode || 90}`;
+  const candidatePhone = rawPhone.startsWith("+") ? rawPhone : `${dialPrefix}${rawPhone.replace(/^0+/, "")}`;
+  const phoneCheck = validateAndNormalizeRealisticPhone(candidatePhone);
+  if (!phoneCheck.valid) {
+    return {
+      ok: false,
+      error: lang === "tr"
+        ? "Lütfen ülke kodunu içeren geçerli bir telefon numarası girin."
+        : "Please enter a valid contact phone number.",
+    };
+  }
+
+  const locErr = validateStructuredLocationMeta(location, locMeta, lang);
+  if (locErr) return { ok: false, error: locErr };
+
+  const addrErr = validateHumanAddressClient(location.addressLine, lang);
+  if (addrErr) return { ok: false, error: addrErr };
+
+  return { ok: true, normalizedPhone: phoneCheck.normalized };
 }
 
 function parseDefaultAddresses(data: readonly UserAddress[]) {
@@ -268,14 +334,29 @@ async function triggerExcelExport(
   window.URL.revokeObjectURL(url);
 }
 
-async function syncAndCreateOrder(
-  token: string,
-  cart: readonly CartItem[],
-  billing: string,
-  delivery: string,
-  lang: SupportedSeoLang,
-  displayCurrency = "TRY"
-) {
+interface SyncAndCreateOrderParams {
+  readonly token: string;
+  readonly cart: readonly CartItem[];
+  readonly billingAddressId: string;
+  readonly deliveryAddressId: string;
+  readonly billing: string;
+  readonly delivery: string;
+  readonly recaptchaToken: string;
+  readonly lang: SupportedSeoLang;
+  readonly displayCurrency?: string;
+}
+
+async function syncAndCreateOrder({
+  token,
+  cart,
+  billingAddressId,
+  deliveryAddressId,
+  billing,
+  delivery,
+  recaptchaToken,
+  lang,
+  displayCurrency = "TRY",
+}: SyncAndCreateOrderParams) {
   const copy = CART_PAGE_COPY[lang];
   const syncRes = await fetch("/api/v1/store/cart/sync", {
     method: "POST",
@@ -303,10 +384,13 @@ async function syncAndCreateOrder(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
+      billing_address_id: billingAddressId,
+      delivery_address_id: deliveryAddressId,
       billing_address: billing,
       delivery_address: delivery,
       payment_method: "BANK_TRANSFER",
       customer_currency: displayCurrency || "TRY",
+      recaptcha_token: recaptchaToken,
     }),
   });
 
@@ -404,8 +488,7 @@ export default function CartClient({
   const [addresses, setAddresses] = useState<UserAddress[]>([]);
   const [billingAddr, setBillingAddr] = useState("");
   const [deliveryAddr, setDeliveryAddr] = useState("");
-  const [customBillingAddr, setCustomBillingAddr] = useState("");
-  const [customDeliveryAddr, setCustomDeliveryAddr] = useState("");
+  const [sameAsDelivery, setSameAsDelivery] = useState(true);
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
   const [fullName, setFullName] = useState("");
@@ -413,6 +496,24 @@ export default function CartClient({
   const [phoneNumber, setPhoneNumber] = useState("");
   const [emailAddress, setEmailAddress] = useState("");
   const [customerMessage, setCustomerMessage] = useState("");
+  const [inquiryLocation, setInquiryLocation] = useState<StructuredLocationValue>({
+    countryId: "",
+    stateId: "",
+    cityId: "",
+    addressLine: "",
+    postalCode: "",
+  });
+  const [inquiryLocMeta, setInquiryLocMeta] = useState<StructuredLocationMeta>({
+    countryCode: "TR",
+    countryPhoneCode: 90,
+    countryName: "",
+    stateName: "",
+    cityName: "",
+    hasStates: true,
+    hasCities: true,
+    loadingStates: false,
+    loadingCities: false,
+  });
   const [submittingInquiry, setSubmittingInquiry] = useState(false);
 
   const [whatsappUrl, setWhatsappUrl] = useState("");
@@ -420,6 +521,7 @@ export default function CartClient({
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("store_user_token") : null;
+  const checkoutDefaults = readCartCheckoutDefaults();
 
   useEffect(() => {
     const loadRates = async () => {
@@ -431,22 +533,30 @@ export default function CartClient({
 
   useEffect(() => {
     if (token && isCheckout) {
-      fetch("/api/v1/store/profile/addresses", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.json())
-        .then((data: unknown) => {
-          if (Array.isArray(data)) {
-            const typed = data as UserAddress[];
-            setAddresses(typed);
-            const defaults = parseDefaultAddresses(typed);
-            setBillingAddr(defaults.billing);
-            setDeliveryAddr(defaults.delivery);
-          }
+      fetchCartUserAddresses(token)
+        .then((typed) => {
+          setAddresses(typed);
+          const defaults = parseDefaultAddresses(typed);
+          setBillingAddr(defaults.billing);
+          setDeliveryAddr(defaults.delivery);
         })
         .catch((err) => console.error("Error fetching addresses:", err));
     }
   }, [token, isCheckout]);
+
+  const handleAddressCreated = async (createdId: string, kind: "shipping" | "billing") => {
+    if (!token) return;
+    const latest = await fetchCartUserAddresses(token);
+    setAddresses(latest);
+    if (kind === "shipping") {
+      setDeliveryAddr(createdId);
+      if (!billingAddr) {
+        setBillingAddr(createdId);
+      }
+      return;
+    }
+    setBillingAddr(createdId);
+  };
 
   const handleLangChange = (newLang: string) => {
     const normalized = normalizeSeoLang(newLang, "tr");
@@ -553,17 +663,32 @@ export default function CartClient({
     e.preventDefault();
     if (!token) return;
 
-    const finalBilling = resolveAddressText(billingAddr, customBillingAddr, addresses);
-    const finalDelivery = resolveAddressText(deliveryAddr, customDeliveryAddr, addresses);
+    const effectiveBillingId = sameAsDelivery ? deliveryAddr : billingAddr;
+    const delObj = addresses.find((a) => a.id === deliveryAddr);
+    const billObj = addresses.find((a) => a.id === effectiveBillingId);
 
-    if (!finalBilling || !finalDelivery) {
+    if (!delObj || !billObj || !isAddressRecordComplete(delObj) || !isAddressRecordComplete(billObj)) {
       showToast(copy.addressRequired);
       return;
     }
 
+    const finalDelivery = formatCheckoutAddressDisplay(delObj);
+    const finalBilling = formatCheckoutAddressDisplay(billObj);
+
     setSubmittingOrder(true);
     try {
-      const data = await syncAndCreateOrder(token, cart, finalBilling, finalDelivery, safeLang, displayCurrency);
+      const recaptchaToken = await executeRecaptchaAction("create_order", safeLang);
+      const data = await syncAndCreateOrder({
+        token,
+        cart,
+        deliveryAddressId: deliveryAddr,
+        billingAddressId: effectiveBillingId,
+        billing: finalBilling,
+        delivery: finalDelivery,
+        recaptchaToken,
+        lang: safeLang,
+        displayCurrency,
+      });
       showToast(`${copy.orderReceivedPrefix} ${data.order_number ?? ""}\n${copy.orderReceivedSuffix}`);
       saveCart([]);
       setIsCheckout(false);
@@ -602,6 +727,18 @@ export default function CartClient({
     e.preventDefault();
     if (cart.length === 0) return;
 
+    const validated = validateCartInquiryInputs(
+      fullName,
+      phoneNumber,
+      inquiryLocation,
+      inquiryLocMeta,
+      safeLang
+    );
+    if (!validated.ok) {
+      showToast(validated.error);
+      return;
+    }
+
     setSubmittingInquiry(true);
 
     const inquiryItems = cart.map((item) => {
@@ -615,16 +752,25 @@ export default function CartClient({
       };
     });
 
-    const payload = {
-      full_name: fullName,
-      company: companyName || null,
-      phone: phoneNumber,
-      email: emailAddress,
-      message: customerMessage || null,
-      items: inquiryItems,
-    };
-
     try {
+      const recaptchaToken = await executeRecaptchaAction("submit_inquiry", safeLang);
+      const payload = {
+        full_name: fullName.trim(),
+        company: companyName.trim() || null,
+        phone: validated.normalizedPhone,
+        email: emailAddress.trim(),
+        message: customerMessage.trim() || null,
+        country_id: inquiryLocation.countryId,
+        state_id: inquiryLocation.stateId || null,
+        city_id: inquiryLocation.cityId || null,
+        postal_code: inquiryLocation.postalCode.trim(),
+        address_line: inquiryLocation.addressLine.trim(),
+        delivery_address: inquiryLocation.addressLine.trim(),
+        customer_currency: displayCurrency,
+        recaptcha_token: recaptchaToken,
+        items: inquiryItems,
+      };
+
       const response = await fetch("/api/v1/store/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -644,11 +790,13 @@ export default function CartClient({
       setPhoneNumber("");
       setEmailAddress("");
       setCustomerMessage("");
+      setInquiryLocation((prev) => ({ ...prev, addressLine: "", postalCode: "" }));
       setWhatsappUrl(result.whatsapp_url || "#");
       setShowSuccessOverlay(true);
     } catch (err) {
       console.error("Failed to submit B2B inquiry", err);
-      showToast(copy.inquiryError);
+      const errMsg = err instanceof Error ? err.message : "";
+      showToast(errMsg || copy.inquiryError);
     } finally {
       setSubmittingInquiry(false);
     }
@@ -774,15 +922,18 @@ export default function CartClient({
                     isCheckout={isCheckout}
                     setIsCheckout={setIsCheckout}
                     onRequestQuoteOnly={handleRequestQuoteOnly}
+                    token={token}
                     addresses={addresses}
                     deliveryAddr={deliveryAddr}
                     setDeliveryAddr={setDeliveryAddr}
-                    customDeliveryAddr={customDeliveryAddr}
-                    setCustomDeliveryAddr={setCustomDeliveryAddr}
                     billingAddr={billingAddr}
                     setBillingAddr={setBillingAddr}
-                    customBillingAddr={customBillingAddr}
-                    setCustomBillingAddr={setCustomBillingAddr}
+                    sameAsDelivery={sameAsDelivery}
+                    setSameAsDelivery={setSameAsDelivery}
+                    onAddressCreated={handleAddressCreated}
+                    defaultFirstName={checkoutDefaults.firstName}
+                    defaultLastName={checkoutDefaults.lastName}
+                    defaultPhone={checkoutDefaults.phone}
                     submittingOrder={submittingOrder}
                     onSubmitCheckout={handleCheckoutSubmit}
                     onCancelCheckout={() => {
@@ -808,6 +959,9 @@ export default function CartClient({
                   setPhoneNumber={setPhoneNumber}
                   emailAddress={emailAddress}
                   setEmailAddress={setEmailAddress}
+                  inquiryLocation={inquiryLocation}
+                  setInquiryLocation={setInquiryLocation}
+                  setInquiryLocMeta={setInquiryLocMeta}
                   customerMessage={customerMessage}
                   setCustomerMessage={setCustomerMessage}
                   submittingInquiry={submittingInquiry}

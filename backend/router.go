@@ -64,7 +64,7 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 		StoreAuth:            storeAuth,
 		StoreInquiry:         handlers.NewInquiryHandler(cfg),
 		AdminAuth:            handlers.NewAdminAuthHandler(cfg),
-		AdminCatalog:         handlers.NewAdminCatalogHandler(),
+		AdminCatalog:         handlers.NewAdminCatalogHandler(cfg),
 		AdminOrders:          handlers.NewAdminOrdersHandler(cfg),
 		Integration:          handlers.NewIntegrationHandler(cfg),
 		Suppliers:            handlers.NewSuppliersHandler(),
@@ -322,6 +322,7 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("GET /api/v1/orders", protect(h.AdminOrders.ListOrders))
 	mux.Handle("GET /api/v1/orders/{id}", protect(h.AdminOrders.GetOrder))
 	mux.Handle("PUT /api/v1/orders/{id}/status", protect(h.AdminOrders.UpdateOrderStatus))
+	mux.Handle("DELETE /api/v1/orders/{id}", protect(h.AdminOrders.DeleteOrder))
 	mux.Handle("PUT /api/v1/payment-notifications/{id}", protect(h.AdminOrders.VerifyPaymentNotification))
 	mux.Handle("PUT /api/v1/refunds/{id}", protect(h.AdminOrders.VerifyRefund))
 

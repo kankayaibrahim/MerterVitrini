@@ -21,9 +21,11 @@ const (
 	mobileChallengeTTL            = 15 * time.Minute
 	mobileChallengeClockSkew      = 60 * time.Second
 	mobileChallengeDefaultPurpose = "mobile_form"
-	mobileChallengePurposeReg     = "register"
-	mobileChallengePurposeSupp    = "supplier_apply"
-	mobileChallengePurposeService = "service_provider_apply"
+	mobileChallengePurposeReg           = "register"
+	mobileChallengePurposeSupp          = "supplier_apply"
+	mobileChallengePurposeService       = "service_provider_apply"
+	mobileChallengePurposeCreateOrder   = "create_order"
+	mobileChallengePurposeSubmitInquiry = "submit_inquiry"
 )
 
 var (
@@ -79,6 +81,10 @@ func normalizeMobileChallengePurpose(purpose string) string {
 		return mobileChallengePurposeService
 	case "auth_register", "signup", mobileChallengePurposeReg:
 		return mobileChallengePurposeReg
+	case "create-order", "order", mobileChallengePurposeCreateOrder:
+		return mobileChallengePurposeCreateOrder
+	case "submit-inquiry", "inquiry", mobileChallengePurposeSubmitInquiry:
+		return mobileChallengePurposeSubmitInquiry
 	default:
 		return clean
 	}

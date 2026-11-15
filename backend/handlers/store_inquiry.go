@@ -15,6 +15,7 @@ import (
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/mailer"
+	"mertervitrini/backend/pkg/phoneutil"
 	"mertervitrini/backend/pkg/safe"
 )
 
@@ -37,7 +38,14 @@ type inquiryPayload struct {
 	Message          *string              `json:"message"`
 	CustomerMessage  *string              `json:"customer_message"`
 	DeliveryAddress  string               `json:"delivery_address"`
+	CountryID        string               `json:"country_id"`
+	StateID          *string              `json:"state_id"`
+	CityID           *string              `json:"city_id"`
+	AddressLine      string               `json:"address_line"`
+	PostalCode       string               `json:"postal_code"`
 	CustomerCurrency string               `json:"customer_currency"`
+	RecaptchaToken   string               `json:"recaptcha_token"`
+	ChallengeToken   string               `json:"challenge_token"`
 	Items            []models.InquiryItem `json:"items"`
 	CartItems        []models.InquiryItem `json:"cart_items"`
 }
@@ -281,7 +289,62 @@ func (h *InquiryHandler) SubmitInquiry(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	res, err := saveInquiryAndDirectSupplierOrders(ctx, &req, raw.DeliveryAddress, raw.CustomerCurrency)
+	if status, errMsg := verifyOrderOrInquiryAntiBot(
+		ctx,
+		h.Cfg,
+		r,
+		raw.RecaptchaToken,
+		raw.ChallengeToken,
+		"submit_inquiry",
+		mobileChallengePurposeSubmitInquiry,
+	); status != 0 {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, errMsg), status)
+		return
+	}
+
+	if err := ValidateHumanPersonName(req.FullName); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	normalizedPhone, phoneErr := phoneutil.NormalizeAndValidatePhone(req.Phone)
+	if phoneErr != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, phoneErr.Error()), http.StatusBadRequest)
+		return
+	}
+	req.Phone = normalizedPhone
+
+	addrLine := strings.TrimSpace(raw.AddressLine)
+	if addrLine == "" {
+		addrLine = strings.TrimSpace(raw.DeliveryAddress)
+	}
+	if err := ValidateHumanAddressText(addrLine); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	loc, locErr := ValidateStructuredLocationDB(ctx, raw.CountryID, raw.StateID, raw.CityID)
+	if locErr != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, locErr.Error()), http.StatusBadRequest)
+		return
+	}
+
+	inquiryCompany := ""
+	if req.Company != nil {
+		inquiryCompany = strings.TrimSpace(*req.Company)
+	}
+	canonicalDeliveryAddr := FormatCanonicalOrderAddress(CanonicalAddressParts{
+		RecipientName: req.FullName,
+		CompanyName:   inquiryCompany,
+		AddressLine:   addrLine,
+		PostalCode:    strings.TrimSpace(raw.PostalCode),
+		CityName:      loc.CityName,
+		StateName:     loc.StateName,
+		CountryName:   loc.CountryName,
+		Phone:         req.Phone,
+	})
+
+	res, err := saveInquiryAndDirectSupplierOrders(ctx, &req, canonicalDeliveryAddr, raw.CustomerCurrency)
 	if err != nil {
 		log.Printf("[STORE INQUIRY ERROR] %v", err)
 		http.Error(w, `{"error":"Failed to process inquiry"}`, http.StatusInternalServerError)
@@ -289,10 +352,6 @@ func (h *InquiryHandler) SubmitInquiry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	formattedTotal := formatCurrencyBreakdownSummary(res.CurrencyTotals, res.TotalAmount, res.Currency)
-	inquiryCompany := ""
-	if req.Company != nil {
-		inquiryCompany = strings.TrimSpace(*req.Company)
-	}
 	reqSnapshot := snapshotRequestForMailerMeta(r)
 	inquiryItemsSnapshot := buildOrderAdminNotificationItems(res.OrderItems)
 	safe.Go("SendInquiryOrderAdminNotification", func() {
@@ -304,7 +363,7 @@ func (h *InquiryHandler) SubmitInquiry(w http.ResponseWriter, r *http.Request) {
 			CustomerCompany:  inquiryCompany,
 			CustomerEmail:    req.Email,
 			CustomerPhone:    req.Phone,
-			DeliveryAddress:  raw.DeliveryAddress,
+			DeliveryAddress:  canonicalDeliveryAddr,
 			TotalAmountTRY:   res.TotalAmountTRY,
 			TotalSummaryText: formattedTotal,
 			Items:            inquiryItemsSnapshot,

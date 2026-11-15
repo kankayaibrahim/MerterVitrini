@@ -247,6 +247,11 @@ class DirectInquiryPayload {
   final String email;
   final String message;
   final String deliveryAddress;
+  final String countryId;
+  final String? stateId;
+  final String? cityId;
+  final String postalCode;
+  final String addressLine;
   final List<DirectInquiryItemPayload> items;
 
   const DirectInquiryPayload({
@@ -256,18 +261,35 @@ class DirectInquiryPayload {
     this.email = '',
     this.message = '',
     this.deliveryAddress = '',
+    this.countryId = '',
+    this.stateId,
+    this.cityId,
+    this.postalCode = '',
+    this.addressLine = '',
     required this.items,
   });
 
-  Map<String, dynamic> toJson() => {
-    'full_name': fullName.trim(),
-    if (companyName.trim().isNotEmpty) 'company_name': companyName.trim(),
-    'phone': phone.trim(),
-    'email': email.trim(),
-    if (message.trim().isNotEmpty) 'message': message.trim(),
-    'delivery_address': deliveryAddress.trim(),
-    'items': items.map((e) => e.toJson()).toList(),
-  };
+  Map<String, dynamic> toJson() {
+    final effectiveAddress = addressLine.trim().isNotEmpty
+        ? addressLine.trim()
+        : deliveryAddress.trim();
+    return {
+      'full_name': fullName.trim(),
+      if (companyName.trim().isNotEmpty) 'company_name': companyName.trim(),
+      'phone': phone.trim(),
+      'email': email.trim(),
+      if (message.trim().isNotEmpty) 'message': message.trim(),
+      if (countryId.trim().isNotEmpty) 'country_id': countryId.trim(),
+      if (stateId != null && stateId!.trim().isNotEmpty)
+        'state_id': stateId!.trim(),
+      if (cityId != null && cityId!.trim().isNotEmpty)
+        'city_id': cityId!.trim(),
+      if (addressLine.trim().isNotEmpty) 'address_line': addressLine.trim(),
+      if (postalCode.trim().isNotEmpty) 'postal_code': postalCode.trim(),
+      'delivery_address': effectiveAddress,
+      'items': items.map((e) => e.toJson()).toList(),
+    };
+  }
 }
 
 class DirectInquirySupplierOrderSummary {

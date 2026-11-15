@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/address_validator.dart';
 import '../../core/app_theme.dart';
 import '../../core/localization.dart';
 import '../../core/phone_validator.dart';
 import '../../models/marketplace.dart';
 import '../../models/product.dart';
+import '../../models/user.dart';
 import '../../providers/session_provider.dart';
 import '../../widgets/editorial_ui.dart';
 
@@ -60,11 +62,20 @@ class _DirectInquirySheetState extends State<_DirectInquirySheet> {
   final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
+  final _postalCtrl = TextEditingController();
   final _messageCtrl = TextEditingController();
 
   late int _packagesQty;
   bool _submitting = false;
+  bool _loadingLocations = false;
   String? _error;
+
+  List<LocationItem> _countries = <LocationItem>[];
+  List<LocationItem> _states = <LocationItem>[];
+  List<LocationItem> _cities = <LocationItem>[];
+  LocationItem? _selectedCountry;
+  LocationItem? _selectedState;
+  LocationItem? _selectedCity;
 
   @override
   void initState() {
@@ -77,7 +88,13 @@ class _DirectInquirySheetState extends State<_DirectInquirySheet> {
       _nameCtrl.text = user.fullName;
       _phoneCtrl.text = user.phone;
       _emailCtrl.text = user.email;
-      _addressCtrl.text = user.deliveryAddress;
+      if (AddressValidator.validateStreetAddress(
+            user.deliveryAddress,
+            lang: lang,
+          ) ==
+          null) {
+        _addressCtrl.text = user.deliveryAddress.trim();
+      }
     }
     if (widget.product != null) {
       final p = widget.product!;
@@ -93,6 +110,7 @@ class _DirectInquirySheetState extends State<_DirectInquirySheet> {
         bg: 'Запитване за цена на едро и наличност за $_packagesQty серии ${p.localizedTitle(lang)} (SKU: ${p.customSku}).',
       );
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInitialLocations());
   }
 
   @override
@@ -102,8 +120,152 @@ class _DirectInquirySheetState extends State<_DirectInquirySheet> {
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
     _addressCtrl.dispose();
+    _postalCtrl.dispose();
     _messageCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadInitialLocations() async {
+    if (!mounted) return;
+    setState(() => _loadingLocations = true);
+    final session = context.read<SessionProvider>();
+    try {
+      CustomerAddress? defaultAddr;
+      if (session.isCustomerLoggedIn) {
+        try {
+          final saved = await session.api.listCustomerAddresses();
+          if (saved.isNotEmpty) {
+            defaultAddr = saved.firstWhere(
+              (a) => a.isDefault,
+              orElse: () => saved.first,
+            );
+          }
+        } catch (_) {}
+      }
+
+      if (defaultAddr != null && mounted) {
+        if (defaultAddr.addressLine.trim().isNotEmpty) {
+          _addressCtrl.text = defaultAddr.addressLine.trim();
+        }
+        if (_postalCtrl.text.trim().isEmpty &&
+            defaultAddr.postalCode.trim().isNotEmpty) {
+          _postalCtrl.text = defaultAddr.postalCode.trim();
+        }
+        final company = (defaultAddr.companyName ?? '').trim();
+        if (_companyCtrl.text.trim().isEmpty && company.isNotEmpty) {
+          _companyCtrl.text = company;
+        }
+      }
+
+      final countries = await session.api.listCountries();
+      if (!mounted) return;
+
+      LocationItem? initialCountry;
+      if (countries.isNotEmpty) {
+        final targetCountryId = defaultAddr?.countryId.trim() ?? '';
+        initialCountry = countries.firstWhere(
+          (c) => targetCountryId.isNotEmpty && c.id == targetCountryId,
+          orElse: () => countries.firstWhere(
+            (c) => c.code.toUpperCase() == 'TR',
+            orElse: () => countries.first,
+          ),
+        );
+      }
+
+      setState(() {
+        _countries = countries;
+        _selectedCountry = initialCountry;
+      });
+
+      if (initialCountry != null) {
+        await _onCountryChanged(
+          initialCountry,
+          preserveStateId: defaultAddr?.stateId,
+          preserveCityId: defaultAddr?.cityId,
+        );
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingLocations = false);
+    }
+  }
+
+  Future<void> _onCountryChanged(
+    LocationItem country, {
+    String? preserveStateId,
+    String? preserveCityId,
+  }) async {
+    setState(() {
+      _selectedCountry = country;
+      _selectedState = null;
+      _selectedCity = null;
+      _states = <LocationItem>[];
+      _cities = <LocationItem>[];
+      _loadingLocations = true;
+    });
+    try {
+      final states =
+          await context.read<SessionProvider>().api.listStatesByCountry(
+                country.id,
+              );
+      if (!mounted) return;
+      LocationItem? matchState;
+      final sid = preserveStateId?.trim() ?? '';
+      if (sid.isNotEmpty && states.isNotEmpty) {
+        for (final s in states) {
+          if (s.id == sid) {
+            matchState = s;
+            break;
+          }
+        }
+      }
+      setState(() {
+        _states = states;
+        _selectedState = matchState;
+      });
+      if (matchState != null) {
+        await _onStateChanged(matchState, preserveCityId: preserveCityId);
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingLocations = false);
+    }
+  }
+
+  Future<void> _onStateChanged(
+    LocationItem stateItem, {
+    String? preserveCityId,
+  }) async {
+    setState(() {
+      _selectedState = stateItem;
+      _selectedCity = null;
+      _cities = <LocationItem>[];
+      _loadingLocations = true;
+    });
+    try {
+      final cities =
+          await context.read<SessionProvider>().api.listCitiesByState(
+                stateItem.id,
+              );
+      if (!mounted) return;
+      LocationItem? matchCity;
+      final cid = preserveCityId?.trim() ?? '';
+      if (cid.isNotEmpty && cities.isNotEmpty) {
+        for (final c in cities) {
+          if (c.id == cid) {
+            matchCity = c;
+            break;
+          }
+        }
+      }
+      setState(() {
+        _cities = cities;
+        _selectedCity = matchCity;
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingLocations = false);
+    }
   }
 
   Future<void> _submit() async {
@@ -117,6 +279,25 @@ class _DirectInquirySheetState extends State<_DirectInquirySheet> {
     );
     if (!phoneCheck.isValid) {
       setState(() => _error = phoneCheck.localizedError(lang));
+      return;
+    }
+
+    if (_selectedCountry == null ||
+        (_states.isNotEmpty && _selectedState == null) ||
+        (_cities.isNotEmpty && _selectedCity == null)) {
+      setState(
+        () => _error = UiText.pick(
+          lang,
+          tr: 'Lütfen ülke, il ve ilçe seçimini eksiksiz yapın.',
+          en: 'Please complete country, state/province, and city selection.',
+          ru: 'Пожалуйста, выберите страну, регион и город.',
+          ar: 'يرجى تحديد البلد والولاية والمدينة بالكامل.',
+          de: 'Bitte wählen Sie Land, Bundesland/Provinz und Stadt vollständig aus.',
+          fr: 'Veuillez sélectionner le pays, la région et la ville.',
+          pl: 'Proszę wybrać kraj, region i miasto.',
+          bg: 'Моля, изберете държава, област и град.',
+        ),
+      );
       return;
     }
 
@@ -145,6 +326,11 @@ class _DirectInquirySheetState extends State<_DirectInquirySheet> {
           phone: phoneCheck.normalized,
           email: _emailCtrl.text.trim(),
           message: _messageCtrl.text.trim(),
+          countryId: _selectedCountry!.id,
+          stateId: _selectedState?.id,
+          cityId: _selectedCity?.id,
+          postalCode: _postalCtrl.text.trim(),
+          addressLine: _addressCtrl.text.trim(),
           deliveryAddress: _addressCtrl.text.trim(),
           items: items,
         ),
@@ -313,9 +499,8 @@ class _DirectInquirySheetState extends State<_DirectInquirySheet> {
                   decoration: InputDecoration(
                     labelText: '${AppStrings.t(lang, 'sender_name')} *',
                   ),
-                  validator: (v) => (v == null || v.trim().length < 2)
-                      ? AppStrings.t(lang, 'err_validation')
-                      : null,
+                  validator: (v) =>
+                      AddressValidator.validatePersonName(v ?? '', lang: lang),
                 ),
                 const SizedBox(height: 10),
                 TextFormField(
@@ -352,10 +537,117 @@ class _DirectInquirySheetState extends State<_DirectInquirySheet> {
                       : null,
                 ),
                 const SizedBox(height: 10),
+                if (_loadingLocations)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: LinearProgressIndicator(
+                      minHeight: 2,
+                      color: AppColors.obsidian,
+                    ),
+                  ),
+                DropdownButtonFormField<LocationItem>(
+                  key: ValueKey('inq_country_${_selectedCountry?.id ?? 'none'}'),
+                  initialValue: _selectedCountry,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: '${AppStrings.t(lang, 'country')} *',
+                  ),
+                  items: _countries
+                      .map(
+                        (c) => DropdownMenuItem<LocationItem>(
+                          value: c,
+                          child: Text(
+                            c.localizedName(lang),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  validator: (v) =>
+                      v == null ? AppStrings.t(lang, 'err_validation') : null,
+                  onChanged: _countries.isEmpty
+                      ? null
+                      : (v) {
+                          if (v != null) _onCountryChanged(v);
+                        },
+                ),
+                if (_states.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<LocationItem>(
+                    key: ValueKey(
+                      'inq_state_${_selectedCountry?.id ?? 'none'}_${_selectedState?.id ?? 'none'}',
+                    ),
+                    initialValue: _selectedState,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: '${AppStrings.t(lang, 'state_province')} *',
+                    ),
+                    items: _states
+                        .map(
+                          (s) => DropdownMenuItem<LocationItem>(
+                            value: s,
+                            child: Text(
+                              s.localizedName(lang),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    validator: (v) =>
+                        v == null ? AppStrings.t(lang, 'err_validation') : null,
+                    onChanged: (v) {
+                      if (v != null) _onStateChanged(v);
+                    },
+                  ),
+                ],
+                if (_cities.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<LocationItem>(
+                    key: ValueKey(
+                      'inq_city_${_selectedState?.id ?? 'none'}_${_selectedCity?.id ?? 'none'}',
+                    ),
+                    initialValue: _selectedCity,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: '${AppStrings.t(lang, 'city_district')} *',
+                    ),
+                    items: _cities
+                        .map(
+                          (c) => DropdownMenuItem<LocationItem>(
+                            value: c,
+                            child: Text(
+                              c.localizedName(lang),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    validator: (v) =>
+                        v == null ? AppStrings.t(lang, 'err_validation') : null,
+                    onChanged: (v) => setState(() => _selectedCity = v),
+                  ),
+                ],
+                const SizedBox(height: 10),
                 TextFormField(
                   controller: _addressCtrl,
+                  maxLines: 2,
                   decoration: InputDecoration(
-                    labelText: AppStrings.t(lang, 'location_address'),
+                    labelText: '${AppStrings.t(lang, 'address_line')} *',
+                  ),
+                  validator: (v) => AddressValidator.validateStreetAddress(
+                    v ?? '',
+                    lang: lang,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _postalCtrl,
+                  decoration: InputDecoration(
+                    labelText: AppStrings.t(lang, 'postal_code'),
+                  ),
+                  validator: (v) => AddressValidator.validatePostalCode(
+                    v ?? '',
+                    lang: lang,
                   ),
                 ),
                 const SizedBox(height: 10),

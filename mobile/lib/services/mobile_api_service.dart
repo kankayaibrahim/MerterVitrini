@@ -362,12 +362,16 @@ class MobileApiService
   Future<Map<String, dynamic>> createOrder({
     required String billingAddress,
     required String deliveryAddress,
+    String? billingAddressId,
+    String? deliveryAddressId,
     String paymentMethod = 'BANK_TRANSFER',
     String customerCurrency = '',
   }) =>
       commerce.createOrder(
         billingAddress: billingAddress,
         deliveryAddress: deliveryAddress,
+        billingAddressId: billingAddressId,
+        deliveryAddressId: deliveryAddressId,
         paymentMethod: paymentMethod,
         customerCurrency: customerCurrency,
       );

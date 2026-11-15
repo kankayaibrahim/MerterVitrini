@@ -612,6 +612,9 @@ func ConnectDB(cfg *config.Config) (*pgxpool.Pool, error) {
 		`CREATE INDEX IF NOT EXISTS idx_users_customer_created_at ON identity.users (created_at DESC) WHERE user_role = 'customer'`,
 		`CREATE INDEX IF NOT EXISTS idx_users_customer_country ON identity.users (country_code) WHERE user_role = 'customer'`,
 		`CREATE INDEX IF NOT EXISTS idx_users_customer_geo_unresolved ON identity.users (created_at DESC) WHERE user_role = 'customer' AND country_code IS NULL`,
+		`ALTER TABLE catalog.settings ADD COLUMN IF NOT EXISTS recaptcha_enabled BOOLEAN NOT NULL DEFAULT true`,
+		`ALTER TABLE catalog.settings ADD COLUMN IF NOT EXISTS recaptcha_site_key TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE catalog.settings ADD COLUMN IF NOT EXISTS recaptcha_secret_key TEXT NOT NULL DEFAULT ''`,
 	}
 
 	for _, ddl := range ddlQueries {

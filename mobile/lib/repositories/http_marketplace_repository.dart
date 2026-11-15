@@ -36,9 +36,12 @@ class HttpMarketplaceRepository implements IMarketplaceRepository {
     DirectInquiryPayload payload,
   ) async {
     try {
-      final resp = await _client.dio.post<dynamic>(
-        '/api/v1/store/inquiries',
-        data: payload.toJson(),
+      final resp = await HttpRepoHelpers.postWithChallenge(
+        _client,
+        mobilePath: '/api/v1/store/inquiries',
+        fallbackStorePath: '/api/v1/store/inquiries',
+        purpose: 'submit_inquiry',
+        payload: payload.toJson(),
       );
       return DirectInquiryResponse.fromJson(HttpRepoHelpers.asMap(resp.data));
     } catch (e) {

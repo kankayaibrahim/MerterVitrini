@@ -11,16 +11,23 @@ import (
 	"strings"
 	"time"
 
+	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
 
 	"github.com/jackc/pgx/v5"
 )
 
-type AdminCatalogHandler struct{}
+type AdminCatalogHandler struct {
+	Cfg *config.Config
+}
 
-func NewAdminCatalogHandler() *AdminCatalogHandler {
-	return &AdminCatalogHandler{}
+func NewAdminCatalogHandler(cfgs ...*config.Config) *AdminCatalogHandler {
+	var cfg *config.Config
+	if len(cfgs) > 0 {
+		cfg = cfgs[0]
+	}
+	return &AdminCatalogHandler{Cfg: cfg}
 }
 
 // --- CATEGORY HANDLERS ---
@@ -656,13 +663,23 @@ func (h *AdminCatalogHandler) GetSettings(w http.ResponseWriter, r *http.Request
 	defer cancel()
 
 	var s models.Settings
-	query := `SELECT id, address, phone, whatsapp, email, show_single_price, COALESCE(show_prices_to_guests, false), updated_at FROM catalog.settings LIMIT 1`
-	err := db.Pool.QueryRow(ctx, query).Scan(&s.ID, &s.Address, &s.Phone, &s.Whatsapp, &s.Email, &s.ShowSinglePrice, &s.ShowPricesToGuests, &s.UpdatedAt)
+	var dbEnabled bool
+	var dbSiteKey, dbSecretKey string
+	query := `SELECT id, address, phone, whatsapp, email, show_single_price, COALESCE(show_prices_to_guests, false), COALESCE(recaptcha_enabled, true), COALESCE(recaptcha_site_key, ''), COALESCE(recaptcha_secret_key, ''), updated_at FROM catalog.settings LIMIT 1`
+	err := db.Pool.QueryRow(ctx, query).Scan(&s.ID, &s.Address, &s.Phone, &s.Whatsapp, &s.Email, &s.ShowSinglePrice, &s.ShowPricesToGuests, &dbEnabled, &dbSiteKey, &dbSecretKey, &s.UpdatedAt)
 	if err != nil {
 		log.Printf("[ADMIN API ERROR] Failed to fetch settings: %v", err)
 		http.Error(w, `{"error":"Failed to fetch settings"}`, http.StatusInternalServerError)
 		return
 	}
+
+	eff := resolveEffectiveReCaptcha(ctx, h.Cfg)
+	s.RecaptchaEnabled = dbEnabled
+	s.RecaptchaSiteKey = strings.TrimSpace(dbSiteKey)
+	if s.RecaptchaSiteKey == "" {
+		s.RecaptchaSiteKey = eff.SiteKey
+	}
+	s.RecaptchaHasSecret = strings.TrimSpace(dbSecretKey) != "" || eff.HasSecret
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(s)
@@ -676,12 +693,16 @@ func (h *AdminCatalogHandler) UpdateSettings(w http.ResponseWriter, r *http.Requ
 	}
 
 	var req struct {
-		Address            string `json:"address"`
-		Phone              string `json:"phone"`
-		Whatsapp           string `json:"whatsapp"`
-		Email              string `json:"email"`
-		ShowSinglePrice    bool   `json:"show_single_price"`
-		ShowPricesToGuests bool   `json:"show_prices_to_guests"`
+		Address              string  `json:"address"`
+		Phone                string  `json:"phone"`
+		Whatsapp             string  `json:"whatsapp"`
+		Email                string  `json:"email"`
+		ShowSinglePrice      bool    `json:"show_single_price"`
+		ShowPricesToGuests   bool    `json:"show_prices_to_guests"`
+		RecaptchaEnabled     *bool   `json:"recaptcha_enabled"`
+		RecaptchaSiteKey     *string `json:"recaptcha_site_key"`
+		RecaptchaSecretKey   *string `json:"recaptcha_secret_key"`
+		ClearRecaptchaSecret bool    `json:"clear_recaptcha_secret"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -697,9 +718,33 @@ func (h *AdminCatalogHandler) UpdateSettings(w http.ResponseWriter, r *http.Requ
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
+	existingEnabled, existingSiteKey, existingSecretKey, hasExisting := loadDBReCaptchaSettings(ctx)
+	nextEnabled := true
+	if hasExisting {
+		nextEnabled = existingEnabled
+	}
+	if req.RecaptchaEnabled != nil {
+		nextEnabled = *req.RecaptchaEnabled
+	}
+
+	nextSiteKey := existingSiteKey
+	if req.RecaptchaSiteKey != nil {
+		nextSiteKey = strings.TrimSpace(*req.RecaptchaSiteKey)
+	}
+
+	nextSecretKey := existingSecretKey
+	if req.ClearRecaptchaSecret {
+		nextSecretKey = ""
+	} else if req.RecaptchaSecretKey != nil {
+		trimmedSecret := strings.TrimSpace(*req.RecaptchaSecretKey)
+		if trimmedSecret != "" {
+			nextSecretKey = trimmedSecret
+		}
+	}
+
 	query := `
-		INSERT INTO catalog.settings (address, phone, whatsapp, email, show_single_price, show_prices_to_guests)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO catalog.settings (address, phone, whatsapp, email, show_single_price, show_prices_to_guests, recaptcha_enabled, recaptcha_site_key, recaptcha_secret_key)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (singleton_guard) DO UPDATE SET
 			address = EXCLUDED.address,
 			phone = EXCLUDED.phone,
@@ -707,18 +752,54 @@ func (h *AdminCatalogHandler) UpdateSettings(w http.ResponseWriter, r *http.Requ
 			email = EXCLUDED.email,
 			show_single_price = EXCLUDED.show_single_price,
 			show_prices_to_guests = EXCLUDED.show_prices_to_guests,
+			recaptcha_enabled = EXCLUDED.recaptcha_enabled,
+			recaptcha_site_key = EXCLUDED.recaptcha_site_key,
+			recaptcha_secret_key = EXCLUDED.recaptcha_secret_key,
 			updated_at = CURRENT_TIMESTAMP
-		RETURNING id, address, phone, whatsapp, email, show_single_price, COALESCE(show_prices_to_guests, false), updated_at`
+		RETURNING id, address, phone, whatsapp, email, show_single_price, COALESCE(show_prices_to_guests, false), COALESCE(recaptcha_enabled, true), COALESCE(recaptcha_site_key, ''), COALESCE(recaptcha_secret_key, ''), updated_at`
 
 	var s models.Settings
-	err := db.Pool.QueryRow(ctx, query, req.Address, req.Phone, req.Whatsapp, req.Email, req.ShowSinglePrice, req.ShowPricesToGuests).Scan(
-		&s.ID, &s.Address, &s.Phone, &s.Whatsapp, &s.Email, &s.ShowSinglePrice, &s.ShowPricesToGuests, &s.UpdatedAt,
+	var savedEnabled bool
+	var savedSiteKey, savedSecretKey string
+	err := db.Pool.QueryRow(
+		ctx,
+		query,
+		req.Address,
+		req.Phone,
+		req.Whatsapp,
+		req.Email,
+		req.ShowSinglePrice,
+		req.ShowPricesToGuests,
+		nextEnabled,
+		nextSiteKey,
+		nextSecretKey,
+	).Scan(
+		&s.ID,
+		&s.Address,
+		&s.Phone,
+		&s.Whatsapp,
+		&s.Email,
+		&s.ShowSinglePrice,
+		&s.ShowPricesToGuests,
+		&savedEnabled,
+		&savedSiteKey,
+		&savedSecretKey,
+		&s.UpdatedAt,
 	)
 	if err != nil {
 		log.Printf("[ADMIN API ERROR] Failed to update settings: %v", err)
 		http.Error(w, `{"error":"Failed to update settings"}`, http.StatusInternalServerError)
 		return
 	}
+
+	invalidateReCaptchaSettingsCache()
+	eff := resolveEffectiveReCaptcha(ctx, h.Cfg)
+	s.RecaptchaEnabled = savedEnabled
+	s.RecaptchaSiteKey = strings.TrimSpace(savedSiteKey)
+	if s.RecaptchaSiteKey == "" {
+		s.RecaptchaSiteKey = eff.SiteKey
+	}
+	s.RecaptchaHasSecret = strings.TrimSpace(savedSecretKey) != "" || eff.HasSecret
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(s)

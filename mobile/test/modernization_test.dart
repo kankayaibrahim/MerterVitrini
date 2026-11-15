@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mertervitrini_mobile/contracts/supplier_catalog_repository.dart';
 import 'package:mertervitrini_mobile/contracts/supplier_operations_repository.dart';
+import 'package:mertervitrini_mobile/core/address_validator.dart';
 import 'package:mertervitrini_mobile/core/app_theme.dart';
 import 'package:mertervitrini_mobile/core/localization.dart';
 import 'package:mertervitrini_mobile/features/supplier/utils/supplier_l10n.dart';
@@ -165,6 +166,11 @@ void main() {
         companyName: 'Weber Mode GmbH',
         phone: '+491701234567',
         email: 'hans@weber.de',
+        countryId: 'DE',
+        stateId: 'st-berlin',
+        cityId: 'ct-berlin',
+        postalCode: '10117',
+        addressLine: 'Friedrichstrasse 112',
         deliveryAddress: 'Berlin',
         items: <DirectInquiryItemPayload>[
           DirectInquiryItemPayload(
@@ -176,8 +182,15 @@ void main() {
           ),
         ],
       );
-      expect(inquiry.toJson()['company_name'], 'Weber Mode GmbH');
-      expect((inquiry.toJson()['items'] as List).length, 1);
+      final inquiryJson = inquiry.toJson();
+      expect(inquiryJson['company_name'], 'Weber Mode GmbH');
+      expect(inquiryJson['country_id'], 'DE');
+      expect(inquiryJson['state_id'], 'st-berlin');
+      expect(inquiryJson['city_id'], 'ct-berlin');
+      expect(inquiryJson['postal_code'], '10117');
+      expect(inquiryJson['address_line'], 'Friedrichstrasse 112');
+      expect(inquiryJson['delivery_address'], 'Friedrichstrasse 112');
+      expect((inquiryJson['items'] as List).length, 1);
 
       final slot = SponsoredSlotItem.fromJson(<String, dynamic>{
         'id': 'slot-1',
@@ -229,6 +242,40 @@ void main() {
         'updated_at': '2026-11-12T08:00:00Z',
       });
       expect(cms.localizedTitle('fr'), 'Guide Export B2B');
+    });
+
+    test('AddressValidator rejects gibberish and enforces multi-word street addresses', () {
+      expect(
+        AddressValidator.validateStreetAddress(
+          'Osiskdlskdpsopdpappdpxpxppspupapa',
+        ),
+        isNotNull,
+      );
+      expect(
+        AddressValidator.validateStreetAddress('Xidskdlskskkdksodsoaooaoa'),
+        isNotNull,
+      );
+      expect(AddressValidator.validateStreetAddress('aaaaabbbbb cd'), isNotNull);
+      expect(
+        AddressValidator.validateStreetAddress('MerterMahallesi12'),
+        isNotNull,
+      );
+      expect(
+        AddressValidator.validateStreetAddress(
+          'Mehmet Nesih Özmen Mah. Gülsever Sok. No:12',
+        ),
+        isNull,
+      );
+      expect(AddressValidator.validatePersonName('Alperen Köse'), isNull);
+      expect(AddressValidator.validatePersonName('aaaaabbbbb'), isNotNull);
+      expect(
+        AddressValidator.validatePostalCode('', required: true),
+        isNotNull,
+      );
+      expect(
+        AddressValidator.validatePostalCode('34173', required: true),
+        isNull,
+      );
     });
 
     test('Supplier Studio DTOs (17-field profile, analytics, billing, payouts) and OrderDetail/Refund serialize accurately', () {

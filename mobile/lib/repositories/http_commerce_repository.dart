@@ -113,21 +113,30 @@ class HttpCommerceRepository implements ICommerceRepository {
   Future<Map<String, dynamic>> createOrder({
     required String billingAddress,
     required String deliveryAddress,
+    String? billingAddressId,
+    String? deliveryAddressId,
     String paymentMethod = 'BANK_TRANSFER',
     String customerCurrency = '',
   }) async {
     try {
-      final resp = await _client.dio.post<Map<String, dynamic>>(
-        '/api/v1/store/orders',
-        data: {
+      final resp = await HttpRepoHelpers.postWithChallenge(
+        _client,
+        mobilePath: '/api/v1/store/orders',
+        fallbackStorePath: '/api/v1/store/orders',
+        purpose: 'create_order',
+        payload: {
           'billing_address': billingAddress,
           'delivery_address': deliveryAddress,
+          if (billingAddressId != null && billingAddressId.trim().isNotEmpty)
+            'billing_address_id': billingAddressId.trim(),
+          if (deliveryAddressId != null && deliveryAddressId.trim().isNotEmpty)
+            'delivery_address_id': deliveryAddressId.trim(),
           'payment_method': paymentMethod,
           if (customerCurrency.trim().isNotEmpty)
             'customer_currency': customerCurrency.trim().toUpperCase(),
         },
       );
-      return resp.data ?? <String, dynamic>{};
+      return HttpRepoHelpers.asMap(resp.data);
     } catch (e) {
       throw ApiClient.mapError(e, lang: _client.activeLanguageCode);
     }

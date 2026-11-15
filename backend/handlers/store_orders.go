@@ -31,11 +31,15 @@ func NewStoreOrdersHandler(cfg *config.Config) *StoreOrdersHandler {
 }
 
 type CreateOrderRequest struct {
-	BillingAddress   string `json:"billing_address"`
-	DeliveryAddress  string `json:"delivery_address"`
-	PaymentMethod    string `json:"payment_method"` // Defaults to "BANK_TRANSFER"
-	CustomerCurrency string `json:"customer_currency"`
-	DisplayCurrency  string `json:"display_currency"`
+	BillingAddress    string `json:"billing_address"`
+	DeliveryAddress   string `json:"delivery_address"`
+	BillingAddressID  string `json:"billing_address_id"`
+	DeliveryAddressID string `json:"delivery_address_id"`
+	PaymentMethod     string `json:"payment_method"` // Defaults to "BANK_TRANSFER"
+	CustomerCurrency  string `json:"customer_currency"`
+	DisplayCurrency   string `json:"display_currency"`
+	RecaptchaToken    string `json:"recaptcha_token"`
+	ChallengeToken    string `json:"challenge_token"`
 }
 
 type PaymentNotificationRequest struct {
@@ -337,15 +341,39 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if req.BillingAddress == "" || req.DeliveryAddress == "" {
-		http.Error(w, `{"error":"Fatura ve teslimat adresleri zorunludur"}`, http.StatusBadRequest)
+	ctx := r.Context()
+
+	if status, errMsg := verifyOrderOrInquiryAntiBot(
+		ctx,
+		h.Cfg,
+		r,
+		req.RecaptchaToken,
+		req.ChallengeToken,
+		"create_order",
+		mobileChallengePurposeCreateOrder,
+	); status != 0 {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, errMsg), status)
 		return
 	}
+
+	canonicalDeliveryAddr, err := ResolveAndValidateSavedUserAddress(ctx, userID, req.DeliveryAddressID, "teslimat adresi")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	canonicalBillingAddr, err := ResolveAndValidateSavedUserAddress(ctx, userID, req.BillingAddressID, "fatura adresi")
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	req.DeliveryAddress = canonicalDeliveryAddr
+	req.BillingAddress = canonicalBillingAddr
+
 	if req.PaymentMethod == "" {
 		req.PaymentMethod = "BANK_TRANSFER"
 	}
-
-	ctx := r.Context()
 
 	var cartID string
 	err = db.Pool.QueryRow(ctx, "SELECT id FROM catalog.carts WHERE user_id = $1", userID).Scan(&cartID)
@@ -775,6 +803,7 @@ func restoreProductAndVariantStock(ctx context.Context, tx pgx.Tx, productID str
 			vIDs = append(vIDs, id)
 		}
 	}
+	vRows.Close()
 
 	if len(vIDs) > 0 {
 		deductions := distributeStockDeduction(quantity, seriesRatio, len(vIDs))
@@ -848,6 +877,11 @@ func (h *StoreOrdersHandler) CancelOrder(w http.ResponseWriter, r *http.Request)
 
 	if err := restoreOrderStock(ctx, tx, orderID); err != nil {
 		http.Error(w, `{"error":"Stok güncellemesi başarısız"}`, http.StatusInternalServerError)
+		return
+	}
+
+	if err := cancelSupplierSubOrdersForOrder(ctx, tx, orderID, "Müşteri tarafından sipariş iptal edildi"); err != nil {
+		http.Error(w, `{"error":"Tedarikçi alt siparişleri iptal edilemedi"}`, http.StatusInternalServerError)
 		return
 	}
 

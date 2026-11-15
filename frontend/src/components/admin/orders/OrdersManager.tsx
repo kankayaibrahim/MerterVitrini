@@ -11,7 +11,11 @@ import {
   X, 
   User, 
   CreditCard, 
-  RotateCcw 
+  RotateCcw,
+  Trash2,
+  Ban,
+  CheckCircle2,
+  AlertTriangle
 } from "lucide-react";
 
 import {
@@ -164,6 +168,63 @@ function getStatusClass(status: string) {
   }
 }
 
+function getPaymentLabel(method: string): string {
+  switch (method) {
+    case "BANK_TRANSFER":
+      return "Banka Havalesi";
+    case "DIRECT_SUPPLIER":
+      return "Doğrudan Tedarikçi";
+    default:
+      return method || "-";
+  }
+}
+
+interface OrderFeedbackState {
+  readonly type: "success" | "error";
+  readonly text: string;
+}
+
+function OrderFeedbackBanner({
+  feedback,
+  onDismiss,
+}: Readonly<{
+  feedback: OrderFeedbackState | null;
+  onDismiss: () => void;
+}>) {
+  if (!feedback) {
+    return null;
+  }
+
+  const isSuccess = feedback.type === "success";
+  const boxClass = isSuccess
+    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+    : "bg-rose-50 border-rose-200 text-rose-800";
+
+  return (
+    <div
+      role="status"
+      className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border text-xs font-bold shadow-xs ${boxClass}`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        {isSuccess ? (
+          <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
+        ) : (
+          <AlertTriangle size={16} className="shrink-0 text-rose-600" />
+        )}
+        <span>{feedback.text}</span>
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Bildirimi kapat"
+        className="p-1 rounded-lg hover:bg-black/5 cursor-pointer shrink-0"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 interface OrdersTableProps {
   readonly loading: boolean;
   readonly error: string | null;
@@ -239,7 +300,7 @@ function OrdersTable({
                 )}
               </td>
               <td className="px-6 py-4 text-xs font-semibold text-zinc-600">
-                {o.payment_method === "BANK_TRANSFER" ? "Banka Havalesi" : o.payment_method}
+                {getPaymentLabel(o.payment_method)}
               </td>
               <td className="px-6 py-4">
                 <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${getStatusClass(o.order_status)}`}>
@@ -267,12 +328,122 @@ function OrdersTable({
   );
 }
 
+interface OrderAdminDangerActionsProps {
+  readonly orderStatus: string;
+  readonly updating: boolean;
+  readonly onCancelOrder: () => void;
+  readonly onDeleteOrder: () => void;
+}
+
+function OrderAdminDangerActions({
+  orderStatus,
+  updating,
+  onCancelOrder,
+  onDeleteOrder,
+}: Readonly<OrderAdminDangerActionsProps>) {
+  const [confirmMode, setConfirmMode] = useState<"cancel" | "delete" | null>(null);
+  const canDelete = orderStatus === "CANCELLED" || orderStatus === "PENDING_PAYMENT";
+
+  if (confirmMode === "cancel") {
+    return (
+      <div className="p-2.5 rounded-xl border border-amber-200 bg-amber-50 space-y-2">
+        <p className="text-[11px] font-bold text-amber-900 leading-snug">
+          Sipariş iptal edilecek, ürün/varyant stokları ve tedarikçi bekleyen bakiyeleri geri alınacak. Onaylıyor musunuz?
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={updating}
+            onClick={() => {
+              setConfirmMode(null);
+              onCancelOrder();
+            }}
+            className="flex-1 px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
+          >
+            Evet, İptal Et
+          </button>
+          <button
+            type="button"
+            disabled={updating}
+            onClick={() => setConfirmMode(null)}
+            className="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-[11px] font-bold text-zinc-700 hover:bg-zinc-100 cursor-pointer"
+          >
+            Vazgeç
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (confirmMode === "delete") {
+    return (
+      <div className="p-2.5 rounded-xl border border-rose-200 bg-rose-50 space-y-2">
+        <p className="text-[11px] font-bold text-rose-900 leading-snug">
+          Bu sipariş kaydı veritabanından kalıcı olarak silinecektir (Ödeme Bekliyor ise stoklar otomatik iade edilir). Onaylıyor musunuz?
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={updating}
+            onClick={() => {
+              setConfirmMode(null);
+              onDeleteOrder();
+            }}
+            className="flex-1 px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer disabled:opacity-50"
+          >
+            Kalıcı Olarak Sil
+          </button>
+          <button
+            type="button"
+            disabled={updating}
+            onClick={() => setConfirmMode(null)}
+            className="px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-[11px] font-bold text-zinc-700 hover:bg-zinc-100 cursor-pointer"
+          >
+            Vazgeç
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 pt-1">
+      {orderStatus !== "CANCELLED" && (
+        <button
+          type="button"
+          disabled={updating}
+          onClick={() => setConfirmMode("cancel")}
+          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 text-[11px] font-extrabold transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <Ban size={13} />
+          Siparişi İptal Et
+        </button>
+      )}
+      <button
+        type="button"
+        disabled={updating || !canDelete}
+        onClick={() => setConfirmMode("delete")}
+        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-zinc-300 bg-white hover:border-rose-300 hover:bg-rose-50 text-zinc-700 hover:text-rose-700 text-[11px] font-extrabold transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
+      >
+        <Trash2 size={13} />
+        Test / Sahte Siparişi Kalıcı Sil
+      </button>
+      {!canDelete && (
+        <p className="text-[10px] font-semibold text-zinc-400 leading-tight">
+          Kalıcı silmek için önce siparişi iptal edin.
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface OrderDetailViewProps {
   readonly loadingDetail: boolean;
   readonly detailError: string | null;
   readonly orderDetail: OrderDetail | null;
   readonly updating: boolean;
   readonly onUpdateStatus: (newStatus: string) => void;
+  readonly onDeleteOrder: () => void;
   readonly onVerifyPayment: (notifId: string, approve: boolean) => void;
   readonly onVerifyRefund: (refundId: string, approve: boolean) => void;
 }
@@ -283,6 +454,7 @@ function OrderDetailView({
   orderDetail,
   updating,
   onUpdateStatus,
+  onDeleteOrder,
   onVerifyPayment,
   onVerifyRefund
 }: Readonly<OrderDetailViewProps>) {
@@ -374,8 +546,15 @@ function OrderDetailView({
               <option value="APPROVED">Onaylandı</option>
               <option value="SHIPPING">Kargoda</option>
               <option value="COMPLETED">Tamamlandı</option>
-              <option value="CANCELLED">İptal Et</option>
+              <option value="CANCELLED">İptal Edildi</option>
             </select>
+            <OrderAdminDangerActions
+              key={orderDetail.id}
+              orderStatus={orderDetail.order_status}
+              updating={updating}
+              onCancelOrder={() => onUpdateStatus("CANCELLED")}
+              onDeleteOrder={onDeleteOrder}
+            />
           </div>
         </div>
       </div>
@@ -579,6 +758,7 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
 
   // Status update, verify notification & verify refund states
   const [updating, setUpdating] = useState(false);
+  const [feedback, setFeedback] = useState<OrderFeedbackState | null>(null);
 
   const fetchOrders = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -681,6 +861,7 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
   };
 
   const handleOpenDetail = (orderId: string) => {
+    setFeedback(null);
     setSelectedOrderID(orderId);
     void fetchOrderDetail(orderId);
   };
@@ -688,11 +869,13 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
   const handleCloseDetail = () => {
     setSelectedOrderID(null);
     setOrderDetail(null);
+    setFeedback(null);
   };
 
   const handleUpdateStatus = async (newStatus: string) => {
     if (!orderDetail) return;
     setUpdating(true);
+    setFeedback(null);
     try {
       const response = await fetch(`${apiUrl}/api/v1/orders/${orderDetail.id}/status`, {
         method: "PUT",
@@ -708,11 +891,47 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
         throw new Error(errData.error || "Sipariş durumu güncellenemedi.");
       }
 
-      alert("Sipariş durumu başarıyla güncellendi.");
+      const msg = newStatus === "CANCELLED"
+        ? "Sipariş iptal edildi; ürün stokları ve tedarikçi bakiyesi güncellendi."
+        : "Sipariş durumu başarıyla güncellendi.";
+      setFeedback({ type: "success", text: msg });
       void fetchOrderDetail(orderDetail.id);
       void fetchOrders();
     } catch (err: unknown) {
-      alert((err as Error).message);
+      setFeedback({ type: "error", text: (err as Error).message });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!orderDetail) return;
+    const deletedNumber = orderDetail.order_number;
+    const deletedId = orderDetail.id;
+    setUpdating(true);
+    setFeedback(null);
+    try {
+      const response = await fetch(`${apiUrl}/api/v1/orders/${deletedId}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || "Sipariş kalıcı olarak silinemedi.");
+      }
+
+      setSelectedOrderID(null);
+      setOrderDetail(null);
+      setFeedback({
+        type: "success",
+        text: `Sipariş (${deletedNumber}) veritabanından kalıcı olarak silindi ve varsa stok/bakiye geri alındı.`
+      });
+      void fetchOrders();
+    } catch (err: unknown) {
+      setFeedback({ type: "error", text: (err as Error).message });
     } finally {
       setUpdating(false);
     }
@@ -721,6 +940,7 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
   const handleVerifyPayment = async (notifId: string, approve: boolean) => {
     if (!orderDetail) return;
     setUpdating(true);
+    setFeedback(null);
     try {
       const response = await fetch(`${apiUrl}/api/v1/payment-notifications/${notifId}`, {
         method: "PUT",
@@ -736,11 +956,14 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
         throw new Error(errData.error || "Ödeme bildirimi güncellenemedi.");
       }
 
-      alert(`Ödeme bildirimi başarıyla ${approve ? "onaylandı" : "reddedildi"}.`);
+      setFeedback({
+        type: "success",
+        text: `Ödeme bildirimi başarıyla ${approve ? "onaylandı" : "reddedildi"}.`
+      });
       void fetchOrderDetail(orderDetail.id);
       void fetchOrders();
     } catch (err: unknown) {
-      alert((err as Error).message);
+      setFeedback({ type: "error", text: (err as Error).message });
     } finally {
       setUpdating(false);
     }
@@ -749,6 +972,7 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
   const handleVerifyRefund = async (refundId: string, approve: boolean) => {
     if (!orderDetail) return;
     setUpdating(true);
+    setFeedback(null);
     try {
       const response = await fetch(`${apiUrl}/api/v1/refunds/${refundId}`, {
         method: "PUT",
@@ -764,11 +988,14 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
         throw new Error(errData.error || "İade işlemi güncellenemedi.");
       }
 
-      alert(`İade talebi başarıyla ${approve ? "onaylandı" : "reddedildi"}.`);
+      setFeedback({
+        type: "success",
+        text: `İade talebi başarıyla ${approve ? "onaylandı" : "reddedildi"}.`
+      });
       void fetchOrderDetail(orderDetail.id);
       void fetchOrders();
     } catch (err: unknown) {
-      alert((err as Error).message);
+      setFeedback({ type: "error", text: (err as Error).message });
     } finally {
       setUpdating(false);
     }
@@ -797,6 +1024,13 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
           {LABELS.REFRESH}
         </button>
       </div>
+
+      {!selectedOrderID && (
+        <OrderFeedbackBanner
+          feedback={feedback}
+          onDismiss={() => setFeedback(null)}
+        />
+      )}
 
       {/* Filters and List */}
       <div className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm overflow-hidden">
@@ -867,10 +1101,22 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
           <div className="relative w-full max-w-4xl bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden z-10 p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-start border-b border-zinc-100 pb-4 shrink-0">
               <div>
-                <h3 className="text-base font-bold text-zinc-950 flex items-center gap-2">
-                  <ShoppingBag className="text-violet-600" size={18} />
-                  Sipariş Yönetimi - {orderDetail?.order_number || "Yükleniyor..."}
-                </h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-bold text-zinc-950 flex items-center gap-2">
+                    <ShoppingBag className="text-violet-600" size={18} />
+                    Sipariş Yönetimi - {orderDetail?.order_number || "Yükleniyor..."}
+                  </h3>
+                  {orderDetail && (
+                    <>
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${getStatusClass(orderDetail.order_status)}`}>
+                        {getStatusLabel(orderDetail.order_status)}
+                      </span>
+                      <span className="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 border border-zinc-200 text-zinc-700">
+                        {getPaymentLabel(orderDetail.payment_method)}
+                      </span>
+                    </>
+                  )}
+                </div>
                 {orderDetail && (
                   <span className="text-[10px] font-semibold text-zinc-400 block mt-0.5">
                     Sipariş Tarihi: {new Date(orderDetail.created_at).toLocaleString("tr-TR")}
@@ -886,12 +1132,22 @@ export default function OrdersManager({ apiUrl, token }: Readonly<OrdersManagerP
               </button>
             </div>
 
+            {feedback && (
+              <div className="pt-3 shrink-0">
+                <OrderFeedbackBanner
+                  feedback={feedback}
+                  onDismiss={() => setFeedback(null)}
+                />
+              </div>
+            )}
+
             <OrderDetailView
               loadingDetail={loadingDetail}
               detailError={detailError}
               orderDetail={orderDetail}
               updating={updating}
               onUpdateStatus={handleUpdateStatus}
+              onDeleteOrder={() => { void handleDeleteOrder(); }}
               onVerifyPayment={handleVerifyPayment}
               onVerifyRefund={handleVerifyRefund}
             />

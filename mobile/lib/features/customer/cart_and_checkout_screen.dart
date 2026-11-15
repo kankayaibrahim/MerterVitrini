@@ -603,10 +603,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Future<void> _submitOrder() async {
     final session = context.read<SessionProvider>();
     final lang = session.languageCode;
-    final delivery = _deliveryCtrl.text.trim();
-    final billing = _sameAsDelivery ? delivery : _billingCtrl.text.trim();
+    final deliveryAddr = _selectedDelivery;
+    final billingAddr = _sameAsDelivery ? _selectedDelivery : _selectedBilling;
+    final delivery = deliveryAddr?.formattedFullAddress.trim() ?? _deliveryCtrl.text.trim();
+    final billing = _sameAsDelivery ? delivery : (billingAddr?.formattedFullAddress.trim() ?? _billingCtrl.text.trim());
 
-    if (delivery.isEmpty || billing.isEmpty) {
+    if (deliveryAddr == null || deliveryAddr.id.trim().isEmpty || billingAddr == null || billingAddr.id.trim().isEmpty || delivery.isEmpty || billing.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppStrings.t(lang, 'err_validation')),
@@ -622,6 +624,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final res = await session.api.createOrder(
         billingAddress: billing,
         deliveryAddress: delivery,
+        billingAddressId: billingAddr.id,
+        deliveryAddressId: deliveryAddr.id,
         paymentMethod: 'BANK_TRANSFER',
         customerCurrency: session.currencyCode,
       );
@@ -794,9 +798,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ],
                     TextField(
                       controller: _deliveryCtrl,
+                      readOnly: true,
+                      onTap: () => _pickOrCreateAddress(forBilling: false),
                       maxLines: 3,
                       decoration: InputDecoration(
-                        labelText: '${AppStrings.t(lang, 'address_line')} *',
+                        labelText: '${AppStrings.t(lang, 'address_type_shipping')} *',
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -867,6 +873,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ],
                       TextField(
                         controller: _billingCtrl,
+                        readOnly: true,
+                        onTap: () => _pickOrCreateAddress(forBilling: true),
                         maxLines: 3,
                         decoration: InputDecoration(
                           labelText:

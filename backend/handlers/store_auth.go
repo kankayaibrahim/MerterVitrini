@@ -769,21 +769,21 @@ func verifyGoogleReCaptcha(secret, token, action string) (bool, error) {
 // When token is non-empty and a secret key exists, it always verifies with Google.
 // When token is empty, it only rejects if enforceWhenPairConfigured is true AND both site_key + secret_key are configured.
 func verifyPublicFormReCaptcha(cfg *config.Config, token, action string, enforceWhenPairConfigured bool) (bool, error) {
+	eff := resolveEffectiveReCaptcha(context.Background(), cfg)
+	if !eff.Enabled {
+		return true, nil
+	}
 	trimmedToken := strings.TrimSpace(token)
 	if trimmedToken == "" {
-		if enforceWhenPairConfigured && cfg != nil && cfg.HasReCaptchaPair() {
+		if enforceWhenPairConfigured && eff.Enforce {
 			return false, errors.New("Güvenlik doğrulaması (reCAPTCHA) gerekli.")
 		}
 		return true, nil
 	}
-	secret := ""
-	if cfg != nil {
-		secret = cfg.EffectiveReCaptchaSecret()
-	}
-	if secret == "" {
+	if eff.SecretKey == "" {
 		return true, nil
 	}
-	return verifyGoogleReCaptcha(secret, trimmedToken, action)
+	return verifyGoogleReCaptcha(eff.SecretKey, trimmedToken, action)
 }
 
 type UserProfile struct {
@@ -1432,6 +1432,11 @@ func (h *StoreAuthHandler) CreateAddress(w http.ResponseWriter, r *http.Request)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
+	if _, err := ValidateAddressRequestLocationAndText(ctx, &req); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
+
 	// Transaction to update defaults & insert
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
@@ -1541,6 +1546,11 @@ func (h *StoreAuthHandler) UpdateAddress(w http.ResponseWriter, r *http.Request)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+
+	if _, err := ValidateAddressRequestLocationAndText(ctx, &req); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
+		return
+	}
 
 	var exists bool
 	err = db.Pool.QueryRow(ctx, `

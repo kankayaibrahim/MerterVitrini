@@ -7,6 +7,11 @@ import {
   SupportedSeoLang,
   normalizeSeoLang,
 } from "@/utils/seoHelpers";
+import StructuredLocationFields, {
+  StructuredLocationMeta,
+  StructuredLocationValue,
+} from "@/components/store/StructuredLocationFields";
+import { getRecaptchaLegalNotice } from "@/utils/recaptcha";
 
 interface InquirySectionCopy {
   readonly formTitle: string;
@@ -19,7 +24,7 @@ const INQUIRY_SECTION_COPY: Record<SupportedSeoLang, InquirySectionCopy> = {
   tr: {
     formTitle: "TEKLİF TALEP FORMU",
     goToCheckout: "Sipariş Ekranına Dön",
-    registeredPrompt: "Kayıtlı kurumsal bayimiz misiniz?",
+    registeredPrompt: "Kayıtlı kurumsal müşterimiz misiniz?",
     signInBtn: "Giriş Yapın",
   },
   en: {
@@ -43,7 +48,7 @@ const INQUIRY_SECTION_COPY: Record<SupportedSeoLang, InquirySectionCopy> = {
   de: {
     formTitle: "ANGEBOTSANFRAGE-FORMULAR",
     goToCheckout: "Zurück zum Checkout",
-    registeredPrompt: "Bereits registrierter B2B-Händler?",
+    registeredPrompt: "Bereits registrierter B2B-Kunde?",
     signInBtn: "Anmelden",
   },
   fr: {
@@ -78,6 +83,9 @@ interface CartInquirySectionProps {
   readonly setPhoneNumber: (v: string) => void;
   readonly emailAddress: string;
   readonly setEmailAddress: (v: string) => void;
+  readonly inquiryLocation: StructuredLocationValue;
+  readonly setInquiryLocation: (v: StructuredLocationValue) => void;
+  readonly setInquiryLocMeta: (m: StructuredLocationMeta) => void;
   readonly customerMessage: string;
   readonly setCustomerMessage: (v: string) => void;
   readonly submittingInquiry: boolean;
@@ -104,6 +112,9 @@ export default function CartInquirySection({
   setPhoneNumber,
   emailAddress,
   setEmailAddress,
+  inquiryLocation,
+  setInquiryLocation,
+  setInquiryLocMeta,
   customerMessage,
   setCustomerMessage,
   submittingInquiry,
@@ -210,6 +221,16 @@ export default function CartInquirySection({
           />
         </div>
 
+        <StructuredLocationFields
+          lang={safeLang}
+          value={inquiryLocation}
+          onChange={setInquiryLocation}
+          onMetaChange={setInquiryLocMeta}
+          showPostalCode={false}
+          compact
+          disabled={submittingInquiry}
+        />
+
         <div className="flex flex-col gap-1">
           <label
             htmlFor="inquiry-message"
@@ -225,6 +246,10 @@ export default function CartInquirySection({
             placeholder={t("placeholder_message", safeLang)}
           />
         </div>
+
+        <p className="text-[10px] font-medium text-neutral-500 text-center leading-snug m-0">
+          {getRecaptchaLegalNotice(safeLang)}
+        </p>
 
         <button
           type="submit"

@@ -9,6 +9,15 @@ import { convertPrice, fetchStoreSettingsCached, getResizedImageUrl, showToast, 
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { persistStoreCart } from "@/utils/cartSync";
 import { UserAddress } from "@/app/profile/components/types";
+import StructuredCheckoutAddressPicker, {
+  formatCheckoutAddressDisplay,
+  isAddressRecordComplete,
+} from "@/components/store/StructuredCheckoutAddressPicker";
+import StructuredLocationFields, {
+  StructuredLocationMeta,
+  StructuredLocationValue,
+} from "@/components/store/StructuredLocationFields";
+import { executeRecaptchaAction, getRecaptchaLegalNotice } from "@/utils/recaptcha";
 
 export interface InquiryFormData {
   fullName: string;
@@ -16,6 +25,12 @@ export interface InquiryFormData {
   phoneNumber: string;
   emailAddress: string;
   customerMessage: string;
+  countryId: string;
+  stateId: string;
+  cityId: string;
+  postalCode: string;
+  addressLine: string;
+  locationMeta: StructuredLocationMeta;
 }
 
 interface CartDrawerProps {
@@ -99,7 +114,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     goToCheckout: "Sipariş Adımına Dön",
     orderViaBankTransfer: "Banka Havalesi ile Sipariş Ver",
     requestProformaOnly: "Sadece Fiyat Teklifi İste (Proforma)",
-    registeredDealerPrompt: "Kayıtlı bayimiz misiniz?",
+    registeredDealerPrompt: "Kayıtlı müşterimiz misiniz?",
     signInBtn: "Giriş Yapın",
     removeItemAria: "Ürünü sepetten kaldır",
   },
@@ -239,7 +254,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     goToCheckout: "Zur Bestellabwicklung",
     orderViaBankTransfer: "Per Banküberweisung bestellen",
     requestProformaOnly: "Nur Preisangebot anfordern (Proforma)",
-    registeredDealerPrompt: "Sind Sie bereits registrierter Händler?",
+    registeredDealerPrompt: "Sind Sie bereits registrierter B2B-Kunde?",
     signInBtn: "Anmelden",
     removeItemAria: "Artikel aus dem Warenkorb entfernen",
   },
@@ -394,23 +409,69 @@ function extractValidBankAccounts(settings: StoreBankSettings | null): DynamicBa
   return list;
 }
 
-function formatAddress(addr: UserAddress): string {
-  const cityPart = addr.city_name ? `${addr.city_name}, ` : "";
-  const companyPart = addr.company_name ? ` - ${addr.company_name}` : "";
-  const stateCountry = `${addr.state_name || ""}/${addr.country_name || ""}`;
-  return `${addr.first_name} ${addr.last_name}${companyPart}\n${addr.address_line}\n${cityPart}${stateCountry}\nTel: ${addr.phone}`;
+const SAME_BILLING_LABELS: Record<string, string> = {
+  tr: "Fatura adresi teslimat adresiyle aynı olsun",
+  en: "Use same address for billing",
+  ru: "Платёжный адрес совпадает с адресом доставки",
+  ar: "عنوان الفوترة مطابق لعنوان التسليم",
+  de: "Rechnungsadresse entspricht der Lieferadresse",
+  fr: "Utiliser la même adresse pour la facturation",
+  pl: "Adres rozliczeniowy taki sam jak adres dostawy",
+  bg: "Адресът за фактуриране е същият като за доставка",
+};
+
+const INCOMPLETE_ADDRESS_LABELS: Record<string, string> = {
+  tr: "Lütfen Ülke, İl, İlçe ve geçerli açık adres içeren kayıtlı teslimat ve fatura adreslerini seçin veya ekleyin.",
+  en: "Please select or add complete delivery and billing addresses including Country, State, City, and street details.",
+  ru: "Выберите или добавьте корректные адреса доставки и оплаты со страной, регионом и городом.",
+  ar: "يرجى تحديد أو إضافة عناوين تسليم وفوترة مكتملة تتضمن الدولة والولاية والمدينة وتفاصيل الشارع.",
+  de: "Bitte wählen oder erfassen Sie vollständige Liefer- und Rechnungsadressen mit Land, Bundesland und Stadt.",
+  fr: "Veuillez sélectionner ou ajouter des adresses complètes avec pays, région, ville et rue.",
+  pl: "Wybierz lub dodaj pełne adresy dostawy i rozliczeń z krajem, województwem, miastem i ulicą.",
+  bg: "Моля, изберете или добавете пълни адреси с държава, област, град и улица.",
+};
+
+function getLocalizedDrawerNote(map: Record<string, string>, lang: string): string {
+  return map[lang] || map.en;
 }
 
-function resolveFinalAddress(
-  selectedId: string,
-  customText: string,
-  addresses: readonly UserAddress[]
-): string {
-  if (selectedId === "custom" || addresses.length === 0) {
-    return customText.trim();
+interface StoredCheckoutDefaults {
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly phone: string;
+}
+
+function readStoredCheckoutDefaults(): StoredCheckoutDefaults {
+  if (typeof window === "undefined") {
+    return { firstName: "", lastName: "", phone: "" };
   }
-  const addr = addresses.find((a) => a.id === selectedId);
-  return addr ? formatAddress(addr) : "";
+  try {
+    const stored = JSON.parse(localStorage.getItem("store_user_info") || "{}") as {
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+    };
+    return {
+      firstName: stored.first_name || "",
+      lastName: stored.last_name || "",
+      phone: stored.phone || "",
+    };
+  } catch {
+    return { firstName: "", lastName: "", phone: "" };
+  }
+}
+
+async function fetchSavedUserAddresses(token: string): Promise<UserAddress[]> {
+  const res = await fetch("/api/v1/store/profile/addresses", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    return [];
+  }
+  const data = (await res.json().catch(() => [])) as UserAddress[];
+  return Array.isArray(data) ? data : [];
 }
 
 function selectDefaultAddresses(
@@ -434,8 +495,11 @@ function selectDefaultAddresses(
 interface SubmitB2BOrderParams {
   readonly token: string;
   readonly cart: readonly CartItem[];
+  readonly billingAddressId: string;
+  readonly deliveryAddressId: string;
   readonly billingAddress: string;
   readonly deliveryAddress: string;
+  readonly recaptchaToken: string;
   readonly lang: string;
   readonly displayCurrency?: string;
 }
@@ -443,8 +507,11 @@ interface SubmitB2BOrderParams {
 async function submitB2BOrder({
   token,
   cart,
+  billingAddressId,
+  deliveryAddressId,
   billingAddress,
   deliveryAddress,
+  recaptchaToken,
   lang,
   displayCurrency,
 }: SubmitB2BOrderParams): Promise<string> {
@@ -475,10 +542,13 @@ async function submitB2BOrder({
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
+      billing_address_id: billingAddressId,
+      delivery_address_id: deliveryAddressId,
       billing_address: billingAddress,
       delivery_address: deliveryAddress,
       payment_method: "BANK_TRANSFER",
       customer_currency: displayCurrency || "TRY",
+      recaptcha_token: recaptchaToken,
     }),
   });
 
@@ -775,82 +845,21 @@ function CartTotalsSection({
 
 interface CartCheckoutFormProps {
   readonly lang: string;
+  readonly token: string | null;
   readonly addresses: readonly UserAddress[];
   readonly deliveryAddr: string;
   readonly setDeliveryAddr: (val: string) => void;
-  readonly customDeliveryAddr: string;
-  readonly setCustomDeliveryAddr: (val: string) => void;
   readonly billingAddr: string;
   readonly setBillingAddr: (val: string) => void;
-  readonly customBillingAddr: string;
-  readonly setCustomBillingAddr: (val: string) => void;
+  readonly sameAsDelivery: boolean;
+  readonly setSameAsDelivery: (val: boolean) => void;
+  readonly onAddressCreated: (createdId: string, kind: "shipping" | "billing") => Promise<void>;
+  readonly defaultFirstName: string;
+  readonly defaultLastName: string;
+  readonly defaultPhone: string;
   readonly submittingOrder: boolean;
   readonly onBackToCart: () => void;
   readonly onSubmit: (e: React.FormEvent) => void;
-}
-
-interface AddressPickerProps {
-  readonly title: string;
-  readonly icon: string;
-  readonly addresses: readonly UserAddress[];
-  readonly selectedAddr: string;
-  readonly onSelectAddr: (val: string) => void;
-  readonly customAddr: string;
-  readonly onCustomAddrChange: (val: string) => void;
-  readonly customPlaceholder: string;
-  readonly customOptionLabel: string;
-  readonly emptyNotice: string;
-}
-
-function AddressPicker({
-  title,
-  icon,
-  addresses,
-  selectedAddr,
-  onSelectAddr,
-  customAddr,
-  onCustomAddrChange,
-  customPlaceholder,
-  customOptionLabel,
-  emptyNotice,
-}: Readonly<AddressPickerProps>) {
-  const showTextarea = selectedAddr === "custom" || addresses.length === 0;
-
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="text-[11px] uppercase font-extrabold text-eerie-black tracking-[0.5px]">
-        {icon} {title}
-      </label>
-      {addresses.length > 0 ? (
-        <select
-          value={selectedAddr}
-          onChange={(e) => onSelectAddr(e.target.value)}
-          className="w-full px-3 py-2 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black"
-        >
-          {addresses.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.title} ({a.address_line.substring(0, 30)}...)
-            </option>
-          ))}
-          <option value="custom">{customOptionLabel}</option>
-        </select>
-      ) : (
-        <div className="text-[10px] text-sonic-silver font-medium italic">
-          {emptyNotice}
-        </div>
-      )}
-      {showTextarea && (
-        <textarea
-          required
-          value={customAddr}
-          onChange={(e) => onCustomAddrChange(e.target.value)}
-          rows={3}
-          className="w-full px-3 py-2.5 bg-white border border-cultured rounded-[5px] text-xs font-semibold focus:outline-none focus:border-salmon-pink text-eerie-black resize-none mt-1"
-          placeholder={customPlaceholder}
-        />
-      )}
-    </div>
-  );
 }
 
 function BankTransferInfo({ lang }: { readonly lang: string }) {
@@ -914,15 +923,18 @@ function BankTransferInfo({ lang }: { readonly lang: string }) {
 
 function CartCheckoutForm({
   lang,
+  token,
   addresses,
   deliveryAddr,
   setDeliveryAddr,
-  customDeliveryAddr,
-  setCustomDeliveryAddr,
   billingAddr,
   setBillingAddr,
-  customBillingAddr,
-  setCustomBillingAddr,
+  sameAsDelivery,
+  setSameAsDelivery,
+  onAddressCreated,
+  defaultFirstName,
+  defaultLastName,
+  defaultPhone,
   submittingOrder,
   onBackToCart,
   onSubmit,
@@ -944,38 +956,58 @@ function CartCheckoutForm({
         </button>
       </div>
 
-      <AddressPicker
-        title={labels.deliveryAddress}
-        icon="🚚"
+      <StructuredCheckoutAddressPicker
+        label={labels.deliveryAddress}
+        icon={<span aria-hidden="true">🚚</span>}
+        addressType="shipping"
+        lang={lang}
+        token={token}
         addresses={addresses}
-        selectedAddr={deliveryAddr}
-        onSelectAddr={setDeliveryAddr}
-        customAddr={customDeliveryAddr}
-        onCustomAddrChange={setCustomDeliveryAddr}
-        customPlaceholder={labels.deliveryAddressPlaceholder}
-        customOptionLabel={labels.customDeliveryOption}
-        emptyNotice={labels.noDeliveryAddresses}
+        selectedAddressId={deliveryAddr}
+        onSelectAddressId={setDeliveryAddr}
+        onAddressCreated={(id) => onAddressCreated(id, "shipping")}
+        defaultFirstName={defaultFirstName}
+        defaultLastName={defaultLastName}
+        defaultPhone={defaultPhone}
       />
 
-      <AddressPicker
-        title={labels.billingAddress}
-        icon="📄"
-        addresses={addresses}
-        selectedAddr={billingAddr}
-        onSelectAddr={setBillingAddr}
-        customAddr={customBillingAddr}
-        onCustomAddrChange={setCustomBillingAddr}
-        customPlaceholder={labels.billingAddressPlaceholder}
-        customOptionLabel={labels.customBillingOption}
-        emptyNotice={labels.noBillingAddresses}
-      />
+      <label className="flex items-center gap-2 text-xs font-bold text-eerie-black cursor-pointer select-none py-1">
+        <input
+          type="checkbox"
+          checked={sameAsDelivery}
+          onChange={(e) => setSameAsDelivery(e.target.checked)}
+          className="w-4 h-4 rounded accent-salmon-pink cursor-pointer"
+        />
+        <span>{getLocalizedDrawerNote(SAME_BILLING_LABELS, lang)}</span>
+      </label>
+
+      {!sameAsDelivery && (
+        <StructuredCheckoutAddressPicker
+          label={labels.billingAddress}
+          icon={<span aria-hidden="true">📄</span>}
+          addressType="billing"
+          lang={lang}
+          token={token}
+          addresses={addresses}
+          selectedAddressId={billingAddr}
+          onSelectAddressId={setBillingAddr}
+          onAddressCreated={(id) => onAddressCreated(id, "billing")}
+          defaultFirstName={defaultFirstName}
+          defaultLastName={defaultLastName}
+          defaultPhone={defaultPhone}
+        />
+      )}
 
       <BankTransferInfo lang={lang} />
+
+      <p className="text-[10px] font-medium text-neutral-500 text-center leading-snug m-0">
+        {getRecaptchaLegalNotice(lang)}
+      </p>
 
       <button
         type="submit"
         disabled={submittingOrder}
-        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed mt-2 active:scale-[0.99] transition-colors duration-300"
+        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed mt-1 active:scale-[0.99] transition-colors duration-300"
       >
         {submittingOrder ? (
           <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
@@ -998,6 +1030,9 @@ interface CartInquiryFormProps {
   readonly setPhoneNumber: (val: string) => void;
   readonly emailAddress: string;
   readonly setEmailAddress: (val: string) => void;
+  readonly inquiryLocation: StructuredLocationValue;
+  readonly setInquiryLocation: (val: StructuredLocationValue) => void;
+  readonly setInquiryLocMeta: (meta: StructuredLocationMeta) => void;
   readonly customerMessage: string;
   readonly setCustomerMessage: (val: string) => void;
   readonly submittingInquiry: boolean;
@@ -1016,6 +1051,9 @@ function CartInquiryForm({
   setPhoneNumber,
   emailAddress,
   setEmailAddress,
+  inquiryLocation,
+  setInquiryLocation,
+  setInquiryLocMeta,
   customerMessage,
   setCustomerMessage,
   submittingInquiry,
@@ -1082,6 +1120,17 @@ function CartInquiryForm({
           placeholder={t("placeholder_email", lang)}
         />
       </div>
+
+      <StructuredLocationFields
+        lang={lang}
+        value={inquiryLocation}
+        onChange={setInquiryLocation}
+        onMetaChange={setInquiryLocMeta}
+        showPostalCode={false}
+        compact
+        disabled={submittingInquiry}
+      />
+
       <div className="flex flex-col gap-1">
         <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("message", lang)}</label>
         <textarea
@@ -1092,10 +1141,14 @@ function CartInquiryForm({
         />
       </div>
 
+      <p className="text-[10px] font-medium text-neutral-500 text-center leading-snug m-0">
+        {getRecaptchaLegalNotice(lang)}
+      </p>
+
       <button
         type="submit"
         disabled={submittingInquiry}
-        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed mt-3 active:scale-[0.99] transition-colors duration-300"
+        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed mt-1 active:scale-[0.99] transition-colors duration-300"
       >
         {submittingInquiry ? (
           <div className="spinner w-4 h-4 border-2" />
@@ -1156,6 +1209,24 @@ export default function CartDrawer({
     return "";
   });
   const [customerMessage, setCustomerMessage] = React.useState<string>("");
+  const [inquiryLocation, setInquiryLocation] = React.useState<StructuredLocationValue>({
+    countryId: "",
+    stateId: "",
+    cityId: "",
+    addressLine: "",
+    postalCode: "",
+  });
+  const [inquiryLocMeta, setInquiryLocMeta] = React.useState<StructuredLocationMeta>({
+    countryCode: "TR",
+    countryPhoneCode: 90,
+    countryName: "",
+    stateName: "",
+    cityName: "",
+    hasStates: true,
+    hasCities: true,
+    loadingStates: false,
+    loadingCities: false,
+  });
 
   const handleInquirySubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1165,6 +1236,12 @@ export default function CartDrawer({
       phoneNumber,
       emailAddress,
       customerMessage,
+      countryId: inquiryLocation.countryId,
+      stateId: inquiryLocation.stateId,
+      cityId: inquiryLocation.cityId,
+      postalCode: inquiryLocation.postalCode,
+      addressLine: inquiryLocation.addressLine,
+      locationMeta: inquiryLocMeta,
     });
   };
   const [isCheckout, setIsCheckout] = React.useState(false);
@@ -1172,29 +1249,36 @@ export default function CartDrawer({
   const [addresses, setAddresses] = React.useState<UserAddress[]>([]);
   const [billingAddr, setBillingAddr] = React.useState("");
   const [deliveryAddr, setDeliveryAddr] = React.useState("");
-  const [customBillingAddr, setCustomBillingAddr] = React.useState("");
-  const [customDeliveryAddr, setCustomDeliveryAddr] = React.useState("");
+  const [sameAsDelivery, setSameAsDelivery] = React.useState(true);
   const [submittingOrder, setSubmittingOrder] = React.useState(false);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("store_user_token") : null;
+  const userDefaults = readStoredCheckoutDefaults();
 
   React.useEffect(() => {
     if (token && isCheckout) {
-      fetch("/api/v1/store/profile/addresses", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-        .then((res) => res.json())
-        .then((data: UserAddress[]) => {
-          if (Array.isArray(data)) {
-            setAddresses(data);
-            selectDefaultAddresses(data, setBillingAddr, setDeliveryAddr);
-          }
+      fetchSavedUserAddresses(token)
+        .then((data) => {
+          setAddresses(data);
+          selectDefaultAddresses(data, setBillingAddr, setDeliveryAddr);
         })
         .catch((err) => console.error("Error fetching addresses:", err));
     }
   }, [token, isCheckout]);
+
+  const handleAddressCreated = async (createdId: string, kind: "shipping" | "billing") => {
+    if (!token) return;
+    const latest = await fetchSavedUserAddresses(token);
+    setAddresses(latest);
+    if (kind === "shipping") {
+      setDeliveryAddr(createdId);
+      if (!billingAddr) {
+        setBillingAddr(createdId);
+      }
+      return;
+    }
+    setBillingAddr(createdId);
+  };
 
   const labels = pickLangText(lang, CART_DRAWER_LABELS);
 
@@ -1202,21 +1286,29 @@ export default function CartDrawer({
     e.preventDefault();
     if (!token) return;
 
-    const finalBilling = resolveFinalAddress(billingAddr, customBillingAddr, addresses);
-    const finalDelivery = resolveFinalAddress(deliveryAddr, customDeliveryAddr, addresses);
+    const effectiveBillingId = sameAsDelivery ? deliveryAddr : billingAddr;
+    const delObj = addresses.find((a) => a.id === deliveryAddr);
+    const billObj = addresses.find((a) => a.id === effectiveBillingId);
 
-    if (!finalBilling || !finalDelivery) {
-      showToast(labels.missingAddressesToast);
+    if (!delObj || !billObj || !isAddressRecordComplete(delObj) || !isAddressRecordComplete(billObj)) {
+      showToast(getLocalizedDrawerNote(INCOMPLETE_ADDRESS_LABELS, lang));
       return;
     }
 
+    const finalDelivery = formatCheckoutAddressDisplay(delObj);
+    const finalBilling = formatCheckoutAddressDisplay(billObj);
+
     setSubmittingOrder(true);
     try {
+      const recaptchaToken = await executeRecaptchaAction("create_order", lang);
       const orderNumber = await submitB2BOrder({
         token,
         cart,
+        deliveryAddressId: deliveryAddr,
+        billingAddressId: effectiveBillingId,
         billingAddress: finalBilling,
         deliveryAddress: finalDelivery,
+        recaptchaToken,
         lang,
         displayCurrency,
       });
@@ -1374,15 +1466,18 @@ export default function CartDrawer({
                 {token && isCheckout && (
                   <CartCheckoutForm
                     lang={lang}
+                    token={token}
                     addresses={addresses}
                     deliveryAddr={deliveryAddr}
                     setDeliveryAddr={setDeliveryAddr}
-                    customDeliveryAddr={customDeliveryAddr}
-                    setCustomDeliveryAddr={setCustomDeliveryAddr}
                     billingAddr={billingAddr}
                     setBillingAddr={setBillingAddr}
-                    customBillingAddr={customBillingAddr}
-                    setCustomBillingAddr={setCustomBillingAddr}
+                    sameAsDelivery={sameAsDelivery}
+                    setSameAsDelivery={setSameAsDelivery}
+                    onAddressCreated={handleAddressCreated}
+                    defaultFirstName={userDefaults.firstName}
+                    defaultLastName={userDefaults.lastName}
+                    defaultPhone={userDefaults.phone}
                     submittingOrder={submittingOrder}
                     onBackToCart={() => {
                       setIsCheckout(false);
@@ -1404,6 +1499,9 @@ export default function CartDrawer({
                     setPhoneNumber={setPhoneNumber}
                     emailAddress={emailAddress}
                     setEmailAddress={setEmailAddress}
+                    inquiryLocation={inquiryLocation}
+                    setInquiryLocation={setInquiryLocation}
+                    setInquiryLocMeta={setInquiryLocMeta}
                     customerMessage={customerMessage}
                     setCustomerMessage={setCustomerMessage}
                     submittingInquiry={submittingInquiry}

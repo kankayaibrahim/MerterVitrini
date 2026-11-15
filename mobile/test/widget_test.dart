@@ -227,6 +227,8 @@ class _FakeCommerceRepository implements ICommerceRepository {
   Future<Map<String, dynamic>> createOrder({
     required String billingAddress,
     required String deliveryAddress,
+    String? billingAddressId,
+    String? deliveryAddressId,
     String paymentMethod = 'BANK_TRANSFER',
     String customerCurrency = '',
   }) async =>

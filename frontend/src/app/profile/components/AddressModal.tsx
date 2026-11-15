@@ -182,9 +182,10 @@ export default function AddressModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                {getAddressT("state_label")}
+                {getAddressT("state_label")} {states.length > 0 ? "*" : ""}
               </label>
               <select
+                required={states.length > 0}
                 value={formStateID}
                 onChange={(e) => handleStateChange(e.target.value)}
                 disabled={states.length === 0}
@@ -201,9 +202,10 @@ export default function AddressModal({
 
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-                {getAddressT("city_label")}
+                {getAddressT("city_label")} {cities.length > 0 ? "*" : ""}
               </label>
               <select
+                required={cities.length > 0}
                 value={formCityID}
                 onChange={(e) => setFormCityID(e.target.value)}
                 disabled={cities.length === 0}
@@ -222,7 +224,7 @@ export default function AddressModal({
           {/* Postal Code */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-extrabold uppercase text-eerie-black tracking-wider">
-              {getAddressT("postal_code_label")}
+              {getAddressT("postal_code_label")} *
             </label>
             <input
               type="text"

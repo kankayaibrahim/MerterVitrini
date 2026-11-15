@@ -17,6 +17,11 @@ import {
   isRealisticPhoneNumber,
   validateAndNormalizeRealisticPhone,
 } from "@/utils/phoneValidation";
+import {
+  validateHumanAddressClient,
+  validateHumanPersonNameClient,
+  validatePostalCodeClient,
+} from "@/utils/addressValidation";
 
 // Centralized types & translations
 import { addressTranslations, orderTranslations } from "./components/translations";
@@ -34,6 +39,34 @@ import RefundModal, { RefundOrderItem } from "./components/RefundModal";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+
+interface ProfileAddressValidationInput {
+  readonly lang: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly hasStates: boolean;
+  readonly stateId: string;
+  readonly hasCities: boolean;
+  readonly cityId: string;
+  readonly postalCode: string;
+  readonly addressLine: string;
+}
+
+function validateProfileAddressDetails(input: ProfileAddressValidationInput): string | null {
+  const firstErr = validateHumanPersonNameClient(input.firstName, input.lang);
+  if (firstErr) return firstErr;
+  const lastErr = validateHumanPersonNameClient(input.lastName, input.lang);
+  if (lastErr) return lastErr;
+  if (input.hasStates && !input.stateId.trim()) {
+    return input.lang === "tr" ? "Lütfen il / eyalet seçimi yapın." : "Please select a state / province.";
+  }
+  if (input.hasCities && !input.cityId.trim()) {
+    return input.lang === "tr" ? "Lütfen ilçe / şehir seçimi yapın." : "Please select a city / district.";
+  }
+  const pcErr = validatePostalCodeClient(input.postalCode, input.lang);
+  if (pcErr) return pcErr;
+  return validateHumanAddressClient(input.addressLine, input.lang);
+}
 
 interface ProfilePageLocaleCopy {
   readonly verifiedSuccess: string;
@@ -1118,8 +1151,19 @@ export default function ProfilePage() {
     setAddressError(null);
     setAddressSuccess(null);
 
-    if (!formPostalCode.trim()) {
-      setAddressError(getAddressT("postal_code_required_error"));
+    const detailErr = validateProfileAddressDetails({
+      lang,
+      firstName: formFirstName,
+      lastName: formLastName,
+      hasStates: states.length > 0,
+      stateId: formStateID,
+      hasCities: cities.length > 0,
+      cityId: formCityID,
+      postalCode: formPostalCode,
+      addressLine: formAddressLine,
+    });
+    if (detailErr) {
+      setAddressError(detailErr);
       return;
     }
 

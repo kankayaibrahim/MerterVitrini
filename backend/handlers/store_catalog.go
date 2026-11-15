@@ -1379,8 +1379,14 @@ func (h *StoreCatalogHandler) GetStoreSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if h != nil && h.Cfg != nil {
-		s.RecaptchaSiteKey = h.Cfg.PublicReCaptchaSiteKey()
+	var cfg *config.Config
+	if h != nil {
+		cfg = h.Cfg
+	}
+	effectiveReCaptcha := resolveEffectiveReCaptcha(ctx, cfg)
+	s.RecaptchaEnabled = effectiveReCaptcha.Enforce
+	if effectiveReCaptcha.Enforce {
+		s.RecaptchaSiteKey = effectiveReCaptcha.SiteKey
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)

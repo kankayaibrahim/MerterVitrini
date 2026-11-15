@@ -327,7 +327,9 @@ type Settings struct {
 	Email              string    `json:"email"`
 	ShowSinglePrice    bool      `json:"show_single_price"`
 	ShowPricesToGuests bool      `json:"show_prices_to_guests"`
+	RecaptchaEnabled   bool      `json:"recaptcha_enabled"`
 	RecaptchaSiteKey   string    `json:"recaptcha_site_key,omitempty"`
+	RecaptchaHasSecret bool      `json:"recaptcha_has_secret,omitempty"`
 	UpdatedAt          time.Time `json:"updated_at"`
 }
 

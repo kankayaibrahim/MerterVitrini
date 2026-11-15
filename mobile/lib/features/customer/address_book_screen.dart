@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/address_validator.dart';
 import '../../core/app_theme.dart';
 import '../../core/localization.dart';
 import '../../core/phone_validator.dart';
@@ -581,6 +582,25 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
       return;
     }
 
+    if (_selectedCountry == null ||
+        (_states.isNotEmpty && _selectedState == null) ||
+        (_cities.isNotEmpty && _selectedCity == null)) {
+      setState(
+        () => _error = UiText.pick(
+          lang,
+          tr: 'Lütfen ülke, il ve ilçe seçimini eksiksiz yapın.',
+          en: 'Please complete country, state/province, and city selection.',
+          ru: 'Пожалуйста, выберите страну, регион и город.',
+          ar: 'يرجى تحديد البلد والولاية والمدينة بالكامل.',
+          de: 'Bitte wählen Sie Land, Bundesland/Provinz und Stadt vollständig aus.',
+          fr: 'Veuillez sélectionner le pays, la région et la ville.',
+          pl: 'Proszę wybrać kraj, region i miasto.',
+          bg: 'Моля, изберете държава, област и град.',
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _submitting = true;
       _error = null;
@@ -760,9 +780,10 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
                             labelText:
                                 '${AppStrings.t(lang, 'first_name')} *',
                           ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? AppStrings.t(lang, 'err_validation')
-                              : null,
+                          validator: (v) => AddressValidator.validatePersonName(
+                            v ?? '',
+                            lang: lang,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -773,9 +794,10 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
                             labelText:
                                 '${AppStrings.t(lang, 'last_name')} *',
                           ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? AppStrings.t(lang, 'err_validation')
-                              : null,
+                          validator: (v) => AddressValidator.validatePersonName(
+                            v ?? '',
+                            lang: lang,
+                          ),
                         ),
                       ),
                     ],
@@ -816,6 +838,9 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
                     ),
                   if (_countries.isNotEmpty) ...[
                     DropdownButtonFormField<LocationItem>(
+                      key: ValueKey(
+                        'addr_country_${_selectedCountry?.id ?? 'none'}',
+                      ),
                       initialValue: _selectedCountry,
                       isExpanded: true,
                       decoration: InputDecoration(
@@ -832,6 +857,8 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
                             ),
                           )
                           .toList(),
+                      validator: (v) =>
+                          v == null ? AppStrings.t(lang, 'err_validation') : null,
                       onChanged: (v) {
                         if (v != null) _onCountryChanged(v);
                       },
@@ -840,6 +867,9 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
                   ],
                   if (_states.isNotEmpty) ...[
                     DropdownButtonFormField<LocationItem>(
+                      key: ValueKey(
+                        'addr_state_${_selectedCountry?.id ?? 'none'}_${_selectedState?.id ?? 'none'}',
+                      ),
                       initialValue: _selectedState,
                       isExpanded: true,
                       decoration: InputDecoration(
@@ -856,12 +886,14 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
                             ),
                           )
                           .toList(),
+                      validator: (v) =>
+                          v == null ? AppStrings.t(lang, 'err_validation') : null,
                       onChanged: (v) {
                         if (v != null) _onStateChanged(v);
                       },
                     ),
                     const SizedBox(height: 10),
-                  ] else ...[
+                  ] else if (!_loadingLocations && _selectedCountry != null) ...[
                     TextFormField(
                       controller: _stateManualCtrl,
                       decoration: InputDecoration(
@@ -872,6 +904,9 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
                   ],
                   if (_cities.isNotEmpty) ...[
                     DropdownButtonFormField<LocationItem>(
+                      key: ValueKey(
+                        'addr_city_${_selectedState?.id ?? 'none'}_${_selectedCity?.id ?? 'none'}',
+                      ),
                       initialValue: _selectedCity,
                       isExpanded: true,
                       decoration: InputDecoration(
@@ -888,10 +923,13 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
                             ),
                           )
                           .toList(),
+                      validator: (v) =>
+                          v == null ? AppStrings.t(lang, 'err_validation') : null,
                       onChanged: (v) => setState(() => _selectedCity = v),
                     ),
                     const SizedBox(height: 10),
-                  ] else ...[
+                  ] else if (!_loadingLocations &&
+                      (_states.isEmpty || _selectedState != null)) ...[
                     TextFormField(
                       controller: _cityManualCtrl,
                       decoration: InputDecoration(
@@ -906,15 +944,21 @@ class _AddressEditorModalState extends State<_AddressEditorModal> {
                     decoration: InputDecoration(
                       labelText: '${AppStrings.t(lang, 'address_line')} *',
                     ),
-                    validator: (v) => (v == null || v.trim().length < 5)
-                        ? AppStrings.t(lang, 'err_validation')
-                        : null,
+                    validator: (v) => AddressValidator.validateStreetAddress(
+                      v ?? '',
+                      lang: lang,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
                     controller: _postalCtrl,
                     decoration: InputDecoration(
-                      labelText: AppStrings.t(lang, 'postal_code'),
+                      labelText: '${AppStrings.t(lang, 'postal_code')} *',
+                    ),
+                    validator: (v) => AddressValidator.validatePostalCode(
+                      v ?? '',
+                      lang: lang,
+                      required: true,
                     ),
                   ),
                   const SizedBox(height: 10),
