@@ -33,6 +33,7 @@ import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
+import { ensureRecaptchaLoaded, executeRecaptchaAction, resolveRecaptchaSiteKey } from "@/utils/recaptcha";
 
 interface ServiceProvidersLocaleCopy {
   readonly heroBadge: string;
@@ -601,34 +602,6 @@ function getCartPkgsSnapshot(): number {
   }
 }
 
-interface GrecaptchaInstance {
-  ready: (callback: () => void) => void;
-  execute: (siteKey: string, options: { action: string }) => Promise<string>;
-}
-
-const DEFAULT_RECAPTCHA_SITE_KEY =
-  process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY ||
-  "6LfwagMtAAAAAHpF7ID6J-bQmcn92YhFaSH9CX94";
-
-async function executeServiceProviderCaptcha(actionName: string): Promise<string> {
-  const grecaptcha = (
-    window as unknown as { grecaptcha?: GrecaptchaInstance }
-  ).grecaptcha;
-  if (!grecaptcha) {
-    return "";
-  }
-  await new Promise<void>((resolve) => {
-    grecaptcha.ready(resolve);
-  });
-  try {
-    return await grecaptcha.execute(DEFAULT_RECAPTCHA_SITE_KEY, {
-      action: actionName,
-    });
-  } catch {
-    return "";
-  }
-}
-
 export interface ServiceProviderItem {
   id: string;
   slug: string;
@@ -1043,6 +1016,7 @@ function ServiceProviderSubmittedNotice({
 
 interface ServiceProviderApplyModalProps {
   readonly isOpen: boolean;
+  readonly lang: SupportedSeoLang;
   readonly copy: ServiceProvidersLocaleCopy;
   readonly onClose: () => void;
   readonly onSuccess: () => void;
@@ -1050,6 +1024,7 @@ interface ServiceProviderApplyModalProps {
 
 function ServiceProviderApplyModal({
   isOpen,
+  lang,
   copy,
   onClose,
   onSuccess,
@@ -1081,8 +1056,9 @@ function ServiceProviderApplyModal({
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const recaptchaToken = await executeServiceProviderCaptcha(
-        "service_provider_apply"
+      const recaptchaToken = await executeRecaptchaAction(
+        "service_provider_apply",
+        lang
       );
       const targetEmail = email.trim();
       const res = await fetch("/api/v1/store/service-providers", {
@@ -1118,6 +1094,10 @@ function ServiceProviderApplyModal({
       setAddress("");
       setPhone("");
       onSuccess();
+    } catch (err: unknown) {
+      setSubmitError(
+        err instanceof Error ? err.message : copy.submitErrorFallback
+      );
     } finally {
       setSubmitting(false);
     }
@@ -1367,16 +1347,15 @@ export default function ServiceProvidersClient({
   );
 
   useEffect(() => {
-    const scriptId = "recaptcha-v3-script";
-    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
-    if (!script) {
-      script = document.createElement("script");
-      script.id = scriptId;
-      script.src = `https://www.google.com/recaptcha/api.js?render=${DEFAULT_RECAPTCHA_SITE_KEY}&hl=${safeLang}`;
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
+    let active = true;
+    void resolveRecaptchaSiteKey().then(({ enabled, siteKey }) => {
+      if (active && enabled && siteKey) {
+        void ensureRecaptchaLoaded(siteKey, safeLang).catch(() => undefined);
+      }
+    });
+    return () => {
+      active = false;
+    };
   }, [safeLang]);
 
   useEffect(() => {
@@ -1552,6 +1531,7 @@ export default function ServiceProvidersClient({
 
       <ServiceProviderApplyModal
         isOpen={showApplyModal}
+        lang={safeLang}
         copy={copy}
         onClose={() => setShowApplyModal(false)}
         onSuccess={() => void loadProviders()}

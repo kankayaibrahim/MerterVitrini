@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { SUPPLIER_TRANSLATIONS, SupplierPageTranslations } from "@/app/[categoryPrefix]/tedarikci-basvuru/translations";
 import turkeyLocationsData from "@/data/turkeyLocations.json";
+import { ensureRecaptchaLoaded, executeRecaptchaAction, resolveRecaptchaSiteKey } from "@/utils/recaptcha";
 import {
   COUNTRY_DIAL_CODES,
   combineDialCodeAndLocalPhone,
@@ -56,11 +57,6 @@ const Instagram = ({ size = 16, ...props }: Readonly<React.SVGProps<SVGSVGElemen
     <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
   </svg>
 );
-
-interface GrecaptchaInstance {
-  ready: (callback: () => void) => void;
-  execute: (siteKey: string, options: { action: string }) => Promise<string>;
-}
 
 interface SupplierApplicationSectionProps {
   readonly lang?: string;
@@ -152,34 +148,16 @@ export default function SupplierApplicationSection({
   const availableDistricts = selectedProvince ? selectedProvince.districts : [];
 
   useEffect(() => {
-    const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LfwagMtAAAAAHpF7ID6J-bQmcn92YhFaSH9CX94";
-    const scriptId = "recaptcha-v3-script";
-    let script = document.getElementById(scriptId) as HTMLScriptElement;
-    if (!script) {
-      script = document.createElement("script");
-      script.id = scriptId;
-      script.src = `https://www.google.com/recaptcha/api.js?render=${siteKey}&hl=${lang}`;
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
-  }, [lang]);
-
-  const executeCaptcha = async (actionName: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LfwagMtAAAAAHpF7ID6J-bQmcn92YhFaSH9CX94";
-      const grecaptcha = (window as unknown as { grecaptcha?: GrecaptchaInstance }).grecaptcha;
-      if (!grecaptcha) {
-        resolve("");
-        return;
+    let active = true;
+    void resolveRecaptchaSiteKey().then(({ enabled, siteKey }) => {
+      if (active && enabled && siteKey) {
+        void ensureRecaptchaLoaded(siteKey, lang).catch(() => undefined);
       }
-      grecaptcha.ready(() => {
-        grecaptcha.execute(siteKey, { action: actionName })
-          .then((token: string) => resolve(token))
-          .catch(() => resolve(""));
-      });
     });
-  };
+    return () => {
+      active = false;
+    };
+  }, [lang]);
 
   const handleReset = () => {
     setSubmitted(false);
@@ -220,7 +198,7 @@ export default function SupplierApplicationSection({
     setLoading(true);
 
     try {
-      const recaptchaToken = await executeCaptcha("supplier_apply");
+      const recaptchaToken = await executeRecaptchaAction("supplier_apply", lang);
 
       const res = await fetch("/api/v1/store/supplier-applications", {
         method: "POST",

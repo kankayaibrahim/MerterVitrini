@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { X, Lock, Mail, User, Phone, Check, AlertCircle, Building2, Info } from "lucide-react";
 import { getCategoryPrefix, t } from "@/app/i18n";
-import { fetchStoreSettingsCached } from "@/app/utils";
+import { ensureRecaptchaLoaded, executeRecaptchaAction, resolveRecaptchaSiteKey } from "@/utils/recaptcha";
 import { getOrSetVisitorId } from "@/components/analytics/AnalyticsTracker";
 import {
   COUNTRY_DIAL_CODES,
@@ -62,78 +62,20 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [resolvedRecaptchaKey, setResolvedRecaptchaKey] = useState<string>(
-    () => process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""
-  );
 
-  // Load Google reCAPTCHA v3 script dynamically when a site key is configured
+  // Preload Google reCAPTCHA v3 script when the auth modal opens and site key is configured
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
-
-    async function ensureRecaptchaLoaded() {
-      let siteKey = resolvedRecaptchaKey;
-      if (!siteKey) {
-        const settings = await fetchStoreSettingsCached();
-        const dbKey = typeof settings?.recaptcha_site_key === "string" ? settings.recaptcha_site_key.trim() : "";
-        if (dbKey && active) {
-          siteKey = dbKey;
-          setResolvedRecaptchaKey(dbKey);
-        }
+    void resolveRecaptchaSiteKey().then(({ enabled, siteKey }) => {
+      if (active && enabled && siteKey) {
+        void ensureRecaptchaLoaded(siteKey, lang).catch(() => undefined);
       }
-      if (!siteKey || !active) {
-        return;
-      }
-
-      const scriptId = "recaptcha-v3-script";
-      let script = document.getElementById(scriptId) as HTMLScriptElement | null;
-      if (!script) {
-        script = document.createElement("script");
-        script.id = scriptId;
-        script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(siteKey)}&hl=${encodeURIComponent(lang)}`;
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-      }
-    }
-
-    void ensureRecaptchaLoaded();
+    });
     return () => {
       active = false;
     };
-  }, [isOpen, lang, resolvedRecaptchaKey]);
-
-  interface GrecaptchaInstance {
-    ready: (callback: () => void) => void;
-    execute: (siteKey: string, options: { action: string }) => Promise<string>;
-  }
-
-  const executeCaptcha = async (actionName: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const siteKey = resolvedRecaptchaKey || process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
-      if (!siteKey) {
-        resolve("");
-        return;
-      }
-
-      const grecaptcha = (window as unknown as { grecaptcha?: GrecaptchaInstance }).grecaptcha;
-      if (!grecaptcha) {
-        resolve("");
-        return;
-      }
-
-      grecaptcha.ready(() => {
-        grecaptcha
-          .execute(siteKey, { action: actionName })
-          .then((token: string) => {
-            resolve(token);
-          })
-          .catch(() => {
-            resolve("");
-          });
-      });
-    });
-  };
+  }, [isOpen, lang]);
 
   const [prevOpenState, setPrevOpenState] = useState({ isOpen, initialMode });
   if (isOpen !== prevOpenState.isOpen || initialMode !== prevOpenState.initialMode) {
@@ -197,7 +139,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
     setLoading(true);
 
     try {
-      const captchaToken = await executeCaptcha("login");
+      const captchaToken = await executeRecaptchaAction("login", lang).catch(() => "");
 
       const response = await fetch("/api/v1/store/auth/login", {
         method: "POST",
@@ -354,7 +296,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
     setLoading(true);
 
     try {
-      const captchaToken = await executeCaptcha("register");
+      const captchaToken = await executeRecaptchaAction("register", lang);
 
       const response = await fetch("/api/v1/store/auth/register", {
         method: "POST",

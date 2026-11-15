@@ -1,17 +1,44 @@
 "use client";
 
-import React from "react";
-import { 
-  Webhook, 
-  ShieldCheck, 
-  TrendingUp, 
-  Languages, 
+import React, { useEffect } from "react";
+import Link from "next/link";
+import {
+  Webhook,
+  ShieldCheck,
+  TrendingUp,
+  Languages,
   ExternalLink,
   CheckCircle2,
+  AlertTriangle,
+  ArrowRight,
   Copy
 } from "lucide-react";
+import { useAdmin } from "@/context/AdminContext";
+
+function maskRecaptchaSiteKey(rawKey?: string): string {
+  const trimmed = (rawKey || "").trim();
+  if (!trimmed) {
+    return "Tanımlanmadı";
+  }
+  if (trimmed.length <= 14) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, 8)}...${trimmed.slice(-4)}`;
+}
 
 export default function AdminSettingsIntegrationsPage() {
+  const { storeSettings, loadStoreSettings } = useAdmin();
+
+  useEffect(() => {
+    void loadStoreSettings();
+  }, [loadStoreSettings]);
+
+  const recaptchaSiteKey = (storeSettings.recaptcha_site_key || "").trim();
+  const recaptchaActive =
+    Boolean(storeSettings.recaptcha_enabled) &&
+    Boolean(recaptchaSiteKey) &&
+    Boolean(storeSettings.recaptcha_has_secret);
+  const maskedSiteKey = maskRecaptchaSiteKey(recaptchaSiteKey);
 
   const copyToClipboard = (text: string) => {
     if (typeof navigator !== "undefined") {
@@ -182,12 +209,18 @@ export default function AdminSettingsIntegrationsPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Google reCAPTCHA v3</h3>
-                  <span className="text-[11px] text-zinc-400">Tedarikçi Başvuru &amp; Form Koruması</span>
+                  <span className="text-[11px] text-zinc-400">Sipariş, Teklif, Kayıt &amp; Başvuru Koruması</span>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold">
-                <CheckCircle2 size={11} /> Aktif (v3 Skor Bazlı)
-              </span>
+              {recaptchaActive ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold">
+                  <CheckCircle2 size={11} /> Aktif (v3 Skor Bazlı)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-bold">
+                  <AlertTriangle size={11} /> Pasif / Anahtar Eksik
+                </span>
+              )}
             </div>
             <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
               Kullanıcıya bulmaca çözdürmeden botları engelleyen görünmez güvenlik doğrulaması.
@@ -195,17 +228,27 @@ export default function AdminSettingsIntegrationsPage() {
             <div className="space-y-1.5 pt-1 text-xs">
               <div className="flex justify-between py-1 border-b border-zinc-100 dark:border-zinc-800/80">
                 <span className="text-zinc-400">Site Key (Public):</span>
-                <span className="font-mono text-zinc-500">6Ld2a6...</span>
+                <span className="font-mono text-zinc-700 dark:text-zinc-300">{maskedSiteKey}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-zinc-100 dark:border-zinc-800/80">
+                <span className="text-zinc-400">Secret Key (Server):</span>
+                <span className={`font-semibold ${storeSettings.recaptcha_has_secret ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                  {storeSettings.recaptcha_has_secret ? "Kayıtlı (Gizli)" : "Eksik"}
+                </span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-zinc-400">Backend Eşik Değeri:</span>
-                <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">Score &gt;= 0.5</span>
+                <span className="font-mono font-bold text-zinc-800 dark:text-zinc-200">Score &gt;= 0.2</span>
               </div>
             </div>
           </div>
-          <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900 text-[11px] text-zinc-500 text-center">
-            Backend API doğrulaması /api/v1/store/supplier-applications rotasında aktiftir.
-          </div>
+          <Link
+            href="/admin/settings/site"
+            className="w-full py-2 px-3 rounded-xl bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 text-xs font-bold hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center gap-1.5"
+          >
+            <span>Mağaza Ayarlarından reCAPTCHA Anahtarlarını Yönet</span>
+            <ArrowRight size={13} />
+          </Link>
         </div>
       </div>
     </div>
