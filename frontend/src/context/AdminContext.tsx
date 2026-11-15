@@ -17,6 +17,7 @@ import {
   Brand,
 } from "@/types/integration";
 import { getFlatCategoriesList } from "@/utils/formatters";
+import { invalidateStoreSettingsCache } from "@/app/utils";
 import {
   BearerTokenHeaderStrategy,
   FetchHttpClient,
@@ -180,10 +181,9 @@ export function AdminProvider({
   }, [sessionBootstrapService]);
 
   const setTheme = useCallback(
-    (nextTheme: "light" | "dark") => {
-      const forcedLight: "light" = nextTheme === "dark" ? "light" : "light";
-      setThemeState(forcedLight);
-      sessionBootstrapService.saveTheme(forcedLight);
+    () => {
+      setThemeState("light");
+      sessionBootstrapService.saveTheme("light");
     },
     [sessionBootstrapService]
   );
@@ -371,12 +371,15 @@ export function AdminProvider({
 
       try {
         await adminService.updateStoreSettings(storeSettings);
+        invalidateStoreSettingsCache();
         if (typeof window !== "undefined") {
           localStorage.setItem(
             "merter_show_prices_to_guests",
             storeSettings.show_prices_to_guests ? "1" : "0"
           );
+          localStorage.setItem("merter_settings_updated_at", String(Date.now()));
           window.dispatchEvent(new Event("auth-change"));
+          window.dispatchEvent(new Event("store-settings-updated"));
         }
         setSettingsSuccess(true);
         setTimeout(() => setSettingsSuccess(false), 4000);

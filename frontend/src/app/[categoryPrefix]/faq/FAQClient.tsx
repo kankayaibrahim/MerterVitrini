@@ -890,6 +890,7 @@ export default function FAQClient({
 
       <Footer
         lang={currentLang}
+        initialSettings={settings}
         onOpenPolicy={(type) => {
           setPolicyModalType(type);
           setIsPolicyModalOpen(true);

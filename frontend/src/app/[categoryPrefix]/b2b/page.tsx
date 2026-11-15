@@ -136,7 +136,7 @@ export default async function B2BPage({ params }: Readonly<PageProps>) {
   const [activeLangs, categories, settingsData, pageData] = await Promise.all([
     fetchLanguages(),
     fetchSsrCategories(),
-    ssrStoreFetch<StoreSettings>("/settings", 300),
+    ssrStoreFetch<StoreSettings>("/settings", 0),
     ssrStoreFetch<B2BCMSPage>("/pages/b2b", 300),
   ]);
 

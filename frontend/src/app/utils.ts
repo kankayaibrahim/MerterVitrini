@@ -84,10 +84,16 @@ export interface CachedStorePublicSettings {
   updated_at?: string;
 }
 
-const SETTINGS_CACHE_TTL_MS = 60_000;
+const SETTINGS_CACHE_TTL_MS = 15_000;
 let cachedStoreSettingsValue: CachedStorePublicSettings | null = null;
 let cachedStoreSettingsAt = 0;
 let inflightStoreSettingsPromise: Promise<CachedStorePublicSettings | null> | null = null;
+
+export function invalidateStoreSettingsCache(): void {
+  cachedStoreSettingsValue = null;
+  cachedStoreSettingsAt = 0;
+  inflightStoreSettingsPromise = null;
+}
 
 export function sanitizeStoreSettingsPayload<T extends Record<string, unknown>>(
   raw: T
@@ -117,6 +123,7 @@ export async function fetchStoreSettingsCached(): Promise<CachedStorePublicSetti
   inflightStoreSettingsPromise = (async () => {
     try {
       const res = await fetch("/api/v1/store/settings", {
+        cache: "no-store",
         headers: { Accept: "application/json" },
       });
       if (!res.ok) return null;

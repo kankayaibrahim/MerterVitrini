@@ -28,6 +28,7 @@ import {
   safeJsonLd,
 } from "@/utils/seoHelpers";
 import {
+  resolveAddressLocality,
   sanitizePublicStoreAddress,
   sanitizePublicStoreEmail,
 } from "@/utils/formatters";
@@ -891,7 +892,7 @@ export default function B2BClient({
       address: {
         "@type": "PostalAddress",
         streetAddress: sanitizePublicStoreAddress(settings.address),
-        addressLocality: "Merter, Güngören",
+        addressLocality: resolveAddressLocality(settings.address),
         addressRegion: "İstanbul",
         addressCountry: "TR",
       },
@@ -1308,6 +1309,7 @@ export default function B2BClient({
 
       <Footer
         lang={currentLang}
+        initialSettings={settings}
         onOpenPolicy={(type) => {
           setPolicyModalType(type);
           setIsPolicyModalOpen(true);

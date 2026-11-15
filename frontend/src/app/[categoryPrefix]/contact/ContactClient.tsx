@@ -31,6 +31,7 @@ import {
   safeJsonLd,
 } from "@/utils/seoHelpers";
 import {
+  resolveAddressLocality,
   sanitizePublicStoreAddress,
   sanitizePublicStoreEmail,
 } from "@/utils/formatters";
@@ -739,11 +740,7 @@ export default function ContactClient({
     cmsPage?.translations?.[currentLang] ||
     cmsPage?.translations?.en ||
     cmsPage?.translations?.tr;
-  const sanitizedCmsHtml = rawCmsTranslation?.content
-    ? rawCmsTranslation.content
-        .replace(/toptanmoda\.net/gi, "mertervitrini.com.tr")
-        .replace(/Esenyurt/gi, "Merter, Güngören")
-    : "";
+  const sanitizedCmsHtml = rawCmsTranslation?.content || "";
 
   const jsonLdData = {
     "@context": "https://schema.org",
@@ -760,7 +757,7 @@ export default function ContactClient({
       address: {
         "@type": "PostalAddress",
         streetAddress: effectiveAddress,
-        addressLocality: "Merter, Güngören",
+        addressLocality: resolveAddressLocality(effectiveAddress),
         addressRegion: "İstanbul",
         addressCountry: "TR",
       },
@@ -1165,7 +1162,7 @@ export default function ContactClient({
               <div className="w-full h-80 rounded-lg overflow-hidden border border-[#E5E0D8] relative bg-zinc-100">
                 <iframe
                   title={texts.mapTitle}
-                  src="https://maps.google.com/maps?q=Merter%20Gungoren%20Istanbul&t=&z=14&ie=UTF8&iwloc=&output=embed"
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(effectiveAddress)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
                   width="100%"
                   height="100%"
                   style={{ border: 0 }}
@@ -1211,6 +1208,7 @@ export default function ContactClient({
 
       <Footer
         lang={currentLang}
+        initialSettings={settings}
         onOpenPolicy={(type) => {
           setPolicyModalType(type);
           setIsPolicyModalOpen(true);

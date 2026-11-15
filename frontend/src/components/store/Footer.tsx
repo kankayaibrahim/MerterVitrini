@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { t, getCategoryPrefix, normalizeLangCode, pickLangText, SupportedLangCode } from "../../app/i18n";
-import { apiFetch } from "../../app/utils";
+import { apiFetch, invalidateStoreSettingsCache } from "../../app/utils";
 import SupplierApplicationSection from "./SupplierApplicationSection";
 import NewsletterSubscriptionBox from "./NewsletterSubscriptionBox";
 import { Building2, Smartphone } from "lucide-react";
@@ -43,6 +43,7 @@ interface FooterProps {
   readonly lang: string;
   readonly onOpenPolicy?: (type: PolicyType) => void;
   readonly showApplicationForm?: boolean;
+  readonly initialSettings?: Partial<Settings>;
 }
 
 interface B2BWholesaleLink {
@@ -491,27 +492,56 @@ function FooterBottomBar({ lang, onOpenPolicy }: FooterBottomBarProps) {
   );
 }
 
-export default function Footer({ lang, onOpenPolicy, showApplicationForm = false }: Readonly<FooterProps>) {
-  const [settings, setSettings] = useState<Settings>({
-    id: "",
-    address: DEFAULT_MERTER_ADDRESS,
-    phone: "+90 533 703 08 83",
-    whatsapp: "+90 533 703 08 83",
-    email: DEFAULT_MERTER_EMAIL,
-  });
+function buildInitialFooterSettings(initial?: Partial<Settings>): Settings {
+  return {
+    id: initial?.id || "",
+    address: sanitizePublicStoreAddress(initial?.address) || DEFAULT_MERTER_ADDRESS,
+    phone: initial?.phone?.trim() || "+90 533 703 08 83",
+    whatsapp: initial?.whatsapp?.trim() || "+90 533 703 08 83",
+    email: sanitizePublicStoreEmail(initial?.email) || DEFAULT_MERTER_EMAIL,
+  };
+}
+
+export default function Footer({
+  lang,
+  onOpenPolicy,
+  showApplicationForm = false,
+  initialSettings,
+}: Readonly<FooterProps>) {
+  const [settings, setSettings] = useState<Settings>(() =>
+    buildInitialFooterSettings(initialSettings)
+  );
 
   useEffect(() => {
-    async function loadSettings() {
-      const data = await apiFetch<Settings>("/settings");
-      if (data) {
-        setSettings({
-          ...data,
-          address: sanitizePublicStoreAddress(data.address) || DEFAULT_MERTER_ADDRESS,
-          email: sanitizePublicStoreEmail(data.email) || DEFAULT_MERTER_EMAIL,
-        });
-      }
-    }
-    void loadSettings();
+    let active = true;
+
+    const refreshSettings = () => {
+      void apiFetch<Settings>("/settings").then((data) => {
+        if (!active || !data) return;
+        setSettings(buildInitialFooterSettings(data));
+      });
+    };
+
+    const handleSettingsEvent = () => {
+      invalidateStoreSettingsCache();
+      refreshSettings();
+    };
+
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key !== "merter_settings_updated_at") return;
+      invalidateStoreSettingsCache();
+      refreshSettings();
+    };
+
+    refreshSettings();
+    window.addEventListener("store-settings-updated", handleSettingsEvent);
+    window.addEventListener("storage", handleStorageEvent);
+
+    return () => {
+      active = false;
+      window.removeEventListener("store-settings-updated", handleSettingsEvent);
+      window.removeEventListener("storage", handleStorageEvent);
+    };
   }, []);
 
   const sanitizedWhatsapp = settings.whatsapp.replace(/\D/g, "");

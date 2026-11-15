@@ -13,7 +13,7 @@ export function fixApostropheCase(text: string | undefined | null): string {
   if (!text) return "";
   return text
     .replace(/([a-z\u00E0-\u024F])\s*['’]\s*[sS]\b/g, "$1's")
-    .replace(/([A-Z])\s*['’]\s+([S])\b/g, "$1'$2");
+    .replace(/([A-Z])\s*['’]\s+(S)\b/g, "$1'$2");
 }
 
 /**
@@ -27,7 +27,7 @@ export function formatAsciiSafeUpper(text: string | undefined | null): string {
 
 export function sanitizePublicStoreEmail(rawEmail: string | undefined | null): string {
   const trimmed = (rawEmail || "").trim();
-  if (!trimmed || /toptanmoda\.net/i.test(trimmed)) {
+  if (!trimmed) {
     return DEFAULT_MERTER_EMAIL;
   }
   return trimmed;
@@ -35,10 +35,30 @@ export function sanitizePublicStoreEmail(rawEmail: string | undefined | null): s
 
 export function sanitizePublicStoreAddress(rawAddress: string | undefined | null): string {
   const trimmed = (rawAddress || "").trim();
-  if (!trimmed || /esenyurt|akevler|regnum\s*astrum/i.test(trimmed)) {
+  if (!trimmed) {
     return DEFAULT_MERTER_ADDRESS;
   }
   return trimmed;
+}
+
+export function resolveAddressLocality(rawAddress: string | undefined | null): string {
+  const normalized = sanitizePublicStoreAddress(rawAddress);
+  const parts = normalized
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const istanbulIndex = parts.findIndex(
+    (part) => part.toLocaleLowerCase("tr-TR") === "istanbul" || part.toLowerCase() === "istanbul"
+  );
+  if (istanbulIndex > 0) {
+    const beforeCity = parts[istanbulIndex - 1].replace(/,/g, " ").trim();
+    const tokens = beforeCity.split(/\s+/).filter(Boolean);
+    const lastToken = tokens.at(-1);
+    if (lastToken) {
+      return lastToken;
+    }
+  }
+  return "İstanbul";
 }
 
 export const formatDateTime = (dateStr: string | null): string => {

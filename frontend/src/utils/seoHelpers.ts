@@ -1,6 +1,7 @@
 import type { Category, Product } from "@/types/store";
 import {
   DEFAULT_MERTER_ADDRESS,
+  resolveAddressLocality,
   sanitizePublicStoreAddress,
   sanitizePublicStoreEmail,
 } from "@/utils/formatters";
@@ -365,29 +366,32 @@ export async function ssrStoreFetch<T>(
     ? endpoint
     : `/${endpoint}`;
   const url = `${getInternalStoreApiBase()}/api/v1/store${normalizedEndpoint}`;
+  const isNoStore = normalizedEndpoint === "/settings" || revalidateSeconds <= 0;
   try {
     const res = await fetch(url, {
       headers: {
         Accept: "application/json",
         "X-SSR-Prefetch": "1",
       },
-      next: { revalidate: revalidateSeconds },
+      ...(isNoStore
+        ? { cache: "no-store" as const }
+        : { next: { revalidate: revalidateSeconds } }),
     });
-      if (!res.ok) return null;
-      const json = (await res.json()) as T;
-      if (normalizedEndpoint === "/settings" && json && typeof json === "object") {
-        const rawObj = json as unknown as Record<string, unknown>;
-        return {
-          ...rawObj,
-          email: sanitizePublicStoreEmail(rawObj.email as string | undefined),
-          address: sanitizePublicStoreAddress(rawObj.address as string | undefined),
-        } as unknown as T;
-      }
-      return json;
-    } catch {
-      return null;
+    if (!res.ok) return null;
+    const json = (await res.json()) as T;
+    if (normalizedEndpoint === "/settings" && json && typeof json === "object") {
+      const rawObj = json as unknown as Record<string, unknown>;
+      return {
+        ...rawObj,
+        email: sanitizePublicStoreEmail(rawObj.email as string | undefined),
+        address: sanitizePublicStoreAddress(rawObj.address as string | undefined),
+      } as unknown as T;
     }
+    return json;
+  } catch {
+    return null;
   }
+}
 
 export async function fetchSsrCategories(): Promise<Category[]> {
   const data = await ssrStoreFetch<Category[]>("/categories", 300);
@@ -416,7 +420,7 @@ export async function fetchSsrProducts(
 }
 
 export async function fetchSsrStoreSettings(): Promise<StorePublicSettings | null> {
-  return ssrStoreFetch<StorePublicSettings>("/settings", 300);
+  return ssrStoreFetch<StorePublicSettings>("/settings", 0);
 }
 
 export function buildOrganizationGraphJsonLd(
@@ -426,6 +430,11 @@ export function buildOrganizationGraphJsonLd(
   const copy = GLOBAL_B2B_SEO_MATRIX[lang];
   const contactPhone = settings?.phone?.trim() || "+90 533 703 08 83";
   const contactEmail = sanitizePublicStoreEmail(settings?.email);
+  const streetAddress = sanitizePublicStoreAddress(
+    settings?.address || DEFAULT_MERTER_ADDRESS
+  );
+  const locality = resolveAddressLocality(streetAddress);
+  const isGungoren = locality.toLocaleLowerCase("tr-TR").includes("güngören");
 
   return {
     "@context": "https://schema.org",
@@ -443,12 +452,10 @@ export function buildOrganizationGraphJsonLd(
         description: copy.portalDescription,
         address: {
           "@type": "PostalAddress",
-          streetAddress: sanitizePublicStoreAddress(
-            settings?.address || DEFAULT_MERTER_ADDRESS
-          ),
-          addressLocality: "Güngören",
+          streetAddress,
+          addressLocality: locality,
           addressRegion: "İstanbul",
-          postalCode: "34173",
+          ...(isGungoren ? { postalCode: "34173" } : {}),
           addressCountry: "TR",
         },
         contactPoint: [

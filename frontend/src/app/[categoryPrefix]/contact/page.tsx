@@ -136,7 +136,7 @@ export default async function ContactPage({ params }: Readonly<PageProps>) {
   const [activeLangs, categories, settingsData, pageData] = await Promise.all([
     fetchLanguages(),
     fetchSsrCategories(),
-    ssrStoreFetch<StoreSettings>("/settings", 300),
+    ssrStoreFetch<StoreSettings>("/settings", 0),
     ssrStoreFetch<ContactCMSPage>("/pages/iletisim", 300),
   ]);
 
