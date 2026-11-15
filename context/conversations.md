@@ -3420,3 +3420,50 @@
    - `GET /api/v1/store/settings` -> `recaptcha_enabled: false` (anahtarlar henüz girilmediği için sipariş akışı kilitlenmiyor) ve `recaptcha_secret_key` dışarıya sızmıyor (`false`).
    - Yetkisiz `DELETE /api/v1/orders/00000000-0000-0000-0000-000000000000` -> `401 Unauthorized` (yeni kalıcı sipariş silme uç noktası canlıda aktif ve JWT korumalı).
    - `HEAD /`, `HEAD /admin/orders`, `HEAD /admin/settings/site` -> tümü `200 OK`.
+
+
+---
+
+## Oturum #174 — 2026-11-16 01:58 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Projede daha önceden kayıtlı olan Google reCAPTCHA v3 anahtar çiftinin bulunup ilgili veritabanı/ayar alanına kaydedilmesi (`"Google reCAPTCHA v3 zaten bunun biryerlerde kayıtlı olması lazım sen bul kaydet ilgili yere"`).
+
+### Yapılan İşlemler ve Bulgular
+1. **Mevcut Google reCAPTCHA v3 Anahtar Çiftinin Tespiti:**
+   - Git geçmişinde ([`config.go`](file:///c:/Projects/mertervitrini.com.tr/backend/config/config.go) `2fb8cfb` / `374dd46`) ve vitrin bileşeninde ([`SupplierApplicationSection.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/SupplierApplicationSection.tsx)) projeye ait kayıtlı reCAPTCHA v3 **Site Key** (`6LfwagMtAAAAAHpF7ID6J-bQmcn92YhFaSH9CX94`) ve **Secret Key** (`6LfwagMt...gxyn`, `40` karakter) bulundu.
+   - `backend/config/config.go` (`defaultConfiguration`) içinde anahtarları Git'e açık metin olarak geri yazmak yerine, çalışma zamanında [`recaptcha_settings.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/recaptcha_settings.go) (`loadDBReCaptchaSettings`, `resolveEffectiveReCaptcha`) ve [`site/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/admin/settings/site/page.tsx) üzerinden yönetilen PostgreSQL `catalog.settings` tablosuna işlendi.
+2. **Canlı Veritabanı Güncellemesi ve Önbellek Yenileme ([`unified_deployer.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/unified_deployer.py)):**
+   - Canlı `213.202.255.80` sunucusundaki `merterdevdb` veritabanında `catalog.settings` tekil satırı (`id = 019e6925-b9f5-7a9d-98ca-9bd932f81ae0`) `UPDATE 1` ile güncellendi: `recaptcha_enabled = true`, `recaptcha_site_key = '6LfwagMtAAAAAHpF7ID6J-bQmcn92YhFaSH9CX94'`, `recaptcha_secret_key` (`secret_len = 40`).
+   - 30 saniyelik bellek içi `recaptchaCache` önbelleğinin anında yenilenmesi için `systemctl restart merter-backend` çalıştırıldı ve servis durumunun `active` olduğu doğrulandı.
+   - `AGENTS.md` Kural #1 uyarınca herhangi bir `git commit` veya `git push` çalıştırılmadı.
+
+### Canlı Doğrulamalar
+- `GET https://mertervitrini.com.tr/api/v1/health`: `status: "healthy"`, `database: "connected"`.
+- `GET https://mertervitrini.com.tr/api/v1/store/settings` ([`store_catalog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_catalog.go)):
+  - `recaptcha_enabled: true`
+  - `recaptcha_site_key: "6LfwagMtAAAAAHpF7ID6J-bQmcn92YhFaSH9CX94"`
+  - `recaptcha_secret_key` alanının kamuya açık API yanıtında kesinlikle yer almadığı (`secret_property_absent: true`) doğrulandı.
+
+
+---
+
+## Oturum #175 — 2026-11-16 02:04 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Yapılan Google reCAPTCHA v3 entegrasyonu ve ayar kayıtlarının commit edilerek canlı sunucuda yayınlanması (`"commitle sunucuda yayınla"`).
+
+### Yapılan İşlemler
+1. **Vitrin & Admin reCAPTCHA v3 Bileşenlerinin Birleştirilmesi:**
+   - [`AuthModal.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/AuthModal.tsx): Yerel betik yükleyici ve lokal `executeCaptcha` yardımcısı kaldırılıp merkezi [`recaptcha.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/recaptcha.ts) (`resolveRecaptchaSiteKey`, `ensureRecaptchaLoaded`, `executeRecaptchaAction`) kullanımına geçirildi (`login` best-effort, `register` zorunlu token bekliyor).
+   - [`SupplierApplicationSection.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/SupplierApplicationSection.tsx): Sabit kodlanmış `#recaptcha-v3-script` enjeksiyonu yerine `catalog.settings` / `resolveRecaptchaSiteKey` üzerinden dinamik ön yükleme ve `executeRecaptchaAction("supplier_apply", lang)` kullanacak şekilde güncellendi.
+   - [`ServiceProvidersClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/hizmet-saglayicilar/ServiceProvidersClient.tsx): `DEFAULT_RECAPTCHA_SITE_KEY` ve yerel betik yüklemesi kaldırıldı; `ServiceProviderApplyModal` içine `lang` aktarılarak `executeRecaptchaAction("service_provider_apply", lang)` ve hata mesajlarını yakalayan `catch` bloğu eklendi.
+   - [`integrations/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/admin/settings/integrations/page.tsx): Statik `6Ld2a6...` yer tutucusu yerine [`AdminContext.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/context/AdminContext.tsx) (`storeSettings`, `loadStoreSettings`) üzerinden canlı `catalog.settings` durumunu (aktif/pasif rozeti, maskelenmiş `Site Key`, `Secret Key` kayıt durumu, `Score >= 0.2` ve [`site/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/admin/settings/site/page.tsx) yönetim bağlantısı) gösterecek şekilde güncellendi.
+2. **Doğrulamalar:**
+   - `cd frontend; npx tsc --noEmit; npm run lint -- --max-warnings=0`: sıfır hata ve sıfır uyarıyla (`exit code 0`) geçti (`AGENTS.md` Kural #7 gereği yerelde `npm run build` çalıştırılmadı).
+3. **Yerel Git Commitleri & Canlı Yayın ([`unified_deployer.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/unified_deployer.py)):**
+   - Frontend refactor (`refactor: unify storefront reCAPTCHA v3 loader and sync admin integrations card`) ve Oturum #174-#175 konuşma kayıtları (`docs: log sessions #174-#175 in persistent conversation history`) yerel depoda commitlendi (`git push` yapılmadı); ardından `python scripts\unified_deployer.py -p unified -c frontend -a all` ile canlı sunucuda uzak Next.js SSR derleme/dağıtım ve uç nokta doğrulamaları yürütüldü.
