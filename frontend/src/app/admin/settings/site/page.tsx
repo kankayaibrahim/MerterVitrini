@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
+import Link from "next/link";
 import { 
   Store, 
   Loader2, 
@@ -13,7 +14,9 @@ import {
   Save,
   Tag,
   Eye,
-  Lock
+  Lock,
+  Bell,
+  ArrowRight
 } from "lucide-react";
 import { useAdmin } from "@/context/AdminContext";
 
@@ -50,6 +53,14 @@ export default function AdminSettingsSitePage() {
             </p>
           </div>
         </div>
+        <Link
+          href="/admin/settings/notifications"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-xs font-bold text-zinc-800 dark:text-zinc-200 transition-colors shrink-0"
+        >
+          <Bell size={14} className="text-violet-600" />
+          <span>E-Posta &amp; Bildirim Ayarları</span>
+          <ArrowRight size={14} />
+        </Link>
       </div>
 
       {/* Main Settings Form */}

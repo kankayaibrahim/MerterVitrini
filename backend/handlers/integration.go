@@ -953,8 +953,8 @@ func parseXMLFeedStream(ctx context.Context, body io.Reader, feedID string, bran
 func markInactiveFeedItems(ctx context.Context, feedID, runID string) {
 	inactiveQuery := `
 		UPDATE catalog.products 
-		SET is_active = false 
-		WHERE feed_id = $1 AND last_sync_run_id != $2`
+		SET is_active = false, deactivated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+		WHERE feed_id = $1 AND last_sync_run_id != $2 AND is_active = true`
 	_, _ = db.Pool.Exec(ctx, inactiveQuery, feedID, runID)
 
 	inactiveVarsQuery := `
@@ -1210,7 +1210,7 @@ func upsertCatalogProduct(ctx context.Context, p SingleProductImportParams, sour
 
 	updateQuery := `
 		UPDATE catalog.products 
-		SET title = $1, category_id = $2, gender = $3, last_sync_run_id = $4, is_active = true, brand_id = $5, 
+		SET title = $1, category_id = $2, gender = $3, last_sync_run_id = $4, is_active = true, deactivated_at = NULL, brand_id = $5, 
 		    series_ratio = $6, packing_ratio = $7, shipping_weight_kg = $8, minimum_order_quantity = $9,
 		    buying_price = $10, price = $10, discounted_price = $11, currency = $12, tax_rate = $13, stock = $14, sku = $15, barcode = $16,
 		    updated_at = CURRENT_TIMESTAMP 
@@ -1952,7 +1952,7 @@ func upsertStandardizedProductRecord(ctx context.Context, params StandardizedUps
 
 	updateQuery := `
 		UPDATE catalog.products 
-		SET title = $1, category_id = $2, gender = $3, last_sync_run_id = $4, is_active = true, brand_id = $5, 
+		SET title = $1, category_id = $2, gender = $3, last_sync_run_id = $4, is_active = true, deactivated_at = NULL, brand_id = $5, 
 		    series_ratio = $6, packing_ratio = $7, shipping_weight_kg = $8, minimum_order_quantity = $9, season = $10,
 		    source_product_group_id = $11, buying_price = $12, price = $12, discounted_price = $13, currency = $14, tax_rate = $15, stock = $16, sku = $17, barcode = $18,
 		    updated_at = CURRENT_TIMESTAMP 

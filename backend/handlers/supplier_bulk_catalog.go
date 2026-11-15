@@ -26,7 +26,8 @@ func ensureProductArchiveSchema(ctx context.Context) {
 		ddl := `
 		ALTER TABLE catalog.products
 			ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT false,
-			ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ NULL;
+			ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ NULL,
+			ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ NULL;
 		CREATE INDEX IF NOT EXISTS idx_products_brand_archived_active
 			ON catalog.products (brand_id, is_archived, is_active);
 		`
@@ -66,6 +67,7 @@ func (h *SupplierPortalHandler) ToggleArchiveProduct(w http.ResponseWriter, r *h
 			UPDATE catalog.products
 			SET is_archived = true,
 			    is_active = false,
+			    deactivated_at = COALESCE(deactivated_at, CURRENT_TIMESTAMP),
 			    archived_at = CURRENT_TIMESTAMP,
 			    updated_at = CURRENT_TIMESTAMP
 			WHERE id = $1 AND brand_id = $2
@@ -87,6 +89,7 @@ func (h *SupplierPortalHandler) ToggleArchiveProduct(w http.ResponseWriter, r *h
 		UPDATE catalog.products
 		SET is_archived = false,
 		    is_active = $3,
+		    deactivated_at = CASE WHEN $3 = true THEN NULL ELSE deactivated_at END,
 		    archived_at = NULL,
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1 AND brand_id = $2
@@ -127,6 +130,7 @@ func executeBulkArchiveByIDs(ctx context.Context, brandID string, req bulkArchiv
 			UPDATE catalog.products
 			SET is_archived = true,
 			    is_active = false,
+			    deactivated_at = COALESCE(deactivated_at, CURRENT_TIMESTAMP),
 			    archived_at = CURRENT_TIMESTAMP,
 			    updated_at = CURRENT_TIMESTAMP
 			WHERE brand_id = $1 AND id::text = ANY($2)
@@ -141,6 +145,7 @@ func executeBulkArchiveByIDs(ctx context.Context, brandID string, req bulkArchiv
 		UPDATE catalog.products
 		SET is_archived = false,
 		    is_active = $3,
+		    deactivated_at = CASE WHEN $3 = true THEN NULL ELSE deactivated_at END,
 		    archived_at = NULL,
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE brand_id = $1 AND id::text = ANY($2)
@@ -175,6 +180,7 @@ func executeBulkArchiveByRules(ctx context.Context, brandID string, req bulkArch
 		UPDATE catalog.products p
 		SET is_archived = true,
 		    is_active = false,
+		    deactivated_at = COALESCE(p.deactivated_at, CURRENT_TIMESTAMP),
 		    archived_at = CURRENT_TIMESTAMP,
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE p.brand_id = $1

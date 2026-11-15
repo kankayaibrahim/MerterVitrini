@@ -16,13 +16,18 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
+	"mertervitrini/backend/pkg/mailer"
+	"mertervitrini/backend/pkg/safe"
 )
 
-type StoreOrdersHandler struct{}
+type StoreOrdersHandler struct {
+	Cfg *config.Config
+}
 
-func NewStoreOrdersHandler() *StoreOrdersHandler {
-	return &StoreOrdersHandler{}
+func NewStoreOrdersHandler(cfg *config.Config) *StoreOrdersHandler {
+	return &StoreOrdersHandler{Cfg: cfg}
 }
 
 type CreateOrderRequest struct {
@@ -423,7 +428,8 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if isImp, adminEmail := isImpersonatedToken(r.Header.Get("Authorization")); isImp {
+	isImp, adminEmail := isImpersonatedToken(r.Header.Get("Authorization"))
+	if isImp {
 		log.Printf("[IMPERSONATION ORDER] Order #%s (id=%s) created on behalf of customer=%s by staff=%s", orderNumber, orderID, userID, adminEmail)
 	}
 
@@ -432,6 +438,26 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 		firstImg = items[0].ImageUrl
 	}
 	breakdownText := formatCurrencyBreakdownSummary(summary.CurrencyTotals, summary.OrderTotalAmount, summary.OrderCurrency)
+	reqSnapshot := snapshotRequestForMailerMeta(r)
+	orderItemsSnapshot := buildOrderAdminNotificationItems(items)
+	safe.Go("SendOrderCreatedAdminNotification", func() {
+		mailer.SendOrderCreatedAdminNotification(h.Cfg, mailer.OrderAdminNotificationData{
+			OrderNumber:         orderNumber,
+			ChannelLabel:        "B2B Mağaza Sepet Siparişi",
+			PaymentMethod:       req.PaymentMethod,
+			CustomerName:        custName,
+			CustomerEmail:       custEmail,
+			CustomerPhone:       custPhone,
+			BillingAddress:      req.BillingAddress,
+			DeliveryAddress:     req.DeliveryAddress,
+			TotalAmountTRY:      summary.TotalAmountTRY,
+			TotalSummaryText:    breakdownText,
+			IsImpersonated:      isImp,
+			ImpersonatedByEmail: adminEmail,
+			Items:               orderItemsSnapshot,
+			Meta:                mailer.ExtractClientMeta(reqSnapshot),
+		})
+	})
 	RecordMemberActivityAsync(r, MemberActivityInput{
 		UserID:        userID,
 		EventType:     "order_create",
@@ -468,6 +494,45 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 		"currency_totals":       summary.CurrencyTotals,
 		"supplier_orders":       supplierOrders,
 	})
+}
+
+func snapshotRequestForMailerMeta(r *http.Request) *http.Request {
+	hdr := make(http.Header)
+	if r != nil {
+		for _, key := range []string{
+			"CF-Connecting-IP",
+			"CF-Pseudo-IPv4",
+			"CF-IPCountry",
+			"CF-IPCity",
+			"X-Forwarded-For",
+			"X-Real-IP",
+			"User-Agent",
+		} {
+			if val := r.Header.Get(key); val != "" {
+				hdr.Set(key, val)
+			}
+		}
+		return &http.Request{Header: hdr, RemoteAddr: r.RemoteAddr}
+	}
+	return &http.Request{Header: hdr}
+}
+
+func buildOrderAdminNotificationItems(items []orderCartItem) []mailer.OrderAdminNotificationItem {
+	out := make([]mailer.OrderAdminNotificationItem, 0, len(items))
+	for _, it := range items {
+		unitPrice := it.Price
+		if it.DiscountedPrice != nil && *it.DiscountedPrice > 0 && *it.DiscountedPrice < it.Price {
+			unitPrice = *it.DiscountedPrice
+		}
+		out = append(out, mailer.OrderAdminNotificationItem{
+			Title:     it.Title,
+			SKU:       it.CustomSku,
+			Quantity:  it.Quantity,
+			UnitPrice: unitPrice,
+			Currency:  normalizeOrderCurrencyCode(it.Currency),
+		})
+	}
+	return out
 }
 
 func hydrateOrderResponseCurrency(o *OrderResponse, rawTotals []byte) {

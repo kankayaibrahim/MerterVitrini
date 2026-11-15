@@ -1101,6 +1101,11 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 			gender = $7, season = $8, buying_price = $9, price = $10,
 			currency = $11, packing_ratio = $12, series_ratio = $13,
 			minimum_order_quantity = $14, series_stock = $15, stock = $16, is_active = $17,
+			deactivated_at = CASE
+				WHEN $17 = false AND is_active = true THEN CURRENT_TIMESTAMP
+				WHEN $17 = true THEN NULL
+				ELSE deactivated_at
+			END,
 			source_product_group_id = $18, updated_at = CURRENT_TIMESTAMP
 		WHERE id = $19 AND brand_id = $20
 		RETURNING coalesce(slug, '')`
@@ -1163,11 +1168,22 @@ func (h *SupplierPortalHandler) DeleteProduct(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	res, err := db.Pool.Exec(ctx, "DELETE FROM catalog.products WHERE id = $1 AND brand_id = $2", id, claims.BrandID)
-	if err != nil || res.RowsAffected() == 0 {
+	var deletedSKU, deletedTitle string
+	err := db.Pool.QueryRow(
+		ctx,
+		"DELETE FROM catalog.products WHERE id = $1 AND brand_id = $2 RETURNING coalesce(sku, ''), coalesce(title, '')",
+		id,
+		claims.BrandID,
+	).Scan(&deletedSKU, &deletedTitle)
+	if err != nil {
 		http.Error(w, `{"error":"Ürün silinemedi veya yetkiniz yok"}`, http.StatusBadRequest)
 		return
 	}
+
+	_, _ = db.Pool.Exec(ctx, `
+		INSERT INTO catalog.product_deletion_logs (product_id, brand_id, sku, title, deletion_mode, actor_type)
+		VALUES ($1, $2, $3, $4, 'hard', 'supplier')
+	`, id, claims.BrandID, deletedSKU, deletedTitle)
 
 	triggerProductMVRefresh()
 

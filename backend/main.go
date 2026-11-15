@@ -59,7 +59,7 @@ func main() {
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
 
-	initBackgroundWorkers(appCtx)
+	initBackgroundWorkers(appCtx, cfg)
 	releaseStuckSyncRuns(dbPool.Exec)
 
 	appHandlers := NewAppHandlers(cfg)
@@ -110,7 +110,7 @@ func withStreamingWriteDeadlines(next http.Handler) http.Handler {
 	})
 }
 
-func initBackgroundWorkers(appCtx context.Context) {
+func initBackgroundWorkers(appCtx context.Context, cfg *config.Config) {
 	cronInitCtx, cronInitCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cronInitCancel()
 
@@ -126,6 +126,11 @@ func initBackgroundWorkers(appCtx context.Context) {
 	}
 	if err := handlers.EnsureCustomerImpersonationSchema(cronInitCtx); err != nil {
 		log.Printf("[WARNING] Failed to provision impersonation logs schema: %v\n", err)
+	}
+	if err := handlers.EnsureNotificationSettingsSchema(cronInitCtx); err != nil {
+		log.Printf("[WARNING] Failed to provision notification settings schema: %v\n", err)
+	} else {
+		handlers.StartDailyDigestScheduler(appCtx, cfg)
 	}
 
 	db.StartRatesWorker(appCtx)

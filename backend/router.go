@@ -39,6 +39,7 @@ type AppHandlers struct {
 	SupplierApplications *handlers.SupplierApplicationsHandler
 	Analytics            *handlers.AnalyticsHandler
 	AdminDashboard       *handlers.AdminDashboardHandler
+	AdminNotifications   *handlers.AdminNotificationsHandler
 	Chat                 *handlers.ChatHandler
 	Marketplace          *handlers.MarketplaceHandler
 	Mobile               *handlers.MobileHandler
@@ -59,9 +60,9 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 		MediaRootDir:         mediaSvc.RootDir(),
 		StoreCatalog:         handlers.NewStoreCatalogHandler(cfg),
 		StoreCart:            handlers.NewCartHandler(),
-		StoreOrders:          handlers.NewStoreOrdersHandler(),
+		StoreOrders:          handlers.NewStoreOrdersHandler(cfg),
 		StoreAuth:            storeAuth,
-		StoreInquiry:         handlers.NewInquiryHandler(),
+		StoreInquiry:         handlers.NewInquiryHandler(cfg),
 		AdminAuth:            handlers.NewAdminAuthHandler(cfg),
 		AdminCatalog:         handlers.NewAdminCatalogHandler(),
 		AdminOrders:          handlers.NewAdminOrdersHandler(cfg),
@@ -81,6 +82,7 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 		SupplierApplications: supplierApps,
 		Analytics:            handlers.NewAnalyticsHandler(cfg),
 		AdminDashboard:       handlers.NewAdminDashboardHandler(cfg),
+		AdminNotifications:   handlers.NewAdminNotificationsHandler(cfg),
 		Chat:                 handlers.NewChatHandler(cfg, notifierSvc),
 		Marketplace:          marketplace,
 		Mobile: handlers.NewMobileHandler(cfg, storeAuth, supplierPortal, handlers.MobileHandlerDeps{
@@ -366,6 +368,12 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("GET /api/v1/analytics/bi-mining", protect(h.Analytics.GetBIMiningReport))
 	mux.Handle("GET /api/v1/admin/analytics/bi-mining", protect(h.Analytics.GetBIMiningReport))
 	mux.Handle("GET /api/v1/admin/dashboard/stats", protect(h.AdminDashboard.GetDashboardStats))
+
+	mux.Handle("GET /api/v1/admin/notifications/settings", protect(h.AdminNotifications.GetSettings))
+	mux.Handle("PUT /api/v1/admin/notifications/settings", protect(h.AdminNotifications.UpdateSettings))
+	mux.Handle("GET /api/v1/admin/notifications/digest-preview", protect(h.AdminNotifications.GetDigestPreview))
+	mux.Handle("POST /api/v1/admin/notifications/send-digest-now", protect(h.AdminNotifications.SendDigestNow))
+	mux.Handle("POST /api/v1/admin/notifications/test", protect(h.AdminNotifications.SendTestNotification))
 
 	mux.Handle("GET /api/v1/admin/marketplace/sub-orders", protect(h.Marketplace.ListAdminSubOrders))
 	mux.Handle("GET /api/v1/admin/marketplace/payouts", protect(h.Marketplace.ListAdminPayoutRequests))

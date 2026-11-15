@@ -20,6 +20,7 @@ import {
   FileText,
   Sparkles,
   Compass,
+  Bell,
   LucideIcon
 } from "lucide-react";
 
@@ -208,6 +209,15 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
         href: "/admin/settings/site",
         icon: Store,
         description: "Showroom adresi, telefon, WhatsApp ve tek fiyat ayarları"
+      },
+      {
+        id: "notifications",
+        title: "E-Posta & Bildirimler",
+        href: "/admin/settings/notifications",
+        icon: Bell,
+        badge: "Yeni",
+        badgeColor: "emerald",
+        description: "Yeni üye, sipariş ve günlük özet e-posta alıcıları (To / CC) ve zamanlama ayarları"
       },
       {
         id: "integrations",

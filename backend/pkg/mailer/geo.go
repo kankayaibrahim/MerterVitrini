@@ -12,6 +12,8 @@ import (
 
 type ClientMeta struct {
 	IP          string
+	IPVersion   string
+	PseudoIPv4  string
 	Country     string
 	CountryCode string
 	City        string
@@ -25,35 +27,66 @@ type ClientMeta struct {
 	UserAgent   string
 }
 
+func normalizeIPString(raw string) (string, string) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", ""
+	}
+	trimmed = strings.TrimPrefix(strings.TrimSuffix(trimmed, "]"), "[")
+	if zoneIdx := strings.Index(trimmed, "%"); zoneIdx > 0 {
+		trimmed = trimmed[:zoneIdx]
+	}
+	parsed := net.ParseIP(trimmed)
+	if parsed == nil {
+		return trimmed, ""
+	}
+	if v4 := parsed.To4(); v4 != nil {
+		return v4.String(), "IPv4"
+	}
+	return parsed.String(), "IPv6"
+}
+
 // GetClientIP retrieves the real visitor IP from reverse proxy / Cloudflare headers
 func GetClientIP(r *http.Request) string {
-	if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
-		return cf
+	candidates := []string{
+		r.Header.Get("CF-Connecting-IP"),
 	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			ip := strings.TrimSpace(parts[0])
-			if ip != "" {
-				return ip
-			}
+		if first, _, _ := strings.Cut(xff, ","); strings.TrimSpace(first) != "" {
+			candidates = append(candidates, first)
 		}
 	}
-	if xri := strings.TrimSpace(r.Header.Get("X-Real-IP")); xri != "" {
-		return xri
+	candidates = append(candidates, r.Header.Get("X-Real-IP"))
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil && host != "" {
+		candidates = append(candidates, host)
+	} else {
+		candidates = append(candidates, r.RemoteAddr)
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil && host != "" {
-		return host
+
+	for _, candidate := range candidates {
+		if cleanIP, _ := normalizeIPString(candidate); cleanIP != "" {
+			return cleanIP
+		}
 	}
-	return r.RemoteAddr
+	return ""
 }
 
 // ExtractClientMeta extracts IP, Cloudflare geo headers, User-Agent, and queries IP-API for rich geo-lookup
 func ExtractClientMeta(r *http.Request) ClientMeta {
+	rawIP := GetClientIP(r)
+	cleanIP, ipVersion := normalizeIPString(rawIP)
 	meta := ClientMeta{
-		IP:        GetClientIP(r),
+		IP:        cleanIP,
+		IPVersion: ipVersion,
 		UserAgent: r.Header.Get("User-Agent"),
+	}
+
+	if ipVersion == "IPv6" {
+		if pseudoRaw := strings.TrimSpace(r.Header.Get("CF-Pseudo-IPv4")); pseudoRaw != "" {
+			if cleanPseudo, pseudoVer := normalizeIPString(pseudoRaw); pseudoVer == "IPv4" && IsPublicIP(cleanPseudo) {
+				meta.PseudoIPv4 = cleanPseudo
+			}
+		}
 	}
 
 	// Cloudflare geo headers fallback

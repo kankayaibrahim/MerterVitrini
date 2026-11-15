@@ -271,12 +271,17 @@ func (h *MobileHandler) QuickUpdateSupplierProduct(w http.ResponseWriter, r *htt
 	var updatedIsActive bool
 	err := db.Pool.QueryRow(ctx, `
 		UPDATE catalog.products
-		SET price        = COALESCE($1, price),
-		    buying_price = COALESCE($2, buying_price),
-		    is_active    = COALESCE($3, is_active),
-		    stock        = COALESCE($4, stock),
-		    series_stock = COALESCE($5, series_stock),
-		    updated_at   = CURRENT_TIMESTAMP
+		SET price          = COALESCE($1, price),
+		    buying_price   = COALESCE($2, buying_price),
+		    is_active      = COALESCE($3, is_active),
+		    deactivated_at = CASE
+		        WHEN $3 IS NOT NULL AND $3 = false AND is_active = true THEN CURRENT_TIMESTAMP
+		        WHEN $3 IS NOT NULL AND $3 = true THEN NULL
+		        ELSE deactivated_at
+		    END,
+		    stock          = COALESCE($4, stock),
+		    series_stock   = COALESCE($5, series_stock),
+		    updated_at     = CURRENT_TIMESTAMP
 		WHERE id = $6 AND brand_id = $7
 		RETURNING coalesce(slug, ''), title, is_active
 	`, req.Price, req.BuyingPrice, req.IsActive, req.Stock, req.SeriesStock, productID, claims.BrandID).Scan(&updatedSlug, &updatedTitle, &updatedIsActive)

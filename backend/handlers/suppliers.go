@@ -506,8 +506,9 @@ func (h *SuppliersHandler) DeactivateSupplierProducts(w http.ResponseWriter, r *
 	// Update all products under this brand (or associated feeds) to be inactive
 	prodQuery := `
 		UPDATE catalog.products 
-		SET is_active = false 
-		WHERE brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1)`
+		SET is_active = false, deactivated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+		WHERE (brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1))
+		  AND is_active = true`
 	_, err := db.Pool.Exec(ctx, prodQuery, id)
 	if err != nil {
 		log.Printf("Failed to deactivate products for supplier %s: %v", id, err)
@@ -573,8 +574,9 @@ func (h *SuppliersHandler) DeleteSupplierProducts(w http.ResponseWriter, r *http
 	// Soft-delete: update is_active to false and deleted_at to current timestamp
 	query := `
 		UPDATE catalog.products 
-		SET is_active = false, deleted_at = CURRENT_TIMESTAMP
-		WHERE brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1)`
+		SET is_active = false, deactivated_at = COALESCE(deactivated_at, CURRENT_TIMESTAMP), deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		WHERE (brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1))
+		  AND deleted_at IS NULL`
 	cmdTag, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {
 		log.Printf("Failed to soft-delete products for supplier %s: %v", id, err)

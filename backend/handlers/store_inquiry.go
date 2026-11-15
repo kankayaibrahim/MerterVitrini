@@ -11,14 +11,19 @@ import (
 	"strings"
 	"time"
 
+	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/mailer"
+	"mertervitrini/backend/pkg/safe"
 )
 
-type InquiryHandler struct{}
+type InquiryHandler struct {
+	Cfg *config.Config
+}
 
-func NewInquiryHandler() *InquiryHandler {
-	return &InquiryHandler{}
+func NewInquiryHandler(cfg *config.Config) *InquiryHandler {
+	return &InquiryHandler{Cfg: cfg}
 }
 
 type inquiryPayload struct {
@@ -284,6 +289,29 @@ func (h *InquiryHandler) SubmitInquiry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	formattedTotal := formatCurrencyBreakdownSummary(res.CurrencyTotals, res.TotalAmount, res.Currency)
+	inquiryCompany := ""
+	if req.Company != nil {
+		inquiryCompany = strings.TrimSpace(*req.Company)
+	}
+	reqSnapshot := snapshotRequestForMailerMeta(r)
+	inquiryItemsSnapshot := buildOrderAdminNotificationItems(res.OrderItems)
+	safe.Go("SendInquiryOrderAdminNotification", func() {
+		mailer.SendOrderCreatedAdminNotification(h.Cfg, mailer.OrderAdminNotificationData{
+			OrderNumber:      res.OrderNumber,
+			ChannelLabel:     "Doğrudan Tedarikçi Sipariş Talebi",
+			PaymentMethod:    "DIRECT_SUPPLIER",
+			CustomerName:     req.FullName,
+			CustomerCompany:  inquiryCompany,
+			CustomerEmail:    req.Email,
+			CustomerPhone:    req.Phone,
+			DeliveryAddress:  raw.DeliveryAddress,
+			TotalAmountTRY:   res.TotalAmountTRY,
+			TotalSummaryText: formattedTotal,
+			Items:            inquiryItemsSnapshot,
+			Meta:             mailer.ExtractClientMeta(reqSnapshot),
+		})
+	})
+
 	inquiryUserID := resolveAuthenticatedMemberID(r, "")
 	if inquiryUserID == "" && req.Email != "" {
 		_ = db.Pool.QueryRow(ctx, `SELECT id FROM identity.users WHERE LOWER(email) = LOWER($1) LIMIT 1`, req.Email).Scan(&inquiryUserID)

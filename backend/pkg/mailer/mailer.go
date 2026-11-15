@@ -1,16 +1,8 @@
 package mailer
 
 import (
-	"bytes"
-	"crypto/rand"
-	"crypto/tls"
-	"encoding/hex"
 	"fmt"
 	"html"
-	"log"
-	"mime"
-	"net"
-	"net/smtp"
 	"net/url"
 	"strings"
 	"time"
@@ -19,10 +11,7 @@ import (
 	"mertervitrini/backend/pkg/safe"
 )
 
-const (
-	defaultAdminEmail = "kankayaibrahim@gmail.com"
-	dateTimeFormatTR  = "02.01.2006 15:04"
-)
+const dateTimeFormatTR = "02.01.2006 15:04"
 
 // SupplierApplicationData encapsulates fields submitted through public supplier application form
 type SupplierApplicationData struct {
@@ -40,112 +29,7 @@ type SupplierApplicationData struct {
 
 // SendRawMail sends an email via the configured SMTP server (e.g., local Postfix)
 func SendRawMail(cfg *config.Config, to, subject, htmlBody, textBody string) error {
-	host := cfg.SMTPHost
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port := cfg.SMTPPort
-	if port == "" {
-		port = "25"
-	}
-	addr := net.JoinHostPort(host, port)
-
-	fromEmail := cfg.SMTPFrom
-	if fromEmail == "" {
-		fromEmail = "destek@mertervitrini.com.tr"
-	}
-	fromHeader := fmt.Sprintf("Merter Vitrini <%s>", fromEmail)
-
-	randomBytes := make([]byte, 12)
-	_, _ = rand.Read(randomBytes)
-	boundary := "=_mv_" + hex.EncodeToString(randomBytes)
-	msgID := fmt.Sprintf("<%d.%s@mertervitrini.com.tr>", time.Now().UnixNano(), hex.EncodeToString(randomBytes[:6]))
-
-	encodedSubject := mime.BEncoding.Encode("utf-8", subject)
-
-	var msg bytes.Buffer
-	msg.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
-	msg.WriteString(fmt.Sprintf("To: %s\r\n", to))
-	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", encodedSubject))
-	msg.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
-	msg.WriteString(fmt.Sprintf("Message-ID: %s\r\n", msgID))
-	msg.WriteString("MIME-Version: 1.0\r\n")
-	msg.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary))
-	msg.WriteString("\r\n")
-
-	// Plain text part
-	msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-	msg.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-	msg.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
-	msg.WriteString(textBody)
-	msg.WriteString("\r\n\r\n")
-
-	// HTML part
-	msg.WriteString(fmt.Sprintf("--%s\r\n", boundary))
-	msg.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
-	msg.WriteString("Content-Transfer-Encoding: 8bit\r\n\r\n")
-	msg.WriteString(htmlBody)
-	msg.WriteString("\r\n\r\n")
-
-	// End boundary
-	msg.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
-
-	// Connect to SMTP with custom TLS handler to avoid loopback certificate mismatch
-	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
-	if err != nil {
-		log.Printf("[MAILER ERROR] Failed to connect to SMTP %s: %v", addr, err)
-		return err
-	}
-
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
-		conn.Close()
-		log.Printf("[MAILER ERROR] Failed to create SMTP client: %v", err)
-		return err
-	}
-	defer client.Close()
-
-	if ok, _ := client.Extension("STARTTLS"); ok {
-		tlsConfig := &tls.Config{
-			ServerName:         host,
-			InsecureSkipVerify: true,
-		}
-		if err := client.StartTLS(tlsConfig); err != nil {
-			log.Printf("[MAILER ERROR] STARTTLS failed: %v", err)
-			return err
-		}
-	}
-
-	if err := client.Mail(fromEmail); err != nil {
-		log.Printf("[MAILER ERROR] MAIL FROM failed for %s: %v", fromEmail, err)
-		return err
-	}
-
-	if err := client.Rcpt(to); err != nil {
-		log.Printf("[MAILER ERROR] RCPT TO failed for %s: %v", to, err)
-		return err
-	}
-
-	w, err := client.Data()
-	if err != nil {
-		log.Printf("[MAILER ERROR] DATA command failed: %v", err)
-		return err
-	}
-
-	if _, err := w.Write(msg.Bytes()); err != nil {
-		log.Printf("[MAILER ERROR] Write body failed: %v", err)
-		return err
-	}
-
-	if err := w.Close(); err != nil {
-		log.Printf("[MAILER ERROR] Close data writer failed: %v", err)
-		return err
-	}
-
-	_ = client.Quit()
-
-	log.Printf("[MAILER SUCCESS] Email delivered to SMTP queue for: %s (subject: %s)", to, subject)
-	return nil
+	return SendMailEnvelope(cfg, []string{to}, nil, subject, htmlBody, textBody)
 }
 
 func cleanPhoneForWhatsApp(phone string) string {
@@ -193,6 +77,24 @@ func formatGeoLocationHTML(meta ClientMeta) string {
 	}
 
 	deviceText := fmt.Sprintf("%s • %s", meta.Device, meta.Browser)
+	ipDisplay := meta.IP
+	if ipDisplay == "" {
+		ipDisplay = "Bilinmiyor"
+	}
+	ipBadge := ""
+	switch meta.IPVersion {
+	case "IPv6":
+		ipBadge = `<span style="display:inline-block;margin-left:6px;background:#e0f2fe;color:#0369a1;font-size:10px;font-weight:800;padding:2px 7px;border-radius:9999px;font-family:sans-serif;">IPv6 • Doğrulanmış İstemci IP</span>`
+	case "IPv4":
+		ipBadge = `<span style="display:inline-block;margin-left:6px;background:#f1f5f9;color:#334155;font-size:10px;font-weight:800;padding:2px 7px;border-radius:9999px;font-family:sans-serif;">IPv4</span>`
+	}
+	pseudoRow := ""
+	if meta.PseudoIPv4 != "" {
+		pseudoRow = fmt.Sprintf(`<tr>
+          <td style="color: #64748b; padding: 3px 0;"><strong>🔀 Cloudflare Pseudo-IPv4:</strong></td>
+          <td style="color: #334155; font-family: monospace; font-size: 12px; padding: 3px 0;">%s</td>
+        </tr>`, html.EscapeString(meta.PseudoIPv4))
+	}
 
 	return fmt.Sprintf(`
     <div style="margin-top: 24px; background: #f1f5f9; border-radius: 12px; padding: 18px; border: 1px solid #e2e8f0;">
@@ -206,8 +108,9 @@ func formatGeoLocationHTML(meta ClientMeta) string {
         </tr>
         <tr>
           <td style="color: #64748b; padding: 3px 0;"><strong>🌐 İstemci IP Adresi:</strong></td>
-          <td style="color: #0284c7; font-family: monospace; font-size: 13px; font-weight: 700; padding: 3px 0;">%s</td>
+          <td style="color: #0284c7; font-family: monospace; font-size: 13px; font-weight: 700; padding: 3px 0; word-break: break-all;">%s %s</td>
         </tr>
+        %s
         <tr>
           <td style="color: #64748b; padding: 3px 0;"><strong>🏢 İnternet Sağlayıcı (ISP):</strong></td>
           <td style="color: #334155; padding: 3px 0;">%s</td>
@@ -217,16 +120,11 @@ func formatGeoLocationHTML(meta ClientMeta) string {
           <td style="color: #334155; padding: 3px 0;">%s</td>
         </tr>
       </table>
-    </div>`, flag, html.EscapeString(locationText), html.EscapeString(meta.IP), html.EscapeString(ispText), html.EscapeString(deviceText))
+    </div>`, flag, html.EscapeString(locationText), html.EscapeString(ipDisplay), ipBadge, pseudoRow, html.EscapeString(ispText), html.EscapeString(deviceText))
 }
 
 // SendSupplierApplicationNotification notifies admin when a supplier fills out public onboarding form
 func SendSupplierApplicationNotification(cfg *config.Config, app SupplierApplicationData, meta ClientMeta) {
-	adminEmail := cfg.AdminEmail
-	if adminEmail == "" {
-		adminEmail = defaultAdminEmail
-	}
-
 	safe.Go("NotifyAdminSupplierApplication", func() {
 		subject := fmt.Sprintf("🏢 Yeni Tedarikçi Başvurusu: %s (%s)", app.CompanyName, app.ContactName)
 		nowStr := time.Now().Format(dateTimeFormatTR)
@@ -367,17 +265,16 @@ Merter Vitrini Bildirim Servisi`,
 			}(),
 		)
 
-		_ = SendRawMail(cfg, adminEmail, subject, htmlBody, textBody)
+		DispatchAdminEventMail(cfg, EventSupplierOnboarding, subject, htmlBody, textBody, map[string]any{
+			"kind":         "supplier_application",
+			"company_name": app.CompanyName,
+			"email":        app.Email,
+		})
 	})
 }
 
 // SendSupplierRegisteredNotification notifies admin when a supplier user is created with full geo details
 func SendSupplierRegisteredNotification(cfg *config.Config, brandName, brandCode, contactName, email, phone string, meta ClientMeta) {
-	adminEmail := cfg.AdminEmail
-	if adminEmail == "" {
-		adminEmail = defaultAdminEmail
-	}
-
 	safe.Go("NotifyAdminSupplierRegistration", func() {
 		subject := fmt.Sprintf("🔔 Yeni Tedarikçi Hesabı: %s (%s)", brandName, contactName)
 		nowStr := time.Now().Format(dateTimeFormatTR)
@@ -485,7 +382,12 @@ Merter Vitrini Bildirim Servisi`, brandName, brandCode, contactName, email, phon
 			}(),
 		)
 
-		_ = SendRawMail(cfg, adminEmail, subject, htmlBody, textBody)
+		DispatchAdminEventMail(cfg, EventSupplierOnboarding, subject, htmlBody, textBody, map[string]any{
+			"kind":       "supplier_user_created",
+			"brand_name": brandName,
+			"brand_code": brandCode,
+			"email":      email,
+		})
 	})
 }
 
@@ -555,11 +457,6 @@ Merter Vitrini Ekibi`, contactName, brandName, email, loginURL)
 
 // SendCustomerRegisteredNotification notifies admin when a new B2B customer registers
 func SendCustomerRegisteredNotification(cfg *config.Config, firstName, lastName, email, phone string, meta ClientMeta) {
-	adminEmail := cfg.AdminEmail
-	if adminEmail == "" {
-		adminEmail = defaultAdminEmail
-	}
-
 	safe.Go("NotifyAdminCustomerRegistration", func() {
 		fullName := strings.TrimSpace(firstName + " " + lastName)
 		subject := fmt.Sprintf("👤 Yeni Müşteri / Bayi Kaydı: %s", fullName)
@@ -662,7 +559,14 @@ Merter Vitrini Bildirim Servisi`, fullName, email, phoneDisplay, nowStr, meta.IP
 			}(),
 		)
 
-		_ = SendRawMail(cfg, adminEmail, subject, htmlBody, textBody)
+		DispatchAdminEventMail(cfg, EventNewCustomer, subject, htmlBody, textBody, map[string]any{
+			"kind":      "customer_registered",
+			"full_name": fullName,
+			"email":     email,
+			"phone":     phoneDisplay,
+			"ip":        meta.IP,
+			"country":   meta.Country,
+		})
 	})
 }
 
@@ -1071,11 +975,6 @@ Web: https://mertervitrini.com.tr/hizmet-saglayicilar`, contactName, companyName
 
 // SendServiceProviderAdminNotification notifies admin after applicant verifies their email.
 func SendServiceProviderAdminNotification(cfg *config.Config, app ServiceProviderApplicationEmailData, meta ClientMeta) {
-	adminEmail := cfg.AdminEmail
-	if adminEmail == "" {
-		adminEmail = defaultAdminEmail
-	}
-
 	safe.Go("SendServiceProviderAdminNotification", func() {
 		subject := fmt.Sprintf("🚚 Yeni Doğrulanmış Hizmet Sağlayıcı Başvurusu: %s (%s)", app.CompanyName, app.ServiceCategory)
 		nowStr := time.Now().Format(dateTimeFormatTR)
@@ -1134,7 +1033,12 @@ Başvuruyu İncelemek ve Onaylamak İçin: https://mertervitrini.com.tr/admin/se
 			geoHTML,
 		)
 
-		_ = SendRawMail(cfg, adminEmail, subject, htmlBody, textBody)
+		DispatchAdminEventMail(cfg, EventSupplierOnboarding, subject, htmlBody, textBody, map[string]any{
+			"kind":             "service_provider_application",
+			"company_name":     app.CompanyName,
+			"service_category": app.ServiceCategory,
+			"email":            app.Email,
+		})
 	})
 }
 
