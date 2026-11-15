@@ -4,7 +4,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Compass, Layers, MapPin } from "lucide-react";
-import { CustomerMapPoint, formatCurrencyTry } from "./customerTypes";
+import {
+  CustomerMapPoint,
+  CustomerMapSample,
+  formatCurrencyTry,
+} from "./customerTypes";
 
 interface CustomersWorldMapProps {
   points: CustomerMapPoint[];
@@ -84,6 +88,91 @@ function buildMarkerPopupHtml(p: CustomerMapPoint): string {
   `;
 }
 
+function clusterPointsByCountry(points: CustomerMapPoint[]): CustomerMapPoint[] {
+  const buckets = new Map<
+    string,
+    {
+      points: CustomerMapPoint[];
+      weightedLat: number;
+      weightedLon: number;
+      totalWeight: number;
+      customerCount: number;
+      todayCount: number;
+      onlineCount: number;
+      ordersCount: number;
+      totalSpend: number;
+      allCentroid: boolean;
+      samples: CustomerMapSample[];
+      seenSampleIds: Set<string>;
+    }
+  >();
+
+  for (const p of points) {
+    const code = (p.country_code || "UNKNOWN").toUpperCase();
+    const weight = Math.max(1, p.customer_count);
+    let bucket = buckets.get(code);
+    if (!bucket) {
+      bucket = {
+        points: [],
+        weightedLat: 0,
+        weightedLon: 0,
+        totalWeight: 0,
+        customerCount: 0,
+        todayCount: 0,
+        onlineCount: 0,
+        ordersCount: 0,
+        totalSpend: 0,
+        allCentroid: true,
+        samples: [],
+        seenSampleIds: new Set<string>(),
+      };
+      buckets.set(code, bucket);
+    }
+
+    bucket.points.push(p);
+    bucket.weightedLat += p.lat * weight;
+    bucket.weightedLon += p.lon * weight;
+    bucket.totalWeight += weight;
+    bucket.customerCount += p.customer_count;
+    bucket.todayCount += p.today_count;
+    bucket.onlineCount += p.online_count;
+    bucket.ordersCount += p.orders_count;
+    bucket.totalSpend += p.total_spend;
+    if (!p.is_centroid) {
+      bucket.allCentroid = false;
+    }
+
+    for (const s of p.sample_customers) {
+      if (bucket.samples.length >= 6) break;
+      if (!bucket.seenSampleIds.has(s.id)) {
+        bucket.seenSampleIds.add(s.id);
+        bucket.samples.push(s);
+      }
+    }
+  }
+
+  return Array.from(buckets.entries()).map(([code, bucket]) => {
+    const first = bucket.points[0];
+    const groupCount = bucket.points.length;
+    return {
+      cluster_key: `country:${code}`,
+      country_code: first.country_code,
+      country_name: first.country_name,
+      city: groupCount > 1 ? `${groupCount} şehir/konum` : first.city,
+      region_name: groupCount === 1 ? first.region_name : "",
+      lat: bucket.weightedLat / bucket.totalWeight,
+      lon: bucket.weightedLon / bucket.totalWeight,
+      customer_count: bucket.customerCount,
+      today_count: bucket.todayCount,
+      online_count: bucket.onlineCount,
+      orders_count: bucket.ordersCount,
+      total_spend: bucket.totalSpend,
+      is_centroid: bucket.allCentroid,
+      sample_customers: bucket.samples,
+    };
+  });
+}
+
 export default function CustomersWorldMap({
   points,
   selectedCountry,
@@ -92,10 +181,10 @@ export default function CustomersWorldMap({
 }: CustomersWorldMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const hasFittedInitialRef = useRef(false);
   const [tileMode, setTileMode] = useState<TileMode>("osm");
+  const [zoomLevel, setZoomLevel] = useState<number>(2);
 
   const filterCountryRef = useRef(onFilterCountry);
   const selectCustomerRef = useRef(onSelectCustomerById);
@@ -115,6 +204,14 @@ export default function CustomersWorldMap({
     return points.filter((p) => p.country_code.toUpperCase() === selectedCountry.toUpperCase());
   }, [points, selectedCountry]);
 
+  const renderedPoints = useMemo(() => {
+    const isSingleCountryFilter = /^[A-Za-z]{2}$/.test(selectedCountry.trim());
+    if (zoomLevel >= 5 || isSingleCountryFilter) {
+      return visiblePoints;
+    }
+    return clusterPointsByCountry(visiblePoints);
+  }, [visiblePoints, zoomLevel, selectedCountry]);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el || mapRef.current) return;
@@ -123,46 +220,38 @@ export default function CustomersWorldMap({
       center: [36.5, 22.0],
       zoom: 2,
       minZoom: 2,
-      maxZoom: 14,
+      maxZoom: 18,
       worldCopyJump: true,
       scrollWheelZoom: false,
     });
 
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> katılımcıları',
+      maxZoom: 18,
+    }).addTo(map);
+
     const layerGroup = L.layerGroup().addTo(map);
+    map.on("zoomend", () => {
+      setZoomLevel(map.getZoom());
+    });
+
     mapRef.current = map;
     markersLayerRef.current = layerGroup;
 
     return () => {
       map.remove();
       mapRef.current = null;
-      tileLayerRef.current = null;
       markersLayerRef.current = null;
       hasFittedInitialRef.current = false;
     };
   }, []);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (tileLayerRef.current) {
-      tileLayerRef.current.remove();
-    }
-
-    const tileUrl =
-      tileMode === "osm"
-        ? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-
-    const attribution =
-      tileMode === "osm"
-        ? '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
-        : '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> &copy; CARTO';
-
-    tileLayerRef.current = L.tileLayer(tileUrl, {
-      attribution,
-      maxZoom: 18,
-    }).addTo(map);
+    const pane = mapRef.current?.getPane("tilePane");
+    if (!pane) return;
+    pane.style.filter =
+      tileMode === "light" ? "grayscale(0.88) brightness(1.06) contrast(0.92)" : "";
   }, [tileMode]);
 
   const handleFitBounds = () => {
@@ -184,7 +273,7 @@ export default function CustomersWorldMap({
 
     layer.clearLayers();
 
-    visiblePoints.forEach((p) => {
+    renderedPoints.forEach((p) => {
       const size = Math.min(48, Math.max(28, Math.round(24 + Math.sqrt(p.customer_count) * 6)));
       const hasFreshActivity = p.today_count > 0 || p.online_count > 0;
       const bgColor = hasFreshActivity
@@ -244,7 +333,7 @@ export default function CustomersWorldMap({
         map.fitBounds(L.latLngBounds(latLngs), { padding: [36, 36], maxZoom: 6 });
       }
     }
-  }, [visiblePoints]);
+  }, [renderedPoints, visiblePoints]);
 
   return (
     <div className="isolate relative z-0 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
@@ -259,10 +348,10 @@ export default function CustomersWorldMap({
           type="button"
           onClick={() => setTileMode((prev) => (prev === "osm" ? "light" : "osm"))}
           className="pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 backdrop-blur border border-zinc-200 shadow-sm text-[11px] font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
-          title="Harita katman stilini değiştir"
+          title="Harita renk modunu değiştir"
         >
           <Layers className="w-3.5 h-3.5 text-indigo-600" />
-          {tileMode === "osm" ? "OpenStreetMap" : "Sade Harita"}
+          {tileMode === "osm" ? "Renkli OSM" : "Sade OSM"}
         </button>
 
         {visiblePoints.length > 0 && (
