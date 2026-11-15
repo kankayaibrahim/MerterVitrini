@@ -3007,3 +3007,75 @@
      - `HEAD https://mertervitrini.com.tr/` ve `HEAD https://mertervitrini.com.tr/admin/customers` (Origin `213.202.255.80`) → `HTTP/1.1 200 OK`
      - Canlı PostgreSQL (`merterdevdb`) dağılım doğrulaması: `TR (Türkiye): 28`, `FR (Fransa): 5`, `LB (Lübnan): 3`, `DE (Almanya): 3`, `RU (Rusya): 2`, `IT (İtalya): 2`, `ME (Karadağ): 2`, `GB (Birleşik Krallık): 2`, `AT (Avusturya): 2`, `NL (Hollanda): 2` dahil toplam `64/65` müşteri kaydı `23` farklı ülkeye tam Türkçe adlarla eşlendi (`1` kayıt konumsuz, bugün `8` yeni kayıt).
 - **Not:** `AGENTS.md` Kural #1 uyarınca uzak depoya `git push` çalıştırılmamıştır; değişiklikler yerel atomic commitlerde ve canlı üretim sunucusunda aktiftir.
+
+---
+
+### [2026-11-15 17:35:30] - Oturum #158 (Admin Hesabı Şifre Güçlendirme & `test_hesaplari.md` Güncellemesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"Admin (Yönetici) https://mertervitrini.com.tr/admin carnavaltedarik@gmail.com CarnavalAdmin2026! bu şifre çok basit düzenleyip başka biraz zor bir şifre ile @[c:\Projects\mertervitrini.com.tr\test_hesaplari.md] bunu güncelleyelim"`
+- **Yapılan İşlemler:**
+  1. **Canlı Keycloak Admin Şifre Rotasyonu:** `merter` realm'indeki `carnavaltedarik@gmail.com` (`ID: 69fc8a2b-3928-481f-ba43-06cedfd4cd0f`) kullanıcısının parolası Admin REST API (`PUT .../reset-password`, `temporary: false`) üzerinden 21 karakterlik yüksek entropili yeni parola (`[REDACTED]`) ile güncellendi.
+  2. **Doğrulama:**
+     - Eski parola (`[REDACTED]`) ile OIDC token talebi reddedildi (`HTTP 400 invalid_grant`).
+     - Yeni parola ile `admin-client` OIDC JWT token'ı (`HTTP 200`, `FINAL_LOGIN_STATUS: 200`) alındı ve canlı Admin API (`GET /api/v1/customers/overview` → `HTTP 200`, `total_customers: 66`, `today_count: 9`, `map_points: 52`) uçtan uca doğrulandı.
+  3. **Yerel Dokümantasyon Güncellemesi:** `.gitignore` kapsamında korunan [`test_hesaplari.md`](file:///c:/Projects/mertervitrini.com.tr/test_hesaplari.md) dosyasındaki Yönetici (Admin) bölümü ve Özet Hızlı Kopyalama Tablosu güncellendi. (`AGENTS.md` Kural #1 uyarınca commit/push yapılmadı.)
+
+---
+
+### [2026-11-15 17:39:00] - Oturum #159 (`CustomersWorldMap` CARTO `"API KEY REQUIRED"` Harita Katmanı Düzeltmesi & Yakınlaştırmaya Duyarlı Ülke Kümelemesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"api key istiyor düzeltelim"` (Ekran görüntüsünde CARTO `basemaps.cartocdn.com` üzerinde `"API KEY REQUIRED"` filigranı)
+- **Yapılan İşlemler:**
+  1. **Kök Neden Tespiti:** Sağ üstteki katman seçicinin kullandığı `basemaps.cartocdn.com/light_all/...` katmanının canlı alan adı üzerinde API anahtarı filigranı (`"API KEY REQUIRED"`) döndürdüğü doğrulandı; buna karşın resmi OpenStreetMap (`https://tile.openstreetmap.org/3/4/2.png`, `Referer: https://mertervitrini.com.tr/`) anahtarsız `HTTP 200 OK` yanıtı verdi.
+  2. **Anahtarsız Resmi OpenStreetMap & Yakınlaştırmaya Duyarlı Kümeleme:** [`CustomersWorldMap.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomersWorldMap.tsx) tamamen güncellendi:
+     - Tüm CARTO URL'leri kaldırıldı; harita yalnızca resmi API-anahtarsız `https://tile.openstreetmap.org/{z}/{x}/{y}.png` katmanını kullanır hale getirildi.
+     - `"Renkli OSM"` / `"Sade OSM"` geçişi harita sunucusunu değiştirmek yerine mevcut OSM `tilePane` üzerine CSS filtresi (`grayscale(0.88) brightness(1.06) contrast(0.92)`) uygular.
+     - Dünya görünümünde (`zoomLevel <= 4`, tek ülke seçili değilken) pinlerin Avrupa/Türkiye üzerinde üst üste binmesini önlemek için otomatik ülke bazlı kümeleme (`clusterPointsByCountry`) eklendi; yaklaşınca (`zoomLevel >= 5`) veya tek ülke seçilince şehir pinleri ayrıntılı gösterilir.
+- **Doğrulamalar:**
+  - `npx tsc --noEmit` ve `npm run lint` sırasıyla sıfır hata ve sıfır uyarıyla tamamlandı (`exit code 0`).
+  - `AGENTS.md` Kural #1 ve #7 uyarınca yerel `npm run build`, `git commit`, `git push` veya canlı dağıtım yapılmadı.
+
+---
+
+### [2026-11-15 17:53:00] - Oturum #160 (Otomatik IndexNow Bildirim Hattı, `catalog.indexnow_logs` Denetim Kaydı & `/admin/catalog/indexnow` Yönetim Merkezi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"yeni ürünler https://mertervitrini.com.tr/admin/catalog/indexnow otmatik buraya gidiyor mu xml çektik mesela yeni ürünler geldi bura otomatik gitse ve loglansa?"`
+- **Kök Neden & Önceki Durum:**
+  - `backend/handlers/integration.go` XML senkronizasyonu bitiminde `triggerIndexNowForSyncRun` ve `supplier_portal.go` ürün oluşturmada `NotifyIndexNowProductSlug` çağırıyordu; **ancak** tüm gönderimler yalnızca sunucu stdout loguna (`log.Printf`) yazılıyordu, PostgreSQL veritabanına hiçbir log kaydedilmiyordu.
+  - `/admin/catalog/indexnow` (`IndexNowManager.tsx`) yalnızca tarayıcının `localStorage` alanındaki manuel gönderimleri listelediği için otomatik XML/tedarikçi bildirimleri ekranda hiç görünmüyordu.
+  - XML senkronizasyonunda `LIMIT 100` sıralamasız sorgu nedeniyle yeni ürünler yerine eski güncellenmiş ürünlerin seçilmesi ve `catalog.mv_products` Materialized View yenilemesiyle yarış durumu (`race condition`) yaşanması riski vardı. Ayrıca tedarikçi ürün güncelleme, Excel içe aktarma, arşivden yayına alma, çok dilli çeviri güncelleme ve mobil hızlı güncelleme noktaları IndexNow'a bağlı değildi.
+- **Yapılan Değişiklikler:**
+  1. **Veritabanı Şeması:** [`0035_add_indexnow_logs.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0035_add_indexnow_logs.sql) eklendi (`catalog.indexnow_logs` tablosu ve `created_at`, `trigger_source`, `status` indeksleri). [`main.go`](file:///c:/Projects/mertervitrini.com.tr/backend/main.go) açılışında `EnsureIndexNowSchema` idempotent provizyonu bağlandı.
+  2. **Backend IndexNow Motoru & Admin API:**
+     - [`indexnow.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/indexnow.go): `EnsureIndexNowSchema`, `BuildProductIndexNowURLs` (8 dil çok dilli URL üretimi), `NormalizeAndChunkIndexNowURLs` (tekilleştirme + 10.000 URL protokol chunk bölme), `SubmitIndexNowSync` (canlıda `api.indexnow.org` HTTP status + gecikme + yanıt loglama; yerelde `skipped_dev` kaydı), `NotifyIndexNowWithMeta`, `NotifyIndexNowProductSlugsWithMeta` eklendi.
+     - [`router.go`](file:///c:/Projects/mertervitrini.com.tr/backend/router.go): `GET /api/v1/indexnow/logs`, `DELETE /api/v1/indexnow/logs`, `POST /api/v1/indexnow/logs/{id}/retry`, `POST /api/v1/indexnow/submit-recent-products` ve geliştirilmiş `POST /api/v1/indexnow/submit` uçları tanımlandı.
+  3. **Tüm Otomatik Ürün & İçerik Kanallarının Bağlanması:**
+     - [`integration.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/integration.go): `updateSyncStatus` içinde önce `REFRESH MATERIALIZED VIEW CONCURRENTLY catalog.mv_products` tamamlanıp ardından sıralı olarak `runIndexNowForSyncRun` çalıştırılır; `LIMIT 100` olmadan tüm yeni eklenen aktif XML ürünleri (yeni ürün yoksa en son güncellenen 50 ürün) `xml_sync` kaynağı ve `feed_id` / `sync_run_id` bağlamıyla IndexNow'a gönderilip loglanır.
+     - [`supplier_portal.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_portal.go), [`supplier_bulk_catalog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_bulk_catalog.go), [`mobile_supplier_handler.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_supplier_handler.go): Web tedarikçi yeni ürün/güncelleme/çeviri güncellemesi, Excel toplu yükleme, arşivden aktif yayına alma ve mobil hızlı ürün güncellemesi `triggerProductMVRefreshAndIndexNow` ile bağlandı.
+     - [`admin_blog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_blog.go) & [`admin_pages.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_pages.go): Yerelleştirilmiş blog slug desteği ve yapılandırılmış `blog` / `cms_page` IndexNow loglaması eklendi.
+  4. **Birim Testleri & Frontend Yönetim Merkezi:**
+     - [`indexnow_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/indexnow_test.go): 8 dil URL üretimi, geçersiz URL filtreleme, tekilleştirme ve >10.000 URL parçalama testleri eklendi.
+     - [`IndexNowManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/catalog/IndexNowManager.tsx): `localStorage` kaldırılarak 5 KPI özet kartı, son eklenen aktif ürünleri tek tıkla gönderme, manuel URL formu, kaynak/durum/arama filtreli ve genişletilebilir URL listeli veritabanı log tablosu, tekrar gönderme ve temizleme aksiyonlarıyla yenilendi.
+- **Doğrulamalar:**
+  - `cd backend; go vet ./...` ve `go test -count=1 ./handlers -run "TestBuildProductIndexNowURLs|TestNormalizeAndChunkIndexNowURLs" -v` hatasız geçti (`2/2 PASS`, `0.118s`).
+  - `cd frontend; npx tsc --noEmit` ve `npm run lint` sırasıyla sıfır hata ve sıfır uyarıyla tamamlandı (`exit code 0`).
+  - `AGENTS.md` Kural #1 ve #7 uyarınca yerel `npm run build`, `git commit`, `git push` veya canlı dağıtım yapılmadı; önceki `CustomersWorldMap.tsx` düzeltmesiyle birlikte çalışma dizininde kullanıcı onayına bırakıldı.
+
+---
+
+### [2026-11-15 17:58:00] - Oturum #161 (OSM Harita Düzeltmesi & Otomatik IndexNow Pipeline — Atomic Commitler ve Canlı Sunucu Yayını)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle sunucuda yayınla"`
+- **Yapılan İşlemler:**
+  1. **Atomic Git Commitler (`main` dalı):**
+     - `e2e76ad`: `fix: replace CARTO tile layer with official OpenStreetMap and add country clustering` ([`CustomersWorldMap.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomersWorldMap.tsx))
+     - `d995bbf`: `feat: automate IndexNow product and XML sync notifications with PostgreSQL audit logs` ([`0035_add_indexnow_logs.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0035_add_indexnow_logs.sql), [`main.go`](file:///c:/Projects/mertervitrini.com.tr/backend/main.go), [`router.go`](file:///c:/Projects/mertervitrini.com.tr/backend/router.go), [`indexnow.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/indexnow.go), [`indexnow_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/indexnow_test.go), [`integration.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/integration.go), [`supplier_portal.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_portal.go), [`supplier_bulk_catalog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_bulk_catalog.go), [`mobile_supplier_handler.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_supplier_handler.go), [`admin_blog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_blog.go), [`admin_pages.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_pages.go), [`IndexNowManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/catalog/IndexNowManager.tsx))
+  2. **Canlı Sunucu Yayını (`scripts/unified_deployer.py -p unified -c all -a all`, Toplam `123.03 sn`):**
+     - **Go Backend (`56.87 sn`):** Linux AMD64 binary (`42.66 MB`) cross-compile edilip `213.202.255.80` sunucusuna aktarıldı; `merter-backend.service` (`PID 1319299`) port `8080` üzerinde aktif olarak başlatıldı.
+     - **Next.js SSR Frontend (`66.16 sn`):** Saf kaynak kod sunucuya aktarıldı; sunucu üzerinde `npm install` + `npm run build` (`56.95 sn`) ile derlenip `merter-frontend.service` (`port 3000`) ve Nginx yeniden başlatıldı.
+  3. **Canlı Üretim Doğrulamaları (Origin `213.202.255.80`):**
+     - `GET /api/v1/health` → `{"status":"healthy","database":"connected","service":"unified-backend"}`
+     - `HEAD /`, `HEAD /admin/customers`, `HEAD /admin/catalog/indexnow` → `HTTP/1.1 200 OK`
+     - `GET /638d6e3eb8a743ec900269823f24ffe6.txt` → `HTTP/1.1 200 OK` (`Content-Length: 33`)
+     - Yetkisiz `GET /api/v1/indexnow/logs` → `HTTP/1.1 401 Unauthorized` (uç canlıda aktif ve admin JWT koruması altında)
+- **Not:** `AGENTS.md` Kural #1 uyarınca uzak Git deposuna `git push` çalıştırılmamıştır; değişiklikler yerel atomic commitlerde ve canlı AlmaLinux sunucusunda yayındadır.
