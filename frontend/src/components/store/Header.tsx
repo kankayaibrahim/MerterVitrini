@@ -16,7 +16,14 @@ import {
 import { Category } from "@/types/store";
 import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/app/utils";
-import { getValidStoreUser, StoreUser } from "@/app/storeAuth";
+import {
+  getValidStoreUser,
+  StoreUser,
+  endCustomerImpersonationSession,
+  isStoreSessionImpersonated,
+} from "@/app/storeAuth";
+import { clearStoreCartOnLogout, pullAndReconcileStoreCart } from "@/utils/cartSync";
+import ImpersonationBanner from "./ImpersonationBanner";
 import AuthModal from "./AuthModal";
 import WishlistDrawer from "./WishlistDrawer";
 import { useWishlistStore } from "@/store/useWishlistStore";
@@ -911,8 +918,25 @@ export default function Header({
   useEffect(() => {
     queueMicrotask(() => {
       setUser(getValidStoreUser<StoreUser>());
+      void pullAndReconcileStoreCart();
     });
-    window.addEventListener("auth-change", checkAuth);
+
+    const handleAuthChange = () => {
+      checkAuth();
+      void pullAndReconcileStoreCart();
+    };
+    const handleFocus = () => {
+      void pullAndReconcileStoreCart();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void pullAndReconcileStoreCart();
+      }
+    };
+
+    window.addEventListener("auth-change", handleAuthChange);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     const handleOpenAuth = (e: Event) => {
       const customEvent = e as CustomEvent<{ mode: "login" | "register" }>;
@@ -924,13 +948,27 @@ export default function Header({
     window.addEventListener("merter-open-auth", handleOpenAuth);
 
     return () => {
-      window.removeEventListener("auth-change", checkAuth);
+      window.removeEventListener("auth-change", handleAuthChange);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("merter-open-auth", handleOpenAuth);
     };
   }, []);
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
+      if (isStoreSessionImpersonated()) {
+        endCustomerImpersonationSession();
+        setIsUserMenuOpen(false);
+        if (window.opener) {
+          window.close();
+          return;
+        }
+        window.location.href = "/admin/customers";
+        return;
+      }
+
+      clearStoreCartOnLogout();
       localStorage.removeItem("store_user_token");
       localStorage.removeItem("store_user_info");
       setIsUserMenuOpen(false);
@@ -1018,6 +1056,7 @@ export default function Header({
 
   return (
     <header className="w-full bg-white select-none border-b border-cultured">
+      <ImpersonationBanner lang={lang} />
       {/* Mobile Top APK Strip */}
       <div className="sm:hidden bg-[#111111] text-white px-3.5 py-2 flex items-center justify-between gap-2 border-b border-white/10">
         <div className="flex items-center gap-1.5 min-w-0">

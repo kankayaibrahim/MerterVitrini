@@ -73,12 +73,16 @@ func ensureDefaultTokenVerifier() {
 	storeVerifierInitialized = true
 }
 
+func configureStoreVerifier(jwtSecret, keycloakPublicKey string) {
+	storeVerifierMu.Lock()
+	defer storeVerifierMu.Unlock()
+	services.ConfigureDefaultVerifier(jwtSecret, keycloakPublicKey)
+	storeVerifierInitialized = true
+}
+
 func NewStoreAuthHandler(cfg *config.Config) *StoreAuthHandler {
 	if cfg != nil && (cfg.JWTSecret != "" || cfg.KeycloakPublicKey != "") {
-		storeVerifierMu.Lock()
-		services.ConfigureDefaultVerifier(cfg.JWTSecret, cfg.KeycloakPublicKey)
-		storeVerifierInitialized = true
-		storeVerifierMu.Unlock()
+		configureStoreVerifier(cfg.JWTSecret, cfg.KeycloakPublicKey)
 	}
 	safe.Go("Ensure Identity Verification Schema", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -680,6 +684,23 @@ func verifyTokenAndGetClaims(authHeader string) (string, map[string]any, error) 
 func verifyTokenAndGetUserID(authHeader string) (string, error) {
 	userID, _, err := verifyTokenAndGetClaims(authHeader)
 	return userID, err
+}
+
+// isImpersonatedToken reports whether authHeader holds a verified customer impersonation JWT and returns the acting staff email.
+func isImpersonatedToken(authHeader string) (bool, string) {
+	if strings.TrimSpace(authHeader) == "" {
+		return false, ""
+	}
+	_, claims, err := verifyTokenAndGetClaims(authHeader)
+	if err != nil || claims == nil {
+		return false, ""
+	}
+	isImp, ok := claims["impersonated"].(bool)
+	if !ok || !isImp {
+		return false, ""
+	}
+	adminEmail, _ := claims["impersonated_by"].(string)
+	return true, strings.TrimSpace(adminEmail)
 }
 
 const (

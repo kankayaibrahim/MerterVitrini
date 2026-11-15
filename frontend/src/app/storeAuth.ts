@@ -11,9 +11,22 @@ export interface StoreUser {
   email?: string;
   phone?: string;
   role?: string;
+  preferred_lang?: string;
+  preferred_currency?: string;
   email_verified?: boolean;
+  impersonated?: boolean;
+  impersonated_by?: string;
+  impersonated_by_id?: string;
   [key: string]: unknown;
 }
+
+export interface ImpersonationBootstrapPayload {
+  token: string;
+  customer: StoreUser;
+  cart_items?: unknown[];
+}
+
+const IMPERSONATION_BACKUP_KEY = "merter_impersonation_prev_session";
 
 let verifiedTokenCache: string | null = null;
 let verifyingTokenInFlight: string | null = null;
@@ -84,6 +97,86 @@ function clearStaleStoreSession(): void {
   }
 }
 
+export function isStoreSessionImpersonated(): boolean {
+  const user = readValidStoreUserPure<StoreUser>();
+  return user?.impersonated === true;
+}
+
+interface StoredSessionBackup {
+  store_user_token: string | null;
+  store_user_info: string | null;
+  merter_b2b_cart: string | null;
+  merter_cart_owner_id: string | null;
+}
+
+export function startCustomerImpersonationSession(payload: ImpersonationBootstrapPayload): void {
+  if (typeof window === "undefined") return;
+  const currentUser = readValidStoreUserPure<StoreUser>();
+  if (!localStorage.getItem(IMPERSONATION_BACKUP_KEY) && !currentUser?.impersonated) {
+    const backup: StoredSessionBackup = {
+      store_user_token: localStorage.getItem("store_user_token"),
+      store_user_info: localStorage.getItem("store_user_info"),
+      merter_b2b_cart: localStorage.getItem("merter_b2b_cart"),
+      merter_cart_owner_id: localStorage.getItem("merter_cart_owner_id"),
+    };
+    localStorage.setItem(IMPERSONATION_BACKUP_KEY, JSON.stringify(backup));
+  }
+
+  const normalizedUser: StoreUser = {
+    ...payload.customer,
+    impersonated: true,
+  };
+  verifiedTokenCache = null;
+  localStorage.setItem("store_user_token", payload.token);
+  localStorage.setItem("store_user_info", JSON.stringify(normalizedUser));
+
+  if (payload.customer.id) {
+    localStorage.setItem("merter_cart_owner_id", payload.customer.id);
+  } else {
+    localStorage.removeItem("merter_cart_owner_id");
+  }
+
+  const initialCart = Array.isArray(payload.cart_items) ? payload.cart_items : [];
+  localStorage.setItem("merter_b2b_cart", JSON.stringify(initialCart));
+
+  window.dispatchEvent(new Event("auth-change"));
+  window.dispatchEvent(new Event("merter-cart-update"));
+}
+
+export function endCustomerImpersonationSession(): void {
+  if (typeof window === "undefined") return;
+  verifiedTokenCache = null;
+  localStorage.removeItem("store_user_token");
+  localStorage.removeItem("store_user_info");
+  localStorage.removeItem("merter_b2b_cart");
+  localStorage.removeItem("merter_cart_owner_id");
+
+  const rawBackup = localStorage.getItem(IMPERSONATION_BACKUP_KEY);
+  localStorage.removeItem(IMPERSONATION_BACKUP_KEY);
+  if (rawBackup) {
+    try {
+      const backup = JSON.parse(rawBackup) as Partial<StoredSessionBackup>;
+      if (typeof backup.store_user_token === "string" && backup.store_user_token) {
+        localStorage.setItem("store_user_token", backup.store_user_token);
+      }
+      if (typeof backup.store_user_info === "string" && backup.store_user_info) {
+        localStorage.setItem("store_user_info", backup.store_user_info);
+      }
+      if (typeof backup.merter_b2b_cart === "string") {
+        localStorage.setItem("merter_b2b_cart", backup.merter_b2b_cart);
+      }
+      if (typeof backup.merter_cart_owner_id === "string") {
+        localStorage.setItem("merter_cart_owner_id", backup.merter_cart_owner_id);
+      }
+    } catch {
+      // ignore corrupted backup JSON
+    }
+  }
+
+  window.dispatchEvent(new Event("auth-change"));
+  window.dispatchEvent(new Event("merter-cart-update"));
+}
+
 function isJwtTokenUnexpired(token: string): boolean {
   try {
     const parts = token.trim().split(".");
@@ -142,7 +235,7 @@ function verifyTokenWithBackendOnce(token: string): void {
           email_verified?: boolean;
           phone?: string;
         };
-        if (!isRealisticPhoneNumber(profile.phone)) {
+        if (!isStoreSessionImpersonated() && !isRealisticPhoneNumber(profile.phone)) {
           verifiedTokenCache = null;
           clearStaleStoreSession();
           window.dispatchEvent(new Event("auth-change"));
@@ -174,8 +267,9 @@ function parseValidStoreUserRecord(customerInfo: string): Record<string, unknown
     if (!parsed.email && !parsed.id && !parsed.first_name) {
       return null;
     }
+    const isImpersonated = parsed.impersonated === true;
     const role = typeof parsed.role === "string" ? parsed.role.trim().toLowerCase() : "";
-    if ((role === "" || role === "customer") && !isRealisticPhoneNumber(parsed.phone)) {
+    if (!isImpersonated && (role === "" || role === "customer") && !isRealisticPhoneNumber(parsed.phone)) {
       return null;
     }
     return parsed;

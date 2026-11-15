@@ -503,6 +503,11 @@ func (h *AnalyticsHandler) TrackPageView(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if isImpersonatedAnalyticsRequest(r, req.AuthToken) {
+		writeAnalyticsIgnoredJSON(w)
+		return
+	}
+
 	path := firstNonEmptyStr(req.Path, "/")
 	if shouldIgnoreTrackedPath(path) {
 		w.Header().Set(headerContentType, mimeApplicationJSON)

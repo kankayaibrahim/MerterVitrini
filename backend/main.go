@@ -124,6 +124,9 @@ func initBackgroundWorkers(appCtx context.Context) {
 	if err := handlers.EnsureIndexNowSchema(cronInitCtx); err != nil {
 		log.Printf("[WARNING] Failed to provision IndexNow logs schema: %v\n", err)
 	}
+	if err := handlers.EnsureCustomerImpersonationSchema(cronInitCtx); err != nil {
+		log.Printf("[WARNING] Failed to provision impersonation logs schema: %v\n", err)
+	}
 
 	db.StartRatesWorker(appCtx)
 	handlers.StartUnverifiedApplicationsCleaner()

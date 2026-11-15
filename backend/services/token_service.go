@@ -27,10 +27,23 @@ type MobilePrincipal struct {
 	IsOwner bool
 }
 
+// CustomerImpersonationInput carries target customer and acting staff claims for an impersonation JWT.
+type CustomerImpersonationInput struct {
+	CustomerID    string
+	CustomerEmail string
+	CustomerName  string
+	CompanyName   string
+	Phone         string
+	AdminID       string
+	AdminEmail    string
+	TTL           time.Duration
+}
+
 // TokenService defines the DIP contract for dual-role JWT verification and local supplier token issuance.
 type TokenService interface {
 	ResolvePrincipal(ctx context.Context, authHeader string) (*MobilePrincipal, error)
 	IssueSupplierJWT(u *models.SupplierUser) string
+	IssueCustomerImpersonationJWT(in CustomerImpersonationInput) string
 }
 
 // UnifiedTokenService validates HS256 (local supplier) and RS256 (Keycloak OIDC) Bearer tokens.
@@ -109,6 +122,37 @@ func (s *UnifiedTokenService) IssueSupplierJWT(u *models.SupplierUser) string {
 		"role":         roleSupplierLiteral,
 		"iat":          now.Unix(),
 		"exp":          now.Add(7 * 24 * time.Hour).Unix(),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString([]byte(s.jwtSecret))
+	if err != nil {
+		return ""
+	}
+	return signed
+}
+
+// IssueCustomerImpersonationJWT mints a short-lived HS256 storefront JWT scoped strictly to a customer session on behalf of staff.
+func (s *UnifiedTokenService) IssueCustomerImpersonationJWT(in CustomerImpersonationInput) string {
+	if s == nil || s.jwtSecret == "" || strings.TrimSpace(in.CustomerID) == "" {
+		return ""
+	}
+	ttl := in.TTL
+	if ttl <= 0 {
+		ttl = 2 * time.Hour
+	}
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"sub":                in.CustomerID,
+		"email":              in.CustomerEmail,
+		"name":               in.CustomerName,
+		"company_name":       in.CompanyName,
+		"phone":              in.Phone,
+		"role":               models.RoleCustomer,
+		"impersonated":       true,
+		"impersonated_by":    in.AdminEmail,
+		"impersonated_by_id": in.AdminID,
+		"iat":                now.Unix(),
+		"exp":                now.Add(ttl).Unix(),
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := tok.SignedString([]byte(s.jwtSecret))

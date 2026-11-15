@@ -13,6 +13,7 @@ import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import ConfirmModal from "@/components/store/ConfirmModal";
 import { UserAddress } from "@/app/profile/components/types";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
+import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
 import CartDesktopTable from "./components/CartDesktopTable";
 import CartMobileList from "./components/CartMobileList";
 import CartSummaryBreakdown from "./components/CartSummaryBreakdown";
@@ -369,6 +370,18 @@ export default function CartClient({
     }
   }, [safeLang]);
 
+  useEffect(() => {
+    const handleCartSync = () => {
+      setCart((prev) => syncLocalCartStateIfChanged(prev));
+    };
+    window.addEventListener("merter-cart-update", handleCartSync);
+    window.addEventListener("storage", handleCartSync);
+    return () => {
+      window.removeEventListener("merter-cart-update", handleCartSync);
+      window.removeEventListener("storage", handleCartSync);
+    };
+  }, []);
+
   const [isLangOpen, setIsLangOpen] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState("");
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
@@ -448,8 +461,7 @@ export default function CartClient({
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
-    localStorage.setItem("merter_b2b_cart", JSON.stringify(newCart));
-    window.dispatchEvent(new Event("merter-cart-update"));
+    persistStoreCart(newCart, newCart.length === 0 ? { immediate: true } : undefined);
   };
 
   const handleAdjustQty = (index: number, change: number) => {

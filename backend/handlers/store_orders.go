@@ -423,6 +423,10 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if isImp, adminEmail := isImpersonatedToken(r.Header.Get("Authorization")); isImp {
+		log.Printf("[IMPERSONATION ORDER] Order #%s (id=%s) created on behalf of customer=%s by staff=%s", orderNumber, orderID, userID, adminEmail)
+	}
+
 	var firstImg string
 	if len(items) > 0 {
 		firstImg = items[0].ImageUrl

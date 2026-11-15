@@ -111,21 +111,8 @@ func mapCartRowToItem(rows pgx.Rows) (CartResponseItem, error) {
 	return item, nil
 }
 
-func (h *CartHandler) GetCart(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	userID, err := verifyTokenAndGetUserID(r.Header.Get("Authorization"))
-	if err != nil {
-		http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
-		return
-	}
-
-	ctx := r.Context()
-
-	// Query user's cart items
+// FetchCartItemsByUserID retrieves all active cart items for the specified customer ID.
+func FetchCartItemsByUserID(ctx context.Context, userID string) ([]CartResponseItem, error) {
 	query := `
 		SELECT ci.id, ci.product_id, p.title, p.custom_sku, COALESCE(col.color_name, 'Standart') as color,
 		       p.series_ratio, p.price, COALESCE(ci.custom_unit_price, p.discounted_price) as discounted_price, p.currency, p.shipping_weight_kg,
@@ -149,9 +136,7 @@ func (h *CartHandler) GetCart(w http.ResponseWriter, r *http.Request) {
 	`
 	rows, err := db.Pool.Query(ctx, query, userID)
 	if err != nil {
-		log.Printf("[STORE CART ERROR] Failed to query cart: %v", err)
-		http.Error(w, `{"error":"Sepet yüklenemedi"}`, http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -163,6 +148,28 @@ func (h *CartHandler) GetCart(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		items = append(items, item)
+	}
+	return items, nil
+}
+
+// GetCart retrieves all cart items for the currently logged-in user
+func (h *CartHandler) GetCart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, err := verifyTokenAndGetUserID(r.Header.Get("Authorization"))
+	if err != nil {
+		http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	items, err := FetchCartItemsByUserID(r.Context(), userID)
+	if err != nil {
+		log.Printf("[STORE CART ERROR] Failed to query cart: %v", err)
+		http.Error(w, `{"error":"Sepet yüklenemedi"}`, http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
@@ -451,28 +458,10 @@ func (h *CartHandler) SyncCart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete existing items in cart
-	_, err = tx.Exec(ctx, "DELETE FROM catalog.cart_items WHERE cart_id = $1", cartID)
-	if err != nil {
-		log.Printf("[STORE CART ERROR] Sync fail delete items: %v", err)
-		http.Error(w, `{"error":"Mevcut sepet temizlenemedi"}`, http.StatusInternalServerError)
+	if err := syncCartItemsPreservingOffers(ctx, tx, cartID, req.Items); err != nil {
+		log.Printf("[STORE CART ERROR] Sync fail upsert items: %v", err)
+		http.Error(w, `{"error":"Sepet güncellenemedi"}`, http.StatusInternalServerError)
 		return
-	}
-
-	// Insert new items
-	for _, item := range req.Items {
-		if item.ProductID == "" || item.Quantity <= 0 {
-			continue
-		}
-		_, err = tx.Exec(ctx, `
-			INSERT INTO catalog.cart_items (cart_id, product_id, quantity)
-			VALUES ($1, $2, $3)
-		`, cartID, item.ProductID, item.Quantity)
-		if err != nil {
-			log.Printf("[STORE CART ERROR] Sync fail insert item: %v", err)
-			http.Error(w, `{"error":"Sepet güncellenemedi"}`, http.StatusInternalServerError)
-			return
-		}
 	}
 
 	err = tx.Commit(ctx)
@@ -484,6 +473,64 @@ func (h *CartHandler) SyncCart(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Write([]byte(`{"success":true}`))
+}
+
+func deduplicateSyncCartItems(items []SyncCartRequestItem) ([]SyncCartRequestItem, []string) {
+	qtyByProduct := make(map[string]int, len(items))
+	orderedIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		pid := strings.TrimSpace(item.ProductID)
+		if pid == "" || item.Quantity <= 0 {
+			continue
+		}
+		if _, exists := qtyByProduct[pid]; !exists {
+			orderedIDs = append(orderedIDs, pid)
+		}
+		qtyByProduct[pid] += item.Quantity
+	}
+	deduped := make([]SyncCartRequestItem, 0, len(orderedIDs))
+	for _, pid := range orderedIDs {
+		deduped = append(deduped, SyncCartRequestItem{
+			ProductID: pid,
+			Quantity:  qtyByProduct[pid],
+		})
+	}
+	return deduped, orderedIDs
+}
+
+func syncCartItemsPreservingOffers(ctx context.Context, tx pgx.Tx, cartID string, items []SyncCartRequestItem) error {
+	deduped, keepIDs := deduplicateSyncCartItems(items)
+	if len(keepIDs) == 0 {
+		_, err := tx.Exec(ctx, "DELETE FROM catalog.cart_items WHERE cart_id = $1", cartID)
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM catalog.cart_items
+		WHERE cart_id = $1 AND NOT (product_id::text = ANY($2))
+	`, cartID, keepIDs); err != nil {
+		return err
+	}
+
+	for _, item := range deduped {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO catalog.cart_items (cart_id, product_id, quantity)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (cart_id, product_id) DO UPDATE SET
+				custom_unit_price = CASE
+					WHEN catalog.cart_items.custom_unit_price IS NOT NULL AND EXCLUDED.quantity < catalog.cart_items.quantity THEN NULL
+					ELSE catalog.cart_items.custom_unit_price
+				END,
+				offer_message_id = CASE
+					WHEN catalog.cart_items.custom_unit_price IS NOT NULL AND EXCLUDED.quantity < catalog.cart_items.quantity THEN NULL
+					ELSE catalog.cart_items.offer_message_id
+				END,
+				quantity = EXCLUDED.quantity
+		`, cartID, item.ProductID, item.Quantity); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // --- Cart Excel Export ---

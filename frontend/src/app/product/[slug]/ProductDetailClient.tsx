@@ -28,6 +28,7 @@ import {
   syncShowPricesToGuestsSetting,
 } from "@/app/storeAuth";
 import { trackMemberEvent } from "@/components/analytics/AnalyticsTracker";
+import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
 import {
   normalizeSeoLang,
   stripBrandTitleSuffix,
@@ -293,18 +294,18 @@ export default function ProductDetailClient({
 
   const activeProduct =
     isAuthenticated &&
-    hydratedAuthProduct &&
-    product &&
-    hydratedAuthProduct.id === product.id
+      hydratedAuthProduct &&
+      product &&
+      hydratedAuthProduct.id === product.id
       ? hydratedAuthProduct
       : product;
 
   const needsAuthPriceHydration = Boolean(
     isAuthenticated &&
-      product &&
-      !(Number(product.price) > 0) &&
-      hydratedAuthProduct?.id !== product.id &&
-      authFetchAttemptedForId !== product.id
+    product &&
+    !(Number(product.price) > 0) &&
+    hydratedAuthProduct?.id !== product.id &&
+    authFetchAttemptedForId !== product.id
   );
   const isPriceLoading = needsAuthPriceHydration;
 
@@ -367,6 +368,18 @@ export default function ProductDetailClient({
   }, [safeLang]);
 
   useEffect(() => {
+    const handleCartSync = () => {
+      setCart((prev) => syncLocalCartStateIfChanged(prev));
+    };
+    window.addEventListener("merter-cart-update", handleCartSync);
+    window.addEventListener("storage", handleCartSync);
+    return () => {
+      window.removeEventListener("merter-cart-update", handleCartSync);
+      window.removeEventListener("storage", handleCartSync);
+    };
+  }, []);
+
+  useEffect(() => {
     if (product) {
       const localizedTitle = getProductTitle(product, safeLang);
       const brandName = product.brand_name || copy.defaultBrand;
@@ -408,8 +421,8 @@ export default function ProductDetailClient({
           setIsLangOpen={setIsLangOpen}
           totalPkgs={totalPkgs}
           setIsCartOpen={setIsCartOpen}
-          setSearchQuery={() => {}}
-          setCurrentPage={() => {}}
+          setSearchQuery={() => { }}
+          setCurrentPage={() => { }}
           setActiveCategoryId={setActiveCategoryId}
           categories={categories}
           activeCategoryId={activeCategoryId}
@@ -471,11 +484,11 @@ export default function ProductDetailClient({
   const hasDiscount = rawDiscountedPrice > 0 && rawDiscountedPrice < rawPrice;
   const discountedPrice = hasDiscount
     ? convertPrice(
-        rawDiscountedPrice,
-        activeProduct.currency || "USD",
-        displayCurrency,
-        exchangeRates
-      )
+      rawDiscountedPrice,
+      activeProduct.currency || "USD",
+      displayCurrency,
+      exchangeRates
+    )
     : unitPrice;
 
   const totalPieces = pkgQty * unitsPerPkg;
@@ -539,7 +552,7 @@ export default function ProductDetailClient({
         updated = [...prev, newItem];
       }
 
-      localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
+      persistStoreCart(updated);
       return updated;
     });
 
@@ -596,7 +609,7 @@ export default function ProductDetailClient({
         updated = [...prev, newItem];
       }
 
-      localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
+      persistStoreCart(updated);
       return updated;
     });
 
@@ -618,7 +631,7 @@ export default function ProductDetailClient({
         updated[idx] = { ...item, packages_qty: nextPkgs };
       }
 
-      localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
+      persistStoreCart(updated);
       return updated;
     });
   };
@@ -645,7 +658,7 @@ export default function ProductDetailClient({
   const handleRemoveCartItem = (idx: number) => {
     setCart((prev) => {
       const updated = prev.filter((_, i) => i !== idx);
-      localStorage.setItem("merter_b2b_cart", JSON.stringify(updated));
+      persistStoreCart(updated);
       return updated;
     });
   };
@@ -743,7 +756,7 @@ export default function ProductDetailClient({
       }
 
       setCart([]);
-      localStorage.removeItem("merter_b2b_cart");
+      persistStoreCart([], { immediate: true });
       setIsCartOpen(false);
       setShowSuccessOverlay(true);
     } catch (err: unknown) {
@@ -771,8 +784,8 @@ export default function ProductDetailClient({
         setIsLangOpen={setIsLangOpen}
         totalPkgs={totalPkgs}
         setIsCartOpen={setIsCartOpen}
-        setSearchQuery={() => {}}
-        setCurrentPage={() => {}}
+        setSearchQuery={() => { }}
+        setCurrentPage={() => { }}
         setActiveCategoryId={setActiveCategoryId}
         categories={categories}
         activeCategoryId={activeCategoryId}

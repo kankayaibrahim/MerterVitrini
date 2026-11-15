@@ -613,6 +613,11 @@ func AuthMiddleware(jwtSecret string, keycloakPublicKey string) func(http.Handle
 				return
 			}
 
+			if isImp, okImp := claims["impersonated"].(bool); okImp && isImp {
+				http.Error(w, `{"error":"Customer impersonation tokens cannot access admin endpoints"}`, http.StatusForbidden)
+				return
+			}
+
 			user := parseUserInfoFromClaims(claims)
 			dbCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 			resolvedRole, blocked := ResolveUserRoleFromDB(dbCtx, user.ID, user.Email, user.Role)

@@ -12,6 +12,8 @@ import {
   FileText,
   Globe,
   History,
+  Loader2,
+  LogIn,
   Mail,
   MapPin,
   Network,
@@ -24,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import CountryFlagBadge from "../analytics/CountryFlagBadge";
+import { CustomerUnfinishedCartSection } from "./CustomerUnfinishedCartSection";
 import {
   Customer,
   formatCurrencyTry,
@@ -34,18 +37,26 @@ import {
 
 interface CustomerDetailModalProps {
   customer: Customer | null;
+  apiUrl: string;
+  token: string | null;
+  impersonatingId: string | null;
   onClose: () => void;
   onOpenJourney: (customer: Customer) => void;
   onToggleBlock: (customer: Customer) => void;
   onRequestDelete: (customer: Customer) => void;
+  onImpersonate: (customer: Customer, openCart?: boolean) => void;
 }
 
 export function CustomerDetailModal({
   customer,
+  apiUrl,
+  token,
+  impersonatingId,
   onClose,
   onOpenJourney,
   onToggleBlock,
   onRequestDelete,
+  onImpersonate,
 }: CustomerDetailModalProps) {
   if (!customer) return null;
 
@@ -272,6 +283,14 @@ export function CustomerDetailModal({
             </div>
           </div>
 
+          <CustomerUnfinishedCartSection
+            customer={customer}
+            apiUrl={apiUrl}
+            token={token}
+            impersonating={impersonatingId === customer.id}
+            onImpersonateWithCart={() => onImpersonate(customer, true)}
+          />
+
           <div>
             <h3 className="text-xs font-bold text-zinc-900 mb-2.5 flex items-center gap-1.5">
               <History className="w-4 h-4 text-zinc-500" />
@@ -310,6 +329,19 @@ export function CustomerDetailModal({
 
         <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-100 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={customer.is_blocked || impersonatingId === customer.id}
+              onClick={() => onImpersonate(customer, false)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {impersonatingId === customer.id ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <LogIn className="w-3.5 h-3.5" />
+              )}
+              Vitrine Müşteri Adına Gir
+            </button>
             <button
               type="button"
               onClick={() => onOpenJourney(customer)}

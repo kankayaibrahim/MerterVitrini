@@ -206,7 +206,35 @@ var knownPageSlugLabels = map[string]string{
 	"ihracat-rehberi":           "İhracat & Gümrük Rehberi",
 }
 
+func writeAnalyticsIgnoredJSON(w http.ResponseWriter) {
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	_, _ = w.Write([]byte(jsonIgnoredOK))
+}
+
+func isImpersonatedAnalyticsRequest(r *http.Request, bodyAuthToken string) bool {
+	if r != nil {
+		if authHdr := strings.TrimSpace(r.Header.Get("Authorization")); authHdr != "" {
+			if imp, _ := isImpersonatedToken(authHdr); imp {
+				return true
+			}
+		}
+	}
+	tok := strings.TrimSpace(bodyAuthToken)
+	if tok != "" {
+		if !strings.HasPrefix(tok, authBearerPrefix) {
+			tok = authBearerPrefix + tok
+		}
+		if imp, _ := isImpersonatedToken(tok); imp {
+			return true
+		}
+	}
+	return false
+}
+
 func resolveAuthenticatedMemberID(r *http.Request, bodyAuthToken string) string {
+	if isImpersonatedAnalyticsRequest(r, bodyAuthToken) {
+		return ""
+	}
 	if r != nil {
 		if authHdr := strings.TrimSpace(r.Header.Get("Authorization")); authHdr != "" {
 			if uid, err := verifyTokenAndGetUserID(authHdr); err == nil && uid != "" {
@@ -277,7 +305,7 @@ func lookupLinkedUserByVisitor(ctx context.Context, visitorID string) string {
 
 // RecordMemberActivityAsync enriches request metadata and writes a member activity event asynchronously.
 func RecordMemberActivityAsync(r *http.Request, input MemberActivityInput) {
-	if isSSRPrefetchRequest(r) {
+	if isSSRPrefetchRequest(r) || isImpersonatedAnalyticsRequest(r, "") {
 		return
 	}
 	var ua, ip, countryCode, visitorHeader string
@@ -764,6 +792,11 @@ func (h *AnalyticsHandler) TrackMemberEvent(w http.ResponseWriter, r *http.Reque
 	var req TrackMemberEventRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, errJSONInvalidJSON, http.StatusBadRequest)
+		return
+	}
+
+	if isImpersonatedAnalyticsRequest(r, req.AuthToken) {
+		writeAnalyticsIgnoredJSON(w)
 		return
 	}
 

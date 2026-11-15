@@ -7,6 +7,7 @@ import { CartItem } from "@/types/store";
 import { t, getCategoryPrefix, pickLangText, SupportedLangCode } from "@/app/i18n";
 import { convertPrice, fetchStoreSettingsCached, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
+import { persistStoreCart } from "@/utils/cartSync";
 import { UserAddress } from "@/app/profile/components/types";
 
 export interface InquiryFormData {
@@ -1223,8 +1224,7 @@ export default function CartDrawer({
       const successNotice = labels.orderSuccessToast.replace("{orderNo}", orderNumber);
 
       showToast(successNotice);
-      localStorage.removeItem("merter_b2b_cart");
-      window.dispatchEvent(new Event("merter-cart-update"));
+      persistStoreCart([], { immediate: true });
       onClose();
       const profileQuery = lang && lang !== "tr" ? `?tab=orders&lang=${encodeURIComponent(lang)}` : "?tab=orders";
       window.location.href = `/profile${profileQuery}`;

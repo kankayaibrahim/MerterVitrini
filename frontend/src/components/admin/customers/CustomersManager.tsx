@@ -9,6 +9,7 @@ import {
   Compass,
   Info,
   Loader2,
+  LogIn,
   RefreshCw,
   ShieldAlert,
   ShoppingBag,
@@ -19,6 +20,8 @@ import {
   X,
 } from "lucide-react";
 import CountryFlagBadge from "../analytics/CountryFlagBadge";
+import { getCategoryPrefix } from "@/app/i18n";
+import { startCustomerImpersonationSession, type StoreUser } from "@/app/storeAuth";
 import CustomerJourneyPanel from "./CustomerJourneyPanel";
 import { CustomerKpiCards } from "./CustomerKpiCards";
 import { CustomersGeoInsightsSection } from "./CustomersGeoInsightsSection";
@@ -50,6 +53,40 @@ const DEFAULT_FILTERS: CustomerFiltersState = {
   sort: "newest",
 };
 
+function buildCustomerStorefrontUrl(langCode: string, openCart: boolean): string {
+  const safeLang = langCode.trim().toLowerCase() || "tr";
+  if (openCart) {
+    return `/${getCategoryPrefix(safeLang)}/cart`;
+  }
+  return safeLang === "tr" ? "/" : `/?lang=${encodeURIComponent(safeLang)}`;
+}
+
+function extractImpersonateErrorMessage(status: number, bodyText: string): string {
+  try {
+    const parsed = JSON.parse(bodyText) as { error?: string };
+    if (parsed.error) return parsed.error;
+  } catch {
+    // ignore non-JSON body
+  }
+  if (status === 403) {
+    return "Müşteri adına giriş yetkisi yalnızca Yönetici ve Satış Müdürü rollerine tanımlıdır.";
+  }
+  return `Müşteri adına giriş başlatılamadı (HTTP ${status}).`;
+}
+
+function navigateImpersonatedTab(popup: Window | null, targetUrl: string): void {
+  if (popup && !popup.closed) {
+    popup.location.replace(targetUrl);
+    return;
+  }
+  if (typeof window !== "undefined") {
+    const fallback = window.open(targetUrl, "_blank");
+    if (!fallback) {
+      window.location.assign(targetUrl);
+    }
+  }
+}
+
 export default function CustomersManager({ apiUrl, token }: CustomersManagerProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [overview, setOverview] = useState<CustomersOverviewResponse | null>(null);
@@ -72,6 +109,7 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
 
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
 
   const loadOverview = useCallback(async () => {
     if (!token) return;
@@ -225,6 +263,53 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
       setError(err instanceof Error ? err.message : "Konum senkronizasyonu sırasında hata oluştu.");
     } finally {
       setSyncingGeo(false);
+    }
+  };
+
+  const handleImpersonateCustomer = async (customer: Customer, openCart = false) => {
+    if (!token || impersonatingId) return;
+    setError(null);
+    setImpersonatingId(customer.id);
+    const popup = typeof window !== "undefined" ? window.open("about:blank", "_blank") : null;
+
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/customers/${customer.id}/impersonate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      if (!res.ok) {
+        const rawErr = await res.text();
+        throw new Error(extractImpersonateErrorMessage(res.status, rawErr));
+      }
+
+      const data = (await res.json()) as {
+        token?: string;
+        customer?: StoreUser;
+        cart_items?: unknown[];
+      };
+      if (!data.token || !data.customer) {
+        throw new Error("Geçersiz oturum yanıtı alındı.");
+      }
+
+      startCustomerImpersonationSession({
+        token: data.token,
+        customer: data.customer,
+        cart_items: data.cart_items,
+      });
+
+      const prefLang = String(data.customer.preferred_lang || customer.preferred_lang || "tr");
+      const targetUrl = buildCustomerStorefrontUrl(prefLang, openCart);
+      navigateImpersonatedTab(popup, targetUrl);
+    } catch (err: unknown) {
+      if (popup && !popup.closed) {
+        popup.close();
+      }
+      setError(err instanceof Error ? err.message : "Müşteri adına giriş başlatılamadı.");
+    } finally {
+      setImpersonatingId(null);
     }
   };
 
@@ -552,10 +637,15 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
                             {c.orders_count} sip.
                           </span>
                           {c.cart_items_count > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-semibold bg-amber-50 text-amber-800 border border-amber-200/70 tabular-nums">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCustomer(c)}
+                              title="Bekleyen sepeti görüntüle"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/70 tabular-nums transition-colors cursor-pointer"
+                            >
                               <ShoppingCart className="w-3 h-3" />
                               {c.cart_items_count}
-                            </span>
+                            </button>
                           )}
                         </div>
                         {c.orders_total_amount > 0 && (
@@ -596,6 +686,22 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
 
                       <td className="py-3.5 px-5 text-right">
                         <div className="inline-flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            disabled={c.is_blocked || impersonatingId === c.id}
+                            onClick={() => {
+                              void handleImpersonateCustomer(c, c.cart_items_count > 0);
+                            }}
+                            title="Müşteri Adına Giriş Yap"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            {impersonatingId === c.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <LogIn className="w-3.5 h-3.5" />
+                            )}
+                            <span className="hidden xl:inline">Giriş Yap</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => setJourneyCustomer(c)}
@@ -653,6 +759,9 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
 
       <CustomerDetailModal
         customer={selectedCustomer}
+        apiUrl={apiUrl}
+        token={token}
+        impersonatingId={impersonatingId}
         onClose={() => setSelectedCustomer(null)}
         onOpenJourney={(c) => {
           setSelectedCustomer(null);
@@ -662,6 +771,9 @@ export default function CustomersManager({ apiUrl, token }: CustomersManagerProp
         onRequestDelete={(c) => {
           setSelectedCustomer(null);
           setDeleteTarget(c);
+        }}
+        onImpersonate={(c, openCart) => {
+          void handleImpersonateCustomer(c, openCart);
         }}
       />
 

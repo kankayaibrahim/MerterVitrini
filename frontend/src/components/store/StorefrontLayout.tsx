@@ -8,6 +8,7 @@ import {
   syncShowPricesToGuestsSetting,
   useIsStoreMemberLoggedIn,
 } from "@/app/storeAuth";
+import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
 
 // Import modular, premium Tailwind E-Commerce subcomponents
 import Header from "@/components/store/Header";
@@ -219,7 +220,7 @@ export default function StorefrontLayout({
   const [products, setProducts] = useState<Product[]>(initialProducts || []);
   const [portalNewArrivals, setPortalNewArrivals] = useState<Product[]>(initialPortalProducts || []);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  
+
   const [activeCategoryId, setActiveCategoryId] = useState<string>(initialCategorySlug || "");
   const [prevInitialCategorySlug, setPrevInitialCategorySlug] = useState(initialCategorySlug);
 
@@ -227,7 +228,7 @@ export default function StorefrontLayout({
     setPrevInitialCategorySlug(initialCategorySlug);
     setActiveCategoryId(initialCategorySlug || "");
   }
-  
+
   const [activeBrandIds, setActiveBrandIds] = useState<string[]>([]);
   const [activeSpecs, setActiveSpecs] = useState<{ gender: string[]; season: string[] }>({
     gender: [],
@@ -256,12 +257,12 @@ export default function StorefrontLayout({
       : Boolean(initialProducts && initialProducts.length > 0);
   const [loadingProducts, setLoadingProducts] = useState<boolean>(!hasInitialSsrProducts);
   const initialMountRef = useRef<boolean>(true);
-  
+
   // --- B2B Details Modal States ---
   const [selectedColor, setSelectedColor] = useState<string>("");
   const [pkgQty, setPkgQty] = useState<number>(1);
   const [modalMainImg, setModalMainImg] = useState<string>("");
-  
+
   // --- Cart Persistent State ---
   const [cart, setCart] = useState<CartItem[]>(() => {
     if (typeof window !== "undefined") {
@@ -285,7 +286,7 @@ export default function StorefrontLayout({
     addedText: string;
   } | null>(null);
 
-  
+
   // --- Quote Inquiry Submission States ---
   const [submittingInquiry, setSubmittingInquiry] = useState<boolean>(false);
   const [whatsappUrl, setWhatsappUrl] = useState<string>("");
@@ -317,7 +318,7 @@ export default function StorefrontLayout({
       const data = await apiFetch<Category[]>("/categories");
       if (data) setCategories(data);
     };
-    
+
     const loadBrands = async () => {
       const data = await apiFetch<Brand[]>("/brands");
       if (data) setBrands(data);
@@ -333,7 +334,7 @@ export default function StorefrontLayout({
       if (data) setExchangeRates(data);
     };
     void loadRates();
-    
+
     void loadCategories();
     void loadBrands();
     void loadAttributes();
@@ -365,25 +366,25 @@ export default function StorefrontLayout({
       }>;
       if (!customEvent.detail?.product) return;
       const { product, quantity } = customEvent.detail;
-      
+
       const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
       const weightPerUnit = product.shipping_weight_kg || 0.35;
       const hasDiscount = product.discounted_price < product.price && product.discounted_price > 0;
       const unitPrice = hasDiscount ? product.discounted_price : product.price;
       const sku = product.custom_sku || product.source_product_id || "";
-      
+
       let coverImg = "/placeholder.png";
       if (product.images && product.images.length > 0) {
         const coverObj = product.images.find(img => img.is_cover) || product.images[0];
         coverImg = coverObj.image_url;
       }
-      
+
       setCart((prevCart) => {
         const updatedCart = [...prevCart];
         const duplicateIdx = updatedCart.findIndex(
           item => item.product_id === product.id && item.units_per_package > 1
         );
-        
+
         if (duplicateIdx > -1) {
           const item = updatedCart[duplicateIdx];
           if (item) {
@@ -414,15 +415,15 @@ export default function StorefrontLayout({
             slug: product.slug || product.id,
           });
         }
-        
-        localStorage.setItem("merter_b2b_cart", JSON.stringify(updatedCart));
+
+        persistStoreCart(updatedCart);
         return updatedCart;
       });
 
       // Show toast
       const prodTitle = getProductTitle(product, lang);
       const addedText = ADDED_TO_CART_TRANSLATIONS[lang] || ADDED_TO_CART_TRANSLATIONS.en;
-      
+
       // Trigger center screen premium flash overlay
       setCenterFlash({
         show: true,
@@ -449,7 +450,7 @@ export default function StorefrontLayout({
 
     window.addEventListener("merter-add-to-cart", handleDirectAddToCart);
     window.addEventListener("merter-show-toast", handleShowCustomToast);
-    
+
     return () => {
       window.removeEventListener("merter-add-to-cart", handleDirectAddToCart);
       window.removeEventListener("merter-show-toast", handleShowCustomToast);
@@ -530,7 +531,7 @@ export default function StorefrontLayout({
       }
       setLoadingProducts(false);
     };
-    
+
     void loadProducts();
   }, [
     currentPage,
@@ -553,12 +554,24 @@ export default function StorefrontLayout({
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
-    localStorage.setItem("merter_b2b_cart", JSON.stringify(newCart));
+    persistStoreCart(newCart, newCart.length === 0 ? { immediate: true } : undefined);
   };
+
+  useEffect(() => {
+    const handleCartSync = () => {
+      setCart((prev) => syncLocalCartStateIfChanged(prev));
+    };
+    window.addEventListener("merter-cart-update", handleCartSync);
+    window.addEventListener("storage", handleCartSync);
+    return () => {
+      window.removeEventListener("merter-cart-update", handleCartSync);
+      window.removeEventListener("storage", handleCartSync);
+    };
+  }, []);
 
   // --- Filter Toggles ---
   const handleBrandChange = (brandId: string) => {
-    setActiveBrandIds(prev => 
+    setActiveBrandIds(prev =>
       prev.includes(brandId) ? prev.filter(id => id !== brandId) : [...prev, brandId]
     );
     setCurrentPage(1);
@@ -593,7 +606,7 @@ export default function StorefrontLayout({
       const updatedValues = currentValues.includes(value)
         ? currentValues.filter(val => val !== value)
         : [...currentValues, value];
-      
+
       const next = { ...prev };
       Reflect.set(next, safeName, updatedValues);
       return next;
@@ -628,22 +641,22 @@ export default function StorefrontLayout({
     const product = await apiFetch<Product>(`/products/${productId}`);
     if (product) {
       setActiveProduct(product);
-      
+
       let colors: string[] = [];
       if (product.color) {
         colors = [product.color];
       }
       if (colors.length === 0) colors = ["Standart"];
-      
+
       setSelectedColor(colors[0]);
-      
+
       let cover = "/placeholder.png";
       if (product.images && product.images.length > 0) {
         const coverObj = product.images.find(img => img.is_cover) || product.images[0];
         cover = coverObj.image_url;
       }
       setModalMainImg(cover);
-      
+
       const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
       const minPkgs = Math.ceil(product.minimum_order_quantity / unitsPerPkg);
       setPkgQty(minPkgs);
@@ -657,28 +670,28 @@ export default function StorefrontLayout({
   // --- Cart Calculations & Actions ---
   const handleAddToCart = (seriesQty: number) => {
     if (!activeProduct) return;
-    
+
     const unitsPerPkg = getUnitsFromSeriesRatio(activeProduct.series_ratio);
     const weightPerUnit = activeProduct.shipping_weight_kg || 0.35;
-    
+
     const hasDiscount = activeProduct.discounted_price < activeProduct.price && activeProduct.discounted_price > 0;
     const unitPrice = hasDiscount ? activeProduct.discounted_price : activeProduct.price;
     const sku = activeProduct.custom_sku || activeProduct.source_product_id || "";
-    
+
     let coverImg = "/placeholder.png";
     if (activeProduct.images && activeProduct.images.length > 0) {
       const coverObj = activeProduct.images.find(img => img.is_cover) || activeProduct.images[0];
       coverImg = coverObj.image_url;
     }
-    
+
     const updatedCart = [...cart];
-    
+
     // A. Add series pack if seriesQty > 0
     if (seriesQty > 0) {
       const duplicateIdx = updatedCart.findIndex(
         item => item.product_id === activeProduct.id && item.color === selectedColor && item.units_per_package > 1
       );
-      
+
       if (duplicateIdx > -1) {
         const item = updatedCart.at(duplicateIdx);
         if (item) {
@@ -701,7 +714,7 @@ export default function StorefrontLayout({
       }
     }
 
-    
+
     saveCart(updatedCart);
     setActiveProduct(null);
     setIsCartOpen(true);
@@ -754,9 +767,9 @@ export default function StorefrontLayout({
   // --- Quote Inquiry Form Submission ---
   const handleSubmitInquiry = async (formData: InquiryFormData) => {
     if (cart.length === 0) return;
-    
+
     setSubmittingInquiry(true);
-    
+
     const inquiryItems = cart.map(item => {
       const totalUnits = item.packages_qty * item.units_per_package;
       return {
@@ -767,7 +780,7 @@ export default function StorefrontLayout({
         price: item.price_per_unit,
       };
     });
-    
+
     const payload = {
       full_name: formData.fullName,
       company: formData.companyName || null,
@@ -776,30 +789,30 @@ export default function StorefrontLayout({
       message: formData.customerMessage || null,
       items: inquiryItems,
     };
-    
+
     try {
       const response = await fetch("/api/v1/store/inquiries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      
+
       if (!response.ok) {
         const errData = await response.json();
         showToast(`Error: ${errData.error || "Failed to submit inquiry"}`);
         setSubmittingInquiry(false);
         return;
       }
-      
+
       const result = await response.json();
-      
+
       // Clean states
       saveCart([]);
       setIsCartOpen(false);
-      
+
       setWhatsappUrl(result.whatsapp_url || "#");
       setShowSuccessOverlay(true);
-      
+
     } catch (err) {
       console.error("Failed to submit B2B inquiry", err);
       showToast("Connection error! Failed to register your quote request.");
@@ -818,15 +831,15 @@ export default function StorefrontLayout({
     Object.values(activeAttributes).reduce((sum, values) => sum + (values ? values.length : 0), 0);
 
   return (
-    <div 
-      className="min-h-screen w-full flex flex-col font-sans antialiased bg-bg-dark text-text-primary overflow-x-hidden" 
+    <div
+      className="min-h-screen w-full flex flex-col font-sans antialiased bg-bg-dark text-text-primary overflow-x-hidden"
       style={{ direction: lang === "ar" ? "rtl" : "ltr" }}
     >
       <Suspense fallback={null}>
-        <QueryParamSyncer 
-          mode={mode} 
-          setSearchQuery={setSearchQuery} 
-          setActiveCategoryId={setActiveCategoryId} 
+        <QueryParamSyncer
+          mode={mode}
+          setSearchQuery={setSearchQuery}
+          setActiveCategoryId={setActiveCategoryId}
           setSortBy={setSortBy}
         />
       </Suspense>
@@ -907,8 +920,8 @@ export default function StorefrontLayout({
         />
       )}
 
-      <Footer 
-        lang={lang} 
+      <Footer
+        lang={lang}
         onOpenPolicy={(type) => {
           setPolicyModalType(type);
           setIsPolicyModalOpen(true);
@@ -1014,7 +1027,7 @@ export default function StorefrontLayout({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            
+
             <div className="space-y-1 w-full">
               <h3 className="text-base font-extrabold text-white tracking-wide">
                 {t("Added to Cart!", lang)}
@@ -1034,11 +1047,11 @@ export default function StorefrontLayout({
       {isMobileFiltersOpen && (
         <div className="fixed inset-0 z-[9999] flex justify-end lg:hidden select-none">
           {/* Backdrop */}
-          <button 
+          <button
             type="button"
             aria-label={t("Close", lang) || "Close"}
             tabIndex={-1}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-fade-in border-none cursor-default" 
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-fade-in border-none cursor-default"
             onClick={() => setIsMobileFiltersOpen(false)}
           />
           {/* Drawer Panel */}
@@ -1048,7 +1061,7 @@ export default function StorefrontLayout({
               <span className="font-extrabold text-sm uppercase text-eerie-black tracking-wide">
                 {t("Filter Options", lang)}
               </span>
-              <button 
+              <button
                 onClick={() => setIsMobileFiltersOpen(false)}
                 className="p-1 hover:text-salmon-pink transition-colors border-none bg-transparent cursor-pointer font-black text-lg"
               >

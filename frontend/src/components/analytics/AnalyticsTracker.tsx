@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { isStoreSessionImpersonated } from "@/app/storeAuth";
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30-minute sliding session window
 const ATTR_STORAGE_KEY = "mv_session_attribution";
@@ -254,6 +255,7 @@ function sendAnalyticsPayload(
   payload: Record<string, unknown>,
   authToken: string
 ): void {
+  if (isStoreSessionImpersonated()) return;
   const bodyStr = JSON.stringify(payload);
 
   if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
@@ -280,6 +282,7 @@ export function bridgeB2BEventToGtag(
   params: Record<string, unknown>
 ): void {
   if (typeof window === "undefined") return;
+  if (isStoreSessionImpersonated()) return;
   if (isNonStorefrontPath(window.location.pathname)) return;
   const win = window as WindowWithGtag;
   if (typeof win.gtag !== "function") return;
@@ -358,6 +361,7 @@ export interface MemberEventPayload {
 
 export function trackMemberEvent(payload: MemberEventPayload): void {
   if (typeof window === "undefined") return;
+  if (isStoreSessionImpersonated()) return;
 
   const authToken = readStoreAuthToken();
   const currentPath = payload.url_path || window.location.pathname;
