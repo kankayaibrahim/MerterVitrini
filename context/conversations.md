@@ -3136,3 +3136,107 @@
      - `HEAD http://127.0.0.1:3000/admin/catalog/indexnow` → `200 OK`
      - Önceki `failed` (`403`) kaydı (`01a1dfb9-2ede-7768-811c-aafe516d4a0d`) için `POST http://127.0.0.1:8080/api/v1/indexnow/logs/{id}/retry` canlı çalıştırıldı → `HTTP 200`, yeni log (`01a1dfcc-b67d-754e-bda0-59b009916df7`) `status = success`, `http_status = 200`, `url_count = 100`, mesaj: `HTTP 200 (OK) — yandex.com/indexnow üzerinden IndexNow ortak ağına (Bing + Yandex) iletildi`.
 - **Not:** `AGENTS.md` Kural #1 uyarınca uzak Git deposuna `git push` çalıştırılmamıştır; değişiklikler yerel commitlerde ve canlı AlmaLinux sunucusunda yayındadır.
+
+
+---
+
+### [2026-11-15 18:40:00] - Oturum #164 (OpenCart Tarzı Müşteri Adına Giriş / Impersonation ve Canlı Sepet Senkronizasyonu Fizibilite Analizi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"bu projede opencart da olduğu gibi müşteri adına login ol gibi bir şey yapılabilir mi maksat hem test edebilmek gerektiğinde onunda adına siparişi doldurabilmek tamamlamadığı sepetini görebilmek"`
+- **Yapılan Analiz & Yanıt Özeti:**
+  - Mevcut mimari ([`admin-api.service.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/services/admin-api.service.ts), [`store_auth.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_auth.go), [`token_service.go`](file:///c:/Projects/mertervitrini.com.tr/backend/services/token_service.go), [`store_cart.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_cart.go), [`StorefrontLayout.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/StorefrontLayout.tsx), [`CartClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/cart/CartClient.tsx), [`customers.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/customers.go)) incelenerek fizibilite doğrulandı:
+    1. Admin (`admin_token`) ve mağaza müşteri (`store_user_token`) oturumlarının ayrık tutulması ve backend'in hem RS256 (Keycloak) hem HS256 JWT doğrulaması sayesinde admin oturumunu bozmadan tek tıkla kısa ömürlü (`impersonated: true`, `impersonated_by`) müşteri token'ı üretilebilir.
+    2. Web vitrin sepeti şu an gezinme sırasında `localStorage` (`merter_b2b_cart`) üzerinde tutulup siparişte `/api/v1/store/cart/sync` ile DB'ye yazıldığı için, müşterinin yarım kalan sepetini canlı görmek ve müşterinin cihazında da senkron tutmak adına giriş yapmış kullanıcılar için anlık arka plan sepet senkronizasyonu (`GET /api/v1/store/cart` + debounce/anlık sync) kurulması gerektiği tespit edildi.
+    3. Vitrin üstü Temsili Oturum Çubuğu (Impersonation Banner) ve `impersonated` oturumlarda müşteri IP/harita/analitik verilerini kirletmeyen denetim logu tasarımı açıklandı.
+- **Not:** Kullanıcı fizibilite sorusu sorduğu için henüz uygulama kodunda değişiklik yapılmadı; kullanıcıdan geliştirme onayı beklenmektedir.
+
+
+---
+
+### [2026-11-15 18:50:40] - Oturum #165 (Admin Paneli `/admin/settings/site` ile Vitrin Ön Yüzü Adres/E-Posta Uyumsuzluğunun Giderilmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** Ekran görüntüleri eşliğinde `"admin panel de adres bu ama site ön yüzünde"` (`/admin/settings/site` içinde Esenyurt adres ve `info@toptanmoda.net` görünürken vitrin footer'ında Merter adres ve `info@mertervitrini.com.tr` görünmesi).
+- **Kök Neden Tespiti:**
+  - [`formatters.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/formatters.ts) içindeki `sanitizePublicStoreAddress` ve `sanitizePublicStoreEmail` fonksiyonları `/esenyurt|akevler|regnum\s*astrum/i` ve `/toptanmoda\.net/i` regex kurallarıyla veritabanındaki `catalog.settings` değerlerini sessizce varsayılan Merter adres/e-postasıyla eziyordu; buna karşın admin paneli (`GET /api/v1/settings`) ham DB kaydını gösteriyordu.
+  - Ayrıca [`ContactClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/contact/ContactClient.tsx) CMS HTML çıktısında `.replace(/toptanmoda\.net/gi, ...).replace(/Esenyurt/gi, ...)`, sabit Google Maps `Merter Gungoren Istanbul` iframe sorgusu ve sabit `"Merter, Güngören"` `PostalAddress` içeriyordu; [`B2BClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/b2b/B2BClient.tsx) ile [`seoHelpers.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/seoHelpers.ts) JSON-LD şemalarında sabit ilçe/posta kodu kullanıyordu ve SSR/client `/settings` önbelleği admin kaydında geçersiz kılınmıyordu.
+- **Yapılan Değişiklikler:**
+  1. **Regex Maskelemenin Kaldırılması & Dinamik İlçe Çözümleme ([`formatters.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/formatters.ts)):**
+     - `sanitizePublicStoreEmail` ve `sanitizePublicStoreAddress` yalnızca boş değerde varsayılanlara dönecek şekilde güncellendi; `/admin/settings/site` tek doğru kaynak haline getirildi.
+     - Adresten dinamik ilçe çözümleyen `resolveAddressLocality` yardımcısı eklendi.
+  2. **Anlık Önbellek Geçersizleştirme & Olay Yayını ([`utils.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/utils.ts), [`AdminContext.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/context/AdminContext.tsx)):**
+     - `SETTINGS_CACHE_TTL_MS` `15_000` ms'ye indirildi, `cache: "no-store"` eklendi ve `invalidateStoreSettingsCache()` dışa aktarıldı.
+     - `handleUpdateSettings` kayıt sonrası hem bellek önbelleğini temizler hem de `merter_settings_updated_at` (`storage` + `store-settings-updated` olayları) tetikler.
+  3. **SSR Önbellek Kaldırma & Dinamik Schema/Harita ([`seoHelpers.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/seoHelpers.ts), [`contact/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/contact/page.tsx), [`b2b/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/b2b/page.tsx), [`faq/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/faq/page.tsx)):**
+     - `/settings` SSR çağrıları `cache: "no-store"` (`revalidate = 0`) yapılacak şekilde güncellendi; `buildOrganizationGraphJsonLd` ilçe ve `34173` posta kodunu kaydedilen adrese göre dinamik üretir hale getirildi.
+  4. **Vitrin Bileşenlerinin Eşitlenmesi ([`Footer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/Footer.tsx), [`ContactClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/contact/ContactClient.tsx), [`B2BClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/b2b/B2BClient.tsx), [`FAQClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/faq/FAQClient.tsx)):**
+     - `Footer` başlangıç SSR ayarlarını `initialSettings` ile alabilir ve ayar güncelleme olaylarında canlı yenilenir hale getirildi.
+     - `ContactClient.tsx` CMS HTML içindeki regex değiştirmeleri kaldırıldı; Google Maps iframe sorgusu ve JSON-LD `addressLocality` kaydedilen adresten dinamik üretildi.
+- **Doğrulamalar:**
+  - `cd frontend; npx tsc --noEmit` ve `npm run lint` sıfır hata ve sıfır uyarıyla geçti (`exit code 0`).
+  - `AGENTS.md` Kural #1 ve #7 uyarınca yerel `npm run build`, `git commit`, `git push` veya canlı sunucu dağıtımı yapılmadı; değişiklikler çalışma dizininde kullanıcı onayına bırakıldı.
+
+
+---
+
+### [2026-11-15 18:50:40] - Oturum #165 (Admin Paneli `/admin/settings/site` ile Vitrin Ön Yüzü Adres/E-Posta Uyumsuzluğunun Giderilmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** Ekran görüntüleri eşliğinde `"admin panel de adres bu ama site ön yüzünde"` (`/admin/settings/site` içinde Esenyurt adres ve `info@toptanmoda.net` görünürken vitrin footer'ında Merter adres ve `info@mertervitrini.com.tr` görünmesi).
+- **Kök Neden Tespiti:**
+  - [`formatters.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/formatters.ts) içindeki `sanitizePublicStoreAddress` ve `sanitizePublicStoreEmail` fonksiyonları `/esenyurt|akevler|regnum\s*astrum/i` ve `/toptanmoda\.net/i` regex kurallarıyla veritabanındaki `catalog.settings` değerlerini sessizce varsayılan Merter adres/e-postasıyla eziyordu; buna karşın admin paneli (`GET /api/v1/settings`) ham DB kaydını gösteriyordu.
+  - Ayrıca [`ContactClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/contact/ContactClient.tsx) CMS HTML çıktısında `.replace(/toptanmoda\.net/gi, ...).replace(/Esenyurt/gi, ...)`, sabit Google Maps `Merter Gungoren Istanbul` iframe sorgusu ve sabit `"Merter, Güngören"` `PostalAddress` içeriyordu; [`B2BClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/b2b/B2BClient.tsx) ile [`seoHelpers.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/seoHelpers.ts) JSON-LD şemalarında sabit ilçe/posta kodu kullanıyordu ve SSR/client `/settings` önbelleği admin kaydında geçersiz kılınmıyordu.
+- **Yapılan Değişiklikler:**
+  1. **Regex Maskelemenin Kaldırılması & Dinamik İlçe Çözümleme ([`formatters.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/formatters.ts)):**
+     - `sanitizePublicStoreEmail` ve `sanitizePublicStoreAddress` yalnızca boş değerde varsayılanlara dönecek şekilde güncellendi; `/admin/settings/site` tek doğru kaynak haline getirildi.
+     - Adresten dinamik ilçe çözümleyen `resolveAddressLocality` yardımcısı eklendi.
+  2. **Anlık Önbellek Geçersizleştirme & Olay Yayını ([`utils.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/utils.ts), [`AdminContext.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/context/AdminContext.tsx)):**
+     - `SETTINGS_CACHE_TTL_MS` `15_000` ms'ye indirildi, `cache: "no-store"` eklendi ve `invalidateStoreSettingsCache()` dışa aktarıldı.
+     - `handleUpdateSettings` kayıt sonrası hem bellek önbelleğini temizler hem de `merter_settings_updated_at` (`storage` + `store-settings-updated` olayları) tetikler.
+  3. **SSR Önbellek Kaldırma & Dinamik Schema/Harita ([`seoHelpers.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/seoHelpers.ts), [`contact/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/contact/page.tsx), [`b2b/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/b2b/page.tsx), [`faq/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/faq/page.tsx)):**
+     - `/settings` SSR çağrıları `cache: "no-store"` (`revalidate = 0`) yapılacak şekilde güncellendi; `buildOrganizationGraphJsonLd` ilçe ve `34173` posta kodunu kaydedilen adrese göre dinamik üretir hale getirildi.
+  4. **Vitrin Bileşenlerinin Eşitlenmesi ([`Footer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/Footer.tsx), [`ContactClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/contact/ContactClient.tsx), [`B2BClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/b2b/B2BClient.tsx), [`FAQClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/faq/FAQClient.tsx)):**
+     - `Footer` başlangıç SSR ayarlarını `initialSettings` ile alabilir ve ayar güncelleme olaylarında canlı yenilenir hale getirildi.
+     - `ContactClient.tsx` CMS HTML içindeki regex değiştirmeleri kaldırıldı; Google Maps iframe sorgusu ve JSON-LD `addressLocality` kaydedilen adresten dinamik üretildi.
+- **Doğrulamalar:**
+  - `cd frontend; npx tsc --noEmit` ve `npm run lint` sıfır hata ve sıfır uyarıyla geçti (`exit code 0`).
+  - `AGENTS.md` Kural #1 ve #7 uyarınca yerel `npm run build`, `git commit`, `git push` veya canlı sunucu dağıtımı yapılmadı; değişiklikler çalışma dizininde kullanıcı onayına bırakıldı.
+
+---
+
+## Oturum #166 — 2026-11-15 20:16 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Müşteri adına giriş yapma ("Customer Impersonation") + anlık çift yönlü sepet senkronizasyonu + `/admin/customers` yönetim paneli butonları ve vitrin test modu uyarı bandının uçtan uca geliştirilmesi ve yayınlanması.
+- `AdminContext.tsx` (satır 185, `typescript:S3923`) ve `formatters.ts` (satır 16, `typescript:S6397`) üzerindeki 2 SonarLint uyarısının düzeltilmesi.
+
+### Yapılan İşlemler & Mimari Özet
+1. **SonarLint Düzeltmeleri:**
+   - `frontend/src/utils/formatters.ts`: `([S])` gereksiz karakter sınıfı `(S)` olarak sadeleştirildi (`typescript:S6397`).
+   - `frontend/src/context/AdminContext.tsx`: `setTheme` içindeki aynı değeri döndüren koşul kaldırıldı (`typescript:S3923`).
+2. **Backend Müşteri Adına Giriş (Impersonation), Güvenlik & Audit Log:**
+   - `database/0036_add_customer_impersonation_logs.sql` ve `backend/handlers/customer_impersonation.go` (`EnsureCustomerImpersonationSchema` ile `backend/main.go` başlangıcında otomatik tablo kurulumu).
+   - `backend/services/token_service.go`: `CustomerImpersonationInput` ve `IssueCustomerImpersonationJWT` (2 saatlik HS256 token; `impersonated: true`, `impersonated_by`, `impersonated_by_id`).
+   - `backend/middleware/middleware.go`: `AuthMiddleware` içinde `claims["impersonated"] == true` token'larının tüm `/api/v1/*` Admin uç noktalarında `403 Forbidden` ile reddedilmesi.
+   - `backend/router.go`: `POST /api/v1/customers/{id}/impersonate` (yalnızca `admin` / `super_admin` / `sales_manager` rolleri), `GET /api/v1/customers/{id}/cart`.
+   - `backend/handlers/customer_impersonation_test.go`: `TestIssueAndVerifyCustomerImpersonationToken` ve `TestAdminMiddlewareRejectsImpersonationToken` birim testleri.
+3. **Backend Telemetri İzolasyonu & Teklif Korumalı Sepet Senkronizasyonu:**
+   - `backend/handlers/store_auth.go`: `configureStoreVerifier` ve `isImpersonatedToken`.
+   - `backend/handlers/member_journey_tracker.go` & `analytics.go`: Impersonation oturumlarında `resolveAuthenticatedMemberID`, `RecordMemberActivityAsync`, `TrackMemberEvent` ve `TrackPageView` kayıtlarının müşteri analitiğini kirletmemesi sağlandı.
+   - `backend/handlers/store_orders.go`: `CreateOrder` sonrasında `[IMPERSONATION ORDER]` audit logu eklendi.
+   - `backend/handlers/store_cart.go`: `FetchCartItemsByUserID` ayrıştırıldı; `SyncCart` yıkıcı silme yerine `deduplicateSyncCartItems` ve `syncCartItemsPreservingOffers` (`custom_unit_price` & `offer_message_id` korumalı upsert) ile güncellendi.
+4. **Frontend Impersonation, Sepet Senkronizasyonu & Admin Paneli:**
+   - `frontend/src/app/storeAuth.ts`: `startCustomerImpersonationSession`, `endCustomerImpersonationSession` (mevcut oturum yedekleme/geri yükleme), `isStoreSessionImpersonated`, impersonated oturumda telefon doğrulama atlaması.
+   - `frontend/src/utils/cartSync.ts`: `persistStoreCart` (350ms debounced push + acil senkronizasyon), `pullAndReconcileStoreCart` (impersonation sırasında misafir sepet birleştirme engeli), `clearStoreCartOnLogout`, `syncLocalCartStateIfChanged`.
+   - `frontend/src/components/store/ImpersonationBanner.tsx`: `Header.tsx` üstüne yerleştirilen canlı müşteri test modu uyarı bandı.
+   - `Header.tsx`, `StorefrontLayout.tsx`, `ProductDetailClient.tsx`, `CartClient.tsx`, `CartDrawer.tsx`, `AnalyticsTracker.tsx`: Çift yönlü sepet senkronizasyonu ve gtag/telemetri izolasyonu bağlandı.
+   - `CustomerUnfinishedCartSection.tsx`, `CustomerDetailModal.tsx`, `CustomersManager.tsx`: Müşterinin bekleyen DB sepetini modal içinde canlı önizleme, tıklanabilir sepet rozeti, `"Giriş Yap"` / `"Sepetiyle Giriş Yap & Tamamla"` ve `"Vitrine Müşteri Adına Gir"` butonları eklendi.
+
+### Doğrulama, Commit ve Canlı Yayın
+- `cd backend; go vet ./...; go test -count=1 ./handlers -run "TestIssueAndVerifyCustomerImpersonationToken|TestAdminMiddlewareRejectsImpersonationToken" -v` -> Exit 0 (`PASS`).
+- `cd frontend; npx tsc --noEmit && npm run lint` -> Exit 0 (0 hata, 0 uyarı).
+- Atomik yerel commitler (`git push` yapılmadı):
+  - `648bb6f`: `fix: sync admin showroom contact settings with storefront and resolve SonarLint warnings`
+  - `1501e35`: `feat: add B2B customer impersonation, audit logging, and live cart synchronization`
+- Canlı yayın: `python scripts\unified_deployer.py -p unified -c all -a all` -> Başarılı (`173.73 sn`, Go Backend :8080 + AlmaLinux uzaktan Next.js SSR build :3000 + Nginx).
+- Canlı doğrulama: `/api/v1/health` (`200`), `/api/v1/store/settings` (`200`), yetkisiz `POST /api/v1/customers/test-id/impersonate` (`401`), `/admin/customers` (`200`).
