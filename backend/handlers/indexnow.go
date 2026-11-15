@@ -25,18 +25,30 @@ import (
 )
 
 const (
-	indexNowHost           = "mertervitrini.com.tr"
-	indexNowKey            = "638d6e3eb8a743ec900269823f24ffe6"
-	indexNowKeyLocation    = "https://mertervitrini.com.tr/638d6e3eb8a743ec900269823f24ffe6.txt"
-	indexNowEndpoint       = "https://api.indexnow.org/IndexNow"
-	indexNowMaxChunkSize   = 10000
-	indexNowSampleURLLimit = 100
+	indexNowHost                = "mertervitrini.com.tr"
+	indexNowKey                 = "638d6e3eb8a743ec900269823f24ffe6"
+	IndexNowKeyVerificationPath = "/" + indexNowKey + ".txt"
+	indexNowKeyLocation         = "https://mertervitrini.com.tr" + IndexNowKeyVerificationPath
+	indexNowUserAgent           = "MerterVitrini-IndexNow/1.0 (+https://mertervitrini.com.tr)"
+	indexNowMaxChunkSize        = 10000
+	indexNowSampleURLLimit      = 100
 )
 
+// IndexNowEndpoint describes an IndexNow Consortium endpoint used for URL notification and failover.
+type IndexNowEndpoint struct {
+	Name string
+	URL  string
+}
+
 var (
-	indexNowSEOLangs     = []string{"en", "ru", "ar", "de", "fr", "pl", "bg"}
-	indexNowSchemaOnce   sync.Once
-	indexNowSchemaErr    error
+	indexNowSEOLangs         = []string{"en", "ru", "ar", "de", "fr", "pl", "bg"}
+	defaultIndexNowEndpoints = []IndexNowEndpoint{
+		{Name: "yandex.com/indexnow", URL: "https://yandex.com/indexnow"},
+		{Name: "search.seznam.cz/indexnow", URL: "https://search.seznam.cz/indexnow"},
+		{Name: "api.indexnow.org", URL: "https://api.indexnow.org/IndexNow"},
+	}
+	indexNowSchemaOnce sync.Once
+	indexNowSchemaErr  error
 )
 
 // IndexNowHandler serves Admin IndexNow monitoring, logging, and manual triggers.
@@ -45,6 +57,14 @@ type IndexNowHandler struct{}
 // NewIndexNowHandler constructs an IndexNowHandler.
 func NewIndexNowHandler() *IndexNowHandler {
 	return &IndexNowHandler{}
+}
+
+// ServeKeyFile serves the IndexNow ownership verification key from the backend as defense-in-depth.
+func (h *IndexNowHandler) ServeKeyFile(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set(headerContentType, "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, indexNowKey)
 }
 
 // IndexNowRequest defines the IndexNow batch submission JSON payload.
@@ -257,7 +277,88 @@ func normalizeOptionalUUIDString(ptr *string) *string {
 	return &trimmed
 }
 
+func parseIndexNowEndpoint(rawPart string) (IndexNowEndpoint, bool) {
+	trimmed := strings.TrimSpace(rawPart)
+	if trimmed == "" {
+		return IndexNowEndpoint{}, false
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Host == "" {
+		return IndexNowEndpoint{}, false
+	}
+	if !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
+		return IndexNowEndpoint{}, false
+	}
+	name := strings.TrimSuffix(parsed.Host+strings.TrimSuffix(parsed.Path, "/"), "/")
+	if name == "" {
+		name = parsed.Host
+	}
+	return IndexNowEndpoint{Name: name, URL: trimmed}, true
+}
+
+func resolveIndexNowEndpoints() []IndexNowEndpoint {
+	raw := strings.TrimSpace(os.Getenv("INDEXNOW_ENDPOINTS"))
+	if raw == "" {
+		return defaultIndexNowEndpoints
+	}
+
+	parts := strings.Split(raw, ",")
+	endpoints := make([]IndexNowEndpoint, 0, len(parts))
+	for _, part := range parts {
+		if ep, ok := parseIndexNowEndpoint(part); ok {
+			endpoints = append(endpoints, ep)
+		}
+	}
+	if len(endpoints) == 0 {
+		return defaultIndexNowEndpoints
+	}
+	return endpoints
+}
+
 func postIndexNowChunk(ctx context.Context, urls []string) (int, string, error) {
+	return postIndexNowChunkWithEndpoints(ctx, urls, resolveIndexNowEndpoints(), httpclient.DefaultPooledClient)
+}
+
+func postIndexNowSingleEndpoint(ctx context.Context, client *http.Client, ep IndexNowEndpoint, jsonData []byte) (int, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep.URL, bytes.NewReader(jsonData))
+	if err != nil {
+		return 0, fmt.Sprintf("İstek oluşturma hatası: %v", err), err
+	}
+	req.Header.Set(headerContentType, "application/json; charset=utf-8")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("User-Agent", indexNowUserAgent)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Sprintf("Bağlantı hatası: %v", err), err
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	bodyText := truncateIndexNowRunes(string(bodyBytes), 350)
+
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted {
+		return resp.StatusCode, fmt.Sprintf(
+			"HTTP %d (%s) — %s üzerinden IndexNow ortak ağına (Bing + Yandex) iletildi",
+			resp.StatusCode, http.StatusText(resp.StatusCode), ep.Name,
+		), nil
+	}
+
+	msg := fmt.Sprintf("HTTP %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
+	if bodyText != "" {
+		msg = fmt.Sprintf("%s: %s", msg, bodyText)
+	}
+	return resp.StatusCode, msg, fmt.Errorf("indexnow %s returned HTTP %d", ep.Name, resp.StatusCode)
+}
+
+func postIndexNowChunkWithEndpoints(ctx context.Context, urls []string, endpoints []IndexNowEndpoint, client *http.Client) (int, string, error) {
+	if len(endpoints) == 0 {
+		endpoints = defaultIndexNowEndpoints
+	}
+	if client == nil {
+		client = httpclient.DefaultPooledClient
+	}
+
 	reqBody := IndexNowRequest{
 		Host:        indexNowHost,
 		Key:         indexNowKey,
@@ -270,30 +371,24 @@ func postIndexNowChunk(ctx context.Context, urls []string) (int, string, error) 
 		return 0, fmt.Sprintf("Payload serileştirme hatası: %v", err), err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, indexNowEndpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return 0, fmt.Sprintf("İstek oluşturma hatası: %v", err), err
-	}
-	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	var attemptErrors []string
+	lastStatus := 0
 
-	resp, err := httpclient.DefaultPooledClient.Do(req)
-	if err != nil {
-		return 0, fmt.Sprintf("Bağlantı hatası: %v", err), err
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-	bodyText := truncateIndexNowRunes(string(bodyBytes), 350)
-
-	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusAccepted {
-		return resp.StatusCode, fmt.Sprintf("HTTP %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode)), nil
+	for _, ep := range endpoints {
+		statusCode, msg, attemptErr := postIndexNowSingleEndpoint(ctx, client, ep, jsonData)
+		if attemptErr == nil {
+			return statusCode, msg, nil
+		}
+		if statusCode > 0 {
+			lastStatus = statusCode
+		}
+		if statusCode == http.StatusBadRequest || statusCode == http.StatusUnprocessableEntity {
+			return statusCode, fmt.Sprintf("%s -> %s", ep.Name, msg), attemptErr
+		}
+		attemptErrors = append(attemptErrors, fmt.Sprintf("%s -> %s", ep.Name, msg))
 	}
 
-	msg := fmt.Sprintf("HTTP %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
-	if bodyText != "" {
-		msg = fmt.Sprintf("%s: %s", msg, bodyText)
-	}
-	return resp.StatusCode, msg, fmt.Errorf("indexnow returned HTTP %d", resp.StatusCode)
+	return lastStatus, strings.Join(attemptErrors, " ; "), fmt.Errorf("all indexnow endpoints failed (last HTTP %d)", lastStatus)
 }
 
 func insertIndexNowLog(ctx context.Context, meta IndexNowSubmissionMeta, totalURLs int, sampleURLs []string, status string, httpStatus int, responseMsg string, durationMs int) (*IndexNowLogEntry, error) {
@@ -347,14 +442,7 @@ func insertIndexNowLog(ctx context.Context, meta IndexNowSubmissionMeta, totalUR
 	return &entry, nil
 }
 
-// SubmitIndexNowSync validates, sends in 10k-URL chunks, and records the result in catalog.indexnow_logs.
-func SubmitIndexNowSync(ctx context.Context, meta IndexNowSubmissionMeta, rawURLs []string) (*IndexNowLogEntry, error) {
-	cleanMeta := sanitizeIndexNowMeta(meta)
-	chunks := NormalizeAndChunkIndexNowURLs(rawURLs, indexNowMaxChunkSize)
-	if len(chunks) == 0 {
-		return nil, errors.New("geçerli http/https URL adresi bulunamadı")
-	}
-
+func collectIndexNowSamples(chunks [][]string) (int, []string) {
 	totalURLs := 0
 	sampleURLs := make([]string, 0, indexNowSampleURLLimit)
 	for _, chunk := range chunks {
@@ -365,35 +453,37 @@ func SubmitIndexNowSync(ctx context.Context, meta IndexNowSubmissionMeta, rawURL
 			}
 		}
 	}
+	return totalURLs, sampleURLs
+}
 
-	if isIndexNowLocalOrDev() {
-		msg := "Yerel/geliştirme ortamında dış IndexNow çağrısı atlandı (canlı Linux sunucuda otomatik gönderilir)."
-		log.Printf("[IndexNow Dev-Skip] source=%s urls=%d label=%q", cleanMeta.TriggerSource, totalURLs, cleanMeta.SourceLabel)
-		entry, err := insertIndexNowLog(ctx, cleanMeta, totalURLs, sampleURLs, "skipped_dev", 0, msg, 0)
-		if err != nil {
-			log.Printf("[IndexNow Log Error] Failed to persist dev-skip log: %v", err)
-		}
-		if entry == nil {
-			entry = &IndexNowLogEntry{
-				TriggerSource:   cleanMeta.TriggerSource,
-				SourceLabel:     cleanMeta.SourceLabel,
-				FeedID:          cleanMeta.FeedID,
-				SyncRunID:       cleanMeta.SyncRunID,
-				Host:            indexNowHost,
-				ProductCount:    cleanMeta.ProductCount,
-				URLCount:        totalURLs,
-				SampleURLs:      sampleURLs,
-				Status:          "skipped_dev",
-				HTTPStatus:      0,
-				ResponseMessage: msg,
-				DurationMs:      0,
-				CreatedAt:       time.Now(),
-			}
-		}
-		return entry, err
+func handleIndexNowDevSkip(ctx context.Context, cleanMeta IndexNowSubmissionMeta, totalURLs int, sampleURLs []string) (*IndexNowLogEntry, error) {
+	msg := "Yerel/geliştirme ortamında dış IndexNow çağrısı atlandı (canlı Linux sunucuda otomatik gönderilir)."
+	log.Printf("[IndexNow Dev-Skip] source=%s urls=%d label=%q", cleanMeta.TriggerSource, totalURLs, cleanMeta.SourceLabel)
+	entry, err := insertIndexNowLog(ctx, cleanMeta, totalURLs, sampleURLs, "skipped_dev", 0, msg, 0)
+	if err != nil {
+		log.Printf("[IndexNow Log Error] Failed to persist dev-skip log: %v", err)
 	}
+	if entry == nil {
+		entry = &IndexNowLogEntry{
+			TriggerSource:   cleanMeta.TriggerSource,
+			SourceLabel:     cleanMeta.SourceLabel,
+			FeedID:          cleanMeta.FeedID,
+			SyncRunID:       cleanMeta.SyncRunID,
+			Host:            indexNowHost,
+			ProductCount:    cleanMeta.ProductCount,
+			URLCount:        totalURLs,
+			SampleURLs:      sampleURLs,
+			Status:          "skipped_dev",
+			HTTPStatus:      0,
+			ResponseMessage: msg,
+			DurationMs:      0,
+			CreatedAt:       time.Now(),
+		}
+	}
+	return entry, err
+}
 
-	startedAt := time.Now()
+func sendAllIndexNowChunks(ctx context.Context, chunks [][]string) (string, int, string) {
 	finalHTTPStatus := http.StatusOK
 	finalStatus := "success"
 	messages := make([]string, 0, len(chunks))
@@ -415,12 +505,26 @@ func SubmitIndexNowSync(ctx context.Context, meta IndexNowSubmissionMeta, rawURL
 			messages = append(messages, msg)
 		}
 	}
+	return finalStatus, finalHTTPStatus, strings.Join(messages, " | ")
+}
 
-	durationMs := int(time.Since(startedAt).Milliseconds())
-	if durationMs < 0 {
-		durationMs = 0
+// SubmitIndexNowSync validates, sends in 10k-URL chunks, and records the result in catalog.indexnow_logs.
+func SubmitIndexNowSync(ctx context.Context, meta IndexNowSubmissionMeta, rawURLs []string) (*IndexNowLogEntry, error) {
+	cleanMeta := sanitizeIndexNowMeta(meta)
+	chunks := NormalizeAndChunkIndexNowURLs(rawURLs, indexNowMaxChunkSize)
+	if len(chunks) == 0 {
+		return nil, errors.New("geçerli http/https URL adresi bulunamadı")
 	}
-	combinedMsg := strings.Join(messages, " | ")
+
+	totalURLs, sampleURLs := collectIndexNowSamples(chunks)
+	if isIndexNowLocalOrDev() {
+		return handleIndexNowDevSkip(ctx, cleanMeta, totalURLs, sampleURLs)
+	}
+
+	startedAt := time.Now()
+	finalStatus, finalHTTPStatus, combinedMsg := sendAllIndexNowChunks(ctx, chunks)
+	durationMs := max(int(time.Since(startedAt).Milliseconds()), 0)
+
 	if finalStatus == "success" {
 		log.Printf("[IndexNow Success] source=%s urls=%d http=%d ms=%d label=%q", cleanMeta.TriggerSource, totalURLs, finalHTTPStatus, durationMs, cleanMeta.SourceLabel)
 	} else {

@@ -121,6 +121,7 @@ func registerPublicAndDocsRoutes(mux *http.ServeMux, h *AppHandlers) {
 	}
 	mux.HandleFunc("GET /health", healthHandler)
 	mux.HandleFunc("GET /api/v1/health", healthHandler)
+	mux.HandleFunc("GET "+handlers.IndexNowKeyVerificationPath, h.IndexNow.ServeKeyFile)
 
 	mux.HandleFunc("GET /swagger.yaml", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set(headerContentType, "text/yaml")

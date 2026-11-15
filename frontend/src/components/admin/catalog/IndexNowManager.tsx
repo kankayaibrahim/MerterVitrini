@@ -42,7 +42,7 @@ type IndexNowLogStatus = "success" | "failed" | "skipped_dev" | "pending";
 
 interface IndexNowLogEntry {
   readonly id: string;
-  readonly trigger_source: IndexNowTriggerSource | string;
+  readonly trigger_source: string;
   readonly source_label: string;
   readonly feed_id?: string | null;
   readonly sync_run_id?: string | null;
@@ -50,7 +50,7 @@ interface IndexNowLogEntry {
   readonly product_count: number;
   readonly url_count: number;
   readonly sample_urls: readonly string[];
-  readonly status: IndexNowLogStatus | string;
+  readonly status: string;
   readonly http_status: number;
   readonly response_message: string;
   readonly duration_ms: number;
@@ -95,8 +95,9 @@ interface FeedbackBanner {
 }
 
 const PAGE_LIMIT = 20;
+const DEFAULT_KEY_LOCATION = "https://mertervitrini.com.tr/638d6e3eb8a743ec900269823f24ffe6.txt";
 
-const SOURCE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+const SOURCE_OPTIONS: ReadonlyArray<{ value: "all" | IndexNowTriggerSource; label: string }> = [
   { value: "all", label: "Tüm Kaynaklar" },
   { value: "xml_sync", label: "XML Senkronizasyon" },
   { value: "supplier_portal", label: "Tedarikçi Stüdyosu" },
@@ -108,12 +109,15 @@ const SOURCE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "manual", label: "Manuel Gönderim" },
 ];
 
-const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "all", label: "Tüm Durumlar" },
-  { value: "success", label: "Başarılı (200/202)" },
-  { value: "failed", label: "Hatalı" },
-  { value: "skipped_dev", label: "Geliştirme Modu" },
-];
+const STATUS_OPTIONS: ReadonlyArray<{
+  value: "all" | Exclude<IndexNowLogStatus, "pending">;
+  label: string;
+}> = [
+    { value: "all", label: "Tüm Durumlar" },
+    { value: "success", label: "Başarılı (200/202)" },
+    { value: "failed", label: "Hatalı" },
+    { value: "skipped_dev", label: "Geliştirme Modu" },
+  ];
 
 const RECENT_LIMIT_OPTIONS = [25, 50, 100, 250, 500] as const;
 
@@ -180,6 +184,47 @@ function getStatusBadge(status: string, httpStatus: number): { label: string; ba
   };
 }
 
+function resolveFeedbackType(status?: string): FeedbackBanner["type"] {
+  if (status === "failed") {
+    return "error";
+  }
+  if (status === "skipped_dev") {
+    return "warning";
+  }
+  return "success";
+}
+
+function formatSuccessRateDisplay(kpi: IndexNowKpiSummary | null): string {
+  const attempted = (kpi?.success_count ?? 0) + (kpi?.failed_count ?? 0);
+  if (attempted > 0) {
+    return `%${(kpi?.success_rate ?? 0).toFixed(1)}`;
+  }
+  if ((kpi?.skipped_dev_count ?? 0) > 0) {
+    return "Yerel Test";
+  }
+  return "—";
+}
+
+function getFeedbackBannerStyle(type: FeedbackBanner["type"]): string {
+  if (type === "success") {
+    return "bg-emerald-50 border-emerald-200 text-emerald-800";
+  }
+  if (type === "warning") {
+    return "bg-amber-50 border-amber-200 text-amber-800";
+  }
+  return "bg-rose-50 border-rose-200 text-rose-800";
+}
+
+function renderFeedbackIcon(type: FeedbackBanner["type"]): React.ReactNode {
+  if (type === "success") {
+    return <CheckCircle2 size={16} className="shrink-0 mt-0.5" />;
+  }
+  if (type === "warning") {
+    return <Info size={16} className="shrink-0 mt-0.5" />;
+  }
+  return <AlertCircle size={16} className="shrink-0 mt-0.5" />;
+}
+
 function formatDateTimeTr(iso: string | null | undefined): string {
   if (!iso) return "Henüz yok";
   const parsed = new Date(iso);
@@ -196,6 +241,590 @@ function formatDateTimeTr(iso: string | null | undefined): string {
 
 function formatNumberTr(value: number): string {
   return new Intl.NumberFormat("tr-TR").format(value);
+}
+
+function buildIndexNowLogsParams(
+  offset: number,
+  source: string,
+  status: string,
+  search: string
+): URLSearchParams {
+  const params = new URLSearchParams({
+    limit: String(PAGE_LIMIT),
+    offset: String(offset),
+  });
+  if (source !== "all") params.set("source", source);
+  if (status !== "all") params.set("status", status);
+  if (search.trim() !== "") params.set("q", search.trim());
+  return params;
+}
+
+function validateManualUrlsInput(rawInput: string): { urls: string[]; error: string | null } {
+  const urls = rawInput
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (urls.length === 0) {
+    return { urls: [], error: "Lütfen en az bir geçerli URL adresi girin." };
+  }
+
+  const hasInvalidScheme = urls.some((u) => {
+    const lower = u.toLowerCase();
+    return !lower.startsWith("http://") && !lower.startsWith("https://");
+  });
+  if (hasInvalidScheme) {
+    return {
+      urls: [],
+      error: "Tüm URL adresleri 'http://' veya 'https://' ile başlamalıdır.",
+    };
+  }
+
+  return { urls, error: null };
+}
+
+async function requestIndexNowLogs(
+  apiUrl: string,
+  token: string,
+  params: URLSearchParams
+): Promise<IndexNowLogsResponse> {
+  const res = await fetch(`${apiUrl}/api/v1/indexnow/logs?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error(`IndexNow logları alınamadı (HTTP ${res.status})`);
+  }
+  return (await res.json()) as IndexNowLogsResponse;
+}
+
+async function sendAuthorizedRequest<T>(
+  url: string,
+  options: { method: "POST" | "DELETE"; token: string; body?: unknown; defaultError: string }
+): Promise<T> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${options.token}`,
+  };
+  const init: RequestInit = { method: options.method, headers };
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(options.body);
+  }
+
+  const response = await fetch(url, init);
+  const data = (await response.json()) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(data.error || options.defaultError);
+  }
+  return data;
+}
+
+interface HeaderCardProps {
+  readonly keyLocationUrl: string;
+  readonly loadingLogs: boolean;
+  readonly onRefresh: () => void;
+}
+
+function IndexNowHeaderCard({ keyLocationUrl, loadingLogs, onRefresh }: Readonly<HeaderCardProps>) {
+  return (
+    <div className="bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+      <div className="space-y-2.5 max-w-3xl">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h2 className="text-xl font-bold text-zinc-950 flex items-center gap-2">
+            <Sparkles size={20} className="text-violet-600" />
+            IndexNow Otomasyon &amp; İndeksleme Log Merkezi
+          </h2>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <ShieldCheck size={12} />
+            Otomatik Hat Aktif (8 Dil)
+          </span>
+        </div>
+
+        <p className="text-xs text-zinc-600 font-medium leading-relaxed">
+          XML feed senkronizasyonları, tedarikçi web/mobil ürün açılışları, Excel toplu yüklemeleri
+          ve blog/sayfa yayınları storefront önbelleği tazelendikten hemen sonra resmi IndexNow
+          Konsorsiyum hattı üzerinden otomatik yedeklemeyle Bing ve Yandex ağlarına iletilir ve tüm
+          sonuçlar kalıcı olarak burada loglanır.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-zinc-600">
+          <span className="px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200/80 font-semibold">
+            MV: catalog.mv_products
+          </span>
+          <span className="px-2 py-0.5 rounded-md bg-violet-50 border border-violet-200/70 text-violet-700 font-semibold">
+            yandex.com/indexnow → search.seznam.cz/indexnow → api.indexnow.org
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <a
+          href={keyLocationUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-xs font-bold text-zinc-700 transition-colors"
+        >
+          <Globe2 size={14} className="text-violet-600" />
+          API Anahtar Dosyası
+          <ExternalLink size={12} className="text-zinc-400" />
+        </a>
+
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loadingLogs}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-400 text-white text-xs font-bold transition-colors cursor-pointer"
+        >
+          <RefreshCw size={14} className={loadingLogs ? "animate-spin" : ""} />
+          Logları Yenile
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function IndexNowFeedbackAlert({ feedback }: Readonly<{ feedback: FeedbackBanner | null }>) {
+  if (!feedback) {
+    return null;
+  }
+  return (
+    <div
+      className={`p-4 border rounded-2xl text-xs font-semibold leading-relaxed flex items-start gap-2.5 ${getFeedbackBannerStyle(
+        feedback.type
+      )}`}
+    >
+      {renderFeedbackIcon(feedback.type)}
+      <span>{feedback.message}</span>
+    </div>
+  );
+}
+
+function IndexNowKpiGrid({ kpi }: Readonly<{ kpi: IndexNowKpiSummary | null }>) {
+  const successRateDisplay = formatSuccessRateDisplay(kpi);
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
+        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <Activity size={13} className="text-violet-600" />
+          Toplam Gönderim
+        </span>
+        <span className="text-2xl font-extrabold text-zinc-950">
+          {formatNumberTr(kpi?.total_submissions ?? 0)}
+        </span>
+        <span className="text-[11px] font-semibold text-zinc-500">
+          Bugün {formatNumberTr(kpi?.today_submissions ?? 0)} bildirim
+        </span>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
+        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <Globe2 size={13} className="text-indigo-600" />
+          Bildirilen URL
+        </span>
+        <span className="text-2xl font-extrabold text-zinc-950">
+          {formatNumberTr(kpi?.total_urls_submitted ?? 0)}
+        </span>
+        <span className="text-[11px] font-semibold text-zinc-500">
+          Bugün {formatNumberTr(kpi?.today_urls_submitted ?? 0)} URL •{" "}
+          {formatNumberTr(kpi?.total_products_notified ?? 0)} ürün
+        </span>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
+        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <Sparkles size={13} className="text-sky-600" />
+          XML &amp; Tedarikçi Oto
+        </span>
+        <span className="text-2xl font-extrabold text-zinc-950">
+          {formatNumberTr((kpi?.xml_sync_submissions ?? 0) + (kpi?.supplier_submissions ?? 0))}
+        </span>
+        <span className="text-[11px] font-semibold text-zinc-500">
+          {formatNumberTr(kpi?.xml_sync_submissions ?? 0)} XML •{" "}
+          {formatNumberTr(kpi?.supplier_submissions ?? 0)} Tedarikçi
+        </span>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
+        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <CheckCircle2 size={13} className="text-emerald-600" />
+          Başarı Oranı
+        </span>
+        <span className="text-2xl font-extrabold text-zinc-950">{successRateDisplay}</span>
+        <span className="text-[11px] font-semibold text-zinc-500">
+          {formatNumberTr(kpi?.success_count ?? 0)} başarılı •{" "}
+          {formatNumberTr(kpi?.failed_count ?? 0)} hatalı
+        </span>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
+        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <Clock size={13} className="text-amber-600" />
+          Son Bildirim
+        </span>
+        <span className="text-sm font-extrabold text-zinc-950 mt-1">
+          {formatDateTimeTr(kpi?.last_submitted_at)}
+        </span>
+        <span className="text-[11px] font-semibold text-zinc-500">
+          Host: {kpi?.host || "mertervitrini.com.tr"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+interface ActionFormsProps {
+  readonly recentLimit: number;
+  readonly submittingRecent: boolean;
+  readonly urlsInput: string;
+  readonly submittingManual: boolean;
+  readonly onRecentLimitChange: (limit: number) => void;
+  readonly onSubmitRecent: () => void;
+  readonly onUrlsInputChange: (value: string) => void;
+  readonly onManualSubmit: (e: React.FormEvent) => void;
+}
+
+function IndexNowActionForms({
+  recentLimit,
+  submittingRecent,
+  urlsInput,
+  submittingManual,
+  onRecentLimitChange,
+  onSubmitRecent,
+  onUrlsInputChange,
+  onManualSubmit,
+}: Readonly<ActionFormsProps>) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm flex flex-col justify-between gap-5">
+        <div className="space-y-3">
+          <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-2">
+            <Sparkles size={16} className="text-amber-500" />
+            Son Eklenen Ürünleri Şimdi Bildir
+          </h3>
+          <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+            Katalogdaki en son eklenen aktif ürünleri (arşivlenmemiş) 8 dil varyantıyla birlikte tek
+            tıkla IndexNow arama motorlarına toplu gönderin.
+          </p>
+
+          <div className="flex flex-col gap-1.5 pt-1">
+            <label
+              htmlFor="recent-products-limit"
+              className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider"
+            >
+              Gönderilecek Ürün Sayısı
+            </label>
+            <select
+              id="recent-products-limit"
+              value={recentLimit}
+              onChange={(e) => onRecentLimitChange(Number(e.target.value))}
+              className="px-3.5 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-800 bg-white focus:outline-none focus:border-violet-500"
+            >
+              {RECENT_LIMIT_OPTIONS.map((count) => (
+                <option key={count} value={count}>
+                  Son {count} Aktif Ürün (~{formatNumberTr(count * 8)} çok dilli URL)
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onSubmitRecent}
+          disabled={submittingRecent}
+          className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-xl text-xs font-bold shadow-sm transition-colors cursor-pointer"
+        >
+          {submittingRecent ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          {submittingRecent ? "Ürünler Bildiriliyor..." : `Son ${recentLimit} Ürünü Gönder`}
+        </button>
+      </div>
+
+      <form
+        onSubmit={onManualSubmit}
+        className="lg:col-span-2 bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm flex flex-col gap-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-2">
+            <Send size={15} className="text-violet-600" />
+            Manuel URL Bildirimi
+          </h3>
+          <span className="text-[11px] font-semibold text-zinc-400">
+            Her satıra bir tam URL yazın (maks. 10.000 URL / parça)
+          </span>
+        </div>
+
+        <textarea
+          id="indexnow-urls-input"
+          value={urlsInput}
+          onChange={(e) => onUrlsInputChange(e.target.value)}
+          rows={4}
+          placeholder="https://mertervitrini.com.tr/product/ornek-toptan-elbise&#10;https://mertervitrini.com.tr/tr/blog/yeni-sezon-toptan-trendler"
+          className="px-4 py-3 rounded-xl border border-zinc-300 text-xs font-semibold placeholder-zinc-400 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 leading-relaxed font-mono resize-y"
+          required
+        />
+
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <span className="text-[11px] text-zinc-500 font-medium">
+            Gönderilen tüm URL&apos;ler otomatik tekilleştirilir ve log tablosuna eklenir.
+          </span>
+          <button
+            type="submit"
+            disabled={submittingManual}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white rounded-xl text-xs font-bold shadow-sm transition-colors cursor-pointer shrink-0"
+          >
+            {submittingManual ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            {submittingManual ? "Gönderiliyor..." : "IndexNow Motorlarına Gönder"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+interface ClearControlsProps {
+  readonly totalLogs: number;
+  readonly failedCount: number;
+  readonly confirmClearAll: boolean;
+  readonly clearingLogs: boolean;
+  readonly onClearFailed: () => void;
+  readonly onRequestClearAll: () => void;
+  readonly onConfirmClearAll: () => void;
+  readonly onCancelClearAll: () => void;
+}
+
+function IndexNowClearControls({
+  totalLogs,
+  failedCount,
+  confirmClearAll,
+  clearingLogs,
+  onClearFailed,
+  onRequestClearAll,
+  onConfirmClearAll,
+  onCancelClearAll,
+}: Readonly<ClearControlsProps>) {
+  if (totalLogs <= 0) {
+    return null;
+  }
+
+  if (confirmClearAll) {
+    return (
+      <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl">
+        <span className="text-[11px] font-bold text-rose-800">Tüm loglar silinsin mi?</span>
+        <button
+          type="button"
+          disabled={clearingLogs}
+          onClick={onConfirmClearAll}
+          className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer"
+        >
+          {clearingLogs ? "Siliniyor..." : "Evet, Sil"}
+        </button>
+        <button
+          type="button"
+          disabled={clearingLogs}
+          onClick={onCancelClearAll}
+          className="px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-zinc-700 text-[11px] font-bold cursor-pointer"
+        >
+          Vazgeç
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      {failedCount > 0 && (
+        <button
+          type="button"
+          disabled={clearingLogs}
+          onClick={onClearFailed}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold cursor-pointer"
+        >
+          <Trash2 size={12} />
+          Hatalıları Temizle
+        </button>
+      )}
+      <button
+        type="button"
+        disabled={clearingLogs}
+        onClick={onRequestClearAll}
+        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 text-[11px] font-bold cursor-pointer"
+      >
+        <Trash2 size={12} />
+        Geçmişi Temizle
+      </button>
+    </div>
+  );
+}
+
+interface LogRowProps {
+  readonly entry: IndexNowLogEntry;
+  readonly isExpanded: boolean;
+  readonly isRetrying: boolean;
+  readonly onRetry: () => void;
+  readonly onToggleExpand: () => void;
+}
+
+function IndexNowLogRow({
+  entry,
+  isExpanded,
+  isRetrying,
+  onRetry,
+  onToggleExpand,
+}: Readonly<LogRowProps>) {
+  const sourceMeta = getSourceMeta(entry.trigger_source);
+  const statusMeta = getStatusBadge(entry.status, entry.http_status);
+
+  return (
+    <div className="border border-zinc-200/80 rounded-xl overflow-hidden transition-colors hover:border-zinc-300">
+      <div className="p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-white">
+        <div className="flex flex-col gap-1.5 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${sourceMeta.badgeClass}`}
+            >
+              {sourceMeta.label}
+            </span>
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${statusMeta.badgeClass}`}
+            >
+              {statusMeta.label}
+            </span>
+            <span className="text-[11px] font-semibold text-zinc-500">
+              {formatDateTimeTr(entry.created_at)}
+            </span>
+            {entry.duration_ms > 0 && (
+              <span className="text-[11px] font-mono text-zinc-400">{entry.duration_ms} ms</span>
+            )}
+          </div>
+
+          <div className="text-xs font-bold text-zinc-900 truncate">{entry.source_label}</div>
+
+          <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-zinc-500">
+            {entry.product_count > 0 && <span>{formatNumberTr(entry.product_count)} ürün</span>}
+            <span>{formatNumberTr(entry.url_count)} bildirilen URL</span>
+            {entry.response_message && (
+              <span className="text-zinc-600 truncate max-w-xl">• {entry.response_message}</span>
+            )}
+          </div>
+        </div>
+
+        {entry.sample_urls.length > 0 && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={isRetrying}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 disabled:opacity-50 text-zinc-700 text-[11px] font-bold cursor-pointer"
+            >
+              {isRetrying ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <RotateCcw size={12} />
+              )}
+              Tekrar Gönder
+            </button>
+
+            <button
+              type="button"
+              onClick={onToggleExpand}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 text-[11px] font-bold cursor-pointer"
+            >
+              {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              URL&apos;ler ({entry.sample_urls.length})
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isExpanded && (
+        <div className="px-4 py-3.5 bg-zinc-50/90 border-t border-zinc-200/80 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-zinc-600">
+            <span>
+              Gösterilen örnek: {entry.sample_urls.length} / {formatNumberTr(entry.url_count)} toplam
+              URL
+            </span>
+            {entry.sync_run_id && (
+              <span className="font-mono text-[10px] text-zinc-500">
+                Sync Run ID: {entry.sync_run_id}
+              </span>
+            )}
+          </div>
+
+          {entry.response_message && (
+            <div className="p-2.5 rounded-lg bg-white border border-zinc-200 text-[11px] font-mono text-zinc-700 break-all">
+              {entry.response_message}
+            </div>
+          )}
+
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-1">
+            {entry.sample_urls.map((u) => (
+              <li key={u} className="truncate">
+                <a
+                  href={u}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-mono text-violet-700 hover:underline truncate max-w-full"
+                >
+                  <ExternalLink size={11} className="shrink-0" />
+                  <span className="truncate">{u}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface LogListSectionProps {
+  readonly loadingLogs: boolean;
+  readonly logs: readonly IndexNowLogEntry[];
+  readonly expandedLogId: string | null;
+  readonly retryingLogId: string | null;
+  readonly onRetryLog: (logId: string) => void;
+  readonly onToggleExpand: (logId: string) => void;
+}
+
+function IndexNowLogListSection({
+  loadingLogs,
+  logs,
+  expandedLogId,
+  retryingLogId,
+  onRetryLog,
+  onToggleExpand,
+}: Readonly<LogListSectionProps>) {
+  if (loadingLogs && logs.length === 0) {
+    return (
+      <div className="py-12 flex flex-col items-center justify-center gap-2 text-zinc-500 text-xs font-semibold">
+        <Loader2 size={22} className="animate-spin text-violet-600" />
+        <span>IndexNow log kayıtları yükleniyor...</span>
+      </div>
+    );
+  }
+
+  if (logs.length === 0) {
+    return (
+      <div className="py-12 text-center text-xs font-semibold text-zinc-400">
+        Seçili filtrelere uygun IndexNow bildirim kaydı bulunamadı.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {logs.map((entry) => (
+        <IndexNowLogRow
+          key={entry.id}
+          entry={entry}
+          isExpanded={expandedLogId === entry.id}
+          isRetrying={retryingLogId === entry.id}
+          onRetry={() => onRetryLog(entry.id)}
+          onToggleExpand={() => onToggleExpand(entry.id)}
+        />
+      ))}
+    </div>
+  );
 }
 
 export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowManagerProps>) {
@@ -224,32 +853,26 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
   const [listError, setListError] = useState<string | null>(null);
 
   const fetchLogs = useCallback(
-    async (opts?: { targetOffset?: number; targetSource?: string; targetStatus?: string; targetSearch?: string }) => {
+    async (opts?: {
+      targetOffset?: number;
+      targetSource?: string;
+      targetStatus?: string;
+      targetSearch?: string;
+    }) => {
       if (!token) {
         setLoadingLogs(false);
         return;
       }
-      const nextOffset = opts?.targetOffset ?? offset;
-      const nextSource = opts?.targetSource ?? sourceFilter;
-      const nextStatus = opts?.targetStatus ?? statusFilter;
-      const nextSearch = opts?.targetSearch ?? debouncedSearch;
+
+      const params = buildIndexNowLogsParams(
+        opts?.targetOffset ?? offset,
+        opts?.targetSource ?? sourceFilter,
+        opts?.targetStatus ?? statusFilter,
+        opts?.targetSearch ?? debouncedSearch
+      );
 
       try {
-        const params = new URLSearchParams({
-          limit: String(PAGE_LIMIT),
-          offset: String(nextOffset),
-        });
-        if (nextSource !== "all") params.set("source", nextSource);
-        if (nextStatus !== "all") params.set("status", nextStatus);
-        if (nextSearch.trim() !== "") params.set("q", nextSearch.trim());
-
-        const res = await fetch(`${apiUrl}/api/v1/indexnow/logs?${params.toString()}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          throw new Error(`IndexNow logları alınamadı (HTTP ${res.status})`);
-        }
-        const data: IndexNowLogsResponse = await res.json();
+        const data = await requestIndexNowLogs(apiUrl, token, params);
         setKpi(data.kpi);
         setLogs(Array.isArray(data.logs) ? data.logs : []);
         setTotalLogs(data.total ?? 0);
@@ -277,36 +900,40 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
 
   useEffect(() => {
     if (!token) return;
-    let cancelled = false;
-    (async () => {
-      await fetchLogs();
-      if (cancelled) return;
-    })();
+    let active = true;
+    const params = buildIndexNowLogsParams(offset, sourceFilter, statusFilter, debouncedSearch);
+
+    void requestIndexNowLogs(apiUrl, token, params)
+      .then((data) => {
+        if (!active) return;
+        setKpi(data.kpi);
+        setLogs(Array.isArray(data.logs) ? data.logs : []);
+        setTotalLogs(data.total ?? 0);
+        setListError(null);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setListError(err instanceof Error ? err.message : "Log geçmişi yüklenirken hata oluştu.");
+      })
+      .finally(() => {
+        if (active) {
+          setLoadingLogs(false);
+        }
+      });
+
     return () => {
-      cancelled = true;
+      active = false;
     };
-  }, [token, fetchLogs]);
+  }, [apiUrl, token, offset, sourceFilter, statusFilter, debouncedSearch]);
 
   const handleRefresh = async () => {
     setLoadingLogs(true);
     await fetchLogs();
   };
 
-  const handleSourceChange = (next: string) => {
-    setOffset(0);
-    setSourceFilter(next);
-  };
-
-  const handleStatusChange = (next: string) => {
-    setOffset(0);
-    setStatusFilter(next);
-  };
-
   const applySubmitResultFeedback = (data: IndexNowSubmitResponse, fallbackMessage: string) => {
-    const resolvedType: FeedbackBanner["type"] =
-      data.status === "failed" ? "error" : data.status === "skipped_dev" ? "warning" : "success";
     setFeedback({
-      type: resolvedType,
+      type: resolveFeedbackType(data.status),
       message: data.message || fallbackMessage,
     });
   };
@@ -315,44 +942,23 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
     e.preventDefault();
     setFeedback(null);
 
-    const urls = urlsInput
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    if (urls.length === 0) {
-      setFeedback({ type: "error", message: "Lütfen en az bir geçerli URL adresi girin." });
-      return;
-    }
-
-    const invalid = urls.filter((u) => {
-      const lower = u.toLowerCase();
-      return !lower.startsWith("http://") && !lower.startsWith("https://");
-    });
-    if (invalid.length > 0) {
-      setFeedback({
-        type: "error",
-        message: "Tüm URL adresleri 'http://' veya 'https://' ile başlamalıdır.",
-      });
+    const validation = validateManualUrlsInput(urlsInput);
+    if (validation.error) {
+      setFeedback({ type: "error", message: validation.error });
       return;
     }
 
     setSubmittingManual(true);
     try {
-      const response = await fetch(`${apiUrl}/api/v1/indexnow/submit`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ urls }),
-      });
-
-      const data: IndexNowSubmitResponse = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "IndexNow isteği başarısız oldu.");
-      }
-
+      const data = await sendAuthorizedRequest<IndexNowSubmitResponse>(
+        `${apiUrl}/api/v1/indexnow/submit`,
+        {
+          method: "POST",
+          token,
+          body: { urls: validation.urls },
+          defaultError: "IndexNow isteği başarısız oldu.",
+        }
+      );
       setUrlsInput("");
       applySubmitResultFeedback(data, "URL listesi IndexNow motorlarına bildirildi.");
       setOffset(0);
@@ -371,20 +977,15 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
     setFeedback(null);
     setSubmittingRecent(true);
     try {
-      const response = await fetch(`${apiUrl}/api/v1/indexnow/submit-recent-products`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ limit: recentLimit }),
-      });
-
-      const data: IndexNowSubmitResponse = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Son ürünler IndexNow gönderimi başarısız oldu.");
-      }
-
+      const data = await sendAuthorizedRequest<IndexNowSubmitResponse>(
+        `${apiUrl}/api/v1/indexnow/submit-recent-products`,
+        {
+          method: "POST",
+          token,
+          body: { limit: recentLimit },
+          defaultError: "Son ürünler IndexNow gönderimi başarısız oldu.",
+        }
+      );
       applySubmitResultFeedback(data, "Son aktif ürünler IndexNow motorlarına gönderildi.");
       setOffset(0);
       await fetchLogs({ targetOffset: 0 });
@@ -402,14 +1003,14 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
     setFeedback(null);
     setRetryingLogId(logId);
     try {
-      const response = await fetch(`${apiUrl}/api/v1/indexnow/logs/${encodeURIComponent(logId)}/retry`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data: IndexNowSubmitResponse = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Tekrar gönderim başarısız oldu.");
-      }
+      const data = await sendAuthorizedRequest<IndexNowSubmitResponse>(
+        `${apiUrl}/api/v1/indexnow/logs/${encodeURIComponent(logId)}/retry`,
+        {
+          method: "POST",
+          token,
+          defaultError: "Tekrar gönderim başarısız oldu.",
+        }
+      );
       applySubmitResultFeedback(data, "Seçili URL kümesi tekrar IndexNow servisine gönderildi.");
       setOffset(0);
       await fetchLogs({ targetOffset: 0 });
@@ -428,14 +1029,14 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
     setFeedback(null);
     try {
       const qs = onlyFailed ? "?status=failed" : "";
-      const response = await fetch(`${apiUrl}/api/v1/indexnow/logs${qs}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data: { message?: string; error?: string } = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Loglar temizlenemedi.");
-      }
+      const data = await sendAuthorizedRequest<{ message?: string }>(
+        `${apiUrl}/api/v1/indexnow/logs${qs}`,
+        {
+          method: "DELETE",
+          token,
+          defaultError: "Loglar temizlenemedi.",
+        }
+      );
       setConfirmClearAll(false);
       setExpandedLogId(null);
       setOffset(0);
@@ -454,254 +1055,37 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
     }
   };
 
-  const keyLocationUrl =
-    kpi?.key_location || "https://mertervitrini.com.tr/638d6e3eb8a743ec900269823f24ffe6.txt";
-
-  const attemptedLiveCount = (kpi?.success_count ?? 0) + (kpi?.failed_count ?? 0);
-  const successRateDisplay =
-    attemptedLiveCount > 0
-      ? `%${(kpi?.success_rate ?? 0).toFixed(1)}`
-      : (kpi?.skipped_dev_count ?? 0) > 0
-        ? "Yerel Test"
-        : "—";
-
-  const canGoPrev = offset > 0;
-  const canGoNext = offset + PAGE_LIMIT < totalLogs;
   const showingFrom = totalLogs === 0 ? 0 : offset + 1;
   const showingTo = Math.min(offset + logs.length, totalLogs);
 
   return (
     <div className="max-w-7xl mx-auto w-full flex flex-col gap-6 animate-in fade-in duration-200">
-      {/* Header & Automation Status Card */}
-      <div className="bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-        <div className="space-y-2 max-w-3xl">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h2 className="text-xl font-bold text-zinc-950 flex items-center gap-2">
-              <Sparkles size={20} className="text-violet-600" />
-              IndexNow Otomasyon &amp; İndeksleme Log Merkezi
-            </h2>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <ShieldCheck size={12} />
-              Otomatik Hat Aktif (8 Dil)
-            </span>
-          </div>
-          <p className="text-xs text-zinc-600 font-medium leading-relaxed">
-            XML feed senkronizasyonları (cron &amp; manuel), tedarikçi web/mobil ürün açılışları,
-            Excel toplu yüklemeleri ve blog/sayfa yayınları storefront önbelleği (
-            <code className="px-1 py-0.5 bg-zinc-100 rounded text-[11px] font-mono">
-              catalog.mv_products
-            </code>
-            ) tazelendikten hemen sonra otomatik olarak Bing &amp; Yandex IndexNow motorlarına
-            iletülür ve tüm sonuçlar kalıcı olarak burada loglanır.
-          </p>
-        </div>
+      <IndexNowHeaderCard
+        keyLocationUrl={kpi?.key_location || DEFAULT_KEY_LOCATION}
+        loadingLogs={loadingLogs}
+        onRefresh={() => {
+          void handleRefresh();
+        }}
+      />
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          <a
-            href={keyLocationUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-xs font-bold text-zinc-700 transition-colors"
-          >
-            <Globe2 size={14} className="text-violet-600" />
-            API Anahtar Dosyası
-            <ExternalLink size={12} className="text-zinc-400" />
-          </a>
+      <IndexNowFeedbackAlert feedback={feedback} />
 
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={loadingLogs}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-400 text-white text-xs font-bold transition-colors cursor-pointer"
-          >
-            <RefreshCw size={14} className={loadingLogs ? "animate-spin" : ""} />
-            Logları Yenile
-          </button>
-        </div>
-      </div>
+      <IndexNowKpiGrid kpi={kpi} />
 
-      {/* Feedback Banner */}
-      {feedback && (
-        <div
-          className={`p-4 border rounded-2xl text-xs font-semibold leading-relaxed flex items-start gap-2.5 ${
-            feedback.type === "success"
-              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-              : feedback.type === "warning"
-                ? "bg-amber-50 border-amber-200 text-amber-800"
-                : "bg-rose-50 border-rose-200 text-rose-800"
-          }`}
-        >
-          {feedback.type === "success" ? (
-            <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
-          ) : feedback.type === "warning" ? (
-            <Info size={16} className="shrink-0 mt-0.5" />
-          ) : (
-            <AlertCircle size={16} className="shrink-0 mt-0.5" />
-          )}
-          <span>{feedback.message}</span>
-        </div>
-      )}
-
-      {/* 5 Executive KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Activity size={13} className="text-violet-600" />
-            Toplam Gönderim
-          </span>
-          <span className="text-2xl font-extrabold text-zinc-950">
-            {formatNumberTr(kpi?.total_submissions ?? 0)}
-          </span>
-          <span className="text-[11px] font-semibold text-zinc-500">
-            Bugün {formatNumberTr(kpi?.today_submissions ?? 0)} bildirim
-          </span>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Globe2 size={13} className="text-indigo-600" />
-            Bildirilen URL
-          </span>
-          <span className="text-2xl font-extrabold text-zinc-950">
-            {formatNumberTr(kpi?.total_urls_submitted ?? 0)}
-          </span>
-          <span className="text-[11px] font-semibold text-zinc-500">
-            Bugün {formatNumberTr(kpi?.today_urls_submitted ?? 0)} URL •{" "}
-            {formatNumberTr(kpi?.total_products_notified ?? 0)} ürün
-          </span>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Sparkles size={13} className="text-sky-600" />
-            XML &amp; Tedarikçi Oto
-          </span>
-          <span className="text-2xl font-extrabold text-zinc-950">
-            {formatNumberTr((kpi?.xml_sync_submissions ?? 0) + (kpi?.supplier_submissions ?? 0))}
-          </span>
-          <span className="text-[11px] font-semibold text-zinc-500">
-            {formatNumberTr(kpi?.xml_sync_submissions ?? 0)} XML •{" "}
-            {formatNumberTr(kpi?.supplier_submissions ?? 0)} Tedarikçi
-          </span>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-            <CheckCircle2 size={13} className="text-emerald-600" />
-            Başarı Oranı
-          </span>
-          <span className="text-2xl font-extrabold text-zinc-950">{successRateDisplay}</span>
-          <span className="text-[11px] font-semibold text-zinc-500">
-            {formatNumberTr(kpi?.success_count ?? 0)} başarılı •{" "}
-            {formatNumberTr(kpi?.failed_count ?? 0)} hatalı
-          </span>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-zinc-200/80 p-4 shadow-sm flex flex-col gap-1">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Clock size={13} className="text-amber-600" />
-            Son Bildirim
-          </span>
-          <span className="text-sm font-extrabold text-zinc-950 mt-1">
-            {formatDateTimeTr(kpi?.last_submitted_at)}
-          </span>
-          <span className="text-[11px] font-semibold text-zinc-500">
-            Host: {kpi?.host || "mertervitrini.com.tr"}
-          </span>
-        </div>
-      </div>
-
-      {/* Quick Bulk Recent Products + Manual Submission */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Quick Submit Recent Active Products */}
-        <div className="bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm flex flex-col justify-between gap-5">
-          <div className="space-y-3">
-            <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-2">
-              <Sparkles size={16} className="text-amber-500" />
-              Son Eklenen Ürünleri Şimdi Bildir
-            </h3>
-            <p className="text-xs text-zinc-500 font-medium leading-relaxed">
-              Katalogdaki en son eklenen aktif ürünleri (arşivlenmemiş) 8 dil varyantıyla birlikte tek
-              tıkla IndexNow arama motorlarına toplu gönderin.
-            </p>
-
-            <div className="flex flex-col gap-1.5 pt-1">
-              <label
-                htmlFor="recent-products-limit"
-                className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider"
-              >
-                Gönderilecek Ürün Sayısı
-              </label>
-              <select
-                id="recent-products-limit"
-                value={recentLimit}
-                onChange={(e) => setRecentLimit(Number(e.target.value))}
-                className="px-3.5 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-800 bg-white focus:outline-none focus:border-violet-500"
-              >
-                {RECENT_LIMIT_OPTIONS.map((count) => (
-                  <option key={count} value={count}>
-                    Son {count} Aktif Ürün (~{formatNumberTr(count * 8)} çok dilli URL)
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleSubmitRecentProducts}
-            disabled={submittingRecent}
-            className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-xl text-xs font-bold shadow-sm transition-colors cursor-pointer"
-          >
-            {submittingRecent ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            {submittingRecent ? "Ürünler Bildiriliyor..." : `Son ${recentLimit} Ürünü Gönder`}
-          </button>
-        </div>
-
-        {/* Right: Manual URL Submission */}
-        <form
-          onSubmit={handleManualSubmit}
-          className="lg:col-span-2 bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm flex flex-col gap-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-2">
-              <Send size={15} className="text-violet-600" />
-              Manuel URL Bildirimi
-            </h3>
-            <span className="text-[11px] font-semibold text-zinc-400">
-              Her satıra bir tam URL yazın (maks. 10.000 URL / parça)
-            </span>
-          </div>
-
-          <textarea
-            id="indexnow-urls-input"
-            value={urlsInput}
-            onChange={(e) => setUrlsInput(e.target.value)}
-            rows={4}
-            placeholder="https://mertervitrini.com.tr/product/ornek-toptan-elbise&#10;https://mertervitrini.com.tr/tr/blog/yeni-sezon-toptan-trendler"
-            className="px-4 py-3 rounded-xl border border-zinc-300 text-xs font-semibold placeholder-zinc-400 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 leading-relaxed font-mono resize-y"
-            required
-          />
-
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <span className="text-[11px] text-zinc-500 font-medium">
-              Gönderilen tüm URL&apos;ler otomatik tekilleştirilir ve log tablosuna eklenir.
-            </span>
-            <button
-              type="submit"
-              disabled={submittingManual}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-400 text-white rounded-xl text-xs font-bold shadow-sm transition-colors cursor-pointer shrink-0"
-            >
-              {submittingManual ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Send size={14} />
-              )}
-              {submittingManual ? "Gönderiliyor..." : "IndexNow Motorlarına Gönder"}
-            </button>
-          </div>
-        </form>
-      </div>
+      <IndexNowActionForms
+        recentLimit={recentLimit}
+        submittingRecent={submittingRecent}
+        urlsInput={urlsInput}
+        submittingManual={submittingManual}
+        onRecentLimitChange={setRecentLimit}
+        onSubmitRecent={() => {
+          void handleSubmitRecentProducts();
+        }}
+        onUrlsInputChange={setUrlsInput}
+        onManualSubmit={(e) => {
+          void handleManualSubmit(e);
+        }}
+      />
 
       {/* Persistent PostgreSQL Submission Log Table */}
       <div className="bg-white rounded-2xl border border-zinc-200/80 p-6 shadow-sm flex flex-col gap-5">
@@ -716,56 +1100,20 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            {totalLogs > 0 && !confirmClearAll && (
-              <>
-                {(kpi?.failed_count ?? 0) > 0 && (
-                  <button
-                    type="button"
-                    disabled={clearingLogs}
-                    onClick={() => handleClearLogs(true)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold cursor-pointer"
-                  >
-                    <Trash2 size={12} />
-                    Hatalıları Temizle
-                  </button>
-                )}
-                <button
-                  type="button"
-                  disabled={clearingLogs}
-                  onClick={() => setConfirmClearAll(true)}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 text-[11px] font-bold cursor-pointer"
-                >
-                  <Trash2 size={12} />
-                  Geçmişi Temizle
-                </button>
-              </>
-            )}
-
-            {confirmClearAll && (
-              <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl">
-                <span className="text-[11px] font-bold text-rose-800">
-                  Tüm loglar silinsin mi?
-                </span>
-                <button
-                  type="button"
-                  disabled={clearingLogs}
-                  onClick={() => handleClearLogs(false)}
-                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer"
-                >
-                  {clearingLogs ? "Siliniyor..." : "Evet, Sil"}
-                </button>
-                <button
-                  type="button"
-                  disabled={clearingLogs}
-                  onClick={() => setConfirmClearAll(false)}
-                  className="px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-zinc-700 text-[11px] font-bold cursor-pointer"
-                >
-                  Vazgeç
-                </button>
-              </div>
-            )}
-          </div>
+          <IndexNowClearControls
+            totalLogs={totalLogs}
+            failedCount={kpi?.failed_count ?? 0}
+            confirmClearAll={confirmClearAll}
+            clearingLogs={clearingLogs}
+            onClearFailed={() => {
+              void handleClearLogs(true);
+            }}
+            onRequestClearAll={() => setConfirmClearAll(true)}
+            onConfirmClearAll={() => {
+              void handleClearLogs(false);
+            }}
+            onCancelClearAll={() => setConfirmClearAll(false)}
+          />
         </div>
 
         {/* Filter Bar */}
@@ -789,7 +1137,10 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
             <select
               aria-label="Kaynak Filtresi"
               value={sourceFilter}
-              onChange={(e) => handleSourceChange(e.target.value)}
+              onChange={(e) => {
+                setOffset(0);
+                setSourceFilter(e.target.value);
+              }}
               className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs font-bold text-zinc-700 focus:outline-none focus:border-violet-500"
             >
               {SOURCE_OPTIONS.map((opt) => (
@@ -804,7 +1155,10 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
             <select
               aria-label="Durum Filtresi"
               value={statusFilter}
-              onChange={(e) => handleStatusChange(e.target.value)}
+              onChange={(e) => {
+                setOffset(0);
+                setStatusFilter(e.target.value);
+              }}
               className="w-full px-3 py-2 rounded-lg border border-zinc-200 bg-white text-xs font-bold text-zinc-700 focus:outline-none focus:border-violet-500"
             >
               {STATUS_OPTIONS.map((opt) => (
@@ -816,7 +1170,6 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
           </div>
         </div>
 
-        {/* Table Content */}
         {listError && (
           <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-800 flex items-center gap-2">
             <AlertCircle size={15} />
@@ -824,142 +1177,17 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
           </div>
         )}
 
-        {loadingLogs && logs.length === 0 ? (
-          <div className="py-12 flex flex-col items-center justify-center gap-2 text-zinc-500 text-xs font-semibold">
-            <Loader2 size={22} className="animate-spin text-violet-600" />
-            <span>IndexNow log kayıtları yükleniyor...</span>
-          </div>
-        ) : logs.length === 0 ? (
-          <div className="py-12 text-center text-xs font-semibold text-zinc-400">
-            Seçili filtrelere uygun IndexNow bildirim kaydı bulunamadı.
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {logs.map((entry) => {
-              const sourceMeta = getSourceMeta(entry.trigger_source);
-              const statusMeta = getStatusBadge(entry.status, entry.http_status);
-              const isExpanded = expandedLogId === entry.id;
-              const isRetrying = retryingLogId === entry.id;
+        <IndexNowLogListSection
+          loadingLogs={loadingLogs}
+          logs={logs}
+          expandedLogId={expandedLogId}
+          retryingLogId={retryingLogId}
+          onRetryLog={(id) => {
+            void handleRetryLog(id);
+          }}
+          onToggleExpand={(id) => setExpandedLogId((prev) => (prev === id ? null : id))}
+        />
 
-              return (
-                <div
-                  key={entry.id}
-                  className="border border-zinc-200/80 rounded-xl overflow-hidden transition-colors hover:border-zinc-300"
-                >
-                  <div className="p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-white">
-                    <div className="flex flex-col gap-1.5 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${sourceMeta.badgeClass}`}
-                        >
-                          {sourceMeta.label}
-                        </span>
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${statusMeta.badgeClass}`}
-                        >
-                          {statusMeta.label}
-                        </span>
-                        <span className="text-[11px] font-semibold text-zinc-500">
-                          {formatDateTimeTr(entry.created_at)}
-                        </span>
-                        {entry.duration_ms > 0 && (
-                          <span className="text-[11px] font-mono text-zinc-400">
-                            {entry.duration_ms} ms
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-xs font-bold text-zinc-900 truncate">
-                        {entry.source_label}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-zinc-500">
-                        {entry.product_count > 0 && (
-                          <span>{formatNumberTr(entry.product_count)} ürün</span>
-                        )}
-                        <span>{formatNumberTr(entry.url_count)} bildirilen URL</span>
-                        {entry.response_message && (
-                          <span className="text-zinc-600 truncate max-w-xl">
-                            • {entry.response_message}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      {entry.sample_urls.length > 0 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleRetryLog(entry.id)}
-                            disabled={isRetrying}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 disabled:opacity-50 text-zinc-700 text-[11px] font-bold cursor-pointer"
-                          >
-                            {isRetrying ? (
-                              <Loader2 size={12} className="animate-spin" />
-                            ) : (
-                              <RotateCcw size={12} />
-                            )}
-                            Tekrar Gönder
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setExpandedLogId(isExpanded ? null : entry.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 text-[11px] font-bold cursor-pointer"
-                          >
-                            {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                            URL&apos;ler ({entry.sample_urls.length})
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="px-4 py-3.5 bg-zinc-50/90 border-t border-zinc-200/80 space-y-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-zinc-600">
-                        <span>
-                          Gösterilen örnek: {entry.sample_urls.length} /{" "}
-                          {formatNumberTr(entry.url_count)} toplam URL
-                        </span>
-                        {entry.sync_run_id && (
-                          <span className="font-mono text-[10px] text-zinc-500">
-                            Sync Run ID: {entry.sync_run_id}
-                          </span>
-                        )}
-                      </div>
-
-                      {entry.response_message && (
-                        <div className="p-2.5 rounded-lg bg-white border border-zinc-200 text-[11px] font-mono text-zinc-700 break-all">
-                          {entry.response_message}
-                        </div>
-                      )}
-
-                      <ul className="grid grid-cols-1 md:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto pr-1">
-                        {entry.sample_urls.map((u) => (
-                          <li key={u} className="truncate">
-                            <a
-                              href={u}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-mono text-violet-700 hover:underline truncate max-w-full"
-                            >
-                              <ExternalLink size={11} className="shrink-0" />
-                              <span className="truncate">{u}</span>
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Pagination */}
         {totalLogs > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-100 text-xs font-semibold text-zinc-500">
             <span>
@@ -969,7 +1197,7 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={!canGoPrev || loadingLogs}
+                disabled={offset <= 0 || loadingLogs}
                 onClick={() => setOffset(Math.max(0, offset - PAGE_LIMIT))}
                 className="px-3.5 py-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-40 text-xs font-bold text-zinc-700 cursor-pointer"
               >
@@ -977,7 +1205,7 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
               </button>
               <button
                 type="button"
-                disabled={!canGoNext || loadingLogs}
+                disabled={offset + PAGE_LIMIT >= totalLogs || loadingLogs}
                 onClick={() => setOffset(offset + PAGE_LIMIT)}
                 className="px-3.5 py-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:opacity-40 text-xs font-bold text-zinc-700 cursor-pointer"
               >

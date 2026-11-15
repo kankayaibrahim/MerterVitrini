@@ -786,6 +786,48 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func loadSupplierProductVariants(ctx context.Context, productID string) []*models.ProductVariant {
+	variants := make([]*models.ProductVariant, 0)
+	vRows, err := db.Pool.Query(
+		ctx,
+		"SELECT id, product_id, variant_size, barcode, stock, is_single, custom_sku, is_active FROM catalog.product_variants WHERE product_id = $1 ORDER BY id ASC",
+		productID,
+	)
+	if err != nil {
+		return variants
+	}
+	defer vRows.Close()
+
+	for vRows.Next() {
+		var v models.ProductVariant
+		if scanErr := vRows.Scan(&v.ID, &v.ProductID, &v.Size, &v.Barcode, &v.Stock, &v.IsSingle, &v.CustomSku, &v.IsActive); scanErr == nil {
+			variants = append(variants, &v)
+		}
+	}
+	return variants
+}
+
+func loadSupplierProductImages(ctx context.Context, productID string) []*models.ProductImage {
+	images := make([]*models.ProductImage, 0)
+	iRows, err := db.Pool.Query(
+		ctx,
+		"SELECT id, product_id, image_url, sort_order, is_cover FROM catalog.product_images WHERE product_id = $1 ORDER BY is_cover DESC, sort_order ASC",
+		productID,
+	)
+	if err != nil {
+		return images
+	}
+	defer iRows.Close()
+
+	for iRows.Next() {
+		var img models.ProductImage
+		if scanErr := iRows.Scan(&img.ID, &img.ProductID, &img.ImageUrl, &img.SortOrder, &img.IsCover); scanErr == nil {
+			images = append(images, &img)
+		}
+	}
+	return images
+}
+
 // GetProduct returns full product details with variants and images
 func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.GetSupplierFromContext(r.Context())
@@ -851,33 +893,9 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Fetch variants in natural insertion order (UUIDv7 ordered)
-	varVariants := make([]*models.ProductVariant, 0)
-	vRows, vErr := db.Pool.Query(ctx, "SELECT id, product_id, variant_size, barcode, stock, is_single, custom_sku, is_active FROM catalog.product_variants WHERE product_id = $1 ORDER BY id ASC", p.ID)
-	if vErr == nil {
-		defer vRows.Close()
-		for vRows.Next() {
-			var v models.ProductVariant
-			if err := vRows.Scan(&v.ID, &v.ProductID, &v.Size, &v.Barcode, &v.Stock, &v.IsSingle, &v.CustomSku, &v.IsActive); err == nil {
-				varVariants = append(varVariants, &v)
-			}
-		}
-	}
-	p.Variants = varVariants
-
-	// Fetch images
-	varImages := make([]*models.ProductImage, 0)
-	iRows, iErr := db.Pool.Query(ctx, "SELECT id, product_id, image_url, sort_order, is_cover FROM catalog.product_images WHERE product_id = $1 ORDER BY is_cover DESC, sort_order ASC", p.ID)
-	if iErr == nil {
-		defer iRows.Close()
-		for iRows.Next() {
-			var img models.ProductImage
-			if err := iRows.Scan(&img.ID, &img.ProductID, &img.ImageUrl, &img.SortOrder, &img.IsCover); err == nil {
-				varImages = append(varImages, &img)
-			}
-		}
-	}
-	p.Images = varImages
+	// Fetch variants in natural insertion order (UUIDv7 ordered) & product images
+	p.Variants = loadSupplierProductVariants(ctx, p.ID)
+	p.Images = loadSupplierProductImages(ctx, p.ID)
 
 	// Fetch multi-language translations (tr, en, ru, ar)
 	p.Translations = loadSupplierProductTranslations(ctx, p.ID, p.Title, p.ShortDescription, p.Description)
