@@ -235,16 +235,12 @@ func aggregateCustomerOverview(rows []customerOverviewRow, now time.Time) Custom
 
 		// Country breakdown aggregation
 		bucketCode := cc
-		bucketName := cleanGeoLabel(r.CountryName)
+		bucketName := ""
 		if bucketCode == "" {
 			bucketCode = "UNKNOWN"
 			bucketName = "Konum Bekleniyor"
-		} else if bucketName == "" {
-			if cmeta, ok := LookupCountryMeta(bucketCode); ok {
-				bucketName = cmeta.Name
-			} else {
-				bucketName = bucketCode
-			}
+		} else {
+			bucketName = CanonicalCountryNameTr(bucketCode, r.CountryName)
 		}
 
 		cb, exists := countryMap[bucketCode]

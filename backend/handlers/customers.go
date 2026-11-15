@@ -288,6 +288,15 @@ func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request)
 		}
 		c.IsActive = c.IsActive && !c.IsBlocked
 		c.IsVerified = c.EmailVerified
+		if c.CountryCode != nil {
+			rawName := ""
+			if c.CountryName != nil {
+				rawName = *c.CountryName
+			}
+			if canonical := CanonicalCountryNameTr(*c.CountryCode, rawName); canonical != "" {
+				c.CountryName = &canonical
+			}
+		}
 
 		c.CreatedAt = createdAt.Format(time.RFC3339)
 		c.UpdatedAt = updatedAt.Format(time.RFC3339)

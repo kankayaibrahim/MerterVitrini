@@ -61,6 +61,12 @@ func TestNormalizeISO2AndLookup(t *testing.T) {
 	if !ok || meta.Name != "Almanya" {
 		t.Fatalf("LookupCountryMeta('de') = (%+v, %v), want Almanya", meta, ok)
 	}
+	if got := CanonicalCountryNameTr("DE", "Germany"); got != "Almanya" {
+		t.Fatalf("CanonicalCountryNameTr('DE', 'Germany') = %q, want Almanya", got)
+	}
+	if got := CanonicalCountryNameTr("TR", "Turkey"); got != "Türkiye" {
+		t.Fatalf("CanonicalCountryNameTr('TR', 'Turkey') = %q, want Türkiye", got)
+	}
 }
 
 func TestBuildCustomerGeoFromMeta(t *testing.T) {

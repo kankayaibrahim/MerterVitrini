@@ -256,6 +256,17 @@ func cleanGeoLabel(v string) string {
 	return trimmed
 }
 
+// CanonicalCountryNameTr returns the Turkish country name from countryMetaMap when known, or falls back cleanly.
+func CanonicalCountryNameTr(cc, fallback string) string {
+	if cmeta, ok := LookupCountryMeta(cc); ok && cmeta.Name != "" {
+		return cmeta.Name
+	}
+	if cleaned := cleanGeoLabel(fallback); cleaned != "" {
+		return cleaned
+	}
+	return NormalizeISO2(cc)
+}
+
 func buildCustomerGeoFromMeta(phone string, meta mailer.ClientMeta) (resolvedCustomerGeo, bool) {
 	cc := NormalizeISO2(meta.CountryCode)
 	city := cleanGeoLabel(meta.City)
@@ -289,18 +300,11 @@ func buildCustomerGeoFromMeta(phone string, meta mailer.ClientMeta) (resolvedCus
 		return resolvedCustomerGeo{}, false
 	}
 
-	if cmeta, ok := LookupCountryMeta(cc); ok {
-		if countryName == "" || len(countryName) == 2 {
-			countryName = cmeta.Name
-		}
-		if latPtr == nil || lonPtr == nil {
-			lat, lon := cmeta.Lat, cmeta.Lon
-			latPtr = &lat
-			lonPtr = &lon
-		}
-	}
-	if countryName == "" {
-		countryName = cc
+	countryName = CanonicalCountryNameTr(cc, countryName)
+	if cmeta, ok := LookupCountryMeta(cc); ok && (latPtr == nil || lonPtr == nil) {
+		lat, lon := cmeta.Lat, cmeta.Lon
+		latPtr = &lat
+		lonPtr = &lon
 	}
 
 	return resolvedCustomerGeo{
@@ -337,6 +341,22 @@ func ensureCustomerGeoColumns(ctx context.Context) {
 			if _, err := db.Pool.Exec(ctx, stmt); err != nil {
 				log.Printf("[CUSTOMER GEO SCHEMA WARNING] Failed DDL statement: %v", err)
 			}
+		}
+		codes := make([]string, 0, len(countryMetaMap))
+		names := make([]string, 0, len(countryMetaMap))
+		for code, meta := range countryMetaMap {
+			codes = append(codes, code)
+			names = append(names, meta.Name)
+		}
+		if _, err := db.Pool.Exec(ctx, `
+			UPDATE identity.users AS u
+			SET country_name = m.name
+			FROM UNNEST($1::text[], $2::text[]) AS m(code, name)
+			WHERE u.user_role = 'customer'
+			  AND UPPER(COALESCE(u.country_code, '')) = m.code
+			  AND COALESCE(u.country_name, '') <> m.name
+		`, codes, names); err != nil {
+			log.Printf("[CUSTOMER GEO SCHEMA WARNING] Failed country_name normalization: %v", err)
 		}
 	})
 }
@@ -410,13 +430,7 @@ func ResolveAndPersistCustomerGeoByIP(ctx context.Context, userID, ipAddress str
 	if hit, ok := batchMap[strings.TrimSpace(ipAddress)]; ok {
 		cc := NormalizeISO2(hit.CountryCode)
 		if cc != "" {
-			countryName := cleanGeoLabel(hit.Country)
-			if cmeta, exists := LookupCountryMeta(cc); exists && countryName == "" {
-				countryName = cmeta.Name
-			}
-			if countryName == "" {
-				countryName = cc
-			}
+			countryName := CanonicalCountryNameTr(cc, hit.Country)
 			lat, lon := hit.Lat, hit.Lon
 			geo := resolvedCustomerGeo{
 				CountryCode: cc,
@@ -635,13 +649,7 @@ func resolveCandidateGeo(c unresolvedCustomerRow, ipResults map[string]ipAPIBatc
 	if hit, ok := ipResults[c.BestIP]; ok {
 		cc := NormalizeISO2(hit.CountryCode)
 		if cc != "" {
-			countryName := cleanGeoLabel(hit.Country)
-			if cmeta, exists := LookupCountryMeta(cc); exists && countryName == "" {
-				countryName = cmeta.Name
-			}
-			if countryName == "" {
-				countryName = cc
-			}
+			countryName := CanonicalCountryNameTr(cc, hit.Country)
 			lat, lon := hit.Lat, hit.Lon
 			return resolvedCustomerGeo{
 				CountryCode: cc,
@@ -656,16 +664,10 @@ func resolveCandidateGeo(c unresolvedCustomerRow, ipResults map[string]ipAPIBatc
 	}
 
 	if existingCC := NormalizeISO2(c.CountryCode); existingCC != "" {
-		if c.HasCoords && cleanGeoLabel(c.CountryName) != "" {
-			return resolvedCustomerGeo{}, false
-		}
 		cmeta, ok := LookupCountryMeta(existingCC)
-		name := cleanGeoLabel(c.CountryName)
-		if ok && name == "" {
-			name = cmeta.Name
-		}
-		if name == "" {
-			name = existingCC
+		name := CanonicalCountryNameTr(existingCC, c.CountryName)
+		if c.HasCoords && cleanGeoLabel(c.CountryName) == name {
+			return resolvedCustomerGeo{}, false
 		}
 		var latPtr, lonPtr *float64
 		if !c.HasCoords && ok {
