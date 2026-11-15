@@ -3240,3 +3240,58 @@
   - `1501e35`: `feat: add B2B customer impersonation, audit logging, and live cart synchronization`
 - Canlı yayın: `python scripts\unified_deployer.py -p unified -c all -a all` -> Başarılı (`173.73 sn`, Go Backend :8080 + AlmaLinux uzaktan Next.js SSR build :3000 + Nginx).
 - Canlı doğrulama: `/api/v1/health` (`200`), `/api/v1/store/settings` (`200`), yetkisiz `POST /api/v1/customers/test-id/impersonate` (`401`), `/admin/customers` (`200`).
+
+
+---
+
+## Oturum #167 — 2026-11-15 20:48 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Gelen müşteri e-postalarındaki IPv6 adreslerinin doğru olup olmadığının kontrol edilmesi ve açıklanması.
+- Yeni müşteri kaydı, yeni sipariş, tedarikçi başvurusu vb. bildirimlerin varsayılan olarak hem `kankayaibrahim@gmail.com` hem de `carnavaltedarik@gmail.com` adreslerine gönderilmesi.
+- Yönetim panelinde bu bildirimlerin **Evet / Hayır** anahtarlarının, **`To` / `CC`** alıcı listelerinin ve saatli **Günlük B2B Özet Raporu**nun (bugün kaydolan üye sayısı, yeni siparişler, eklenen ürünler, kapatılan/arşivlenen/silinen ürünler vb.) yönetilebildiği bir ekranın geliştirilmesi.
+
+### Yapılan İşlemler & Mimari Özet
+1. **IPv6 Analizi, Normalleştirme & Mail Zenginleştirme ([`geo.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/mailer/geo.go), [`mailer.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/mailer/mailer.go)):**
+   - Gelen kayıtlardaki IPv6 adreslerinin Cloudflare `CF-Connecting-IP` başlığı üzerinden aktarılan gerçek müşteri IP adresleri olduğu doğrulandı (Türkiye'deki 4.5G/5G mobil operatörler ve modern fiber ISS'ler Cloudflare kenar sunucularına yerel IPv6 ile bağlanır).
+   - `normalizeIPString` ile `::ffff:x.x.x.x` eşlemeli IPv4 adresleri normalize edildi, `ClientMeta.IPVersion` (`IPv6` / `IPv4`) ve opsiyonel `CF-Pseudo-IPv4` alanları eklendi.
+   - `formatGeoLocationHTML` içine `IPv6 • Doğrulanmış İstemci IP` / `IPv4` rozeti ve varsa `Cloudflare Pseudo-IPv4` satırı eklendi.
+2. **Çoklu Alıcılı (`To` + `CC`) Bildirim Motoru & Veritabanı Şeması ([`0037_add_admin_notification_settings.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0037_add_admin_notification_settings.sql), [`envelope.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/mailer/envelope.go), [`order_digest_templates.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/mailer/order_digest_templates.go)):**
+   - `identity.notification_settings` ve `identity.notification_logs` tabloları ile `new_customer`, `new_order`, `daily_digest` ve `supplier_onboarding` kuralları için varsayılan `to_emails = ['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com']` tanımlandı.
+   - `SendMailEnvelope` / `BuildMimeEnvelopeMessage` ile RFC-5322 `To:` + tekilleştirilmiş `Cc:` başlıkları ve çoklu SMTP `RCPT TO` teslimatı ile teslimat loglaması (`DispatchAdminEventMail`) sağlandı.
+   - `mailer.go` içindeki `SendCustomerRegisteredNotification`, `SendSupplierRegisteredNotification`, `SendSupplierApplicationNotification` ve `SendServiceProviderAdminNotification` olayları merkezi yönlendirmeye (`DispatchAdminEventMail`) bağlandı.
+3. **Yeni Sipariş Bildirimleri, Ürün Yaşam Döngüsü Takibi & Günlük Özet Zamanlayıcısı ([`admin_notifications.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_notifications.go), [`admin_notifications_digest.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_notifications_digest.go), [`store_orders.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_orders.go), [`store_inquiry.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_inquiry.go), [`router.go`](file:///c:/Projects/mertervitrini.com.tr/backend/router.go), [`main.go`](file:///c:/Projects/mertervitrini.com.tr/backend/main.go)):**
+   - `catalog.products.deactivated_at` sütunu ve `catalog.product_deletion_logs` tablosu eklendi; `integration.go`, `suppliers.go`, `supplier_portal.go`, `mobile_supplier_handler.go` ve `supplier_bulk_catalog.go` üzerinde ürün kapatma/arşivleme/silme geçişleri günlük raporda izlenebilir hale getirildi.
+   - `StoreOrdersHandler.CreateOrder` ve `InquiryHandler.SubmitInquiry` işlemlerine asenkron `SendOrderCreatedAdminNotification` e-posta bildirimi eklendi.
+   - `StartDailyDigestScheduler` (İstanbul saat diliminde 30 sn ticker ve atomik `last_sent_date` kilidi) `main.go` içinde başlatıldı; `/api/v1/admin/notifications/settings` (`GET`/`PUT`), `/digest-preview` (`GET`), `/send-digest-now` (`POST`) ve `/test` (`POST`) uç noktaları tanımlandı.
+4. **Admin Paneli E-Posta & Bildirim Merkezi ([`page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/admin/settings/notifications/page.tsx), [`NotificationsManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/settings/notifications/NotificationsManager.tsx), [`DailyDigestLiveCard.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/settings/notifications/DailyDigestLiveCard.tsx), [`NotificationRuleCard.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/settings/notifications/NotificationRuleCard.tsx), [`EmailRecipientListInput.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/settings/notifications/EmailRecipientListInput.tsx), [`NotificationLogsTable.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/settings/notifications/NotificationLogsTable.tsx), [`adminNavigation.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/config/adminNavigation.ts)):**
+   - `/admin/settings/notifications` rotası ve sol menüde *"E-Posta & Bildirimler"* (`Yeni` rozetiyle) bağlantısı oluşturuldu; `Evet/Hayır` seçimi, `To` & `CC` etiket yönetimi, günlük özet gönderim saati, bugünün canlı KPI önizlemesi, *"Günlük Özeti Şimdi Gönder"* / *"Test Maili Gönder"* butonları ve son gönderim logları eklendi.
+
+### Doğrulama
+- Backend: `cd backend; go vet ./...; go test -count=1 ./pkg/mailer/... ./handlers/... ./services/...` -> Exit code `0` (`pkg/mailer`, `handlers`, `services` tüm testler geçti).
+- Frontend: `cd frontend; npx tsc --noEmit && npm run lint` -> Exit code `0` (`0` hata, `0` uyarı; `NotificationsManager.tsx` içindeki `react-hooks/set-state-in-effect` düzeltildi).
+- `AGENTS.md` Kural #1 ve #7 uyarınca yerel `npm run build`, `git commit`, `git push` veya sunucu dağıtımı yapılmadı; değişiklikler çalışma dizininde kullanıcı onayına bırakıldı.
+
+
+---
+
+## Oturum #168 — 2026-11-15 21:08 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Oturum #167 kapsamında geliştirilen çoklu alıcılı (`To` / `CC`) yönetici bildirim merkezi, IPv6 coğrafi analiz iyileştirmeleri ve günlük B2B özet raporunun yerelde commit edilip canlı sunucuda yayınlanması (`"commitle yayaınla"`).
+
+### Yapılan İşlemler, Commit & Canlı Yayın
+1. **Atomik Yerel Commit (`git push` yapılmadı):**
+   - `8ad981e`: `feat: add multi-recipient admin email notification center, daily digest scheduler, and IPv6 geo enrichment` (`27 dosya`, `+3502 / -188 satır`; önceden var olan CRLF gürültülü `admin_blog.go` ve `admin_pages.go` hariç tutuldu).
+2. **Canlı Sunucu Derleme & Dağıtım ([`unified_deployer.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/unified_deployer.py)):**
+   - Komut: `python scripts\unified_deployer.py -p unified -c all -a all` (`206.81 sn`, exit code `0`).
+   - **Go Backend (`merter-backend.service`, Port `8080`):** Linux `amd64` için `42.93 MB` binary derlendi ve yüklendi (`53.70 sn`). Başlangıçta `EnsureNotificationSettingsSchema` şemayı ve varsayılan kuralları doğruladı, `[DAILY DIGEST] Scheduler started (Europe/Istanbul timezone).` ile zamanlayıcı devreye girdi.
+   - **Next.js SSR Frontend (`merter-frontend.service`, Port `3000`):** Sunucuda uzak Next.js SSR build (`npm install + build`, `/admin/settings/notifications` rotası dahil) tamamlandı (`153.11 sn`), servis ve Nginx yeniden başlatıldı.
+3. **Canlı Sunucu Doğrulaması (`https://mertervitrini.com.tr`):**
+   - `GET /api/v1/health` -> `200 OK` (`status=healthy`, `database=connected`, `service=unified-backend`).
+   - Yetkisiz `GET /api/v1/admin/notifications/settings` -> `401 Unauthorized` (yeni admin uç noktası canlıda aktif ve JWT korumalı).
+   - `HEAD /admin/settings/notifications` -> `200 OK`.
