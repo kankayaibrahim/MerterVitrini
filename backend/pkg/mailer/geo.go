@@ -16,6 +16,8 @@ type ClientMeta struct {
 	CountryCode string
 	City        string
 	RegionName  string
+	Lat         float64
+	Lon         float64
 	ISP         string
 	Org         string
 	Device      string
@@ -67,7 +69,7 @@ func ExtractClientMeta(r *http.Request) ClientMeta {
 
 	meta.Device, meta.Browser = parseUserAgent(meta.UserAgent)
 
-	if isPublicIP(meta.IP) {
+	if IsPublicIP(meta.IP) {
 		lookupGeo(&meta)
 	}
 
@@ -81,7 +83,8 @@ func ExtractClientMeta(r *http.Request) ClientMeta {
 	return meta
 }
 
-func isPublicIP(ipStr string) bool {
+// IsPublicIP reports whether ipStr is a valid, routable public IP address.
+func IsPublicIP(ipStr string) bool {
 	parsed := net.ParseIP(strings.TrimSpace(ipStr))
 	if parsed == nil {
 		return false
@@ -104,13 +107,15 @@ func lookupGeo(meta *ClientMeta) {
 	defer resp.Body.Close()
 
 	var result struct {
-		Status      string `json:"status"`
-		Country     string `json:"country"`
-		CountryCode string `json:"countryCode"`
-		RegionName  string `json:"regionName"`
-		City        string `json:"city"`
-		ISP         string `json:"isp"`
-		Org         string `json:"org"`
+		Status      string  `json:"status"`
+		Country     string  `json:"country"`
+		CountryCode string  `json:"countryCode"`
+		RegionName  string  `json:"regionName"`
+		City        string  `json:"city"`
+		Lat         float64 `json:"lat"`
+		Lon         float64 `json:"lon"`
+		ISP         string  `json:"isp"`
+		Org         string  `json:"org"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && result.Status == "success" {
@@ -125,6 +130,10 @@ func lookupGeo(meta *ClientMeta) {
 		}
 		if result.RegionName != "" {
 			meta.RegionName = result.RegionName
+		}
+		if result.Lat != 0 || result.Lon != 0 {
+			meta.Lat = result.Lat
+			meta.Lon = result.Lon
 		}
 		meta.ISP = result.ISP
 		meta.Org = result.Org

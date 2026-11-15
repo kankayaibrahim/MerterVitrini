@@ -347,6 +347,8 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("GET /api/v1/cron/logs", protect(h.Cron.GetLogs))
 
 	mux.Handle("GET /api/v1/customers", protect(h.Customers.ListCustomers))
+	mux.Handle("GET /api/v1/customers/overview", protect(h.Customers.GetCustomersOverview))
+	mux.Handle("POST /api/v1/customers/sync-geo", protect(h.Customers.SyncCustomerGeo))
 	mux.Handle("GET /api/v1/customers/{id}/journey", protect(h.Customers.GetCustomerJourney))
 	mux.Handle("PUT /api/v1/customers/{id}/block", protect(h.Customers.ToggleBlockCustomer))
 	mux.Handle("DELETE /api/v1/customers/{id}", protect(h.Customers.DeleteCustomer))

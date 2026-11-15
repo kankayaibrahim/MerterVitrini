@@ -50,7 +50,23 @@ type CustomerResponse struct {
 	InstagramUsername *string              `json:"instagram_username"`
 	PreferredLang     *string              `json:"preferred_lang"`
 	PreferredCurrency *string              `json:"preferred_currency"`
+	CountryCode       *string              `json:"country_code"`
+	CountryName       *string              `json:"country_name"`
+	City              *string              `json:"city"`
+	RegionName        *string              `json:"region_name"`
+	Latitude          *float64             `json:"latitude"`
+	Longitude         *float64             `json:"longitude"`
+	GeoSource         *string              `json:"geo_source"`
 	LastLoginAt       *string              `json:"last_login_at"`
+	LastActiveAt      *string              `json:"last_active_at"`
+	IsOnline          bool                 `json:"is_online"`
+	OrdersCount       int                  `json:"orders_count"`
+	OrdersTotalAmount float64              `json:"orders_total_amount"`
+	CartItemsCount    int                  `json:"cart_items_count"`
+	PagesRead         int                  `json:"pages_read"`
+	ProductsViewed    int                  `json:"products_viewed"`
+	LastEventTitle    string               `json:"last_event_title"`
+	LastEventCategory string               `json:"last_event_category"`
 	LoginHistory      []LoginHistoryRecord `json:"login_history"`
 }
 
@@ -59,33 +75,190 @@ type ToggleBlockRequest struct {
 	BlockReason string `json:"block_reason"`
 }
 
+func resolveCustomerOrderBySQL(sortParam string) string {
+	switch strings.ToLower(strings.TrimSpace(sortParam)) {
+	case "oldest":
+		return "ORDER BY created_at ASC"
+	case "last_active":
+		return "ORDER BY last_active_at DESC NULLS LAST, created_at DESC"
+	case "most_orders":
+		return "ORDER BY orders_count DESC, orders_total_amount DESC, created_at DESC"
+	case "highest_spend":
+		return "ORDER BY orders_total_amount DESC, orders_count DESC, created_at DESC"
+	case "most_engaged":
+		return "ORDER BY (pages_read + products_viewed * 2 + cart_items_count * 3 + orders_count * 5) DESC, last_active_at DESC"
+	default:
+		return "ORDER BY created_at DESC"
+	}
+}
+
+func buildCustomerListFilters(q url.Values) (whereSQL string, args []any, orderBySQL string) {
+	var clauses []string
+	search := strings.TrimSpace(q.Get("search"))
+	country := strings.TrimSpace(q.Get("country"))
+	period := strings.TrimSpace(q.Get("period"))
+	status := strings.ToLower(strings.TrimSpace(q.Get("status")))
+
+	if search != "" {
+		args = append(args, "%"+search+"%")
+		p := fmt.Sprintf("$%d", len(args))
+		clauses = append(clauses, fmt.Sprintf(
+			"(first_name ILIKE %s OR last_name ILIKE %s OR email ILIKE %s OR phone ILIKE %s OR COALESCE(country_name, '') ILIKE %s OR COALESCE(city, '') ILIKE %s OR COALESCE(country_code, '') ILIKE %s OR COALESCE(instagram_username, '') ILIKE %s OR COALESCE(registration_ip, '') ILIKE %s)",
+			p, p, p, p, p, p, p, p, p,
+		))
+	}
+
+	if country != "" && !strings.EqualFold(country, "ALL") {
+		switch strings.ToUpper(country) {
+		case "FOREIGN":
+			clauses = append(clauses, "COALESCE(country_code, '') <> '' AND UPPER(country_code) <> 'TR'")
+		case "UNKNOWN":
+			clauses = append(clauses, "COALESCE(country_code, '') = ''")
+		default:
+			if iso := NormalizeISO2(country); iso != "" {
+				args = append(args, iso)
+				clauses = append(clauses, fmt.Sprintf("UPPER(COALESCE(country_code, '')) = $%d", len(args)))
+			}
+		}
+	}
+
+	if periodCond := customerPeriodSQLCondition(period, "created_at"); periodCond != "" {
+		clauses = append(clauses, "("+periodCond+")")
+	}
+
+	switch status {
+	case "active":
+		clauses = append(clauses, "is_active = true AND is_blocked = false")
+	case "blocked":
+		clauses = append(clauses, "is_blocked = true")
+	case "verified":
+		clauses = append(clauses, "email_verified = true")
+	case "unverified":
+		clauses = append(clauses, "email_verified = false")
+	case "online":
+		clauses = append(clauses, "last_active_at >= NOW() - INTERVAL '10 minutes'")
+	case "with_orders":
+		clauses = append(clauses, "orders_count > 0")
+	case "with_cart":
+		clauses = append(clauses, "cart_items_count > 0")
+	}
+
+	if len(clauses) > 0 {
+		whereSQL = "WHERE " + strings.Join(clauses, " AND ")
+	}
+	orderBySQL = resolveCustomerOrderBySQL(q.Get("sort"))
+	return whereSQL, args, orderBySQL
+}
+
 func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
 
-	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	ensureCustomerGeoColumns(r.Context())
+
+	whereSQL, args, orderBySQL := buildCustomerListFilters(r.URL.Query())
 
 	query := `
-		SELECT u.id, u.first_name, u.last_name, u.email, COALESCE(u.phone, ''), u.user_role,
-		       COALESCE(u.email_verified, false), COALESCE(u.is_active, true), COALESCE(u.is_blocked, false), u.block_reason, u.created_at, u.updated_at,
-		       u.registration_ip, u.billing_address, u.delivery_address, u.tax_no_tckn, u.instagram_username, u.preferred_lang, u.preferred_currency,
-		       (SELECT login_at FROM identity.user_login_history WHERE user_id = u.id ORDER BY login_at DESC LIMIT 1) as last_login_at,
-		       COALESCE(
-		           (SELECT json_agg(json_build_object('login_at', login_at, 'ip_address', ip_address) ORDER BY login_at DESC)
-		            FROM identity.user_login_history
-		            WHERE user_id = u.id), '[]'::json
-		       ) as login_history_json
-		FROM identity.users u
-		WHERE u.user_role = 'customer'
+		WITH customer_rows AS (
+			SELECT
+				u.id,
+				u.first_name,
+				u.last_name,
+				u.email,
+				COALESCE(u.phone, '') AS phone,
+				u.user_role,
+				COALESCE(u.email_verified, false) AS email_verified,
+				COALESCE(u.is_active, true) AS is_active,
+				COALESCE(u.is_blocked, false) AS is_blocked,
+				u.block_reason,
+				u.created_at,
+				u.updated_at,
+				u.registration_ip,
+				u.billing_address,
+				u.delivery_address,
+				u.tax_no_tckn,
+				u.instagram_username,
+				u.preferred_lang,
+				u.preferred_currency,
+				NULLIF(TRIM(u.country_code), '') AS country_code,
+				NULLIF(TRIM(u.country_name), '') AS country_name,
+				NULLIF(TRIM(u.city), '') AS city,
+				NULLIF(TRIM(u.region_name), '') AS region_name,
+				u.latitude,
+				u.longitude,
+				NULLIF(TRIM(u.geo_source), '') AS geo_source,
+				(SELECT MAX(lh.login_at) FROM identity.user_login_history lh WHERE lh.user_id = u.id) AS last_login_at,
+				GREATEST(
+					u.created_at,
+					COALESCE((SELECT MAX(lh2.login_at) FROM identity.user_login_history lh2 WHERE lh2.user_id = u.id), u.created_at),
+					COALESCE(me_agg.last_me_at, u.created_at),
+					COALESCE(pv_agg.last_pv_at, u.created_at)
+				) AS last_active_at,
+				(
+					COALESCE((SELECT COUNT(*) FROM catalog.orders o WHERE o.user_id = u.id), 0) +
+					COALESCE((SELECT COUNT(*) FROM catalog.store_inquiries si WHERE LOWER(si.email) = LOWER(u.email)), 0)
+				)::int AS orders_count,
+				(
+					COALESCE((SELECT SUM(CASE WHEN COALESCE(o.total_amount_try, 0) > 0 THEN o.total_amount_try ELSE o.total_amount END) FROM catalog.orders o WHERE o.user_id = u.id), 0) +
+					COALESCE((SELECT SUM(ii.quantity * ii.price) FROM catalog.store_inquiry_items ii INNER JOIN catalog.store_inquiries si ON ii.inquiry_id = si.id WHERE LOWER(si.email) = LOWER(u.email)), 0)
+				)::double precision AS orders_total_amount,
+				COALESCE((SELECT SUM(ci.quantity)::int FROM catalog.cart_items ci INNER JOIN catalog.carts ca ON ci.cart_id = ca.id WHERE ca.user_id = u.id), 0) AS cart_items_count,
+				GREATEST(COALESCE(me_agg.pages_read, 0), COALESCE(pv_agg.pv_count, 0))::int AS pages_read,
+				COALESCE(me_agg.products_viewed, 0)::int AS products_viewed,
+				COALESCE(me_last.title, '') AS last_event_title,
+				COALESCE(me_last.event_category, 'auth') AS last_event_category,
+				COALESCE(
+					(
+						SELECT json_agg(json_build_object('login_at', login_at, 'ip_address', ip_address) ORDER BY login_at DESC)
+						FROM identity.user_login_history
+						WHERE user_id = u.id
+					),
+					'[]'::json
+				) AS login_history_json
+			FROM identity.users u
+			LEFT JOIN LATERAL (
+				SELECT
+					COUNT(*) FILTER (WHERE ` + memberPageVisitSQLFilter + `)::int AS pages_read,
+					COUNT(DISTINCT me.entity_id) FILTER (WHERE me.event_type = 'product_view' AND me.entity_id IS NOT NULL AND me.entity_id <> '')::int AS products_viewed,
+					MAX(me.created_at) AS last_me_at
+				FROM analytics.member_events me
+				WHERE me.user_id = u.id
+				   OR me.visitor_id IN (SELECT uvl.visitor_id FROM analytics.user_visitor_links uvl WHERE uvl.user_id = u.id)
+			) me_agg ON true
+			LEFT JOIN LATERAL (
+				SELECT
+					COUNT(*)::int AS pv_count,
+					MAX(pv.created_at) AS last_pv_at
+				FROM analytics.page_views pv
+				WHERE COALESCE(pv.is_bot, false) = false
+				  AND (
+					pv.user_id = u.id
+					OR pv.visitor_id IN (SELECT uvl2.visitor_id FROM analytics.user_visitor_links uvl2 WHERE uvl2.user_id = u.id)
+				  )
+			) pv_agg ON true
+			LEFT JOIN LATERAL (
+				SELECT me2.title, me2.event_category
+				FROM analytics.member_events me2
+				WHERE me2.user_id = u.id
+				   OR me2.visitor_id IN (SELECT uvl3.visitor_id FROM analytics.user_visitor_links uvl3 WHERE uvl3.user_id = u.id)
+				ORDER BY me2.created_at DESC
+				LIMIT 1
+			) me_last ON true
+			WHERE u.user_role = 'customer'
+		)
+		SELECT
+			id, first_name, last_name, email, phone, user_role,
+			email_verified, is_active, is_blocked, block_reason, created_at, updated_at,
+			registration_ip, billing_address, delivery_address, tax_no_tckn, instagram_username, preferred_lang, preferred_currency,
+			country_code, country_name, city, region_name, latitude, longitude, geo_source,
+			last_login_at, last_active_at, orders_count, orders_total_amount, cart_items_count,
+			pages_read, products_viewed, last_event_title, last_event_category, login_history_json
+		FROM customer_rows
+		` + whereSQL + `
+		` + orderBySQL + `
 	`
-	var args []any
-	if search != "" {
-		query += " AND (u.first_name ILIKE $1 OR u.last_name ILIKE $1 OR u.email ILIKE $1 OR u.phone ILIKE $1)"
-		args = append(args, "%"+search+"%")
-	}
-	query += " ORDER BY u.created_at DESC"
 
 	rows, err := db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
@@ -96,39 +269,47 @@ func (h *CustomersHandler) ListCustomers(w http.ResponseWriter, r *http.Request)
 	defer rows.Close()
 
 	customers := []CustomerResponse{}
+	now := time.Now()
 	for rows.Next() {
 		var c CustomerResponse
-		var createdAt, updatedAt time.Time
+		var createdAt, updatedAt, lastActiveAt time.Time
 		var lastLoginAtTime *time.Time
 		var loginHistoryBytes []byte
 		if err := rows.Scan(
-			&c.ID, &c.FirstName, &c.LastName, &c.Email, &c.Phone, &c.Role, &c.EmailVerified, &c.IsActive, &c.IsBlocked, &c.BlockReason, &createdAt, &updatedAt,
+			&c.ID, &c.FirstName, &c.LastName, &c.Email, &c.Phone, &c.Role,
+			&c.EmailVerified, &c.IsActive, &c.IsBlocked, &c.BlockReason, &createdAt, &updatedAt,
 			&c.RegistrationIP, &c.BillingAddress, &c.DeliveryAddress, &c.TaxNoTCKN, &c.InstagramUsername, &c.PreferredLang, &c.PreferredCurrency,
-			&lastLoginAtTime, &loginHistoryBytes,
+			&c.CountryCode, &c.CountryName, &c.City, &c.RegionName, &c.Latitude, &c.Longitude, &c.GeoSource,
+			&lastLoginAtTime, &lastActiveAt, &c.OrdersCount, &c.OrdersTotalAmount, &c.CartItemsCount,
+			&c.PagesRead, &c.ProductsViewed, &c.LastEventTitle, &c.LastEventCategory, &loginHistoryBytes,
 		); err != nil {
 			log.Printf("[ADMIN CUSTOMERS ERROR] Failed to scan customer: %v", err)
 			continue
 		}
 		c.IsActive = c.IsActive && !c.IsBlocked
 		c.IsVerified = c.EmailVerified
-		
+
 		c.CreatedAt = createdAt.Format(time.RFC3339)
 		c.UpdatedAt = updatedAt.Format(time.RFC3339)
-		
+		lastActiveFormatted := lastActiveAt.Format(time.RFC3339)
+		c.LastActiveAt = &lastActiveFormatted
+		c.IsOnline = now.Sub(lastActiveAt) <= 10*time.Minute
+
 		if lastLoginAtTime != nil {
 			formatted := lastLoginAtTime.Format(time.RFC3339)
 			c.LastLoginAt = &formatted
 		}
-		
+
+		c.LoginHistory = []LoginHistoryRecord{}
 		if len(loginHistoryBytes) > 0 {
-			json.Unmarshal(loginHistoryBytes, &c.LoginHistory)
+			_ = json.Unmarshal(loginHistoryBytes, &c.LoginHistory)
 		}
 
 		customers = append(customers, c)
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
-	json.NewEncoder(w).Encode(customers)
+	_ = json.NewEncoder(w).Encode(customers)
 }
 
 func (h *CustomersHandler) ToggleBlockCustomer(w http.ResponseWriter, r *http.Request) {

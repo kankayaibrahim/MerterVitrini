@@ -459,6 +459,7 @@ func (h *StoreAuthHandler) completeCustomerRegistration(w http.ResponseWriter, r
 	}
 
 	meta := mailer.ExtractClientMeta(r)
+	PersistCustomerGeoFromMeta(ctx, keycloakUserID, req.Phone, meta)
 	mailer.SendCustomerRegisteredNotification(h.Cfg, req.FirstName, req.LastName, req.Email, req.Phone, meta)
 
 	visitorID := firstNonEmptyStr(req.VisitorID, r.Header.Get(headerVisitorID))
@@ -921,6 +922,7 @@ func (h *StoreAuthHandler) insertOAuthCustomerProfile(ctx context.Context, r *ht
 	}
 
 	meta := mailer.ExtractClientMeta(r)
+	PersistCustomerGeoFromMeta(ctx, userID, req.Phone, meta)
 	mailer.SendCustomerRegisteredNotification(h.Cfg, req.FirstName, req.LastName, email, req.Phone, meta)
 	safe.Go("Record Login History OAuth Phone", func() {
 		recordLoginHistory(context.Background(), userID, ip)
@@ -1835,6 +1837,7 @@ func recordLoginHistory(ctx context.Context, userID, ipAddress string) {
 	if err != nil {
 		log.Printf("[AUTH WARNING] Failed to record login history for user %s: %v", userID, err)
 	}
+	ResolveAndPersistCustomerGeoByIP(ctx, userID, ipAddress)
 }
 
 func (h *StoreAuthHandler) setKeycloakEmailVerified(ctx context.Context, keycloakUserID string) {

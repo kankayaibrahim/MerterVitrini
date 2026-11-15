@@ -123,6 +123,7 @@ func initBackgroundWorkers(appCtx context.Context) {
 
 	db.StartRatesWorker(appCtx)
 	handlers.StartUnverifiedApplicationsCleaner()
+	handlers.TriggerCustomerGeoBackfillAsync()
 }
 
 type sqlExecFunc[R interface{ RowsAffected() int64 }] func(ctx context.Context, sql string, arguments ...any) (R, error)

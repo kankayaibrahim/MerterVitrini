@@ -1,843 +1,792 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { User, ShieldAlert, ShieldCheck, Search, Loader2, RefreshCw, Info, X, Trash2, Compass } from "lucide-react";
+import {
+  Activity,
+  Ban,
+  CheckCircle2,
+  Compass,
+  Info,
+  Loader2,
+  RefreshCw,
+  ShieldAlert,
+  ShoppingBag,
+  ShoppingCart,
+  Trash2,
+  UserCheck,
+  Users,
+  X,
+} from "lucide-react";
+import CountryFlagBadge from "../analytics/CountryFlagBadge";
 import CustomerJourneyPanel from "./CustomerJourneyPanel";
+import { CustomerKpiCards } from "./CustomerKpiCards";
+import { CustomersGeoInsightsSection } from "./CustomersGeoInsightsSection";
+import { CustomersFilterBar } from "./CustomersFilterBar";
+import { CustomerDetailModal } from "./CustomerDetailModal";
+import {
+  Customer,
+  CustomerFiltersState,
+  CustomerPeriodFilter,
+  CustomerStatusFilter,
+  CustomersOverviewResponse,
+  formatCurrencyTry,
+  formatDateTimeTr,
+  formatRelativeTimeTr,
+  geoSourceLabelTr,
+  isRegisteredTodayIstanbul,
+} from "./customerTypes";
 
 interface CustomersManagerProps {
   readonly apiUrl: string;
   readonly token: string | null;
 }
 
-interface LoginHistoryRecord {
-  readonly login_at: string;
-  readonly ip_address: string;
-}
-
-interface Customer {
-  readonly id: string;
-  readonly first_name: string;
-  readonly last_name: string;
-  readonly email: string;
-  readonly phone: string;
-  readonly role: string;
-  readonly is_active: boolean;
-  readonly is_blocked: boolean;
-  readonly block_reason: string | null;
-  readonly created_at: string;
-  readonly updated_at: string;
-  readonly registration_ip?: string | null;
-  readonly billing_address?: string | null;
-  readonly delivery_address?: string | null;
-  readonly tax_no_tckn?: string | null;
-  readonly instagram_username?: string | null;
-  readonly preferred_lang?: string | null;
-  readonly preferred_currency?: string | null;
-  readonly last_login_at?: string | null;
-  readonly login_history?: readonly LoginHistoryRecord[] | null;
-}
-
-const LABELS = {
-  TITLE: "Müşteri Listesi & Yönetimi",
-  SUBTITLE: "Storefront üzerinden kayıt olan ve Keycloak OIDC altyapısı ile kimlik doğrulayan tüm aktif/engellenmiş son kullanıcı listesi.",
-  REFRESH: "Yenile",
-  SEARCH_PLACEHOLDER: "İsim, e-posta veya telefon ile ara...",
-  SEARCH_BTN: "Ara",
-  LOADING: "Müşteri verileri yükleniyor...",
-  EMPTY: "Kayıtlı herhangi bir müşteri bulunamadı.",
-  TH_CUSTOMER: "Müşteri",
-  TH_EMAIL: "E-Posta",
-  TH_PHONE: "Telefon",
-  TH_CREATED: "Kayıt Tarihi",
-  TH_STATUS: "Durum",
-  TH_ACTIONS: "İşlemler",
-  STATUS_BLOCKED: "Engellenmiş",
-  STATUS_ACTIVE: "Aktif",
-  UNBLOCK: "Engeli Aç",
-  BLOCK: "Engelle",
-  BLOCK_TITLE: "Müşteriyi Engelle",
-  BLOCK_DESC_PRE: "isimli müşterinin sisteme erişimini engellemek üzeresiniz. Bu işlem sonrasında müşteri mağazaya giriş yapamayacaktır.",
-  BLOCK_REASON: "Engelleme Gerekçesi",
-  CANCEL: "Vazgeç",
-  CONFIRM_BLOCK: "Onayla ve Engelle",
-  BLOCKING: "Engelleniyor...",
-  ID_LABEL: "ID: ",
-  REASON_LABEL: "Neden: ",
-  ERROR_PREFIX: "⚠️ Hata: ",
-  BLOCK_PLACEHOLDER: "Örn: B2B kurallarına aykırı davranış...",
-  DELETE_TITLE: "Müşteriyi Sil",
-  DELETE_DESC: "isimli müşteriyi kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz, müşterinin Keycloak hesabı ve veri tabanındaki kaydı silinecektir.",
-  DELETE_BTN: "Sil",
-  DELETING: "Siliniyor...",
+const DEFAULT_FILTERS: CustomerFiltersState = {
+  search: "",
+  country: "ALL",
+  period: "",
+  status: "",
+  sort: "newest",
 };
 
-function formatCustomerInitials(firstName?: string, lastName?: string): string {
-  const first = (firstName || "").trim()[0] || "M";
-  const last = (lastName || "").trim()[0] || "";
-  return `${first}${last}`.toLocaleUpperCase("tr-TR");
-}
-
-interface CustomersTableProps {
-  readonly loading: boolean;
-  readonly error: string | null;
-  readonly customers: readonly Customer[];
-  readonly updating: boolean;
-  readonly onOpenJourney: (customer: Customer) => void;
-  readonly onOpenDetails: (customer: Customer) => void;
-  readonly onToggleBlock: (customer: Customer) => void;
-  readonly onOpenDelete: (customer: Customer) => void;
-}
-
-function CustomersTable({
-  loading,
-  error,
-  customers,
-  updating,
-  onOpenJourney,
-  onOpenDetails,
-  onToggleBlock,
-  onOpenDelete,
-}: Readonly<CustomersTableProps>) {
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <Loader2 size={32} className="text-violet-600 animate-spin" />
-        <span className="text-xs font-bold text-zinc-400">{LABELS.LOADING}</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="py-20 text-center text-xs font-bold text-rose-500">
-        {`${LABELS.ERROR_PREFIX}${error}`}
-      </div>
-    );
-  }
-
-  if (customers.length === 0) {
-    return (
-      <div className="py-20 text-center text-xs font-bold text-zinc-400">
-        {LABELS.EMPTY}
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full overflow-x-auto">
-      <table className="w-full border-collapse text-left">
-        <thead>
-          <tr className="border-b border-zinc-100 bg-zinc-50/40">
-            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
-              {LABELS.TH_CUSTOMER}
-            </th>
-            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
-              {LABELS.TH_EMAIL}
-            </th>
-            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
-              {LABELS.TH_PHONE}
-            </th>
-            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
-              {LABELS.TH_CREATED}
-            </th>
-            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
-              {LABELS.TH_STATUS}
-            </th>
-            <th className="px-3 py-3 text-[11px] font-bold text-zinc-500 uppercase tracking-wider text-right whitespace-nowrap">
-              {LABELS.TH_ACTIONS}
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100">
-          {customers.map((c) => {
-            const fullName = `${c.first_name || ""} ${c.last_name || ""}`.trim() || "İsimsiz Müşteri";
-            const formattedDate = new Date(c.created_at).toLocaleDateString("tr-TR", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-
-            return (
-              <tr key={c.id} className="hover:bg-zinc-50/40 transition-colors">
-                <td className="px-3 py-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-violet-50 border border-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                      {formatCustomerInitials(c.first_name, c.last_name)}
-                    </div>
-                    <div className="min-w-0">
-                      <span
-                        className="text-xs font-bold text-zinc-900 block max-w-[160px] truncate"
-                        title={fullName}
-                      >
-                        {fullName}
-                      </span>
-                      <span className="text-[9px] font-semibold text-zinc-400 block tracking-wider uppercase">
-                        {`${LABELS.ID_LABEL}${c.id.substring(0, 8)}`}
-                      </span>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-3 py-3">
-                  <span
-                    className="block max-w-[200px] truncate text-xs font-semibold text-zinc-600"
-                    title={c.email}
-                  >
-                    {c.email}
-                  </span>
-                </td>
-                <td className="px-3 py-3 text-xs font-semibold text-zinc-600 whitespace-nowrap">
-                  {c.phone || "-"}
-                </td>
-                <td className="px-3 py-3 text-xs font-semibold text-zinc-500 whitespace-nowrap tabular-nums">
-                  {formattedDate}
-                </td>
-                <td className="px-3 py-3 whitespace-nowrap">
-                  {c.is_blocked ? (
-                    <div className="inline-flex flex-col gap-0.5">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 border border-rose-200 text-rose-700">
-                        {LABELS.STATUS_BLOCKED}
-                      </span>
-                      {c.block_reason && (
-                        <span
-                          className="text-[9px] font-medium text-rose-500 max-w-[130px] truncate"
-                          title={c.block_reason}
-                        >
-                          {LABELS.REASON_LABEL}
-                          {c.block_reason}
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">
-                      {LABELS.STATUS_ACTIVE}
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-3 text-right whitespace-nowrap">
-                  <div className="inline-flex justify-end items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => onOpenJourney(c)}
-                      title="Üye Yolculuk Haritası ve Aktivite Tarihçesi"
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-[#0F172A] hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold shadow-2xs transition-all cursor-pointer whitespace-nowrap"
-                    >
-                      <Compass size={13} />
-                      <span>Yolculuk</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenDetails(c)}
-                      title="Müşteri Hesap Detayları"
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap"
-                    >
-                      <Info size={13} />
-                      <span>Detay</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onToggleBlock(c)}
-                      disabled={updating}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap active:scale-[0.98] ${
-                        c.is_blocked
-                          ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                          : "bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200"
-                      }`}
-                    >
-                      {c.is_blocked ? (
-                        <>
-                          <ShieldCheck size={13} />
-                          <span>{LABELS.UNBLOCK}</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShieldAlert size={13} />
-                          <span>{LABELS.BLOCK}</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenDelete(c)}
-                      disabled={updating}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[11px] font-bold shadow-2xs transition-all cursor-pointer whitespace-nowrap active:scale-[0.98]"
-                    >
-                      <Trash2 size={13} />
-                      <span>{LABELS.DELETE_BTN}</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-export default function CustomersManager({ apiUrl, token }: Readonly<CustomersManagerProps>) {
+export default function CustomersManager({ apiUrl, token }: CustomersManagerProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [overview, setOverview] = useState<CustomersOverviewResponse | null>(null);
+  const [loadingList, setLoadingList] = useState(true);
+  const [loadingOverview, setLoadingOverview] = useState(true);
+  const [syncingGeo, setSyncingGeo] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
 
-  // Block modal state
+  const [filters, setFilters] = useState<CustomerFiltersState>(DEFAULT_FILTERS);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const isFirstSearchRun = useRef(true);
+
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [blockReason, setBlockReason] = useState("");
-  const [updating, setUpdating] = useState(false);
-
-  // Detailed customer modal state
-  const [detailedCustomer, setDetailedCustomer] = useState<Customer | null>(null);
-
-  // Journey map & timeline modal state
   const [journeyCustomer, setJourneyCustomer] = useState<Customer | null>(null);
 
-  // Delete modal state
-  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
+  const [blockTarget, setBlockTarget] = useState<Customer | null>(null);
+  const [blockReasonInput, setBlockReasonInput] = useState("");
+  const [blockingId, setBlockingId] = useState<string | null>(null);
 
-  const fetchCustomers = useCallback(async (showRefreshing = false) => {
-    if (showRefreshing) setRefreshing(true);
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const loadOverview = useCallback(async () => {
+    if (!token) return;
     try {
-      const queryParam = searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : "";
-      const response = await fetch(`${apiUrl}/api/v1/customers${queryParam}`, {
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
+      const res = await fetch(`${apiUrl}/api/v1/customers/overview`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (!response.ok) {
-        throw new Error("Müşteri listesi yüklenemedi.");
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
       }
-
-      const data = await response.json();
-      setCustomers(data);
-      setError(null);
-    } catch (err: unknown) {
-      setError((err as Error).message || "Bir hata oluştu.");
+      const data: CustomersOverviewResponse = await res.json();
+      setOverview(data);
+    } catch {
+      // Overview error is surfaced gently without blocking list operations
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setLoadingOverview(false);
     }
-  }, [apiUrl, token, searchQuery]);
+  }, [apiUrl, token]);
+
+  const loadCustomers = useCallback(
+    async (activeFilters: CustomerFiltersState, searchTerm: string) => {
+      if (!token) return;
+      try {
+        const params = new URLSearchParams();
+        if (searchTerm.trim() !== "") params.set("search", searchTerm.trim());
+        if (activeFilters.country && activeFilters.country !== "ALL") {
+          params.set("country", activeFilters.country);
+        }
+        if (activeFilters.period) params.set("period", activeFilters.period);
+        if (activeFilters.status) params.set("status", activeFilters.status);
+        if (activeFilters.sort) params.set("sort", activeFilters.sort);
+
+        const qs = params.toString();
+        const url = qs ? `${apiUrl}/api/v1/customers?${qs}` : `${apiUrl}/api/v1/customers`;
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          throw new Error("Müşteriler yüklenemedi.");
+        }
+        const data: Customer[] = await res.json();
+        setCustomers(Array.isArray(data) ? data : []);
+        setError(null);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Beklenmeyen bir hata oluştu.");
+      } finally {
+        setLoadingList(false);
+      }
+    },
+    [apiUrl, token]
+  );
 
   useEffect(() => {
-    let isMounted = true;
+    if (isFirstSearchRun.current) {
+      isFirstSearchRun.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearch(filters.search);
+    }, 260);
+    return () => clearTimeout(timer);
+  }, [filters.search]);
 
+  useEffect(() => {
     if (!token) return;
-
-    const loadInitialData = async () => {
-      try {
-        const queryParam = searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : "";
-        const response = await fetch(`${apiUrl}/api/v1/customers${queryParam}`, {
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error("Müşteri listesi yüklenemedi.");
-        }
-
-        const data = await response.json();
-        if (isMounted) {
-          setCustomers(data);
-          setError(null);
-        }
-      } catch (err: unknown) {
-        if (isMounted) {
-          setError((err as Error).message || "Bir hata oluştu.");
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void loadInitialData();
-
+    let cancelled = false;
+    (async () => {
+      await loadOverview();
+      if (cancelled) return;
+    })();
     return () => {
-      isMounted = false;
+      cancelled = true;
     };
-  }, [apiUrl, token, searchQuery]);
+  }, [token, loadOverview]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    void fetchCustomers();
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      await loadCustomers(filters, debouncedSearch);
+      if (cancelled) return;
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    token,
+    debouncedSearch,
+    filters.country,
+    filters.period,
+    filters.status,
+    filters.sort,
+    filters,
+    loadCustomers,
+  ]);
+
+  const handleRefreshAll = async () => {
+    setLoadingList(true);
+    setLoadingOverview(true);
+    await Promise.all([loadOverview(), loadCustomers(filters, filters.search)]);
   };
 
-  const handleToggleBlock = async (customer: Customer) => {
-    if (customer.is_blocked) {
-      // Unblock directly
-      setUpdating(true);
-      try {
-        const response = await fetch(`${apiUrl}/api/v1/customers/${customer.id}/block`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            is_blocked: false,
-            block_reason: ""
-          })
-        });
-
-        if (!response.ok) throw new Error("Engelleme kaldırılamadı.");
-        
-        void fetchCustomers();
-      } catch (err: unknown) {
-        alert((err as Error).message);
-      } finally {
-        setUpdating(false);
-      }
-    } else {
-      // Open block reason modal
-      setSelectedCustomer(customer);
-      setBlockReason("");
+  const handleFiltersChange = (next: CustomerFiltersState) => {
+    setLoadingList(true);
+    setFilters(next);
+    if (next.search === "") {
+      setDebouncedSearch("");
     }
   };
 
-  const submitBlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCustomer) return;
+  const handleResetFilters = () => {
+    setLoadingList(true);
+    setFilters(DEFAULT_FILTERS);
+    setDebouncedSearch("");
+  };
 
-    setUpdating(true);
+  const handleSelectPeriod = (period: CustomerPeriodFilter) => {
+    setLoadingList(true);
+    setFilters((prev) => ({ ...prev, period }));
+  };
+
+  const handleSelectStatus = (status: CustomerStatusFilter) => {
+    setLoadingList(true);
+    setFilters((prev) => ({ ...prev, status }));
+  };
+
+  const handleSelectCountry = (country: string) => {
+    setLoadingList(true);
+    setFilters((prev) => ({ ...prev, country: country || "ALL" }));
+  };
+
+  const handleSyncGeo = async () => {
+    if (!token || syncingGeo) return;
+    setSyncingGeo(true);
+    setSyncMessage(null);
     try {
-      const response = await fetch(`${apiUrl}/api/v1/customers/${selectedCustomer.id}/block`, {
+      const res = await fetch(`${apiUrl}/api/v1/customers/sync-geo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        throw new Error("Konum senkronizasyonu başarısız oldu.");
+      }
+      const data: { updated_count?: number } = await res.json();
+      const updated = data.updated_count ?? 0;
+      setSyncMessage(
+        updated > 0 ? `${updated} müşterinin konumu güncellendi` : "Tüm konumlar güncel"
+      );
+      await Promise.all([loadOverview(), loadCustomers(filters, debouncedSearch)]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Konum senkronizasyonu sırasında hata oluştu.");
+    } finally {
+      setSyncingGeo(false);
+    }
+  };
+
+  const handleSelectCustomerById = useCallback(
+    (customerId: string) => {
+      const existing = customers.find((c) => c.id === customerId);
+      if (existing) {
+        setSelectedCustomer(existing);
+        return;
+      }
+      if (!token) return;
+      void (async () => {
+        try {
+          const res = await fetch(`${apiUrl}/api/v1/customers`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) return;
+          const all: Customer[] = await res.json();
+          const match = all.find((c) => c.id === customerId);
+          if (match) setSelectedCustomer(match);
+        } catch {
+          // Ignore lookup error cleanly
+        }
+      })();
+    },
+    [apiUrl, customers, token]
+  );
+
+  const openBlockDialogOrUnblock = (c: Customer) => {
+    if (!c.is_blocked) {
+      setBlockTarget(c);
+      setBlockReasonInput("");
+      return;
+    }
+    void executeToggleBlock(c, false, "");
+  };
+
+  const executeToggleBlock = async (c: Customer, isBlocked: boolean, reason: string) => {
+    if (!token) return;
+    setBlockingId(c.id);
+    try {
+      const res = await fetch(`${apiUrl}/api/v1/customers/${c.id}/block`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          is_blocked: true,
-          block_reason: blockReason
-        })
+        body: JSON.stringify({ is_blocked: isBlocked, block_reason: reason }),
       });
-
-      if (!response.ok) throw new Error("Müşteri engellenemedi.");
-
-      setSelectedCustomer(null);
-      void fetchCustomers();
+      if (!res.ok) {
+        throw new Error("Durum güncellenemedi.");
+      }
+      setBlockTarget(null);
+      if (selectedCustomer?.id === c.id) {
+        setSelectedCustomer({
+          ...c,
+          is_blocked: isBlocked,
+          block_reason: isBlocked ? reason : null,
+          is_active: !isBlocked,
+        });
+      }
+      await Promise.all([loadOverview(), loadCustomers(filters, debouncedSearch)]);
     } catch (err: unknown) {
-      alert((err as Error).message);
+      setError(err instanceof Error ? err.message : "Müşteri durumu güncellenemedi.");
     } finally {
-      setUpdating(false);
+      setBlockingId(null);
     }
   };
 
-  const handleDeleteCustomer = async () => {
-    if (!deletingCustomer) return;
-
-    setUpdating(true);
+  const executeDeleteCustomer = async () => {
+    if (!token || !deleteTarget) return;
+    setDeletingId(deleteTarget.id);
     try {
-      const response = await fetch(`${apiUrl}/api/v1/customers/${deletingCustomer.id}`, {
+      const res = await fetch(`${apiUrl}/api/v1/customers/${deleteTarget.id}`, {
         method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Müşteri silinemedi.");
+      if (!res.ok) {
+        throw new Error("Müşteri silinemedi.");
       }
-
-      setDeletingCustomer(null);
-      void fetchCustomers();
+      if (selectedCustomer?.id === deleteTarget.id) {
+        setSelectedCustomer(null);
+      }
+      if (journeyCustomer?.id === deleteTarget.id) {
+        setJourneyCustomer(null);
+      }
+      setDeleteTarget(null);
+      await Promise.all([loadOverview(), loadCustomers(filters, debouncedSearch)]);
     } catch (err: unknown) {
-      alert((err as Error).message || "Bir hata oluştu.");
+      setError(err instanceof Error ? err.message : "Müşteri silinemedi.");
     } finally {
-      setUpdating(false);
+      setDeletingId(null);
     }
   };
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in duration-200">
-      
-      {/* Header Cards & Title */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-white p-6 rounded-2xl border border-zinc-200/80 shadow-sm">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-zinc-950 flex items-center gap-2">
-            <User className="text-violet-600" size={22} />
-            {LABELS.TITLE}
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 flex items-center gap-2.5">
+            <Users className="w-6 h-6 text-indigo-600" />
+            Müşteriler &amp; Coğrafi Analiz
           </h1>
-          <p className="text-xs text-zinc-500 font-semibold mt-1">
-            {LABELS.SUBTITLE}
+          <p className="text-sm text-zinc-500 mt-1">
+            Günlük B2B kayıt performansı, ülke bazlı dağılım, OpenStreetMap müşteri yoğunluğu ve müşteri yaşam döngüsü.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+
+        <div className="flex flex-wrap items-center gap-2.5">
           <Link
             href="/admin/member-journeys"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-xs font-bold text-white rounded-xl transition-all shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-semibold hover:bg-indigo-100 transition-colors"
           >
-            <Compass size={14} />
-            Üye Yolculuk Haritası Merkezi
+            <Compass className="w-4 h-4" />
+            Canlı Müşteri Akışı
           </Link>
           <button
-            onClick={() => void fetchCustomers(true)}
-            disabled={loading || refreshing}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 rounded-xl transition-all cursor-pointer bg-white"
             type="button"
+            onClick={handleRefreshAll}
+            disabled={loadingList || loadingOverview}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
           >
-            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-            {LABELS.REFRESH}
+            <RefreshCw
+              className={`w-4 h-4 ${loadingList || loadingOverview ? "animate-spin" : ""}`}
+            />
+            Yenile
           </button>
         </div>
       </div>
 
-      {/* Filter and Table Card */}
-      <div className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm overflow-hidden">
-        
-        {/* Search Bar */}
-        <div className="p-4 border-b border-zinc-100 bg-zinc-50/50">
-          <form onSubmit={handleSearchSubmit} className="flex gap-2 max-w-md">
-            <div className="relative flex-1">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400">
-                <Search size={16} />
-              </span>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={LABELS.SEARCH_PLACEHOLDER}
-                className="w-full pl-9 pr-4 py-2 bg-white border border-zinc-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
-              />
-            </div>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-            >
-              {LABELS.SEARCH_BTN}
-            </button>
-          </form>
-        </div>
-
-        {/* Content Area */}
-        <CustomersTable
-          loading={loading}
-          error={error}
-          customers={customers}
-          updating={updating}
-          onOpenJourney={(c) => setJourneyCustomer(c)}
-          onOpenDetails={(c) => setDetailedCustomer(c)}
-          onToggleBlock={handleToggleBlock}
-          onOpenDelete={(c) => setDeletingCustomer(c)}
-        />
-      </div>
-
-      {/* Block Reason Modal */}
-      {selectedCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button 
-            type="button"
-            aria-label={LABELS.CANCEL}
-            tabIndex={-1}
-            className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm transition-opacity duration-300 border-none cursor-default"
-            onClick={() => setSelectedCustomer(null)}
-          />
-          <div className="relative w-full max-w-md bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden z-10 p-6 animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="text-base font-bold text-zinc-950 flex items-center gap-2 mb-2">
-              <ShieldAlert className="text-rose-600" size={18} />
-              {LABELS.BLOCK_TITLE}
-            </h3>
-            <p className="text-xs text-zinc-500 font-semibold mb-4 leading-relaxed">
-              <strong className="text-zinc-800">{`${selectedCustomer.first_name} ${selectedCustomer.last_name}`}</strong> {LABELS.BLOCK_DESC_PRE}
-            </p>
-            <form onSubmit={submitBlock} className="space-y-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="block-reason-textarea" className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                  {LABELS.BLOCK_REASON}
-                </label>
-                <textarea
-                  id="block-reason-textarea"
-                  value={blockReason}
-                  onChange={(e) => setBlockReason(e.target.value)}
-                  rows={3}
-                  className="px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 leading-relaxed"
-                  placeholder={LABELS.BLOCK_PLACEHOLDER}
-                  required
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedCustomer(null)}
-                  className="px-4 py-2 border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 rounded-xl transition-all cursor-pointer bg-white"
-                >
-                  {LABELS.CANCEL}
-                </button>
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-500/10 hover:shadow-rose-500/20 transition-all cursor-pointer"
-                >
-                  {updating ? LABELS.BLOCKING : LABELS.CONFIRM_BLOCK}
-                </button>
-              </div>
-            </form>
+      {error && (
+        <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-2xl text-xs flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 font-medium">
+            <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{error}</span>
           </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deletingCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button 
-            type="button"
-            aria-label={LABELS.CANCEL}
-            tabIndex={-1}
-            className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm transition-opacity duration-300 border-none cursor-default"
-            onClick={() => setDeletingCustomer(null)}
-          />
-          <div className="relative w-full max-w-md bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden z-10 p-6 animate-in fade-in zoom-in-95 duration-200">
-            <h3 className="text-base font-bold text-zinc-950 flex items-center gap-2 mb-2">
-              <Trash2 className="text-rose-600" size={18} />
-              {LABELS.DELETE_TITLE}
-            </h3>
-            <p className="text-xs text-zinc-500 font-semibold mb-6 leading-relaxed">
-              <strong className="text-zinc-800">{`${deletingCustomer.first_name} ${deletingCustomer.last_name}`}</strong> {LABELS.DELETE_DESC}
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setDeletingCustomer(null)}
-                className="px-4 py-2 border border-zinc-200 hover:bg-zinc-50 text-xs font-bold text-zinc-700 rounded-xl transition-all cursor-pointer bg-white"
-              >
-                {LABELS.CANCEL}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDeleteCustomer()}
-                disabled={updating}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-500/10 hover:shadow-rose-500/20 transition-all cursor-pointer active:scale-[0.98]"
-              >
-                {updating ? LABELS.DELETING : LABELS.DELETE_BTN}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Customer Details Modal */}
-      {detailedCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button 
-            type="button"
-            aria-label="Kapat"
-            tabIndex={-1}
-            className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm transition-opacity duration-300 border-none cursor-default"
-            onClick={() => setDetailedCustomer(null)}
-          />
-          <div className="relative w-full max-w-2xl bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden z-10 p-6 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-start border-b border-zinc-100 pb-4 mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-violet-100 border border-violet-200 text-violet-700 flex items-center justify-center font-bold text-sm uppercase">
-                  {formatCustomerInitials(detailedCustomer.first_name, detailedCustomer.last_name)}
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-zinc-950">
-                    {`${detailedCustomer.first_name} ${detailedCustomer.last_name}`}
-                  </h3>
-                  <span className="text-[10px] font-semibold text-zinc-400 block tracking-wider uppercase">
-                    Kullanıcı ID: {detailedCustomer.id}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDetailedCustomer(null)}
-                className="p-1 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-              {/* Left Column: Personal and System Info */}
-              <div className="space-y-4">
-                <div className="bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3">
-                  <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
-                    Kişisel Bilgiler
-                  </h4>
-                  <div className="grid grid-cols-3 gap-1">
-                    <span className="text-zinc-400 font-semibold">E-Posta:</span>
-                    <span className="col-span-2 text-zinc-700 font-bold break-all">{detailedCustomer.email}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    <span className="text-zinc-400 font-semibold">Telefon:</span>
-                    <span className="col-span-2 text-zinc-700 font-bold">{detailedCustomer.phone || "-"}</span>
-                  </div>
-                </div>
-
-                <div className="bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3">
-                  <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
-                    Sistem Bilgileri
-                  </h4>
-                  <div className="grid grid-cols-3 gap-1">
-                    <span className="text-zinc-400 font-semibold">Kayıt Tarihi:</span>
-                    <span className="col-span-2 text-zinc-700 font-bold">
-                      {new Date(detailedCustomer.created_at).toLocaleString("tr-TR")}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    <span className="text-zinc-400 font-semibold">Kayıt IP:</span>
-                    <span className="col-span-2 text-zinc-700 font-bold">
-                      {detailedCustomer.registration_ip || "Bilinmiyor"}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    <span className="text-zinc-400 font-semibold">Tercih Edilen Dil:</span>
-                    <span className="col-span-2 text-zinc-700 font-bold uppercase">
-                      {detailedCustomer.preferred_lang || "-"}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    <span className="text-zinc-400 font-semibold">Para Birimi:</span>
-                    <span className="col-span-2 text-zinc-700 font-bold">
-                      {detailedCustomer.preferred_currency || "-"}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    <span className="text-zinc-400 font-semibold">Son Oturum:</span>
-                    <span className="col-span-2 text-zinc-700 font-bold text-violet-700">
-                      {detailedCustomer.last_login_at 
-                        ? new Date(detailedCustomer.last_login_at).toLocaleString("tr-TR") 
-                        : "Hiç oturum açılmadı"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Address and Extra Info */}
-              <div className="space-y-4">
-                <div className="bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3">
-                  <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
-                    Adres Tanımları
-                  </h4>
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-zinc-400 font-semibold block mb-1">Fatura Adresi:</span>
-                      <p className="text-zinc-700 font-bold bg-white p-2.5 rounded-lg border border-zinc-200/60 whitespace-pre-wrap min-h-[50px]">
-                        {detailedCustomer.billing_address || "Tanımlanmamış"}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-zinc-400 font-semibold block mb-1">Teslimat Adresi:</span>
-                      <p className="text-zinc-700 font-bold bg-white p-2.5 rounded-lg border border-zinc-200/60 whitespace-pre-wrap min-h-[50px]">
-                        {detailedCustomer.delivery_address || "Tanımlanmamış"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3">
-                  <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
-                    Diğer Bilgiler
-                  </h4>
-                  <div className="grid grid-cols-3 gap-1">
-                    <span className="text-zinc-400 font-semibold">Vergi No / TCKN:</span>
-                    <span className="col-span-2 text-zinc-700 font-bold">
-                      {detailedCustomer.tax_no_tckn || "-"}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    <span className="text-zinc-400 font-semibold">Instagram:</span>
-                    <span className="col-span-2 text-zinc-700 font-bold">
-                      {detailedCustomer.instagram_username ? `@${detailedCustomer.instagram_username}` : "-"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Login History Section (Full Width) */}
-            <div className="mt-6 bg-zinc-50/50 p-4 rounded-xl border border-zinc-100 space-y-3 text-xs">
-              <h4 className="font-bold text-zinc-800 uppercase tracking-wider text-[10px] border-b border-zinc-200/60 pb-1">
-                Oturum Açma Geçmişi (Logins History)
-              </h4>
-              {detailedCustomer.login_history && detailedCustomer.login_history.length > 0 ? (
-                <div className="max-h-[160px] overflow-y-auto border border-zinc-200/60 rounded-lg bg-white">
-                  <table className="w-full text-[11px] text-left border-collapse">
-                    <thead>
-                      <tr className="bg-zinc-50 border-b border-zinc-200/60 text-zinc-500 font-bold uppercase tracking-wider">
-                        <th className="px-4 py-2 font-bold">Tarih / Saat</th>
-                        <th className="px-4 py-2 font-bold">IP Adresi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 text-zinc-700">
-                      {detailedCustomer.login_history.map((lh) => (
-                        <tr key={`${lh.login_at}-${lh.ip_address}`} className="hover:bg-zinc-50/40">
-                          <td className="px-4 py-2 font-semibold">
-                            {new Date(lh.login_at).toLocaleString("tr-TR")}
-                          </td>
-                          <td className="px-4 py-2 font-bold">{lh.ip_address}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="text-[11px] font-semibold text-zinc-400 py-2 text-center">
-                  Oturum açma geçmişi bulunmuyor.
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4 border-t border-zinc-100 mt-6">
-              <button
-                type="button"
-                onClick={() => setDetailedCustomer(null)}
-                className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-[0.98]"
-              >
-                Kapat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Customer Journey Map & Activity Timeline Modal */}
-      {journeyCustomer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
           <button
             type="button"
-            aria-label="Kapat"
-            tabIndex={-1}
-            className="fixed inset-0 bg-zinc-950/50 backdrop-blur-sm border-none cursor-default"
-            onClick={() => setJourneyCustomer(null)}
-          />
-          <div className="relative w-full max-w-6xl bg-slate-50 border border-zinc-200 rounded-3xl shadow-2xl overflow-hidden z-10 max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-zinc-200 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <Compass size={18} className="text-violet-600" />
-                <span className="text-sm font-extrabold text-zinc-950">
-                  {journeyCustomer.first_name} {journeyCustomer.last_name} — Üye Yolculuk Haritası & Tarihçesi
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Link
-                  href={`/admin/member-journeys?customer_id=${encodeURIComponent(journeyCustomer.id)}`}
-                  className="px-3 py-1.5 rounded-xl bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-bold transition-colors"
+            onClick={() => setError(null)}
+            className="text-rose-700 hover:text-rose-900 font-semibold cursor-pointer"
+          >
+            Kapat
+          </button>
+        </div>
+      )}
+
+      <CustomerKpiCards
+        kpis={overview?.kpis ?? null}
+        loading={loadingOverview}
+        activePeriod={filters.period}
+        activeStatus={filters.status}
+        activeCountry={filters.country}
+        onSelectPeriod={handleSelectPeriod}
+        onSelectStatus={handleSelectStatus}
+        onSelectCountry={handleSelectCountry}
+        onResetAll={handleResetFilters}
+      />
+
+      <CustomersGeoInsightsSection
+        overview={overview}
+        loading={loadingOverview}
+        syncingGeo={syncingGeo}
+        syncMessage={syncMessage}
+        selectedCountry={filters.country}
+        onSelectCountry={handleSelectCountry}
+        onSyncGeo={handleSyncGeo}
+        onSelectCustomerById={handleSelectCustomerById}
+      />
+
+      <CustomersFilterBar
+        filters={filters}
+        countries={overview?.countries ?? []}
+        resultCount={customers.length}
+        loading={loadingList}
+        customers={customers}
+        onChange={handleFiltersChange}
+        onReset={handleResetFilters}
+      />
+
+      <div className="glass-card bg-white rounded-3xl border border-zinc-200/80 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-zinc-50/90 border-b border-zinc-200/80 text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+                <th className="py-3.5 px-5">Müşteri</th>
+                <th className="py-3.5 px-4">Ülke &amp; Konum</th>
+                <th className="py-3.5 px-4">Kayıt &amp; Son Aktiflik</th>
+                <th className="py-3.5 px-4">Sipariş &amp; Etkileşim</th>
+                <th className="py-3.5 px-4">Durum</th>
+                <th className="py-3.5 px-5 text-right">İşlemler</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 text-sm">
+              {loadingList && customers.length === 0 ? (
+                Array.from({ length: 6 }).map((_, idx) => (
+                  <tr key={idx} className="animate-pulse">
+                    <td className="py-4 px-5">
+                      <div className="h-4 w-40 bg-zinc-200 rounded mb-1.5" />
+                      <div className="h-3 w-32 bg-zinc-100 rounded" />
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="h-4 w-28 bg-zinc-200 rounded" />
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="h-4 w-28 bg-zinc-200 rounded" />
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="h-4 w-24 bg-zinc-200 rounded" />
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="h-5 w-20 bg-zinc-200 rounded-full" />
+                    </td>
+                    <td className="py-4 px-5 text-right">
+                      <div className="h-7 w-28 bg-zinc-100 rounded-xl ml-auto" />
+                    </td>
+                  </tr>
+                ))
+              ) : customers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-14 px-6 text-center text-zinc-500">
+                    <div className="text-sm font-semibold text-zinc-700">
+                      Seçili kriterlere uygun müşteri bulunamadı
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Filtreleri sıfırlayarak tüm kayıtları görüntüleyebilirsiniz.
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                customers.map((c) => {
+                  const registeredToday = isRegisteredTodayIstanbul(c.created_at);
+                  const initial = (c.first_name || c.email || "?").charAt(0).toUpperCase();
+                  return (
+                    <tr
+                      key={c.id}
+                      className="hover:bg-zinc-50/70 transition-colors align-top"
+                    >
+                      <td className="py-3.5 px-5">
+                        <div className="flex items-start gap-3">
+                          <div className="relative w-9 h-9 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                            {initial}
+                            {c.is_online && (
+                              <span
+                                title="Şu an çevrimiçi"
+                                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white"
+                              />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-bold text-zinc-900 truncate max-w-[200px]">
+                                {c.first_name} {c.last_name}
+                              </span>
+                              {registeredToday && (
+                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 uppercase tracking-wide">
+                                  Bugün
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-zinc-500 truncate max-w-[240px]">
+                              {c.email}
+                            </div>
+                            <div className="text-[11px] text-zinc-500 font-mono mt-0.5 flex flex-wrap items-center gap-2">
+                              <span>{c.phone || "-"}</span>
+                              {c.instagram_username && (
+                                <span className="text-pink-700 font-sans font-medium">
+                                  @{c.instagram_username}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-start gap-2">
+                          <CountryFlagBadge
+                            countryCode={c.country_code || ""}
+                            title={c.country_name || c.country_code || "Konum bilinmiyor"}
+                          />
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-zinc-900">
+                              {c.country_name || (c.country_code ? c.country_code : "Konum Bekleniyor")}
+                            </div>
+                            <div className="text-[11px] text-zinc-500 truncate max-w-[160px]">
+                              {[c.city, c.region_name].filter(Boolean).join(", ") ||
+                                geoSourceLabelTr(c.geo_source)}
+                            </div>
+                            {c.registration_ip && (
+                              <div className="text-[10px] font-mono text-zinc-400 mt-0.5">
+                                {c.registration_ip}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-xs">
+                        <div className="font-semibold text-zinc-900 tabular-nums">
+                          {formatDateTimeTr(c.created_at)}
+                        </div>
+                        <div className="text-[11px] text-zinc-500 mt-0.5">
+                          Son aktif:{" "}
+                          <span className="font-semibold text-zinc-700">
+                            {c.is_online
+                              ? "Şu an çevrimiçi"
+                              : formatRelativeTimeTr(c.last_active_at || c.last_login_at)}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-zinc-400 uppercase mt-0.5">
+                          Dil: {c.preferred_lang || "TR"} • {c.preferred_currency || "TRY"}
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-xs">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-semibold tabular-nums ${
+                              c.orders_count > 0
+                                ? "bg-indigo-50 text-indigo-800 border border-indigo-200/70"
+                                : "bg-zinc-100 text-zinc-600"
+                            }`}
+                          >
+                            <ShoppingBag className="w-3 h-3" />
+                            {c.orders_count} sip.
+                          </span>
+                          {c.cart_items_count > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg font-semibold bg-amber-50 text-amber-800 border border-amber-200/70 tabular-nums">
+                              <ShoppingCart className="w-3 h-3" />
+                              {c.cart_items_count}
+                            </span>
+                          )}
+                        </div>
+                        {c.orders_total_amount > 0 && (
+                          <div className="text-[11px] font-bold text-zinc-800 mt-1 tabular-nums">
+                            {formatCurrencyTry(c.orders_total_amount)}
+                          </div>
+                        )}
+                        <div className="text-[11px] text-zinc-500 mt-0.5 tabular-nums">
+                          {c.products_viewed} ürün • {c.pages_read} sayfa
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="flex flex-col items-start gap-1">
+                          {c.is_blocked ? (
+                            <span
+                              title={c.block_reason || "Blokeli"}
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800"
+                            >
+                              <ShieldAlert className="w-3 h-3" /> Blokeli
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                              <UserCheck className="w-3 h-3" /> Aktif
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500">
+                            {c.email_verified ? (
+                              <>
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> E-posta onaylı
+                              </>
+                            ) : (
+                              "E-posta onaysız"
+                            )}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-5 text-right">
+                        <div className="inline-flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setJourneyCustomer(c)}
+                            title="Müşteri Yolculuğu"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-semibold transition-colors cursor-pointer"
+                          >
+                            <Activity className="w-3.5 h-3.5" />
+                            <span className="hidden xl:inline">Yolculuk</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCustomer(c)}
+                            title="Müşteri Detayı"
+                            className="p-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-xl transition-colors cursor-pointer"
+                          >
+                            <Info className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openBlockDialogOrUnblock(c)}
+                            disabled={blockingId === c.id}
+                            title={c.is_blocked ? "Engeli Kaldır" : "Hesabı Blokla"}
+                            className={`p-2 rounded-xl transition-colors cursor-pointer disabled:opacity-50 ${
+                              c.is_blocked
+                                ? "text-emerald-600 hover:bg-emerald-50"
+                                : "text-amber-600 hover:bg-amber-50"
+                            }`}
+                          >
+                            {blockingId === c.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : c.is_blocked ? (
+                              <UserCheck className="w-4 h-4" />
+                            ) : (
+                              <Ban className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(c)}
+                            title="Müşteriyi Kalıcı Sil"
+                            className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <CustomerDetailModal
+        customer={selectedCustomer}
+        onClose={() => setSelectedCustomer(null)}
+        onOpenJourney={(c) => {
+          setSelectedCustomer(null);
+          setJourneyCustomer(c);
+        }}
+        onToggleBlock={openBlockDialogOrUnblock}
+        onRequestDelete={(c) => {
+          setSelectedCustomer(null);
+          setDeleteTarget(c);
+        }}
+      />
+
+      {blockTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-zinc-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <h3 className="text-base font-bold text-zinc-900">Müşteri Hesabını Blokla</h3>
+              <button
+                type="button"
+                onClick={() => setBlockTarget(null)}
+                className="p-1.5 text-zinc-400 hover:text-zinc-700 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-zinc-600">
+                <strong className="text-zinc-900">
+                  {blockTarget.first_name} {blockTarget.last_name}
+                </strong>{" "}
+                ({blockTarget.email}) kullanıcısının giriş yetkisi engellenecektir.
+              </p>
+              <div>
+                <label
+                  htmlFor="customer-block-reason"
+                  className="block text-xs font-semibold text-zinc-700 mb-1.5"
                 >
-                  Tam Ekran Aç
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setJourneyCustomer(null)}
-                  className="p-1.5 rounded-xl hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
+                  Bloklama Sebebi (Opsiyonel)
+                </label>
+                <textarea
+                  id="customer-block-reason"
+                  rows={3}
+                  value={blockReasonInput}
+                  onChange={(e) => setBlockReasonInput(e.target.value)}
+                  placeholder="Örn: Şüpheli işlem veya ödeme ihlali"
+                  className="w-full px-3.5 py-2.5 text-xs border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+                />
               </div>
             </div>
-            <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1">
+            <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-100 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setBlockTarget(null)}
+                className="px-4 py-2 text-xs font-semibold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-100 cursor-pointer"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                disabled={blockingId === blockTarget.id}
+                onClick={() => void executeToggleBlock(blockTarget, true, blockReasonInput.trim())}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-xl disabled:opacity-50 cursor-pointer"
+              >
+                {blockingId === blockTarget.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Hesabı Blokla
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl border border-zinc-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between">
+              <h3 className="text-base font-bold text-rose-700 flex items-center gap-2">
+                <Trash2 className="w-4 h-4" /> Kalıcı Hesap Silme
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="p-1.5 text-zinc-400 hover:text-zinc-700 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 text-xs text-zinc-600 leading-relaxed">
+              <strong className="text-zinc-900">
+                {deleteTarget.first_name} {deleteTarget.last_name}
+              </strong>{" "}
+              ({deleteTarget.email}) müşterisi hem veritabanından hem Keycloak kimlik sisteminden kalıcı olarak silinecektir. Bu işlem geri alınamaz.
+            </div>
+            <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-100 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-xs font-semibold text-zinc-700 bg-white border border-zinc-200 rounded-xl hover:bg-zinc-100 cursor-pointer"
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                disabled={deletingId === deleteTarget.id}
+                onClick={() => void executeDeleteCustomer()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl disabled:opacity-50 cursor-pointer"
+              >
+                {deletingId === deleteTarget.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Evet, Kalıcı Olarak Sil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {journeyCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl border border-zinc-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/70">
+              <div>
+                <h2 className="text-base font-bold text-zinc-900">
+                  Müşteri Yolculuğu — {journeyCustomer.first_name} {journeyCustomer.last_name}
+                </h2>
+                <p className="text-xs text-zinc-500">{journeyCustomer.email}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setJourneyCustomer(null)}
+                aria-label="Müşteri yolculuğunu kapat"
+                className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200/70 rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
               <CustomerJourneyPanel
                 customerId={journeyCustomer.id}
                 apiUrl={apiUrl}
@@ -847,7 +796,6 @@ export default function CustomersManager({ apiUrl, token }: Readonly<CustomersMa
           </div>
         </div>
       )}
-
     </div>
   );
 }
