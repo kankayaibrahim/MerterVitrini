@@ -267,7 +267,9 @@ func (h *MobileHandler) QuickUpdateSupplierProduct(w http.ResponseWriter, r *htt
 		req.Stock = &computedTotal
 	}
 
-	res, err := db.Pool.Exec(ctx, `
+	var updatedSlug, updatedTitle string
+	var updatedIsActive bool
+	err := db.Pool.QueryRow(ctx, `
 		UPDATE catalog.products
 		SET price        = COALESCE($1, price),
 		    buying_price = COALESCE($2, buying_price),
@@ -276,8 +278,9 @@ func (h *MobileHandler) QuickUpdateSupplierProduct(w http.ResponseWriter, r *htt
 		    series_stock = COALESCE($5, series_stock),
 		    updated_at   = CURRENT_TIMESTAMP
 		WHERE id = $6 AND brand_id = $7
-	`, req.Price, req.BuyingPrice, req.IsActive, req.Stock, req.SeriesStock, productID, claims.BrandID)
-	if err != nil || res.RowsAffected() == 0 {
+		RETURNING coalesce(slug, ''), title, is_active
+	`, req.Price, req.BuyingPrice, req.IsActive, req.Stock, req.SeriesStock, productID, claims.BrandID).Scan(&updatedSlug, &updatedTitle, &updatedIsActive)
+	if err != nil {
 		httpx.Error(w, http.StatusNotFound, "Ürün bulunamadı veya yetkiniz yok.")
 		return
 	}
@@ -286,7 +289,15 @@ func (h *MobileHandler) QuickUpdateSupplierProduct(w http.ResponseWriter, r *htt
 		distributeVariantStockProportionally(ctx, productID, *req.Stock)
 	}
 
-	triggerProductMVRefresh()
+	if updatedIsActive && strings.TrimSpace(updatedSlug) != "" {
+		triggerProductMVRefreshAndIndexNow([]string{updatedSlug}, IndexNowSubmissionMeta{
+			TriggerSource: "mobile_supplier",
+			SourceLabel:   "Mobil Tedarikçi Stüdyosu: " + updatedTitle,
+			ProductCount:  1,
+		})
+	} else {
+		triggerProductMVRefresh()
+	}
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"message": "Ürün hızlıca güncellendi.",

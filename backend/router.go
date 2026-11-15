@@ -335,7 +335,11 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("DELETE /api/v1/blog/{id}", protect(h.Blog.DeleteBlogPost))
 	mux.Handle("GET /api/v1/blog/check-slug", protect(h.Blog.CheckSlugUniqueness))
 
+	mux.Handle("GET /api/v1/indexnow/logs", protect(h.IndexNow.ListLogs))
+	mux.Handle("DELETE /api/v1/indexnow/logs", protect(h.IndexNow.ClearLogs))
+	mux.Handle("POST /api/v1/indexnow/logs/{id}/retry", protect(h.IndexNow.RetryLog))
 	mux.Handle("POST /api/v1/indexnow/submit", protect(h.IndexNow.SubmitManual))
+	mux.Handle("POST /api/v1/indexnow/submit-recent-products", protect(h.IndexNow.SubmitRecentProducts))
 	mux.Handle("GET /api/v1/translate/stats", protect(h.Translate.ListStats))
 	mux.Handle("GET /api/v1/translate/status", protect(h.Translate.GetStatus))
 	mux.Handle("POST /api/v1/translate/start", protect(h.Translate.StartJob))

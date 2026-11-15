@@ -18,6 +18,7 @@ import (
 	"mertervitrini/backend/middleware"
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/httpx"
+	"mertervitrini/backend/pkg/safe"
 	"mertervitrini/backend/services"
 )
 
@@ -37,6 +38,31 @@ func triggerProductMVRefresh() {
 			log.Printf("[SUPPLIER PORTAL] Async MV refresh error: %v", err)
 		}
 	}()
+}
+
+// triggerProductMVRefreshAndIndexNow refreshes catalog.mv_products first and then submits active slugs to IndexNow.
+func triggerProductMVRefreshAndIndexNow(slugs []string, meta IndexNowSubmissionMeta) {
+	slugsCopy := append([]string(nil), slugs...)
+	safe.Go("Supplier MV Refresh & IndexNow", func() {
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer bgCancel()
+		if _, err := db.Pool.Exec(bgCtx, refreshMaterializedViewSQL); err != nil {
+			log.Printf("[SUPPLIER PORTAL] Async MV refresh error: %v", err)
+		}
+		if len(slugsCopy) == 0 {
+			return
+		}
+		urls, productCount := BuildProductIndexNowURLs(slugsCopy)
+		if len(urls) == 0 {
+			return
+		}
+		if meta.ProductCount <= 0 {
+			meta.ProductCount = productCount
+		}
+		if _, err := SubmitIndexNowSync(bgCtx, meta, urls); err != nil {
+			log.Printf("[SUPPLIER PORTAL] IndexNow submission error: %v", err)
+		}
+	})
 }
 
 func parseSupplierPagination(r *http.Request) (int, int) {
@@ -952,12 +978,23 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	triggerProductMVRefresh()
-	if req.IsActive {
-		NotifyIndexNowProductSlug(mainSlug)
+	var notifySlugs []string
+	if req.IsActive && strings.TrimSpace(mainSlug) != "" {
+		notifySlugs = append(notifySlugs, mainSlug)
 	}
 	for _, s := range activeSiblingSlugs {
-		NotifyIndexNowProductSlug(s)
+		if strings.TrimSpace(s) != "" {
+			notifySlugs = append(notifySlugs, s)
+		}
+	}
+	if len(notifySlugs) > 0 {
+		triggerProductMVRefreshAndIndexNow(notifySlugs, IndexNowSubmissionMeta{
+			TriggerSource: "supplier_portal",
+			SourceLabel:   "Tedarikçi Yeni Ürün: " + req.Title,
+			ProductCount:  len(notifySlugs),
+		})
+	} else {
+		triggerProductMVRefresh()
 	}
 
 	msg := "Ürün taslak olarak kaydedildi."
@@ -1047,9 +1084,11 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 			currency = $11, packing_ratio = $12, series_ratio = $13,
 			minimum_order_quantity = $14, series_stock = $15, stock = $16, is_active = $17,
 			source_product_group_id = $18, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $19 AND brand_id = $20`
+		WHERE id = $19 AND brand_id = $20
+		RETURNING coalesce(slug, '')`
 
-	_, err = tx.Exec(
+	var updatedSlug string
+	err = tx.QueryRow(
 		ctx, updateSQL,
 		req.Title, req.ShortDescription, req.Description,
 		req.CategoryID, req.ColorID, req.FabricID,
@@ -1057,7 +1096,7 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		req.Currency, req.PackingRatio, req.SeriesRatio,
 		req.MinimumOrderQuantity, req.SeriesStock, initialStock, req.IsActive,
 		groupID, id, claims.BrandID,
-	)
+	).Scan(&updatedSlug)
 	if err != nil {
 		log.Printf("[SUPPLIER PRODUCT] Update error: %v", err)
 		httpx.Error(w, http.StatusInternalServerError, "Ürün güncellenemedi")
@@ -1073,7 +1112,15 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	triggerProductMVRefresh()
+	if req.IsActive && strings.TrimSpace(updatedSlug) != "" {
+		triggerProductMVRefreshAndIndexNow([]string{updatedSlug}, IndexNowSubmissionMeta{
+			TriggerSource: "supplier_portal",
+			SourceLabel:   "Tedarikçi Ürün Yayınlama/Güncelleme: " + req.Title,
+			ProductCount:  1,
+		})
+	} else {
+		triggerProductMVRefresh()
+	}
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
 		"message":                 "Ürün başarıyla güncellendi.",
 		"is_active":               req.IsActive,
@@ -1516,11 +1563,12 @@ func (h *SupplierPortalHandler) UpdateProductTranslations(w http.ResponseWriter,
 	}
 	defer tx.Rollback(ctx)
 
-	var currentTitle, currentShort, currentDesc string
+	var currentTitle, currentShort, currentDesc, productSlug string
+	var isActive bool
 	err = tx.QueryRow(ctx, `
-		SELECT title, coalesce(short_description, ''), coalesce(description, '')
+		SELECT title, coalesce(short_description, ''), coalesce(description, ''), coalesce(slug, ''), is_active
 		FROM catalog.products
-		WHERE id = $1 AND brand_id = $2`, id, claims.BrandID).Scan(&currentTitle, &currentShort, &currentDesc)
+		WHERE id = $1 AND brand_id = $2`, id, claims.BrandID).Scan(&currentTitle, &currentShort, &currentDesc, &productSlug, &isActive)
 	if err != nil {
 		http.Error(w, `{"error":"Ürün bulunamadı veya yetkiniz yok"}`, http.StatusNotFound)
 		return
@@ -1546,7 +1594,15 @@ func (h *SupplierPortalHandler) UpdateProductTranslations(w http.ResponseWriter,
 		return
 	}
 
-	triggerProductMVRefresh()
+	if isActive && strings.TrimSpace(productSlug) != "" {
+		triggerProductMVRefreshAndIndexNow([]string{productSlug}, IndexNowSubmissionMeta{
+			TriggerSource: "supplier_portal",
+			SourceLabel:   "Tedarikçi Çok Dilli Çeviri Güncellemesi: " + currentTitle,
+			ProductCount:  1,
+		})
+	} else {
+		triggerProductMVRefresh()
+	}
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"message": "Çok dilli ürün çevirileri (TR / EN / RU / AR / DE / FR / PL / BG) başarıyla güncellendi.",

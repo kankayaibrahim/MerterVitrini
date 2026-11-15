@@ -121,6 +121,10 @@ func initBackgroundWorkers(appCtx context.Context) {
 		handlers.StartCronScheduler(appCtx)
 	}
 
+	if err := handlers.EnsureIndexNowSchema(cronInitCtx); err != nil {
+		log.Printf("[WARNING] Failed to provision IndexNow logs schema: %v\n", err)
+	}
+
 	db.StartRatesWorker(appCtx)
 	handlers.StartUnverifiedApplicationsCleaner()
 	handlers.TriggerCustomerGeoBackfillAsync()

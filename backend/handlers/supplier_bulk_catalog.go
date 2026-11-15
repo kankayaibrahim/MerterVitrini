@@ -82,20 +82,30 @@ func (h *SupplierPortalHandler) ToggleArchiveProduct(w http.ResponseWriter, r *h
 		return
 	}
 
-	res, err := db.Pool.Exec(ctx, `
+	var restoredSlug, restoredTitle string
+	err := db.Pool.QueryRow(ctx, `
 		UPDATE catalog.products
 		SET is_archived = false,
 		    is_active = $3,
 		    archived_at = NULL,
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1 AND brand_id = $2
-	`, id, claims.BrandID, req.RestoreActive)
-	if err != nil || res.RowsAffected() == 0 {
+		RETURNING coalesce(slug, ''), title
+	`, id, claims.BrandID, req.RestoreActive).Scan(&restoredSlug, &restoredTitle)
+	if err != nil {
 		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": "Ürün arşivden çıkarılamadı"})
 		return
 	}
 
-	triggerProductMVRefresh()
+	if req.RestoreActive && strings.TrimSpace(restoredSlug) != "" {
+		triggerProductMVRefreshAndIndexNow([]string{restoredSlug}, IndexNowSubmissionMeta{
+			TriggerSource: "supplier_portal",
+			SourceLabel:   "Tedarikçi Arşivden Yayına Alma: " + restoredTitle,
+			ProductCount:  1,
+		})
+	} else {
+		triggerProductMVRefresh()
+	}
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"message": "Ürün arşivden çıkarıldı.",
@@ -111,7 +121,7 @@ type bulkArchiveRequest struct {
 	ZeroStockOnly bool     `json:"zero_stock_only"`
 }
 
-func executeBulkArchiveByIDs(ctx context.Context, brandID string, req bulkArchiveRequest) (int64, error) {
+func executeBulkArchiveByIDs(ctx context.Context, brandID string, req bulkArchiveRequest) (int64, []string, error) {
 	if req.IsArchived {
 		tag, err := db.Pool.Exec(ctx, `
 			UPDATE catalog.products
@@ -122,23 +132,37 @@ func executeBulkArchiveByIDs(ctx context.Context, brandID string, req bulkArchiv
 			WHERE brand_id = $1 AND id::text = ANY($2)
 		`, brandID, req.ProductIDs)
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
-		return tag.RowsAffected(), nil
+		return tag.RowsAffected(), nil, nil
 	}
 
-	tag, err := db.Pool.Exec(ctx, `
+	rows, err := db.Pool.Query(ctx, `
 		UPDATE catalog.products
 		SET is_archived = false,
 		    is_active = $3,
 		    archived_at = NULL,
 		    updated_at = CURRENT_TIMESTAMP
 		WHERE brand_id = $1 AND id::text = ANY($2)
+		RETURNING coalesce(slug, '')
 	`, brandID, req.ProductIDs, req.RestoreActive)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
-	return tag.RowsAffected(), nil
+	defer rows.Close()
+
+	var count int64
+	var restoredSlugs []string
+	for rows.Next() {
+		var s string
+		if scanErr := rows.Scan(&s); scanErr == nil {
+			count++
+			if req.RestoreActive && strings.TrimSpace(s) != "" {
+				restoredSlugs = append(restoredSlugs, s)
+			}
+		}
+	}
+	return count, restoredSlugs, nil
 }
 
 func executeBulkArchiveByRules(ctx context.Context, brandID string, req bulkArchiveRequest) (int64, error) {
@@ -184,9 +208,10 @@ func (h *SupplierPortalHandler) BulkArchiveProducts(w http.ResponseWriter, r *ht
 	ensureProductArchiveSchema(ctx)
 
 	var affected int64
+	var restoredSlugs []string
 	var err error
 	if len(req.ProductIDs) > 0 {
-		affected, err = executeBulkArchiveByIDs(ctx, claims.BrandID, req)
+		affected, restoredSlugs, err = executeBulkArchiveByIDs(ctx, claims.BrandID, req)
 	} else {
 		affected, err = executeBulkArchiveByRules(ctx, claims.BrandID, req)
 	}
@@ -195,7 +220,15 @@ func (h *SupplierPortalHandler) BulkArchiveProducts(w http.ResponseWriter, r *ht
 		return
 	}
 
-	triggerProductMVRefresh()
+	if len(restoredSlugs) > 0 {
+		triggerProductMVRefreshAndIndexNow(restoredSlugs, IndexNowSubmissionMeta{
+			TriggerSource: "supplier_portal",
+			SourceLabel:   fmt.Sprintf("Tedarikçi Toplu Arşivden Yayına Alma (%d ürün)", len(restoredSlugs)),
+			ProductCount:  len(restoredSlugs),
+		})
+	} else {
+		triggerProductMVRefresh()
+	}
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
 		"success":        true,
 		"affected_count": affected,
@@ -489,17 +522,17 @@ func insertSingleImportedRow(
 	rowIdx int,
 	row []string,
 	cats categoryLookupMap,
-) error {
+) (string, error) {
 	title := cellAt(row, 0)
 	catRaw := cellAt(row, 1)
 	price := parsePriceValue(cellAt(row, 2))
 	if title == "" || price <= 0 {
-		return fmt.Errorf("Satır %d: Ürün başlığı ve geçerli satış fiyatı zorunludur", rowIdx)
+		return "", fmt.Errorf("Satır %d: Ürün başlığı ve geçerli satış fiyatı zorunludur", rowIdx)
 	}
 
 	catID := cats.resolve(catRaw)
 	if catID == "" {
-		return fmt.Errorf("Satır %d: Geçerli bir kategori bulunamadı", rowIdx)
+		return "", fmt.Errorf("Satır %d: Geçerli bir kategori bulunamadı", rowIdx)
 	}
 
 	currency := strings.ToUpper(cellAt(row, 3))
@@ -532,12 +565,12 @@ func insertSingleImportedRow(
 
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("Satır %d: Veritabanı işlemi başlatılamadı", rowIdx)
+		return "", fmt.Errorf("Satır %d: Veritabanı işlemi başlatılamadı", rowIdx)
 	}
 	defer tx.Rollback(ctx)
 
 	sourceProductID := fmt.Sprintf("XLS-%d-%d", time.Now().UnixNano(), rowIdx)
-	var newProductID string
+	var newProductID, newSlug string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO catalog.products (
 			brand_id, feed_id, source_product_id, title, short_description, description,
@@ -549,15 +582,15 @@ func insertSingleImportedRow(
 			$6, $7, $8, $9, $10,
 			0, $11, $12, $13, $14,
 			$15, $16, true
-		) RETURNING id::text
+		) RETURNING id::text, coalesce(slug, '')
 	`,
 		brandID, sourceProductID, title, shortDesc, desc,
 		catID, colorID, fabricID, gender, season,
 		price, currency, packingRatio, seriesRatio,
 		moq, totalStock,
-	).Scan(&newProductID)
+	).Scan(&newProductID, &newSlug)
 	if err != nil {
-		return fmt.Errorf("Satır %d (%s): Kayıt hatası", rowIdx, title)
+		return "", fmt.Errorf("Satır %d (%s): Kayıt hatası", rowIdx, title)
 	}
 
 	upsertSupplierProductTranslations(ctx, tx, newProductID, title, shortDesc, desc, nil)
@@ -565,9 +598,9 @@ func insertSingleImportedRow(
 	insertProductImages(ctx, tx, newProductID, images)
 
 	if commitErr := tx.Commit(ctx); commitErr != nil {
-		return fmt.Errorf("Satır %d: Onay hatası", rowIdx)
+		return "", fmt.Errorf("Satır %d: Onay hatası", rowIdx)
 	}
-	return nil
+	return newSlug, nil
 }
 
 // ImportProductsFromExcel handles POST /api/v1/supplier/products/import-excel
@@ -608,13 +641,15 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 	importedCount := 0
 	skippedCount := 0
 	rowErrors := make([]string, 0)
+	importedSlugs := make([]string, 0)
 
 	for i := 1; i < len(rows); i++ {
 		row := rows[i]
 		if len(row) == 0 || cellAt(row, 0) == "" {
 			continue
 		}
-		if err := insertSingleImportedRow(ctx, claims.BrandID, i+1, row, cats); err != nil {
+		slug, err := insertSingleImportedRow(ctx, claims.BrandID, i+1, row, cats)
+		if err != nil {
 			skippedCount++
 			if len(rowErrors) < 15 {
 				rowErrors = append(rowErrors, err.Error())
@@ -622,9 +657,18 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 			continue
 		}
 		importedCount++
+		if strings.TrimSpace(slug) != "" {
+			importedSlugs = append(importedSlugs, slug)
+		}
 	}
 
-	if importedCount > 0 {
+	if len(importedSlugs) > 0 {
+		triggerProductMVRefreshAndIndexNow(importedSlugs, IndexNowSubmissionMeta{
+			TriggerSource: "supplier_excel",
+			SourceLabel:   fmt.Sprintf("Tedarikçi Excel Aktarımı (%d yeni ürün)", len(importedSlugs)),
+			ProductCount:  len(importedSlugs),
+		})
+	} else if importedCount > 0 {
 		triggerProductMVRefresh()
 	}
 

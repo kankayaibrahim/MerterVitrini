@@ -275,13 +275,21 @@ func saveBlogPostTranslations(ctx context.Context, tx pgx.Tx, postID string, tra
 	return result, nil
 }
 
-func notifyBlogPostIndexNow(slug string) {
+func notifyBlogPostIndexNow(slug string, translations map[string]models.BlogPostTranslation) {
 	prefixes := []string{"tr", "en", "pl", "bg", "ar", "ru", "de", "fr"}
 	var urls []string
 	for _, prefix := range prefixes {
-		urls = append(urls, "https://mertervitrini.com.tr/"+prefix+"/blog/"+slug)
+		localizedSlug := slug
+		if tr, ok := translations[prefix]; ok && tr.Slug != nil && strings.TrimSpace(*tr.Slug) != "" {
+			localizedSlug = strings.TrimSpace(*tr.Slug)
+		}
+		urls = append(urls, "https://mertervitrini.com.tr/"+prefix+"/blog/"+localizedSlug)
 	}
-	NotifyIndexNow(urls)
+	NotifyIndexNowWithMeta(IndexNowSubmissionMeta{
+		TriggerSource: "blog",
+		SourceLabel:   "Blog Yazısı: " + slug,
+		ProductCount:  1,
+	}, urls)
 }
 
 func (h *BlogHandler) CreateBlogPost(w http.ResponseWriter, r *http.Request) {
@@ -353,7 +361,7 @@ func (h *BlogHandler) CreateBlogPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if post.IsActive {
-		notifyBlogPostIndexNow(post.Slug)
+		notifyBlogPostIndexNow(post.Slug, post.Translations)
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
@@ -449,7 +457,7 @@ func (h *BlogHandler) UpdateBlogPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if post.IsActive {
-		notifyBlogPostIndexNow(post.Slug)
+		notifyBlogPostIndexNow(post.Slug, post.Translations)
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)

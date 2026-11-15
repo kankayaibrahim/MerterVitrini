@@ -261,7 +261,11 @@ func notifyPageIndexNow(slug string) {
 	for _, prefix := range prefixes {
 		urls = append(urls, "https://mertervitrini.com.tr/"+prefix+"/pages/"+slug)
 	}
-	NotifyIndexNow(urls)
+	NotifyIndexNowWithMeta(IndexNowSubmissionMeta{
+		TriggerSource: "cms_page",
+		SourceLabel:   "Kurumsal Sayfa: " + slug,
+		ProductCount:  1,
+	}, urls)
 }
 
 func (h *PagesHandler) CreatePage(w http.ResponseWriter, r *http.Request) {
