@@ -2962,3 +2962,48 @@
      - `e80ac38`: `fix: resolve logged-in product page crash and hydrate authenticated SSR prices` (16 dosya)
      - `docs: record sessions #152-#155 multi-currency orders, product SSR hydration, and live deployment` (`context/conversations.md`)
 - **Sonuç:** Tüm web, API, veritabanı ve mobil `v1.2.1+7` değişiklikleri yerel atomic commitlere ayrıldı ve canlı sunucuda doğrulandı.
+
+---
+
+### [2026-11-15 16:48:00] - Oturum #156 (`/admin/customers` Detaylı B2B KPI Kartları, Ülke/Dönem Filtreleme, GeoIP/Telefon Konum Zenginleştirme ve OpenStreetMap Haritası)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"https://mertervitrini.com.tr/admin/customers burada daha fazla detay olmalı bugün kaydolan kaç kişi toplam kaydolan kaç kişi ülkeye göre filtreleme falan gerekirse openmap dan hartita koy"`
+- **Yapılan İşlemler:**
+  1. **Veritabanı & Startup Migration:**
+     - [`0034_add_customer_geo_enrichment.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0034_add_customer_geo_enrichment.sql) ve [`db.go`](file:///c:/Projects/mertervitrini.com.tr/backend/db/db.go) üzerine `identity.users` tablosu için `country_code`, `country_name`, `city`, `region_name`, `latitude`, `longitude`, `geo_source`, `geo_resolved_at` kolonları ile `idx_users_customer_created_at`, `idx_users_customer_country`, `idx_users_customer_geo_unresolved` indeksleri idempotent olarak eklendi.
+  2. **Çok Kaynaklı Coğrafi Çözümleme & Arka Plan Backfill Motoru:**
+     - [`geo.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/mailer/geo.go): `ClientMeta` yapısına `Lat`/`Lon` eklendi, `lookupGeo` koordinat çözümlemesi ve dışa açık `IsPublicIP` yardımcı fonksiyonu tanımlandı.
+     - [`customers_geo.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/customers_geo.go): `NormalizeISO2`, `LookupCountryMeta`, E.164 telefon ön ekinden ülke çıkarımı (`ResolveCountryFromPhone`), kayıt anında GeoIP/telefon kaydetme (`PersistCustomerGeoFromMeta`), giriş sırasında tembel şehir/ülke tamamlama (`ResolveAndPersistCustomerGeoByIP`) ve mevcut üyeleri `ip-api.com/batch` + `analytics.member_events` + telefon alan kodu üzerinden zenginleştiren `BackfillUnresolvedCustomerGeo` / `TriggerCustomerGeoBackfillAsync` yazıldı.
+     - [`store_auth.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_auth.go) (`completeCustomerRegistration`, `insertOAuthCustomerProfile`, `recordLoginHistory`) ve [`main.go`](file:///c:/Projects/mertervitrini.com.tr/backend/main.go) (`initBackgroundWorkers`) bu konum yakalama/backfill akışına bağlandı.
+  3. **Backend API Genişletmeleri & Birim Testleri:**
+     - [`customers_overview.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/customers_overview.go): `GET /api/v1/customers/overview` (bugün/dün/7g/30g/bu ay, toplam, onaylı/blokeli, anlık çevrimiçi, bugün aktif, sipariş veren/aktif sepetli üye KPI'ları, 30 günlük TSİ kayıt eğilimi, ülke bazlı dağılım ve kümelenmiş `map_points` pinleri) ile `POST /api/v1/customers/sync-geo` eklendi.
+     - [`customers.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/customers.go) ve [`router.go`](file:///c:/Projects/mertervitrini.com.tr/backend/router.go): `GET /api/v1/customers` geriye dönük uyumlu JSON dizi yapısını koruyarak coğrafya + sipariş/sepet/oturum metrikleri ve parametreli `search`, `country` (`ALL`/`FOREIGN`/`UNKNOWN`/ISO-2), `period` (`today`, `yesterday`, `7d`, `30d`, `this_month`), `status`, `sort` filtreleriyle güncellendi.
+     - [`customers_geo_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/customers_geo_test.go): Telefon ön eki çözümleme, GeoIP fallback, overview kümeleme ve filtre SQL doğrulama testleri eklendi.
+  4. **Frontend `/admin/customers` Arayüzü & Leaflet OpenStreetMap:**
+     - `frontend/` içerisine `leaflet` ve `@types/leaflet` kuruldu.
+     - [`customerTypes.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/customerTypes.ts), [`CustomerKpiCards.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomerKpiCards.tsx), [`CustomersWorldMap.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomersWorldMap.tsx) (`ssr: false` Leaflet OpenStreetMap + sade CARTO katman seçici, XSS kaçışlı popup, ülkeye göre filtrele ve müşteri detayı butonları), [`CustomersGeoInsightsSection.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomersGeoInsightsSection.tsx) (ülke dağılımı listesi, 30 günlük yığılmış trend grafiği, `Konumları Şimdi Çözümle` butonu), [`CustomersFilterBar.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomersFilterBar.tsx) (ülke/dönem/durum/sıralama + UTF-8 BOM CSV indirme), [`CustomerDetailModal.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomerDetailModal.tsx) ve [`CustomersManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/customers/CustomersManager.tsx) oluşturuldu/güncellendi.
+- **Doğrulamalar:**
+  - `go vet ./...` ve `go test ./handlers/...` hatasız geçti (`ok mertervitrini/backend/handlers 0.385s`).
+  - `npx tsc --noEmit` ve `npm run lint` sırasıyla sıfır hata ve sıfır uyarıyla geçti (`exit code 0`).
+  - `AGENTS.md` Kural #1 ve #7 uyarınca yerel `npm run build`, `git commit`, `git push` veya canlı dağıtım yapılmadı; değişiklikler çalışma dizininde kullanıcı onayına bırakıldı.
+
+---
+
+### [2026-11-15 17:00:30] - Oturum #157 (`/admin/customers` KPI, Ülke/Dönem Filtreleri, GeoIP Backfill & OpenStreetMap — Yerel Commitler ve Canlı Sunucu Yayını)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `"commitle yayınla"`
+- **Yapılan İşlemler:**
+  1. **Özellik Commit'i (`5ed30c6`):**
+     - `feat: add B2B customer KPIs, country/period filters, GeoIP backfill, and OpenStreetMap to /admin/customers` (19 dosya: `0034_add_customer_geo_enrichment.sql`, `db.go`, `main.go`, `router.go`, `pkg/mailer/geo.go`, `customers.go`, `customers_geo.go`, `customers_geo_test.go`, `customers_overview.go`, `store_auth.go`, `package.json`, `package-lock.json`, ve `frontend/src/components/admin/customers/` bileşenleri).
+  2. **İlk Canlı Yayın (`scripts/unified_deployer.py -p unified -c all -a all`, `120.58 sn`):**
+     - Go Linux AMD64 binary (`42.58 MB`, `merter-backend.service`, `PID 1313806`) ve Next.js SSR frontend (`npm install` + sunucuda `npm run build` `65.81 sn`, `merter-frontend.service`) başarıyla canlıya alındı.
+     - Açılışta `[CUSTOMER GEO] Enriched geo coordinates/country for 63 customer accounts.` günlüğüyle mevcut müşteri hesapları zenginleştirildi.
+  3. **Canlı Veri Gözlemi & Türkçe Ülke Adı Düzeltmesi (`61ed7b3`):**
+     - Canlı `identity.users` kontrolünde `ip-api.com?lang=tr` servisinin bazı ülkeler için İngilizce ad (`Turkey`, `France`, `Germany`, `The Netherlands`) döndürdüğü tespit edildi.
+     - [`customers_geo.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/customers_geo.go) (`CanonicalCountryNameTr` + `ensureCustomerGeoColumns` toplu güncellemesi), [`customers_overview.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/customers_overview.go), [`customers.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/customers.go) ve [`customers_geo_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/customers_geo_test.go) güncellenerek tüm ülke adlarının kanonik Türkçe karşılıklarıyla (`Türkiye`, `Fransa`, `Almanya`, `Hollanda` vb.) dönmesi sağlandı.
+     - `go vet ./...` ve `go test ./handlers/...` (`0.638s`) geçti; `61ed7b3` (`fix: normalize resolved customer country names to Turkish`) olarak commit'lendi ve backend (`scripts/unified_deployer.py -p unified -c backend -a all`, `46.32 sn`, `PID 1316211`) canlıda yenilendi.
+  4. **Canlı Üretim Doğrulamaları:**
+     - `GET https://mertervitrini.com.tr/api/v1/health` (Origin `213.202.255.80`) → `{"status":"healthy","database":"connected","service":"unified-backend"}`
+     - `HEAD https://mertervitrini.com.tr/` ve `HEAD https://mertervitrini.com.tr/admin/customers` (Origin `213.202.255.80`) → `HTTP/1.1 200 OK`
+     - Canlı PostgreSQL (`merterdevdb`) dağılım doğrulaması: `TR (Türkiye): 28`, `FR (Fransa): 5`, `LB (Lübnan): 3`, `DE (Almanya): 3`, `RU (Rusya): 2`, `IT (İtalya): 2`, `ME (Karadağ): 2`, `GB (Birleşik Krallık): 2`, `AT (Avusturya): 2`, `NL (Hollanda): 2` dahil toplam `64/65` müşteri kaydı `23` farklı ülkeye tam Türkçe adlarla eşlendi (`1` kayıt konumsuz, bugün `8` yeni kayıt).
+- **Not:** `AGENTS.md` Kural #1 uyarınca uzak depoya `git push` çalıştırılmamıştır; değişiklikler yerel atomic commitlerde ve canlı üretim sunucusunda aktiftir.
