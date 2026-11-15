@@ -3295,3 +3295,128 @@
    - `GET /api/v1/health` -> `200 OK` (`status=healthy`, `database=connected`, `service=unified-backend`).
    - Yetkisiz `GET /api/v1/admin/notifications/settings` -> `401 Unauthorized` (yeni admin uç noktası canlıda aktif ve JWT korumalı).
    - `HEAD /admin/settings/notifications` -> `200 OK`.
+
+
+---
+
+## Oturum #169 — 2026-11-15 21:25 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Lighthouse "Ajan Tabanlı Tarama" (`2/3`) raporundaki `llms.txt, önerilere uygun değil — Dosyada bağlantı yok.` uyarısı için `"bir şey yapmak gerekiyor mu?"` sorusu.
+
+### Yapılan İnceleme & Yanıt Özeti
+1. **Etki Analizi:** Bu uyarı sitenin işleyişini veya klasik Google arama sıralamasını bozmaz; Lighthouse'un yeni *Ajan Tabanlı Tarama (Agentic Browsing)* / LLM keşfedilebilirlik kontrolüdür.
+2. **Kök Neden ([`route.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/llms.txt/route.ts#L33-L41)):** `https://mertervitrini.com.tr/llms.txt` yanıtındaki URL'ler standart Markdown bağlantı sözdizimi (`- [Başlık](https://...): Açıklama`) yerine düz metin (`- Catalog Browser: https://...`) olarak yazıldığı için Lighthouse ayrıştırıcısı dosya içinde link tespit edemiyor.
+3. **Ek Tespit ([`route.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/llms.txt/route.ts#L12)):** Aynı dosyada eski sabit Güngören adresi ve `info@mertervitrini.com.tr` e-postası statik olarak duruyor; canlı mağaza ayarlarından (`/api/v1/store/settings`) dinamik beslenmesi uygun olur.
+4. **Durum:** Danışma sorusu olduğu için kod değişikliği yapılmadı; kullanıcıya Markdown link formatına geçiş + dinamik mağaza bilgisi güncellemesi önerildi ve onayı beklendi.
+
+
+---
+
+## Oturum #170 — 2026-11-15 22:25 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Google Search Console'dan gelen *"mertervitrini.com.tr sitesinde Satıcı girişleri yapılandırılmış verisi sorunları tespit edildi (`1 adet` sayfa — Kritik olmayan: `"description" alanı eksik`)"* e-postası için `"doğru mu?"` sorusu.
+
+### Canlı Doğrulama & İnceleme Özeti
+1. **E-Postanın Mahiyeti:** Bildirim gerçek bir Google Search Console uyarısıdır ve **"Kritik olmayan sorun"** sınıfındadır (Google Arama'da indekslenmeyi veya görünürlüğü engellemez).
+2. **Canlı Site Taraması ([`page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/page.tsx), [`store_catalog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_catalog.go)):**
+   - Veritabanında `description` ve `short_description` alanları tamamen boş olan bir canlı üründe bile (`/product/zames-sim-detayli-elbise-l6mu`), `buildProductJsonLdGraph` ve `resolveLocalizedProductDesc` fonksiyonlarının (`471ee0b` / `ff8346b` güncellemeleriyle) `@type: "Product"` JSON-LD bloğu içinde dolu ve yerelleştirilmiş B2B `description` metni ürettiği canlı HTML üzerinden doğrulandı.
+   - Google Merchant XML akışı (`/api/v1/store/feeds/google-merchant.xml`) 8 dilde (`5.830` aktif ürün × `8` dil = `46.640` öğe) tarandı ve `0` adet boş/geçersiz `g:description` bulundu (`badDesc=0`).
+3. **Uyarının Muhtemel Kaynağı:**
+   - Googlebot'un 12–14 Kasım SEO güncellemelerinden (`471ee0b` / `ff8346b`) önce taradığı önbellekli `1` adet ürün sayfası için GSC'nin gecikmeli toplu mail göndermiş olması.
+   - İhtiyaten, [`resolveLocalizedProductDesc`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/product/%5Bslug%5D/page.tsx#L140-L151) yalnızca HTML etiketlerini (`<...>`) temizlediği için, gelecekte bir tedarikçi yalnızca `&nbsp;` / `&#160;` içeren açıklama girerse bunun da fallback metne yönlendirilmesi için HTML entity temizliği eklenebilir.
+4. **Durum:** Danışma sorusu olduğu için kod değişikliği yapılmadı; kullanıcıya Search Console'da **"Düzeltmeyi Doğrula"** butonunu kullanması ve isterse `&nbsp;` entity korumasının `llms.txt` iyileştirmesiyle birlikte eklenebileceği iletildi.
+
+
+---
+
+## Oturum #171 — 2026-11-16 00:49 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Gelen *"👤 Yeni Müşteri / Bayi Kaydı: Altini Official"* bildirim e-postası üzerinden: *"bu mailde bayii yazmasın Müşteri ise Müşteri Tedarikçi ise Tedarikçi yazsın kafa karıştırıyor uygulamanın başka yerlerinde de bayi geçiyorsa onlarıda düzeltelim"*.
+
+### Yapılan İşlemler
+1. **E-Posta Şablonları (`Müşteri` vs `Tedarikçi` Açık Hesap Türü Ayrımı):**
+   - [`mailer.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/mailer/mailer.go):
+     - `SendCustomerRegisteredNotification`: Konu `"👤 Yeni Müşteri Kaydı: %s"`, rozet `"👤 Yeni Müşteri Kaydı"`, başlık `"Mağaza Vitrininden Yeni Müşteri Kaydı Geldi"` olarak güncellendi; hem düz metin hem HTML detay tablosunun en üstüne `Hesap Türü: Müşteri` satırı eklendi.
+     - `SendSupplierApplicationNotification`: Düz metin ve HTML tablosunun en üstüne `🏷️ Hesap Türü: Tedarikçi (Başvuru)` satırı eklendi.
+     - `SendSupplierRegisteredNotification`: Konu `"🏢 Yeni Tedarikçi Kaydı: %s (%s)"`, rozet `"🏢 Yeni Tedarikçi Kaydı"`, başlık `"Yeni Tedarikçi Portalı Hesabı Açıldı"` olarak güncellendi; düz metin ve HTML tablosunun en üstüne `Hesap Türü: Tedarikçi` satırı eklendi.
+   - [`order_digest_templates.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/mailer/order_digest_templates.go): Test siparişindeki `"ornek-bayi@mertervitrini.com.tr"` adresi `"ornek-musteri@mertervitrini.com.tr"` olarak değiştirildi; yeni müşteri test maili şablonundan `"Bayi"` ibaresi kaldırılıp `Hesap Türü: Müşteri` satırı eklendi.
+   - [`envelope_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/pkg/mailer/envelope_test.go): `TestBuildTestEventEmailBodiesNoBayiWording` birim testi eklendi.
+2. **Backend Bildirim Merkezi, API & Veritabanı Şemaları:**
+   - [`admin_notifications.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_notifications.go) & [`0037_add_admin_notification_settings.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0037_add_admin_notification_settings.sql): `new_customer` kural başlığı `'Yeni Müşteri Kaydı Bildirimi'` yapıldı ve mevcut canlı DB kaydını ayarlara (`enabled`, `to_emails`, `cc_emails`) dokunmadan güncelleyen idempotent `UPDATE` sorgusu eklendi.
+   - [`marketplace.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/marketplace.go): `CreateB2BApiKey` hata mesajı `"Müşteri veya firma adı zorunludur"` olarak güncellendi.
+   - [`0028_add_customer_email_verification.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0028_add_customer_email_verification.sql), [`0010_b2b_marketplace_suborders_wallet_feeds.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0010_b2b_marketplace_suborders_wallet_feeds.sql) ve [`DB_DDL.sql`](file:///c:/Projects/mertervitrini.com.tr/database/DB_DDL.sql) içindeki `"bayi"` / `"bayilik"` yorum satırları güncellendi.
+3. **Next.js Frontend (`Müşteri` / `Tedarikçi` Terminolojisi):**
+   - [`adminNavigation.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/config/adminNavigation.ts): `"Müşteriler & Bayiler"` -> `"Müşteriler"`.
+   - [`B2BClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/b2b/B2BClient.tsx): `"Toptan Müşteri / Bayi Başvuru Formu"` -> `"Toptan Müşteri Başvuru Formu"`.
+   - [`CartInquirySection.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/cart/components/CartInquirySection.tsx) & [`CartDrawer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/CartDrawer.tsx): TR (`bayimiz` -> `müşterimiz`) ve DE (`Händler` -> `B2B-Kunde`) kayıtlı müşteri istemleri güncellendi.
+   - [`ContactClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/contact/ContactClient.tsx): TR, EN, AR ve DE `emailDesc` metinlerindeki bayilik/dealership/Händler ibareleri müşteri/tedarikçi ifadeleriyle güncellendi.
+
+### Doğrulamalar
+- Tüm kaynak kod taramasında (`backend`, `frontend/src`, `mobile/lib`, `keycloak-theme`, `database`) kullanıcıya dönük hiçbir `"bayi"` kalıntısı kalmadı (yalnızca İzmir ilçesi `"Bayındır"`, `envelope_test.go` negatif testi ve eski DB başlığını güncelleyen `WHERE title = ...` göç koşulu kaldı).
+- `cd backend; go vet ./...; go test -count=1 ./pkg/mailer/... ./handlers/...`: `ok mertervitrini/backend/pkg/mailer (0.248s)`, `ok mertervitrini/backend/handlers (0.580s)`.
+- `cd frontend; npx tsc --noEmit; npm run lint`: sıfır hata ve sıfır uyarıyla (`exit code 0`) geçti.
+- `AGENTS.md` Kural #1 ve #7 uyarınca yerel `npm run build`, `git commit`, `git push` veya canlı sunucu dağıtımı yapılmadı; değişiklikler çalışma dizininde kullanıcı onayına bırakıldı.
+
+
+---
+
+## Oturum #172 — 2026-11-16 01:35 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Admin sipariş detay ekranında (`20261113-00001`) yer alan anlamsız teslimat/fatura adresleri (`Osiskdlskdpsopdpappdpxpxppspupapa` / `Xidskdlskskkdksodsoaooaoa`) ve `"İptal Et"` durum seçimi üzerinden: *"bazı böyle test siparişlerini iptal edebilmeliyim gerçek ülke il ilçe gibi bilgileri girmeden kimse sipariş verememeli google recapthca koruması olmalı sipariş verme adımında"*.
+
+### Yapılan İşlemler
+1. **Veritabanı Şeması ve Otomatik Migration (Google reCAPTCHA v3 Ayarları):**
+   - [`0038_add_recaptcha_settings.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0038_add_recaptcha_settings.sql), [`DB_DDL.sql`](file:///c:/Projects/mertervitrini.com.tr/database/DB_DDL.sql) ve [`db.go`](file:///c:/Projects/mertervitrini.com.tr/backend/db/db.go): `catalog.settings` tablosuna `recaptcha_enabled BOOLEAN NOT NULL DEFAULT true`, `recaptcha_site_key TEXT NOT NULL DEFAULT ''` ve `recaptcha_secret_key TEXT NOT NULL DEFAULT ''` alanları eklendi.
+2. **Go Backend — Sipariş İptal/Silme, Yapılandırılmış Konum + Sahte Metin Koruması & reCAPTCHA v3:**
+   - [`recaptcha_settings.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/recaptcha_settings.go), [`models.go`](file:///c:/Projects/mertervitrini.com.tr/backend/models/models.go), [`admin_catalog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_catalog.go), [`store_catalog.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_catalog.go), [`router.go`](file:///c:/Projects/mertervitrini.com.tr/backend/router.go): DB + `config.json`/env fallback destekli Google reCAPTCHA v3 yönetimi (Secret Key GET uçlarında maskelenir/dönülmez); `verifyOrderOrInquiryAntiBot` ile sipariş (`POST /api/v1/store/orders`) ve B2B doğrudan talep (`POST /api/v1/store/inquiries`) adımlarında reCAPTCHA v3 veya imzalı mobil `X-Mobile-Challenge` doğrulaması uygulanır (`impersonated: true` admin taklit oturumu muaf tutulur); [`mobile_challenge.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/mobile_challenge.go) içine `create_order` ve `submit_inquiry` amaçları eklendi.
+   - [`address_validation.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/address_validation.go), [`address_validation_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/address_validation_test.go), [`store_auth.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_auth.go), [`store_orders.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_orders.go), [`store_inquiry.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_inquiry.go): Ülke (`country_id`), il (`state_id`, varsa zorunlu) ve ilçe (`city_id`, varsa zorunlu) hiyerarşisi DB'den doğrulanır; `ValidateHumanPersonName` ve `ValidateHumanAddressText` tekrarlı/anlamsız klavye dizilerini (`Osiskdlsk...`, `aaaaa...`, tek kelime vb.) reddeder; `CreateOrder` kayıtlı ve doğrulanmış `delivery_address_id` + `billing_address_id` zorunluluğu uygular.
+   - [`admin_orders.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/admin_orders.go), [`marketplace.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/marketplace.go), [`store_orders.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/store_orders.go): Misafir/talep siparişleri için `LEFT JOIN identity.users` desteği, iptalde ürün/varyant stok iadesi (`restoreProductAndVariantStock`) + tedarikçi alt sipariş iptali (`cancelSupplierSubOrdersForOrder`) + cüzdan/ledger düzeltmesi (`ORDER_CANCELLED_REVERSAL`) ve `DELETE /api/v1/orders/{id}` (`DeleteOrder`) ile `CANCELLED` / `PENDING_PAYMENT` test siparişlerinin kalıcı silinmesi eklendi.
+3. **Next.js Admin & Vitrin Mağazası:**
+   - [`OrdersManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/orders/OrdersManager.tsx): `alert()` yerine satır içi bildirim banner'ı, `"İptal Et"` -> `"İptal Edildi"` etiket düzeltmesi, modal başlığında durum ve ödeme rozetleri ile **"Siparişi İptal Et"** ve **"Test / Sahte Siparişi Kalıcı Sil"** aksiyonları eklendi.
+   - [`site/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/admin/settings/site/page.tsx), [`admin-api.service.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/services/admin-api.service.ts), [`AdminContext.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/context/AdminContext.tsx): `/admin/settings/site` içine **Google reCAPTCHA v3 Bot & Sahte Sipariş Koruması** (aç/kapat anahtarı, Site Key ve write-only Secret Key) kartı eklendi.
+   - [`recaptcha.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/recaptcha.ts), [`addressValidation.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/utils/addressValidation.ts), [`StructuredLocationFields.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/StructuredLocationFields.tsx), [`StructuredCheckoutAddressPicker.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/StructuredCheckoutAddressPicker.tsx), [`CartDrawer.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/CartDrawer.tsx), [`StorefrontLayout.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/store/StorefrontLayout.tsx), [`CartCheckoutSection.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/cart/components/CartCheckoutSection.tsx), [`CartInquirySection.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/cart/components/CartInquirySection.tsx), [`CartClient.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/%5BcategoryPrefix%5D/cart/CartClient.tsx), [`AddressModal.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/profile/components/AddressModal.tsx), [`profile/page.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/app/profile/page.tsx): Checkout'taki serbest `<textarea>` adres alanları `StructuredCheckoutAddressPicker` ile değiştirildi; tüm sepet/talep/profil formlarına basamaklı Ülke -> İl -> İlçe seçimi, anlamsız adres/isim engeli ve `executeRecaptchaAction("create_order")` / `executeRecaptchaAction("submit_inquiry")` entegrasyonu eklendi.
+4. **Flutter Mobil Uygulama:**
+   - [`address_validator.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/core/address_validator.dart), [`marketplace.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/models/marketplace.dart), [`commerce_repository.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/contracts/commerce_repository.dart), [`http_commerce_repository.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/repositories/http_commerce_repository.dart), [`http_marketplace_repository.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/repositories/http_marketplace_repository.dart), [`mobile_api_service.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/services/mobile_api_service.dart), [`cart_and_checkout_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/cart_and_checkout_screen.dart), [`direct_inquiry_sheet.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/direct_inquiry_sheet.dart), [`address_book_screen.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/lib/features/customer/address_book_screen.dart), [`widget_test.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/test/widget_test.dart), [`modernization_test.dart`](file:///c:/Projects/mertervitrini.com.tr/mobile/test/modernization_test.dart): Mobil sipariş (`createOrder`) ve doğrudan B2B talep (`submitDirectInquiry`) akışlarına imzalı `X-Mobile-Challenge`, zorunlu Ülke -> İl -> İlçe seçimi ve `AddressValidator` sahte adres/isim doğrulaması eklendi.
+
+### Doğrulamalar
+- `cd backend; go vet ./...; go test -count=1 ./handlers/... ./pkg/mailer/...`: `ok mertervitrini/backend/handlers (0.384s)`, `ok mertervitrini/backend/pkg/mailer (0.048s)` (`exit code 0`).
+- `cd frontend; npx tsc --noEmit; npm run lint -- --max-warnings=0`: sıfır hata ve sıfır uyarıyla (`exit code 0`) geçti.
+- `cd mobile; flutter analyze; flutter test`: `No issues found!` ve tüm `31` birim/widget testi (`+31: All tests passed!`, `exit code 0`) geçti.
+- `AGENTS.md` Kural #1 ve #7 uyarınca yerel `npm run build`, `git commit`, `git push` veya canlı sunucu dağıtımı yapılmadı; değişiklikler çalışma dizininde kullanıcı onayına bırakıldı.
+
+
+---
+
+## Oturum #173 — 2026-11-16 01:41 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- Oturum #171 ve Oturum #172 kapsamındaki tüm değişikliklerin commit edilip canlı sunucuda yayınlanması (`"commitle yayınla"`).
+
+### Yapılan İşlemler, Commit & Canlı Yayın
+1. **Atomik Yerel Commitler (`git push` çalıştırılmadı):**
+   - `e947ca1`: `refactor: replace ambiguous dealer wording with explicit customer and supplier labels` (`10` dosya, `+65 / -20` satır — Oturum #171 kapsamı).
+   - `558bb03`: `feat: add test order purge, structured address validation, and checkout reCAPTCHA v3` (`42` dosya, `+4110 / -471` satır — Oturum #172 kapsamı).
+   - (CRLF gürültüsü taşıyan önceden değiştirilmiş `backend/handlers/admin_blog.go` ve `backend/handlers/admin_pages.go` commitlere dahil edilmedi.)
+2. **Canlı Sunucu Derleme & Dağıtım ([`unified_deployer.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/unified_deployer.py)):**
+   - Komut: `python scripts\unified_deployer.py -p unified -c all -a all` (`141.19 sn`, exit code `0`).
+   - **Go Backend (`merter-backend.service`, Port `8080`):** Linux `amd64` için `43.00 MB` binary cross-compile edilip yüklendi (`52.26 sn`), `catalog.settings` reCAPTCHA sütunları ve bildirim kuralları başlangıçta otomatik doğrulandı, günlük özet zamanlayıcısı (`Europe/Istanbul`) ve API başarıyla başlatıldı.
+   - **Next.js SSR Frontend (`merter-frontend.service`, Port `3000`):** Sunucuda uzak Next.js SSR build (`88.92 sn`) tamamlandı, servis ve Nginx yeniden başlatıldı.
+3. **Canlı Sunucu Doğrulaması (`https://mertervitrini.com.tr`):**
+   - `GET /api/v1/health` -> `200 OK` (`{"status":"healthy","database":"connected","service":"unified-backend"}`).
+   - `GET /api/v1/store/settings` -> `recaptcha_enabled: false` (anahtarlar henüz girilmediği için sipariş akışı kilitlenmiyor) ve `recaptcha_secret_key` dışarıya sızmıyor (`false`).
+   - Yetkisiz `DELETE /api/v1/orders/00000000-0000-0000-0000-000000000000` -> `401 Unauthorized` (yeni kalıcı sipariş silme uç noktası canlıda aktif ve JWT korumalı).
+   - `HEAD /`, `HEAD /admin/orders`, `HEAD /admin/settings/site` -> tümü `200 OK`.
