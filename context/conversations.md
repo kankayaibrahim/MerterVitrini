@@ -3079,3 +3079,60 @@
      - `GET /638d6e3eb8a743ec900269823f24ffe6.txt` → `HTTP/1.1 200 OK` (`Content-Length: 33`)
      - Yetkisiz `GET /api/v1/indexnow/logs` → `HTTP/1.1 401 Unauthorized` (uç canlıda aktif ve admin JWT koruması altında)
 - **Not:** `AGENTS.md` Kural #1 uyarınca uzak Git deposuna `git push` çalıştırılmamıştır; değişiklikler yerel atomic commitlerde ve canlı AlmaLinux sunucusunda yayındadır.
+
+
+---
+
+### [2026-11-15 18:11:00] - Oturum #162 (IndexNow 403 `UserForbiddedToAccessSite` Kök Neden Tespiti ve Resmi Konsorsiyum Failover Düzeltmesi)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** `https://mertervitrini.com.tr/admin/catalog/indexnow` ekranında `"Gönderim denendi ancak IndexNow hata döndürdü: HTTP 403 (Forbidden): {"errorCode":"UserForbiddedToAccessSite",...}"` hatasının giderilmesi.
+- **Canlı Sunucu (`213.202.255.80`) Üzerinde Doğrulanan Kök Neden:**
+  - `merter-backend`, gönderimlerin tamamını yalnızca `https://api.indexnow.org/IndexNow` (Microsoft Bing/Azure) uç noktasına yapıyordu.
+  - Nginx erişim loglarında (`18:00:17 +0300`) `api.indexnow.org` kaynaklı hiçbir anahtar doğrulama (`638d6e3eb8a743ec900269823f24ffe6.txt`) isteği origin sunucuya ulaşamadı; Cloudflare Bot Fight Mode / WAF, Bing'in doğrulanmamış Azure veri merkezi IP'sini Cloudflare kenarında (`403`) engellediği için Bing `UserForbiddedToAccessSite` döndürdü.
+  - Buna karşın canlı sunucu üzerinden yapılan aynı JSON `POST` testinde Cloudflare tarafından doğrulanmış botlara (`YandexBot/3.0`, `5.45.207.48` → Nginx `200 OK`) sahip resmi IndexNow konsorsiyum uçları **`https://yandex.com/indexnow`** ve **`https://search.seznam.cz/indexnow`** aynı anahtar dosyasını okuyup **`HTTP 200 OK`** ile kabul etti. IndexNow protokolü gereği kabul edilen URL'ler otomatik olarak tüm konsorsiyum motorlarına (Bing + Yandex + Seznam + Naver) paylaşılır.
+- **Yapılan Değişiklikler:**
+  1. **Çoklu IndexNow Konsorsiyum Yönlendirme & Failover ([`indexnow.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/indexnow.go)):**
+     - `defaultIndexNowEndpoints` sıralaması eklendi: `yandex.com/indexnow` → `search.seznam.cz/indexnow` → `api.indexnow.org` (istenirse `INDEXNOW_ENDPOINTS` ortam değişkeniyle özelleştirilebilir).
+     - `postIndexNowChunkWithEndpoints` ve `postIndexNowSingleEndpoint` ile geçerli `200`/`202` cevabı gelene kadar `403`/`429`/`5xx`/ağ hatalarında otomatik sıradaki konsorsiyum ucuna geçiş sağlandı; `400`/`422` şema/alan hatalarında gereksiz tekrar durduruldu.
+     - Tüm isteklere `MerterVitrini-IndexNow/1.0 (+https://mertervitrini.com.tr)` `User-Agent` başlığı eklendi ve kabul eden uç nokta bilgisi `response_message` alanına yazıldı.
+  2. **Anahtar Dosyası Temizliği & Backend Fallback Rotası ([`638d6e3eb8a743ec900269823f24ffe6.txt`](file:///c:/Projects/mertervitrini.com.tr/frontend/public/638d6e3eb8a743ec900269823f24ffe6.txt), [`indexnow.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/indexnow.go), [`router.go`](file:///c:/Projects/mertervitrini.com.tr/backend/router.go)):**
+     - `frontend/public/638d6e3eb8a743ec900269823f24ffe6.txt` dosyası BOM ve satır sonu boşluğu olmadan tam 32 byte ASCII (`638d6e3eb8a743ec900269823f24ffe6`) olarak yazıldı.
+     - `ServeKeyFile` işleyicisi `GET /638d6e3eb8a743ec900269823f24ffe6.txt` rotasına savunma amaçlı eklendi.
+  3. **Birim Testleri & Admin Arayüz Metni ([`indexnow_test.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/indexnow_test.go), [`IndexNowManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/catalog/IndexNowManager.tsx)):**
+     - `TestPostIndexNowChunkFailoverOn403`, `TestPostIndexNowChunkNoRetryOn422` ve `TestServeKeyFile` `httptest` testleri eklendi.
+     - Admin IndexNow başlık açıklamasındaki yazım hatası (`"iletülür"` → `"iletilir"`) ve konsorsiyum failover akış açıklaması güncellendi.
+- **Doğrulamalar:**
+  - `frontend/public/638d6e3eb8a743ec900269823f24ffe6.txt`: `32` byte tam doğrulandı.
+  - `cd backend; go vet ./...` ve `go test -count=1 ./handlers -run "TestBuildProductIndexNowURLs|TestNormalizeAndChunkIndexNowURLs|TestPostIndexNowChunk|TestServeKeyFile" -v` → `5/5 PASS` (`0.381s`).
+  - `cd frontend; npx tsc --noEmit` ve `npm run lint` → sıfır hata/uyarı (`exit code 0`).
+  - `AGENTS.md` Kural #1 ve #7 uyarınca yerel `npm run build`, `git commit`, `git push` veya canlı dağıtım yapılmadı; değişiklikler çalışma dizininde kullanıcı onayına bırakıldı.
+
+
+---
+
+### [2026-11-15 18:22:00] - Oturum #163 (SonarLint Düzeltmeleri, Commit ve Canlı Sunucu Yayını)
+- **Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+- **Kullanıcı İstemi:** [`IndexNowManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/catalog/IndexNowManager.tsx) için 11 SonarLint uyarısının ve [`supplier_portal.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_portal.go) satır 791 (`GetProduct`) bilişsel karmaşıklık (`go:S3776`) uyarısının giderilmesi, ardından `"düzeltikten sonra commitle ve yayınla"` talimatının uygulanması.
+- **Yapılan İşlemler:**
+  1. **Frontend SonarLint Düzeltmeleri ([`IndexNowManager.tsx`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/components/admin/catalog/IndexNowManager.tsx)):**
+     - `typescript:S6571`: `IndexNowLogEntry.trigger_source` ve `status` alanlarındaki `| string` tarafından ezilen birleşim tipleri temiz `string` olarak sadeleştirildi; `IndexNowTriggerSource` ve `IndexNowLogStatus` tipleri filtre sabitlerinde korundu.
+     - `typescript:S3358`: Tüm iç içe üçlü (`ternary`) ifadeler `resolveFeedbackType`, `formatSuccessRateDisplay`, `getFeedbackBannerStyle`, `renderFeedbackIcon` yardımcılarına ve `IndexNowLogListSection` erken dönüşlerine ayrıldı.
+     - `typescript:S6772`: Başlık açıklamasındaki satır içi `<code>` etiketleri düz `<p>` paragrafı + ayrı rozet satırına taşındı.
+     - `typescript:S9383` ve React `react-hooks/set-state-in-effect`: `requestIndexNowLogs` saf istemci yardımcısı ile `useEffect` içinde `void requestIndexNowLogs(...).then(...).catch(...).finally(...)` deseni uygulandı ve tüm asenkron tetikleyiciler `void` ile sarıldı.
+     - `typescript:S3776`: Ana bileşen `IndexNowHeaderCard`, `IndexNowFeedbackAlert`, `IndexNowKpiGrid`, `IndexNowActionForms`, `IndexNowClearControls`, `IndexNowLogRow`, `IndexNowLogListSection` alt bileşenlerine ve `buildIndexNowLogsParams`, `validateManualUrlsInput`, `sendAuthorizedRequest` yardımcılarına bölündü.
+  2. **Backend Bilişsel Karmaşıklık Azaltımı (`go:S3776`):**
+     - [`supplier_portal.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_portal.go): `GetProduct` içindeki varyant ve görsel sorguları [`loadSupplierProductVariants`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_portal.go#L790-L810) ve [`loadSupplierProductImages`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/supplier_portal.go#L812-L832) yardımcılarına ayrıldı (`17` karmaşıklık erken dönüşlerle azaltıldı).
+     - [`indexnow.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/indexnow.go): `parseIndexNowEndpoint`, `collectIndexNowSamples`, `handleIndexNowDevSkip` ve `sendAllIndexNowChunks` yardımcıları ayrıldı.
+  3. **Yerel Doğrulamalar:**
+     - `cd backend; go vet ./...` ve `go test -count=1 ./handlers -run "TestBuildProductIndexNowURLs|TestNormalizeAndChunkIndexNowURLs|TestPostIndexNowChunk|TestServeKeyFile" -v` → `5/5 PASS` (`0.368s`).
+     - `cd frontend; npx tsc --noEmit` ve `npm run lint` → `exit code 0` (`0` hata, `0` uyarı).
+  4. **Git Commit & Canlı Sunucu Yayını (`213.202.255.80`):**
+     - Commit `7ae6229`: `fix: route IndexNow via consortium failover and reduce handler cognitive complexity` (6 dosya).
+     - `python scripts/unified_deployer.py -p unified -c all -a all` toplam `119.53 sn` sürede başarıyla tamamlandı (`merter-backend` `PID 1321233`, `merter-frontend`, `nginx` aktif).
+  5. **Canlı Üretim Doğrulamaları (`213.202.255.80`):**
+     - `systemctl is-active merter-backend merter-frontend nginx` → `active / active / active`
+     - `GET http://127.0.0.1:8080/api/v1/health` → `{"status":"healthy","database":"connected","service":"unified-backend"}`
+     - `GET http://127.0.0.1:8080/638d6e3eb8a743ec900269823f24ffe6.txt`, origin HTTPS ve Cloudflare (`YandexBot/3.0` UA) → `32` byte tam anahtar.
+     - `HEAD http://127.0.0.1:3000/admin/catalog/indexnow` → `200 OK`
+     - Önceki `failed` (`403`) kaydı (`01a1dfb9-2ede-7768-811c-aafe516d4a0d`) için `POST http://127.0.0.1:8080/api/v1/indexnow/logs/{id}/retry` canlı çalıştırıldı → `HTTP 200`, yeni log (`01a1dfcc-b67d-754e-bda0-59b009916df7`) `status = success`, `http_status = 200`, `url_count = 100`, mesaj: `HTTP 200 (OK) — yandex.com/indexnow üzerinden IndexNow ortak ağına (Bing + Yandex) iletildi`.
+- **Not:** `AGENTS.md` Kural #1 uyarınca uzak Git deposuna `git push` çalıştırılmamıştır; değişiklikler yerel commitlerde ve canlı AlmaLinux sunucusunda yayındadır.
