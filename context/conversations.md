@@ -3467,3 +3467,87 @@
    - `cd frontend; npx tsc --noEmit; npm run lint -- --max-warnings=0`: sıfır hata ve sıfır uyarıyla (`exit code 0`) geçti (`AGENTS.md` Kural #7 gereği yerelde `npm run build` çalıştırılmadı).
 3. **Yerel Git Commitleri & Canlı Yayın ([`unified_deployer.py`](file:///c:/Projects/mertervitrini.com.tr/scripts/unified_deployer.py)):**
    - Frontend refactor (`refactor: unify storefront reCAPTCHA v3 loader and sync admin integrations card`) ve Oturum #174-#175 konuşma kayıtları (`docs: log sessions #174-#175 in persistent conversation history`) yerel depoda commitlendi (`git push` yapılmadı); ardından `python scripts\unified_deployer.py -p unified -c frontend -a all` ile canlı sunucuda uzak Next.js SSR derleme/dağıtım ve uç nokta doğrulamaları yürütüldü.
+
+
+---
+
+## Oturum #176 — 2026-11-16 10:53 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- [`backend/handlers/admin_orders.go`](file:///C:/Projects/mertervitrini.com.tr/backend/handlers/admin_orders.go) dosyasındaki `DeleteOrder` metodunun bilişsel karmaşıklık (Cognitive Complexity) uyarısının (`go:S3776`, 16 -> <= 15) refactor edilerek giderilmesi.
+
+### Yapılan İşlemler
+1. **Bilişsel Karmaşıklığın Azaltılması:**
+   - [`backend/handlers/admin_orders.go`](file:///C:/Projects/mertervitrini.com.tr/backend/handlers/admin_orders.go) içindeki `DeleteOrder` metodunda yer alan iç içe bloklar ve döngü işlemleri iki özel yardımcı fonksiyona ayrıştırıldı:
+     - `restoreAndCancelOrderOnDeletion(ctx, tx, orderID)`: İptal edilmemiş siparişlerin stok iadesi ve tedarikçi alt sipariş iptali mantığı.
+     - `purgeOrderRecords(ctx, tx, orderID)`: İlişkili sipariş kayıtlarının (iade, ödeme bildirimi, alt sipariş, kalemler ve sipariş) silme sorguları.
+   - Böylece `DeleteOrder` fonksiyonunun bilişsel karmaşıklığı 16'dan 12'ye düşürülerek SonarQube sınırının (<= 15) oldukça altına çekildi.
+2. **Doğrulamalar:**
+   - `cd backend; go vet ./...`: Başarılı (`exit code 0`).
+   - `cd backend; go test -count=1 ./handlers/...`: Tüm handler birim testleri başarıyla geçti (`ok mertervitrini/backend/handlers 0.468s`, `exit code 0`).
+   - `AGENTS.md` Kural #1 gereği izinsiz `git commit` veya `git push` çalıştırılmadı.
+
+
+---
+
+## Oturum #177 — 2026-11-16 10:56 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- [`frontend/src/services/admin-api.service.ts`](file:///c:/Projects/mertervitrini.com.tr/frontend/src/services/admin-api.service.ts) dosyasındaki SonarLint uyarılarının (`typescript:S3358` iç içe ternary ve `typescript:S3923` aynı değeri dönen koşullu ifade) düzeltilmesi.
+
+### Yapılan İşlemler
+1. **İç İçe Ternary İfadesinin Sadeleştirilmesi (`typescript:S3358`):**
+   - `normalizeProductsPayload` içerisindeki `fallbackTotal` hesaplamasında iç içe ternary kaldırıldı; `products.length === 0` durumunda erken dönüş (`return { products, total: 0 }`) yapıldı ve limit kontrolü (`hasMore`) ayrı bir ifadeye ayrıştırıldı.
+2. **Gereksiz Koşulun Düzeltilmesi (`typescript:S3923`):**
+   - `saveTheme` metodundaki `theme === "dark" ? "light" : "light"` yapısı kaldırılarak `if (typeof window === "undefined" || !theme) return;` kontrolü ile temiz bir erken dönüşe dönüştürüldü; böylece hem SonarLint uyarısı giderildi hem de ESLint unused-var kuralı sıfır uyarıyla sağlandı.
+3. **Doğrulamalar:**
+   - `cd frontend; npx tsc --noEmit; npm run lint -- --max-warnings=0`: Sıfır hata ve sıfır uyarıyla tamamlandı (`exit code 0`).
+   - `AGENTS.md` Kural #1 gereği izinsiz `git commit` veya `git push` çalıştırılmadı.
+
+
+---
+
+## Oturum #178 — 2026-11-16 10:58 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- [`backend/handlers/indexnow.go`](file:///C:/Projects/mertervitrini.com.tr/backend/handlers/indexnow.go) dosyasındaki 4 kod analiz uyarısının (parametre sayısı `go:S107`, tekrarlanan literal `go:S1192` ve switch-tag `QF1003`) düzeltilmesi.
+
+### Yapılan İşlemler
+1. **Parametre Sayısının Azaltılması (`go:S107`):**
+   - `insertIndexNowLog` fonksiyonunun 8 adet parametresi `indexNowLogRecordInput` struct'ı altında toplanarak parametre sayısı 2'ye (`ctx context.Context, in indexNowLogRecordInput`) düşürüldü.
+2. **Tekrarlanan Metin Literalinin Sabite Alınması (`go:S1192`):**
+   - 3 farklı yerde tekrarlanan `"IndexNow şeması hazırlanamadı"` dizesi için `errIndexNowSchemaPrep` sabiti tanımlandı ve `SubmitRecentProducts`, `RetryLog` ve `ClearLogs` işleyicilerinde kullanıldı.
+3. **Tagged Switch Kullanımı (`QF1003`):**
+   - 749 ve 978. satırlardaki `entry.Status` için ardışık `if/else-if` blokları deyimsel Go `switch entry.Status` yapısına dönüştürüldü.
+4. **Doğrulamalar:**
+   - `cd backend; go vet ./...`: Hatasız geçti (`exit code 0`).
+   - `cd backend; go test -count=1 ./handlers/...`: Tüm handler birim testleri başarıyla tamamlandı (`ok mertervitrini/backend/handlers 0.623s`, `exit code 0`).
+   - `AGENTS.md` Kural #1 gereği izinsiz `git commit` veya `git push` çalıştırılmadı.
+
+
+---
+
+## Oturum #179 — 2026-11-16 11:00 (+03:00)
+
+**Conversation ID:** `ea80f35f-34dd-451d-a636-45dd496a7728`
+
+### Kullanıcı İstemi
+- [`backend/handlers/address_validation.go`](file:///C:/Projects/mertervitrini.com.tr/backend/handlers/address_validation.go) dosyasındaki 3 fonksiyonun bilişsel karmaşıklık (`go:S3776` Cognitive Complexity > 15) uyarılarının giderilmesi (`isGibberishAlphaToken` 24-><=15, `ValidateHumanAddressText` 18-><=15, `ValidateStructuredLocationDB` 23-><=15).
+
+### Yapılan İşlemler
+1. **`isGibberishAlphaToken` Sadeleştirilmesi (24 -> 2):**
+   - Alt belirteç analizi `analyzeAlphaSubToken` (harf çeşitliliği ve ardışık sessiz harf ölçümü) ve `isGibberishSubToken` yardımcı fonksiyonlarına ayrıştırıldı.
+2. **`ValidateHumanAddressText` Sadeleştirilmesi (18 -> 11):**
+   - Adres harf karakter istatistikleri `countAddressLetters` (`totalLetters`, `cjkLetters`, `uniqueLetters`) fonksiyonuna, anlamsız belirteç kontrolü ise `containsGibberishToken` fonksiyonuna ayrıştırıldı.
+3. **`ValidateStructuredLocationDB` Sadeleştirilmesi (23 -> 9):**
+   - Hiyerarşik konum doğrulama adımları tek sorumluluk prensibiyle (SRP) `resolveCountryLocation`, `validateAndResolveState` ve `validateAndResolveCity` yardımcı fonksiyonlarına bölündü.
+4. **Doğrulamalar:**
+   - `cd backend; go vet ./...`: Başarılı (`exit code 0`).
+   - `cd backend; go test -count=1 ./handlers/...`: Adres ve isim doğrulama testleri dahil tüm testler başarıyla geçti (`ok mertervitrini/backend/handlers 0.626s`, `exit code 0`).
+   - `AGENTS.md` Kural #1 gereği izinsiz `git commit` veya `git push` çalıştırılmadı.

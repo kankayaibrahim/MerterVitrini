@@ -66,8 +66,8 @@ Bu kurallar bütünü, `mertervitrini.com.tr` deposunda kod yazan, refactor yapa
 
 ---
 
-## 4. Kalıcı Konuşma Kaydı Kuralı (Persistent Conversation Logging)
+## 4. Önemli Kararların Kaydı Kuralı (Decision-Only Logging)
 
-1. **HER KONUŞMA TURUNU KAYDETME ZORUNLULUĞU:**
-   - Kullanıcı ile gerçekleşen her diyalog (kullanıcı talebi ve ajanın verdiği yanıt / yaptığı teknik işlemler), yanıt kullanıcıya sunulmadan hemen önce [`context/conversations.md`](file:///c:/Projects/mertervitrini.com.tr/context/conversations.md) dosyasına kronolojik olarak eklenmelidir (`Append`).
-   - Kayıt formatı; Tarih/Saat (`YYYY-MM-DD HH:mm`), `Conversation ID`, **Kullanıcı Mesajı**, **Ajan Yanıtı / Yapılan İşlemler** ve varsa **Değiştirilen Dosyalar** başlıklarını içermelidir.
+1. **YALNIZCA ÖNEMLİ DÖNÜM NOKTALARINI KAYDETME:**
+   - Sıradan konuşmalar, küçük hata düzeltmeleri veya rutin refactor işlemleri her seferinde konuşma günlüğüne kaydedilmez.
+   - Yalnızca kritik mimari tasarım değişiklikleri, yeni entegrasyonlar, DB şema kararları veya temel iş kuralları gibi **önemli dönüm noktası kararları** [`context/conversations.md`](file:///c:/Projects/mertervitrini.com.tr/context/conversations.md) veya ilgili `context/` belgelerine eklenmelidir.

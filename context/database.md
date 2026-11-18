@@ -100,3 +100,16 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY catalog.mv_products;
 3. **Startup Kurtarma (Self-Healing Recovery):**
    - Backend servisi yeniden başladığında veya yeni sürüm deploy edildiğinde, `integration.sync_runs` tablosunda `running` durumunda kilitli kalmış süreçler otomatik olarak `failed` durumuna çekilir ve sistem kilitlenmeleri önlenir.
 4. **Redis Fallback:** Redis bağlantısı kesilirse sistem çökmez; loglara uyarı bırakılarak senkronizasyon takibi Go in-memory süreçlerine devredilir.
+
+---
+
+## 6. `analytics` Şeması: WhatsApp İletişim Logları (`analytics.whatsapp_clicks`)
+
+Müşteri ve misafir ziyaretçilerin hangi tedarikçi, ürün ve vitrin alanı üzerinden WhatsApp iletişimine geçtiğini uçtan uca izlemek için [`0018_add_whatsapp_clicks_analytics.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0018_add_whatsapp_clicks_analytics.sql) ve [`db.go`](file:///c:/Projects/mertervitrini.com.tr/backend/db/db.go) içinde `analytics.whatsapp_clicks` tablosu tanımlanmıştır:
+
+- **Tablo (`analytics.whatsapp_clicks`):**
+  - `id` (`UUID PRIMARY KEY DEFAULT uuidv7()`), `brand_id` (`UUID NULL`, `catalog.brands(id) ON DELETE SET NULL`), `product_id` (`UUID NULL`, `catalog.products(id) ON DELETE SET NULL`).
+  - `user_id` (`VARCHAR(128)` — JWT veya `StitchVisitorToMember` ile geçmiş misafir tıklamaları kayıtlı üye ile geriye dönük birleştirilir), `visitor_id` (`VARCHAR(128)`).
+  - `target_phone` (`VARCHAR(64)` — tıklama anında açılan tedarikçi veya mağaza WhatsApp numarası), `source_surface` (`VARCHAR(64)` — örn. `product_calculator`, `product_supplier_card`, `product_quick_modal`, `supplier_directory`, `footer`), `page_path` (`VARCHAR(500)`).
+  - `country_code`, `language_code`, `device_type`, `ip_address`, `referrer_host`, `created_at` (`TIMESTAMPTZ`).
+- **İndeksler:** `idx_whatsapp_clicks_created_at`, `idx_whatsapp_clicks_brand_created`, `idx_whatsapp_clicks_user_id` (`WHERE user_id <> ''`), `idx_whatsapp_clicks_visitor_id` (`WHERE visitor_id <> ''`).

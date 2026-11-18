@@ -128,9 +128,9 @@ Bu projede tek bir jenerik asistan yerine, kendi içinde koordine olan **Özerk 
    - Next.js SSR uygulaması doğrudan AlmaLinux sunucusu üzerinde (`systemd: merter-frontend`, Port `3000`) çalışır.
    - Dağıtım işleminde yalnızca saf kaynak kodlar (`src/`, `public/`, `package.json` vb.) sunucuya aktarılır; derleme işlemi doğrudan sunucu ortamında (`npm run build`) gerçekleştirilir.
    - Tüm deployment araçlarında (`unified_deployer.py`, `build_deploy.ps1`) `--remote-build` kalıcı olarak varsayılandır (default: true).
-8. **HER KONUŞMAYI OTOMATİK VE KALICI OLARAK KAYDET (Persistent Conversation Logging):**
-   - Kullanıcı ile yapılan **her konuşma turu (her kullanıcı mesajı ve ajan yanıtı/aksiyon özeti)** istisnasız olarak [`context/conversations.md`](file:///c:/Projects/mertervitrini.com.tr/context/conversations.md) dosyasına tarih/saat damgası, konuşma kimliği (`Conversation ID`), kullanıcı istemi ve yapılan işlemler/cevap özeti ile birlikte eklenmelidir (`Append`).
-   - Hiçbir yanıt, `context/conversations.md` güncellenmeden tamamlanmamalıdır.
+8. **YALNIZCA ÖNEMLİ MİMARİ VE SİSTEM KARARLARINI KAYDET (Decision-Only Logging):**
+   - Sıradan/küçük sohbetler, hata düzeltmeleri veya küçük refactor turları her seferinde konuşma günlüğüne kaydedilmez.
+   - Yalnızca kritik mimari değişiklikler, yeni entegrasyonlar, DB şema kararları veya iş kuralları gibi **önemli dönüm noktası kararları** [`context/conversations.md`](file:///c:/Projects/mertervitrini.com.tr/context/conversations.md) veya ilgili `context/` belgelerine işlenir.
 
 ---
 
