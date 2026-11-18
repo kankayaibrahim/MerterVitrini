@@ -32,6 +32,7 @@ const (
 	indexNowUserAgent           = "MerterVitrini-IndexNow/1.0 (+https://mertervitrini.com.tr)"
 	indexNowMaxChunkSize        = 10000
 	indexNowSampleURLLimit      = 100
+	errIndexNowSchemaPrep       = "IndexNow şeması hazırlanamadı"
 )
 
 // IndexNowEndpoint describes an IndexNow Consortium endpoint used for URL notification and failover.
@@ -391,13 +392,24 @@ func postIndexNowChunkWithEndpoints(ctx context.Context, urls []string, endpoint
 	return lastStatus, strings.Join(attemptErrors, " ; "), fmt.Errorf("all indexnow endpoints failed (last HTTP %d)", lastStatus)
 }
 
-func insertIndexNowLog(ctx context.Context, meta IndexNowSubmissionMeta, totalURLs int, sampleURLs []string, status string, httpStatus int, responseMsg string, durationMs int) (*IndexNowLogEntry, error) {
+type indexNowLogRecordInput struct {
+	meta        IndexNowSubmissionMeta
+	totalURLs   int
+	sampleURLs  []string
+	status      string
+	httpStatus  int
+	responseMsg string
+	durationMs  int
+}
+
+func insertIndexNowLog(ctx context.Context, in indexNowLogRecordInput) (*IndexNowLogEntry, error) {
 	if db.Pool == nil {
 		return nil, nil
 	}
 	if err := EnsureIndexNowSchema(ctx); err != nil {
 		return nil, err
 	}
+	sampleURLs := in.sampleURLs
 	if sampleURLs == nil {
 		sampleURLs = []string{}
 	}
@@ -425,9 +437,9 @@ func insertIndexNowLog(ctx context.Context, meta IndexNowSubmissionMeta, totalUR
 
 	err = db.Pool.QueryRow(
 		ctx, insertSQL,
-		meta.TriggerSource, meta.SourceLabel, meta.FeedID, meta.SyncRunID, indexNowHost,
-		meta.ProductCount, totalURLs, string(sampleJSON), status, httpStatus,
-		truncateIndexNowRunes(responseMsg, 1000), durationMs,
+		in.meta.TriggerSource, in.meta.SourceLabel, in.meta.FeedID, in.meta.SyncRunID, indexNowHost,
+		in.meta.ProductCount, in.totalURLs, string(sampleJSON), in.status, in.httpStatus,
+		truncateIndexNowRunes(in.responseMsg, 1000), in.durationMs,
 	).Scan(
 		&entry.ID, &entry.TriggerSource, &entry.SourceLabel, &entry.FeedID, &entry.SyncRunID,
 		&entry.Host, &entry.ProductCount, &entry.URLCount, &rawSamples, &entry.Status,
@@ -459,7 +471,15 @@ func collectIndexNowSamples(chunks [][]string) (int, []string) {
 func handleIndexNowDevSkip(ctx context.Context, cleanMeta IndexNowSubmissionMeta, totalURLs int, sampleURLs []string) (*IndexNowLogEntry, error) {
 	msg := "Yerel/geliştirme ortamında dış IndexNow çağrısı atlandı (canlı Linux sunucuda otomatik gönderilir)."
 	log.Printf("[IndexNow Dev-Skip] source=%s urls=%d label=%q", cleanMeta.TriggerSource, totalURLs, cleanMeta.SourceLabel)
-	entry, err := insertIndexNowLog(ctx, cleanMeta, totalURLs, sampleURLs, "skipped_dev", 0, msg, 0)
+	entry, err := insertIndexNowLog(ctx, indexNowLogRecordInput{
+		meta:        cleanMeta,
+		totalURLs:   totalURLs,
+		sampleURLs:  sampleURLs,
+		status:      "skipped_dev",
+		httpStatus:  0,
+		responseMsg: msg,
+		durationMs:  0,
+	})
 	if err != nil {
 		log.Printf("[IndexNow Log Error] Failed to persist dev-skip log: %v", err)
 	}
@@ -531,7 +551,15 @@ func SubmitIndexNowSync(ctx context.Context, meta IndexNowSubmissionMeta, rawURL
 		log.Printf("[IndexNow Warning] source=%s urls=%d http=%d err=%s label=%q", cleanMeta.TriggerSource, totalURLs, finalHTTPStatus, combinedMsg, cleanMeta.SourceLabel)
 	}
 
-	entry, logErr := insertIndexNowLog(ctx, cleanMeta, totalURLs, sampleURLs, finalStatus, finalHTTPStatus, combinedMsg, durationMs)
+	entry, logErr := insertIndexNowLog(ctx, indexNowLogRecordInput{
+		meta:        cleanMeta,
+		totalURLs:   totalURLs,
+		sampleURLs:  sampleURLs,
+		status:      finalStatus,
+		httpStatus:  finalHTTPStatus,
+		responseMsg: combinedMsg,
+		durationMs:  durationMs,
+	})
 	if logErr != nil {
 		log.Printf("[IndexNow Log Error] Failed to persist log entry: %v", logErr)
 		return &IndexNowLogEntry{
@@ -678,7 +706,7 @@ func (h *IndexNowHandler) SubmitRecentProducts(w http.ResponseWriter, r *http.Re
 	ctx, cancel := context.WithTimeout(r.Context(), 35*time.Second)
 	defer cancel()
 	if err := EnsureIndexNowSchema(ctx); err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "IndexNow şeması hazırlanamadı")
+		httpx.Error(w, http.StatusInternalServerError, errIndexNowSchemaPrep)
 		return
 	}
 
@@ -721,11 +749,14 @@ func (h *IndexNowHandler) SubmitRecentProducts(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	message := fmt.Sprintf("%d ürün (%d çok dilli URL) IndexNow'a bildirildi.", productCount, entry.URLCount)
-	if entry.Status == "skipped_dev" {
+	var message string
+	switch entry.Status {
+	case "skipped_dev":
 		message = fmt.Sprintf("%d ürün (%d URL) yerel geliştirme modunda simülasyon olarak loglandı.", productCount, entry.URLCount)
-	} else if entry.Status == "failed" {
+	case "failed":
 		message = fmt.Sprintf("Gönderim denendi ancak IndexNow hata döndürdü: %s", entry.ResponseMessage)
+	default:
+		message = fmt.Sprintf("%d ürün (%d çok dilli URL) IndexNow'a bildirildi.", productCount, entry.URLCount)
 	}
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
@@ -905,7 +936,7 @@ func (h *IndexNowHandler) RetryLog(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	if err := EnsureIndexNowSchema(ctx); err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "IndexNow şeması hazırlanamadı")
+		httpx.Error(w, http.StatusInternalServerError, errIndexNowSchemaPrep)
 		return
 	}
 
@@ -947,11 +978,14 @@ func (h *IndexNowHandler) RetryLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message := "URL'ler tekrar IndexNow motorlarına gönderildi."
-	if entry.Status == "skipped_dev" {
+	var message string
+	switch entry.Status {
+	case "skipped_dev":
 		message = entry.ResponseMessage
-	} else if entry.Status == "failed" {
+	case "failed":
 		message = "Tekrar gönderim IndexNow hatasıyla sonuçlandı: " + entry.ResponseMessage
+	default:
+		message = "URL'ler tekrar IndexNow motorlarına gönderildi."
 	}
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
@@ -971,7 +1005,7 @@ func (h *IndexNowHandler) ClearLogs(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	if err := EnsureIndexNowSchema(ctx); err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "IndexNow şeması hazırlanamadı")
+		httpx.Error(w, http.StatusInternalServerError, errIndexNowSchemaPrep)
 		return
 	}
 

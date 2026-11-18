@@ -106,42 +106,52 @@ func hasRepeatedLetterRun(text string, limit int) bool {
 	return false
 }
 
+func analyzeAlphaSubToken(sub string) (maxConsonants int, uniqueCount int) {
+	uniqueLetters := make(map[rune]struct{})
+	run, maxRun := 0, 0
+	for _, r := range sub {
+		uniqueLetters[unicode.ToLower(r)] = struct{}{}
+		if isASCIILatinConsonant(r) {
+			run++
+			if run > maxRun {
+				maxRun = run
+			}
+		} else {
+			run = 0
+		}
+	}
+	return maxRun, len(uniqueLetters)
+}
+
+func isGibberishSubToken(sub string) bool {
+	letterCount := utf8.RuneCountInString(sub)
+	if letterCount == 0 {
+		return false
+	}
+	if letterCount > 24 && !hasCJKRune(sub) {
+		return true
+	}
+
+	maxConsonants, uniqueCount := analyzeAlphaSubToken(sub)
+	if letterCount >= 12 && maxConsonants >= 7 {
+		return true
+	}
+	if letterCount >= 14 {
+		ratio := float64(uniqueCount) / float64(letterCount)
+		if ratio < 0.38 {
+			return true
+		}
+	}
+	return false
+}
+
 func isGibberishAlphaToken(token string) bool {
 	subTokens := strings.FieldsFunc(token, func(r rune) bool {
 		return !unicode.IsLetter(r)
 	})
 	for _, sub := range subTokens {
-		letterCount := utf8.RuneCountInString(sub)
-		if letterCount == 0 {
-			continue
-		}
-		if letterCount > 24 && !hasCJKRune(sub) {
+		if isGibberishSubToken(sub) {
 			return true
-		}
-
-		uniqueLetters := make(map[rune]struct{}, letterCount)
-		asciiConsonantRun := 0
-		maxASCIIConsonantRun := 0
-		for _, r := range sub {
-			uniqueLetters[unicode.ToLower(r)] = struct{}{}
-			if isASCIILatinConsonant(r) {
-				asciiConsonantRun++
-				if asciiConsonantRun > maxASCIIConsonantRun {
-					maxASCIIConsonantRun = asciiConsonantRun
-				}
-			} else {
-				asciiConsonantRun = 0
-			}
-		}
-
-		if letterCount >= 12 && maxASCIIConsonantRun >= 7 {
-			return true
-		}
-		if letterCount >= 14 {
-			ratio := float64(len(uniqueLetters)) / float64(letterCount)
-			if ratio < 0.38 {
-				return true
-			}
 		}
 	}
 	return false
@@ -179,6 +189,37 @@ func ValidateHumanPersonName(raw string) error {
 	return nil
 }
 
+type addressLetterStats struct {
+	totalLetters  int
+	cjkLetters    int
+	uniqueLetters int
+}
+
+func countAddressLetters(clean string) addressLetterStats {
+	total := 0
+	cjk := 0
+	unique := make(map[rune]struct{}, 32)
+	for _, r := range clean {
+		if unicode.IsLetter(r) {
+			total++
+			unique[unicode.ToLower(r)] = struct{}{}
+			if isCJKRune(r) {
+				cjk++
+			}
+		}
+	}
+	return addressLetterStats{totalLetters: total, cjkLetters: cjk, uniqueLetters: len(unique)}
+}
+
+func containsGibberishToken(tokens []string) bool {
+	for _, tok := range tokens {
+		if isGibberishAlphaToken(tok) {
+			return true
+		}
+	}
+	return false
+}
+
 // ValidateHumanAddressText rejects short, single-word, repeated-character, and keyboard-mash fake addresses.
 func ValidateHumanAddressText(raw string) error {
 	clean := strings.TrimSpace(raw)
@@ -198,38 +239,99 @@ func ValidateHumanAddressText(raw string) error {
 		return errors.New("Adres alanında anlamsız tekrar eden karakterler kullanılamaz")
 	}
 
-	totalLetters := 0
-	cjkLetters := 0
-	uniqueLetters := make(map[rune]struct{}, 32)
-	for _, r := range clean {
-		if unicode.IsLetter(r) {
-			totalLetters++
-			uniqueLetters[unicode.ToLower(r)] = struct{}{}
-			if isCJKRune(r) {
-				cjkLetters++
-			}
-		}
-	}
-
-	if totalLetters < 4 {
+	stats := countAddressLetters(clean)
+	if stats.totalLetters < 4 {
 		return errors.New("Lütfen yalnızca rakam veya sembol yerine anlaşılır bir açık adres girin")
 	}
-	if totalLetters >= 8 && len(uniqueLetters) < 4 && cjkLetters == 0 {
+	if stats.totalLetters >= 8 && stats.uniqueLetters < 4 && stats.cjkLetters == 0 {
 		return errors.New("Lütfen geçerli ve anlaşılır bir açık adres girin")
 	}
 
 	wsTokens := strings.Fields(clean)
-	if cjkLetters == 0 && len(wsTokens) < 2 {
+	if stats.cjkLetters == 0 && len(wsTokens) < 2 {
 		return errors.New("Lütfen mahalle, cadde/sokak ve kapı numarasını boşluklarla ayrılmış şekilde açıkça yazın")
 	}
 
-	for _, tok := range wsTokens {
-		if isGibberishAlphaToken(tok) {
-			return errors.New("Adres içinde anlamsız veya rastgele karakter dizisi tespit edildi. Lütfen gerçek açık adresinizi girin")
-		}
+	if containsGibberishToken(wsTokens) {
+		return errors.New("Adres içinde anlamsız veya rastgele karakter dizisi tespit edildi. Lütfen gerçek açık adresinizi girin")
 	}
 
 	return nil
+}
+
+func resolveCountryLocation(ctx context.Context, countryID string) (code, name string, err error) {
+	err = db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(code, ''),
+		       COALESCE(localized_names->>'tr_TR', localized_names->>'en_US', code, '')
+		FROM catalog.countries
+		WHERE id::text = $1
+		LIMIT 1
+	`, countryID).Scan(&code, &name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", errors.New("Seçilen ülke sistemde bulunamadı")
+	}
+	if err != nil {
+		return "", "", errors.New("Geçersiz ülke seçimi")
+	}
+	return code, name, nil
+}
+
+func validateAndResolveState(ctx context.Context, countryID, stateID string) (string, error) {
+	var stateCount int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.country_states WHERE country_id::text = $1`, countryID).Scan(&stateCount); err != nil {
+		return "", fmt.Errorf("il listesi doğrulanamadı: %w", err)
+	}
+
+	if stateCount > 0 && stateID == "" {
+		return "", errors.New("Seçili ülke için il / eyalet seçimi zorunludur")
+	}
+	if stateID == "" {
+		return "", nil
+	}
+
+	var stateName string
+	err := db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(state_name, '')
+		FROM catalog.country_states
+		WHERE id::text = $1 AND country_id::text = $2
+		LIMIT 1
+	`, stateID, countryID).Scan(&stateName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", errors.New("Seçilen il / eyalet seçili ülkeye ait değil")
+	}
+	if err != nil {
+		return "", errors.New("Geçersiz il / eyalet seçimi")
+	}
+	return stateName, nil
+}
+
+func validateAndResolveCity(ctx context.Context, stateID, cityID string) (string, error) {
+	var cityCount int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.country_cities WHERE state_id::text = $1`, stateID).Scan(&cityCount); err != nil {
+		return "", fmt.Errorf("ilçe listesi doğrulanamadı: %w", err)
+	}
+
+	if cityCount > 0 && cityID == "" {
+		return "", errors.New("Seçili il için ilçe seçimi zorunludur")
+	}
+	if cityID == "" {
+		return "", nil
+	}
+
+	var cityName string
+	err := db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(name, '')
+		FROM catalog.country_cities
+		WHERE id::text = $1 AND state_id::text = $2
+		LIMIT 1
+	`, cityID, stateID).Scan(&cityName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", errors.New("Seçilen ilçe seçili ile ait değil")
+	}
+	if err != nil {
+		return "", errors.New("Geçersiz ilçe seçimi")
+	}
+	return cityName, nil
 }
 
 // ValidateStructuredLocationDB verifies that CountryID is valid and required State (İl) / City (İlçe) exist in the hierarchy.
@@ -249,65 +351,29 @@ func ValidateStructuredLocationDB(ctx context.Context, countryID string, stateID
 		CityID:    derefTrimmed(cityIDPtr),
 	}
 
-	err := db.Pool.QueryRow(ctx, `
-		SELECT COALESCE(code, ''),
-		       COALESCE(localized_names->>'tr_TR', localized_names->>'en_US', code, '')
-		FROM catalog.countries
-		WHERE id::text = $1
-		LIMIT 1
-	`, cleanCountryID).Scan(&resolved.CountryCode, &resolved.CountryName)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, errors.New("Seçilen ülke sistemde bulunamadı")
-	} else if err != nil {
-		return nil, errors.New("Geçersiz ülke seçimi")
+	countryCode, countryName, err := resolveCountryLocation(ctx, cleanCountryID)
+	if err != nil {
+		return nil, err
+	}
+	resolved.CountryCode = countryCode
+	resolved.CountryName = countryName
+
+	if resolved.StateID == "" && resolved.CityID != "" {
+		return nil, errors.New("İlçe seçimi için önce il / eyalet seçilmelidir")
 	}
 
-	var stateCount int
-	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.country_states WHERE country_id::text = $1`, cleanCountryID).Scan(&stateCount); err != nil {
-		return nil, fmt.Errorf("il listesi doğrulanamadı: %w", err)
+	stateName, err := validateAndResolveState(ctx, cleanCountryID, resolved.StateID)
+	if err != nil {
+		return nil, err
 	}
-
-	if stateCount > 0 && resolved.StateID == "" {
-		return nil, errors.New("Seçili ülke için il / eyalet seçimi zorunludur")
-	}
+	resolved.StateName = stateName
 
 	if resolved.StateID != "" {
-		err = db.Pool.QueryRow(ctx, `
-			SELECT COALESCE(state_name, '')
-			FROM catalog.country_states
-			WHERE id::text = $1 AND country_id::text = $2
-			LIMIT 1
-		`, resolved.StateID, cleanCountryID).Scan(&resolved.StateName)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errors.New("Seçilen il / eyalet seçili ülkeye ait değil")
-		} else if err != nil {
-			return nil, errors.New("Geçersiz il / eyalet seçimi")
+		cityName, err := validateAndResolveCity(ctx, resolved.StateID, resolved.CityID)
+		if err != nil {
+			return nil, err
 		}
-
-		var cityCount int
-		if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM catalog.country_cities WHERE state_id::text = $1`, resolved.StateID).Scan(&cityCount); err != nil {
-			return nil, fmt.Errorf("ilçe listesi doğrulanamadı: %w", err)
-		}
-
-		if cityCount > 0 && resolved.CityID == "" {
-			return nil, errors.New("Seçili il için ilçe seçimi zorunludur")
-		}
-
-		if resolved.CityID != "" {
-			err = db.Pool.QueryRow(ctx, `
-				SELECT COALESCE(name, '')
-				FROM catalog.country_cities
-				WHERE id::text = $1 AND state_id::text = $2
-				LIMIT 1
-			`, resolved.CityID, resolved.StateID).Scan(&resolved.CityName)
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil, errors.New("Seçilen ilçe seçili ile ait değil")
-			} else if err != nil {
-				return nil, errors.New("Geçersiz ilçe seçimi")
-			}
-		}
-	} else if resolved.CityID != "" {
-		return nil, errors.New("İlçe seçimi için önce il / eyalet seçilmelidir")
+		resolved.CityName = cityName
 	}
 
 	return resolved, nil

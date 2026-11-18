@@ -790,6 +790,33 @@ func (h *AdminOrdersHandler) VerifyRefund(w http.ResponseWriter, r *http.Request
 	w.Write(fmt.Appendf(nil, `{"success":true,"message":"İade talebi başarıyla %s olarak güncellendi."}`, targetStatus))
 }
 
+func restoreAndCancelOrderOnDeletion(ctx context.Context, tx pgx.Tx, orderID string) error {
+	if err := restoreOrderStock(ctx, tx, orderID); err != nil {
+		return fmt.Errorf("restore stock: %w", err)
+	}
+	if err := cancelSupplierSubOrdersForOrder(ctx, tx, orderID, "Test/sahte sipariş kalıcı olarak silindi"); err != nil {
+		return fmt.Errorf("cancel supplier sub-orders: %w", err)
+	}
+	return nil
+}
+
+func purgeOrderRecords(ctx context.Context, tx pgx.Tx, orderID string) error {
+	cleanupQueries := []string{
+		`DELETE FROM catalog.refund_items WHERE refund_id IN (SELECT id FROM catalog.refunds WHERE order_id = $1)`,
+		`DELETE FROM catalog.refunds WHERE order_id = $1`,
+		`DELETE FROM catalog.payment_notifications WHERE order_id = $1`,
+		`DELETE FROM catalog.supplier_sub_orders WHERE order_id = $1`,
+		`DELETE FROM catalog.order_items WHERE order_id = $1`,
+		`DELETE FROM catalog.orders WHERE id = $1`,
+	}
+	for _, q := range cleanupQueries {
+		if _, err := tx.Exec(ctx, q, orderID); err != nil {
+			return fmt.Errorf("cleanup query (%s): %w", q, err)
+		}
+	}
+	return nil
+}
+
 // DeleteOrder permanently removes a CANCELLED or PENDING_PAYMENT test/fake order after safely restoring stock and supplier balances.
 func (h *AdminOrdersHandler) DeleteOrder(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
@@ -837,32 +864,17 @@ func (h *AdminOrdersHandler) DeleteOrder(w http.ResponseWriter, r *http.Request)
 	}
 
 	if statusUpper != "CANCELLED" {
-		if err := restoreOrderStock(ctx, tx, orderID); err != nil {
+		if err := restoreAndCancelOrderOnDeletion(ctx, tx, orderID); err != nil {
 			log.Printf("[ADMIN ORDERS ERROR] DeleteOrder restore stock failed: %v", err)
-			http.Error(w, `{"error":"Stok güncellemesi başarısız"}`, http.StatusInternalServerError)
-			return
-		}
-		if err := cancelSupplierSubOrdersForOrder(ctx, tx, orderID, "Test/sahte sipariş kalıcı olarak silindi"); err != nil {
-			log.Printf("[ADMIN ORDERS ERROR] DeleteOrder cancel sub-orders failed: %v", err)
-			http.Error(w, `{"error":"Tedarikçi alt siparişleri iptal edilemedi"}`, http.StatusInternalServerError)
+			http.Error(w, `{"error":"Sipariş iptal ve stok iade işlemleri başarısız"}`, http.StatusInternalServerError)
 			return
 		}
 	}
 
-	cleanupQueries := []string{
-		`DELETE FROM catalog.refund_items WHERE refund_id IN (SELECT id FROM catalog.refunds WHERE order_id = $1)`,
-		`DELETE FROM catalog.refunds WHERE order_id = $1`,
-		`DELETE FROM catalog.payment_notifications WHERE order_id = $1`,
-		`DELETE FROM catalog.supplier_sub_orders WHERE order_id = $1`,
-		`DELETE FROM catalog.order_items WHERE order_id = $1`,
-		`DELETE FROM catalog.orders WHERE id = $1`,
-	}
-	for _, q := range cleanupQueries {
-		if _, err := tx.Exec(ctx, q, orderID); err != nil {
-			log.Printf("[ADMIN ORDERS ERROR] DeleteOrder cleanup failed (%s): %v", q, err)
-			http.Error(w, `{"error":"Sipariş kayıtları silinemedi"}`, http.StatusInternalServerError)
-			return
-		}
+	if err := purgeOrderRecords(ctx, tx, orderID); err != nil {
+		log.Printf("[ADMIN ORDERS ERROR] DeleteOrder cleanup failed: %v", err)
+		http.Error(w, `{"error":"Sipariş kayıtları silinemedi"}`, http.StatusInternalServerError)
+		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {

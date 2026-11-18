@@ -1182,15 +1182,8 @@ func queryBIAcquisitionAttribution(ctx context.Context, win biTimeWindow) []BIAc
 	return list
 }
 
-func queryBIPageIntelligence(ctx context.Context, win biTimeWindow) BIPageIntelligence {
-	out := BIPageIntelligence{
-		LandingPages: []BILandingPageRow{},
-		ExitPages:    []BIExitPageRow{},
-	}
-	if db.Pool == nil {
-		return out
-	}
-
+func queryBILandingPages(ctx context.Context, win biTimeWindow) []BILandingPageRow {
+	list := []BILandingPageRow{}
 	landingSQL := `
 		WITH sess_pv AS (
 			SELECT
@@ -1235,11 +1228,15 @@ func queryBIPageIntelligence(ctx context.Context, win biTimeWindow) BIPageIntell
 				lp.BounceRatePct = safePct(bounces, lp.Sessions)
 				lp.AvgDurationSec = round1(lp.AvgDurationSec)
 				lp.AvgScrollPct = round1(lp.AvgScrollPct)
-				out.LandingPages = append(out.LandingPages, lp)
+				list = append(list, lp)
 			}
 		}
 	}
+	return list
+}
 
+func queryBIExitPages(ctx context.Context, win biTimeWindow) []BIExitPageRow {
+	list := []BIExitPageRow{}
 	exitSQL := `
 		WITH sess_pv AS (
 			SELECT
@@ -1280,11 +1277,24 @@ func queryBIPageIntelligence(ctx context.Context, win biTimeWindow) BIPageIntell
 				if ep.ExitRatePct > 100 {
 					ep.ExitRatePct = 100
 				}
-				out.ExitPages = append(out.ExitPages, ep)
+				list = append(list, ep)
 			}
 		}
 	}
-	return out
+	return list
+}
+
+func queryBIPageIntelligence(ctx context.Context, win biTimeWindow) BIPageIntelligence {
+	if db.Pool == nil {
+		return BIPageIntelligence{
+			LandingPages: []BILandingPageRow{},
+			ExitPages:    []BIExitPageRow{},
+		}
+	}
+	return BIPageIntelligence{
+		LandingPages: queryBILandingPages(ctx, win),
+		ExitPages:    queryBIExitPages(ctx, win),
+	}
 }
 
 func classifyProductOpportunityFlag(views, cartAdds, inquiriesOrOrders int, convPct float64) string {
@@ -1300,15 +1310,8 @@ func classifyProductOpportunityFlag(views, cartAdds, inquiriesOrOrders int, conv
 	return ""
 }
 
-func queryBIProductAndBrandVelocity(ctx context.Context, win biTimeWindow) BIProductBrandVelocity {
-	out := BIProductBrandVelocity{
-		HotProducts: []BIHotProductRow{},
-		TopBrands:   []BITopBrandRow{},
-	}
-	if db.Pool == nil {
-		return out
-	}
-
+func queryBIHotProducts(ctx context.Context, win biTimeWindow) []BIHotProductRow {
+	list := []BIHotProductRow{}
 	prodSQL := `
 		WITH me_prod AS (
 			SELECT
@@ -1386,11 +1389,15 @@ func queryBIProductAndBrandVelocity(ctx context.Context, win biTimeWindow) BIPro
 				}
 				hp.ConversionPct = safePct(hp.CartAdds+hp.InquiriesOrOrders, denom)
 				hp.OpportunityFlag = classifyProductOpportunityFlag(hp.Views, hp.CartAdds, hp.InquiriesOrOrders, hp.ConversionPct)
-				out.HotProducts = append(out.HotProducts, hp)
+				list = append(list, hp)
 			}
 		}
 	}
+	return list
+}
 
+func queryBITopBrands(ctx context.Context, win biTimeWindow) []BITopBrandRow {
+	list := []BITopBrandRow{}
 	brandSQL := `
 		WITH be_agg AS (
 			SELECT
@@ -1435,11 +1442,24 @@ func queryBIProductAndBrandVelocity(ctx context.Context, win biTimeWindow) BIPro
 			var tb BITopBrandRow
 			if scanErr := rows.Scan(&tb.BrandID, &tb.BrandName, &tb.ProfileViews, &tb.ProductViews, &tb.WhatsappAndLeads); scanErr == nil {
 				tb.LeadRatePct = safePct(tb.WhatsappAndLeads, tb.ProfileViews+tb.ProductViews)
-				out.TopBrands = append(out.TopBrands, tb)
+				list = append(list, tb)
 			}
 		}
 	}
-	return out
+	return list
+}
+
+func queryBIProductAndBrandVelocity(ctx context.Context, win biTimeWindow) BIProductBrandVelocity {
+	if db.Pool == nil {
+		return BIProductBrandVelocity{
+			HotProducts: []BIHotProductRow{},
+			TopBrands:   []BITopBrandRow{},
+		}
+	}
+	return BIProductBrandVelocity{
+		HotProducts: queryBIHotProducts(ctx, win),
+		TopBrands:   queryBITopBrands(ctx, win),
+	}
 }
 
 type buyerScoreInputs struct {

@@ -124,10 +124,12 @@ function normalizeProductsPayload(
     return { products, total: bodyTotal };
   }
 
-  const fallbackTotal =
-    products.length > 0
-      ? offset + products.length + (products.length >= limit ? 1 : 0)
-      : 0;
+  if (products.length === 0) {
+    return { products, total: 0 };
+  }
+
+  const hasMore = products.length >= limit ? 1 : 0;
+  const fallbackTotal = offset + products.length + hasMore;
 
   return { products, total: fallbackTotal };
 }
@@ -196,12 +198,12 @@ export class AdminApiService
   }
 
   saveTheme(theme: "light" | "dark"): void {
-    const normalized: "light" = theme === "dark" ? "light" : "light";
-    if (typeof window !== "undefined") {
-      localStorage.setItem("merter_admin_theme", normalized);
-      document.documentElement.classList.remove("dark");
-      document.body.classList.remove("dark");
+    if (typeof window === "undefined" || !theme) {
+      return;
     }
+    localStorage.setItem("merter_admin_theme", "light");
+    document.documentElement.classList.remove("dark");
+    document.body.classList.remove("dark");
   }
 
   readSavedSession(): { token: string; user: UserInfo; idToken?: string } | null {
