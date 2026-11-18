@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { 
   Plus, 
   Edit3, 
@@ -494,9 +495,15 @@ function SupplierCard({
           {(supplier.whatsapp_phone || supplier.phone) ? (
             <div className="flex flex-col gap-0.5 text-zinc-700 font-semibold">
               {supplier.whatsapp_phone && (
-                <div className="flex items-center gap-2 text-emerald-700">
+                <div className="flex items-center gap-2 text-emerald-700 flex-wrap">
                   <Phone size={15} className="text-emerald-600 shrink-0" />
                   <span>WhatsApp: {supplier.whatsapp_phone}</span>
+                  <Link
+                    href={`/admin/whatsapp-logs?brand_id=${encodeURIComponent(supplier.id)}`}
+                    className="text-[11px] font-bold text-emerald-700 underline hover:text-emerald-900"
+                  >
+                    Logları Gör
+                  </Link>
                 </div>
               )}
               {supplier.phone && supplier.phone !== supplier.whatsapp_phone && (

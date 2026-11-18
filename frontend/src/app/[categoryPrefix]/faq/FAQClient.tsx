@@ -19,6 +19,7 @@ import {
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+import { trackWhatsappClick } from "@/app/utils";
 import { CartItem, Category } from "@/types/store";
 import { SupportedSeoLang, normalizeSeoLang, safeJsonLd } from "@/utils/seoHelpers";
 import { sanitizePublicStoreEmail } from "@/utils/formatters";
@@ -865,6 +866,12 @@ export default function FAQClient({
               href={whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() =>
+                trackWhatsappClick({
+                  sourceSurface: "faq_page",
+                  targetPhone: settings.whatsapp || "+90 533 703 08 83",
+                })
+              }
               className="inline-flex items-center gap-2 px-6 py-3.5 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold shadow-xs transition-colors"
             >
               <MessageSquare size={16} />

@@ -1162,7 +1162,12 @@ function SidebarIdentityCard({
               href={waUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => trackBrandEvent(brand.id, "whatsapp_click")}
+              onClick={() =>
+                trackBrandEvent(brand.id, "whatsapp_click", "", {
+                  source_surface: "supplier_editorial",
+                  target_phone: waRaw,
+                })
+              }
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-extrabold no-underline transition-colors"
             >
               <MessageCircle size={15} />

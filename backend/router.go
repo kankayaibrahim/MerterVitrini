@@ -368,6 +368,8 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("GET /api/v1/admin/analytics/stats", protect(h.Analytics.GetAnalyticsStats))
 	mux.Handle("GET /api/v1/analytics/bi-mining", protect(h.Analytics.GetBIMiningReport))
 	mux.Handle("GET /api/v1/admin/analytics/bi-mining", protect(h.Analytics.GetBIMiningReport))
+	mux.Handle("GET /api/v1/analytics/whatsapp-clicks", protect(h.Analytics.GetAdminWhatsappClicks))
+	mux.Handle("GET /api/v1/admin/analytics/whatsapp-clicks", protect(h.Analytics.GetAdminWhatsappClicks))
 	mux.Handle("GET /api/v1/admin/dashboard/stats", protect(h.AdminDashboard.GetDashboardStats))
 
 	mux.Handle("GET /api/v1/admin/notifications/settings", protect(h.AdminNotifications.GetSettings))

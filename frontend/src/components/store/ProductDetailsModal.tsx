@@ -14,7 +14,16 @@ import {
   t,
   translateColor,
 } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
+import {
+  getUnitsFromSeriesRatio,
+  convertPrice,
+  getResizedImageUrl,
+  showToast,
+  ExchangeRate,
+  normalizeWhatsappDigits,
+  trackBrandEvent,
+  trackWhatsappClick,
+} from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getMemberPriceLabel, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
 
@@ -311,12 +320,7 @@ export default function ProductDetailsModal({
   const supplierName = product.brand_profile?.name || product.brand_name || t("merter_manufacturer", lang);
   const supplierWaRaw = product.brand_profile?.whatsapp_phone || product.brand_profile?.phone || "";
   const supplierCallRaw = product.brand_profile?.phone || product.brand_profile?.whatsapp_phone || "";
-  const supplierWaDigits = (() => {
-    const digits = supplierWaRaw.replace(/\D/g, "");
-    if (digits.startsWith("0") && digits.length === 11) return "90" + digits.slice(1);
-    if (digits.length === 10 && digits.startsWith("5")) return "90" + digits;
-    return digits;
-  })();
+  const supplierWaDigits = normalizeWhatsappDigits(supplierWaRaw);
   const directWaMessage = buildSupplierWhatsAppMessage({
     lang,
     isAuthenticated,
@@ -639,6 +643,14 @@ export default function ProductDetailsModal({
                       href={directWaUrl}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() =>
+                        trackWhatsappClick({
+                          brandId: product.brand_id,
+                          productId: product.id,
+                          sourceSurface: "product_quick_modal",
+                          targetPhone: supplierWaRaw,
+                        })
+                      }
                       className="flex-1 py-2.5 px-3 bg-[#15803D] hover:bg-[#166534] text-white rounded-md font-extrabold text-xs tracking-[0.3px] transition-colors flex items-center justify-center gap-2 no-underline"
                     >
                       <MessageCircle className="w-4 h-4 shrink-0" />
@@ -650,6 +662,7 @@ export default function ProductDetailsModal({
                   {supplierCallRaw && (
                     <a
                       href={`tel:${supplierCallRaw}`}
+                      onClick={() => trackBrandEvent(product.brand_id, "phone_click", product.id)}
                       className="py-2.5 px-3.5 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 no-underline shrink-0"
                     >
                       <Phone className="w-3.5 h-3.5 shrink-0" />

@@ -9,6 +9,7 @@ import {
   FileJson,
   Filter,
   Globe2,
+  MessageCircle,
   PackageSearch,
   Radio,
   RefreshCw,
@@ -106,6 +107,12 @@ export default function BiHeaderBar({
       label: "Web Vitals (RUM), Cihaz & SEO Bot",
       shortLabel: "RUM & SEO Bot",
       icon: Bot,
+    },
+    {
+      id: "whatsapp",
+      label: "WhatsApp İletişim Logları",
+      shortLabel: "WhatsApp Logları",
+      icon: MessageCircle,
     },
   ];
 

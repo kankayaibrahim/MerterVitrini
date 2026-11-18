@@ -286,6 +286,12 @@ func StitchVisitorToMember(ctx context.Context, userID, visitorID string) {
 		SET user_id = $1
 		WHERE visitor_id = $2 AND (user_id IS NULL OR user_id = '')
 	`, userID, visitorID)
+
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE analytics.whatsapp_clicks
+		SET user_id = $1
+		WHERE visitor_id = $2 AND (user_id IS NULL OR user_id = '')
+	`, userID, visitorID)
 }
 
 func lookupLinkedUserByVisitor(ctx context.Context, visitorID string) string {

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { t, getCategoryPrefix, normalizeLangCode, pickLangText, SupportedLangCode } from "../../app/i18n";
-import { apiFetch, invalidateStoreSettingsCache } from "../../app/utils";
+import { apiFetch, invalidateStoreSettingsCache, trackWhatsappClick } from "../../app/utils";
 import SupplierApplicationSection from "./SupplierApplicationSection";
 import NewsletterSubscriptionBox from "./NewsletterSubscriptionBox";
 import { Building2, Smartphone } from "lucide-react";
@@ -372,7 +372,15 @@ function FooterCustomerServiceColumn({ lang, onOpenPolicy }: CustomerServiceProp
   );
 }
 
-function FooterAccountColumn({ lang, whatsappUrl }: { readonly lang: string; readonly whatsappUrl: string }) {
+function FooterAccountColumn({
+  lang,
+  whatsappUrl,
+  whatsappPhone,
+}: {
+  readonly lang: string;
+  readonly whatsappUrl: string;
+  readonly whatsappPhone: string;
+}) {
   const dispatchAuthEvent = (mode: "login" | "register") => {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("merter-open-auth", { detail: { mode } }));
@@ -417,6 +425,12 @@ function FooterAccountColumn({ lang, whatsappUrl }: { readonly lang: string; rea
           href={whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() =>
+            trackWhatsappClick({
+              sourceSurface: "footer",
+              targetPhone: whatsappPhone,
+            })
+          }
           className="inline-flex items-center gap-3 px-5 py-3 bg-[#15803D] hover:bg-[#166534] text-white rounded-md shadow-sm transition-all duration-300 group font-bold text-xs tracking-[1.5px] border-none relative overflow-hidden no-underline"
         >
           <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -556,7 +570,7 @@ export default function Footer({
           <FooterContactColumn settings={settings} lang={lang} />
           <FooterAboutColumn lang={lang} />
           <FooterCustomerServiceColumn lang={lang} onOpenPolicy={onOpenPolicy} />
-          <FooterAccountColumn lang={lang} whatsappUrl={whatsappUrl} />
+          <FooterAccountColumn lang={lang} whatsappUrl={whatsappUrl} whatsappPhone={settings.whatsapp} />
         </div>
 
         <FooterWholesaleHub lang={lang} />

@@ -3,7 +3,13 @@
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import { Product, Brand, Category, CartItem } from "@/types/store";
 import { t, getProductTitle, getCategoryPrefix } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, apiFetch, showToast, ExchangeRate } from "@/app/utils";
+import {
+  getUnitsFromSeriesRatio,
+  apiFetch,
+  showToast,
+  ExchangeRate,
+  trackWhatsappClick,
+} from "@/app/utils";
 import {
   syncShowPricesToGuestsSetting,
   useIsStoreMemberLoggedIn,
@@ -297,6 +303,7 @@ export default function StorefrontLayout({
   // --- Quote Inquiry Submission States ---
   const [submittingInquiry, setSubmittingInquiry] = useState<boolean>(false);
   const [whatsappUrl, setWhatsappUrl] = useState<string>("");
+  const [whatsappMeta, setWhatsappMeta] = useState<{ brandId?: string; targetPhone?: string }>({});
   const [showSuccessOverlay, setShowSuccessOverlay] = useState<boolean>(false);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
 
@@ -871,6 +878,13 @@ const validateDrawerInquiryData = (
       setIsCartOpen(false);
 
       setWhatsappUrl(result.whatsapp_url || "#");
+      const firstSupplierOrder = Array.isArray(result.supplier_orders)
+        ? result.supplier_orders[0]
+        : undefined;
+      setWhatsappMeta({
+        brandId: firstSupplierOrder?.brand_id || "",
+        targetPhone: firstSupplierOrder?.whatsapp_phone || storeSettings?.whatsapp || "",
+      });
       setShowSuccessOverlay(true);
 
     } catch (err) {
@@ -1033,6 +1047,13 @@ const validateDrawerInquiryData = (
           onClose={() => setShowSuccessOverlay(false)}
           lang={lang}
           whatsappUrl={whatsappUrl}
+          onWhatsappClick={() =>
+            trackWhatsappClick({
+              brandId: whatsappMeta.brandId,
+              sourceSurface: "inquiry_success_modal",
+              targetPhone: whatsappMeta.targetPhone,
+            })
+          }
         />
       )}
 

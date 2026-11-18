@@ -20,7 +20,9 @@ import {
   apiFetch,
   convertPrice,
   ExchangeRate,
+  normalizeWhatsappDigits,
   showToast as triggerToast,
+  trackWhatsappClick,
 } from "@/app/utils";
 import {
   useIsStoreMemberLoggedIn,
@@ -744,11 +746,11 @@ export default function ProductDetailClient({
         if (formData.customerMessage) {
           waMsg += `----------------------------\n${copy.waNote}: ${formData.customerMessage}`;
         }
-        const supplierWaDigits = (
+        const supplierWaDigits = normalizeWhatsappDigits(
           activeProduct.brand_profile?.whatsapp_phone ||
           activeProduct.brand_profile?.phone ||
           ""
-        ).replace(/\D/g, "");
+        );
         const encodedWa = supplierWaDigits
           ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(waMsg)}`
           : "";
@@ -771,6 +773,18 @@ export default function ProductDetailClient({
     safeLang === "tr"
       ? `/ureticiler/${encodeURIComponent(supplierSlug)}`
       : `/ureticiler/${encodeURIComponent(supplierSlug)}?lang=${safeLang}`;
+
+  const supplierWaRaw =
+    activeProduct.brand_profile?.whatsapp_phone ||
+    activeProduct.brand_profile?.phone ||
+    "";
+  const supplierWaDigits = normalizeWhatsappDigits(supplierWaRaw);
+  const calcWaSupplierName =
+    activeProduct.brand_profile?.name || activeProduct.brand_name || copy.defaultBrand;
+  const calcWaMessage = `${calcWaSupplierName} — *${title}* (SKU: ${activeProduct.custom_sku || "-"}) • ${pkgQty} ${t("package", safeLang)} (${totalPieces} ${t("piece", safeLang)})`;
+  const calcWaUrl = supplierWaDigits
+    ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(calcWaMessage)}`
+    : "";
 
   return (
     <div
@@ -877,6 +891,16 @@ export default function ProductDetailClient({
                 t={t}
                 handleAddToCart={handleAddToCart}
                 isPriceLoading={isPriceLoading}
+                supplierWhatsappUrl={calcWaUrl}
+                supplierWhatsappPhone={supplierWaRaw}
+                onSupplierWhatsappClick={() =>
+                  trackWhatsappClick({
+                    brandId: activeProduct.brand_id,
+                    productId: activeProduct.id,
+                    sourceSurface: "product_calculator",
+                    targetPhone: supplierWaRaw,
+                  })
+                }
                 onOpenSupplierChat={() => {
                   if (!isAuthenticated) {
                     openStoreAuthModal("login");
@@ -962,6 +986,14 @@ export default function ProductDetailClient({
         showSuccessOverlay={showSuccessOverlay}
         setShowSuccessOverlay={setShowSuccessOverlay}
         whatsappUrl={whatsappUrl}
+        onWhatsappClick={() =>
+          trackWhatsappClick({
+            brandId: activeProduct.brand_id,
+            productId: activeProduct.id,
+            sourceSurface: "inquiry_success_modal",
+            targetPhone: supplierWaRaw,
+          })
+        }
       />
 
       {pendingRemove !== null && (

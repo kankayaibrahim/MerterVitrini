@@ -21,6 +21,7 @@ import BiSearchMiningTab from "./BiSearchMiningTab";
 import BiGeoAndAttributionTab from "./BiGeoAndAttributionTab";
 import BiCatalogAndPagesTab from "./BiCatalogAndPagesTab";
 import BiTechAndBotMonitorTab from "./BiTechAndBotMonitorTab";
+import WhatsappClicksPanel from "./WhatsappClicksPanel";
 
 export type {
   AnalyticsSummary,
@@ -181,6 +182,9 @@ export default function AnalyticsDashboardClient() {
           botCrawlMonitor={biData.bot_crawl_monitor}
         />
       );
+    }
+    if (activeTab === "whatsapp") {
+      return <WhatsappClicksPanel embedded initialPeriod={period} />;
     }
     return (
       <BiOverviewTab

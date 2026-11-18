@@ -9,7 +9,8 @@ export type BiTabId =
   | "search"
   | "geo"
   | "catalog"
-  | "tech";
+  | "tech"
+  | "whatsapp";
 
 export interface BiOverviewMetrics {
   unique_visitors: number;

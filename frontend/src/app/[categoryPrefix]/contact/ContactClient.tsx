@@ -23,6 +23,7 @@ import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import SafeHtml from "@/components/common/SafeHtml";
+import { trackWhatsappClick } from "@/app/utils";
 import { CartItem, Category } from "@/types/store";
 import {
   SITE_ORIGIN,
@@ -729,6 +730,11 @@ export default function ContactClient({
       `🌍 ${formData.country || "-"}\n\n` +
       `💬 ${formData.message}`;
 
+    trackWhatsappClick({
+      sourceSurface: "contact_form",
+      targetPhone: settings.whatsapp || "+90 533 703 08 83",
+    });
+
     window.open(
       `https://wa.me/${sanitizedWhatsapp}?text=${encodeURIComponent(waText)}`,
       "_blank",
@@ -825,6 +831,12 @@ export default function ContactClient({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() =>
+                  trackWhatsappClick({
+                    sourceSurface: "contact_page",
+                    targetPhone: settings.whatsapp || "+90 533 703 08 83",
+                  })
+                }
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-bold shadow-xs transition-colors"
               >
                 <MessageSquare size={16} />
@@ -916,6 +928,12 @@ export default function ContactClient({
                 href={whatsappUrl}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() =>
+                  trackWhatsappClick({
+                    sourceSurface: "contact_page",
+                    targetPhone: settings.whatsapp || "+90 533 703 08 83",
+                  })
+                }
                 className="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-xs font-bold text-white bg-[#15803D] hover:bg-[#166534] shadow-xs transition-colors"
               >
                 <MessageSquare size={14} />

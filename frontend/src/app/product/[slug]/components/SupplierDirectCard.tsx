@@ -16,7 +16,7 @@ import {
   FileText,
 } from "lucide-react";
 import { Brand, Product } from "@/types/store";
-import { showToast, trackBrandEvent } from "@/app/utils";
+import { normalizeWhatsappDigits, showToast, trackBrandEvent, trackWhatsappClick } from "@/app/utils";
 import {
   useIsStoreAuthenticated,
   useIsStoreMemberLoggedIn,
@@ -25,15 +25,7 @@ import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
 
 function normalizeWaPhone(raw?: string): string {
-  if (!raw) return "";
-  const digits = raw.replace(/\D/g, "");
-  if (digits.startsWith("0") && digits.length === 11) {
-    return "90" + digits.slice(1);
-  }
-  if (digits.length === 10 && digits.startsWith("5")) {
-    return "90" + digits;
-  }
-  return digits;
+  return normalizeWhatsappDigits(raw);
 }
 
 interface SupplierCardCopy {
@@ -561,6 +553,12 @@ export default function SupplierDirectCard({
         setSubmittedOrderNo(data.order_number || "OK");
         showToast(copy.sentToast(supplierName));
         if (data.whatsapp_url) {
+          trackWhatsappClick({
+            brandId: product.brand_id,
+            productId: product.id,
+            sourceSurface: "product_direct_inquiry",
+            targetPhone: waRaw,
+          });
           window.open(data.whatsapp_url, "_blank", "noopener,noreferrer");
         }
       } else {
@@ -645,7 +643,14 @@ export default function SupplierDirectCard({
               href={directWaUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => trackBrandEvent(product.brand_id, "whatsapp_click", product.id)}
+              onClick={() =>
+                trackWhatsappClick({
+                  brandId: product.brand_id,
+                  productId: product.id,
+                  sourceSurface: "product_supplier_card_inline",
+                  targetPhone: waRaw,
+                })
+              }
               className="font-extrabold hover:underline no-underline text-[#15803D]"
             >
               WhatsApp: {waRaw}
@@ -726,7 +731,14 @@ export default function SupplierDirectCard({
             href={directWaUrl}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => trackBrandEvent(product.brand_id, "whatsapp_click", product.id)}
+            onClick={() =>
+              trackWhatsappClick({
+                brandId: product.brand_id,
+                productId: product.id,
+                sourceSurface: "product_supplier_card",
+                targetPhone: waRaw,
+              })
+            }
             className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-extrabold transition-colors no-underline sm:col-span-2"
           >
             <MessageCircle size={16} />

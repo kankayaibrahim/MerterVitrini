@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { Brand, Category } from "@/types/store";
 import { getCategoryPrefix } from "@/app/i18n";
-import { apiFetch } from "@/app/utils";
+import { apiFetch, normalizeWhatsappDigits, trackWhatsappClick } from "@/app/utils";
 import { syncShowPricesToGuestsSetting } from "@/app/storeAuth";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
@@ -424,7 +424,25 @@ function SupplierCardContactDetails({
       {waRaw && (
         <div className="flex items-center gap-1.5">
           <MessageCircle size={13} className="text-[#15803D] shrink-0" />
-          <span className="font-bold text-[#15803D]">WhatsApp: {waRaw}</span>
+          {normalizeWhatsappDigits(waRaw) ? (
+            <a
+              href={`https://wa.me/${normalizeWhatsappDigits(waRaw)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() =>
+                trackWhatsappClick({
+                  brandId: brand.id,
+                  sourceSurface: "supplier_directory",
+                  targetPhone: waRaw,
+                })
+              }
+              className="font-bold text-[#15803D] hover:underline no-underline"
+            >
+              WhatsApp: {waRaw}
+            </a>
+          ) : (
+            <span className="font-bold text-[#15803D]">WhatsApp: {waRaw}</span>
+          )}
         </div>
       )}
       {callRaw && (

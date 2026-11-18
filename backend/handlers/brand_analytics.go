@@ -50,13 +50,16 @@ var countryCodeLabels = map[string]string{
 
 // TrackBrandEventRequest represents a supplier interaction event from web or mobile.
 type TrackBrandEventRequest struct {
-	BrandID     string `json:"brand_id"`
-	ProductID   string `json:"product_id,omitempty"`
-	EventType   string `json:"event_type"`
-	VisitorID   string `json:"visitor_id,omitempty"`
-	AuthToken   string `json:"auth_token,omitempty"`
-	CountryCode string `json:"country_code,omitempty"`
-	Language    string `json:"language,omitempty"`
+	BrandID       string `json:"brand_id"`
+	ProductID     string `json:"product_id,omitempty"`
+	EventType     string `json:"event_type"`
+	VisitorID     string `json:"visitor_id,omitempty"`
+	AuthToken     string `json:"auth_token,omitempty"`
+	CountryCode   string `json:"country_code,omitempty"`
+	Language      string `json:"language,omitempty"`
+	SourceSurface string `json:"source_surface,omitempty"`
+	TargetPhone   string `json:"target_phone,omitempty"`
+	PagePath      string `json:"page_path,omitempty"`
 }
 
 // SupplierBrandAnalyticsSummary holds top-level ROI KPIs for a supplier.
@@ -209,9 +212,10 @@ func RecordBrandAnalyticsEvent(brandID, productID, eventType string, r *http.Req
 		deviceType = "desktop"
 	}
 
+	cleanProductID := strings.TrimSpace(productID)
 	go insertBrandEventRecord(brandEventRecordParams{
 		BrandID:     brandID,
-		ProductID:   strings.TrimSpace(productID),
+		ProductID:   cleanProductID,
 		EventType:   eventType,
 		VisitorID:   visitorID,
 		CountryCode: countryCode,
@@ -219,6 +223,16 @@ func RecordBrandAnalyticsEvent(brandID, productID, eventType string, r *http.Req
 		DeviceType:  deviceType,
 		RefHost:     refHost,
 	})
+	if eventType == "whatsapp_click" {
+		RecordWhatsappClickAsync(r, WhatsappClickInput{
+			BrandID:       brandID,
+			ProductID:     cleanProductID,
+			VisitorID:     visitorID,
+			SourceSurface: "backend_event",
+			CountryCode:   countryCode,
+			LangCode:      langCode,
+		})
+	}
 }
 
 func insertBrandEventRecord(p brandEventRecordParams) {
@@ -263,8 +277,14 @@ func (h *AnalyticsHandler) TrackBrandEvent(w http.ResponseWriter, r *http.Reques
 
 	brandID := strings.TrimSpace(req.BrandID)
 	eventType := strings.TrimSpace(req.EventType)
-	if brandID == "" || !allowedBrandEventTypes[eventType] {
+	if !allowedBrandEventTypes[eventType] || (brandID == "" && eventType != "whatsapp_click") {
 		http.Error(w, `{"error":"invalid brand_id or event_type"}`, http.StatusBadRequest)
+		return
+	}
+
+	if isImpersonatedAnalyticsRequest(r, req.AuthToken) {
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		w.Write([]byte(`{"ok":true}`))
 		return
 	}
 
@@ -273,20 +293,37 @@ func (h *AnalyticsHandler) TrackBrandEvent(w http.ResponseWriter, r *http.Reques
 	countryCode, langCode := resolveVisitorCountryAndLang(r, req.CountryCode, req.Language)
 	deviceType, _, _ := parseDeviceAndBrowser(r.UserAgent(), 0)
 	refHost := parseReferrerHost(r.Referer())
+	cleanProductID := strings.TrimSpace(req.ProductID)
 
-	go insertBrandEventRecord(brandEventRecordParams{
-		BrandID:     brandID,
-		ProductID:   strings.TrimSpace(req.ProductID),
-		EventType:   eventType,
-		VisitorID:   visitorID,
-		CountryCode: countryCode,
-		LangCode:    langCode,
-		DeviceType:  deviceType,
-		RefHost:     refHost,
-	})
+	if brandID != "" {
+		go insertBrandEventRecord(brandEventRecordParams{
+			BrandID:     brandID,
+			ProductID:   cleanProductID,
+			EventType:   eventType,
+			VisitorID:   visitorID,
+			CountryCode: countryCode,
+			LangCode:    langCode,
+			DeviceType:  deviceType,
+			RefHost:     refHost,
+		})
 
-	if eventType != "product_view" && eventType != "profile_view" {
-		recordBrandContactMemberEvent(r, userID, visitorID, brandID, strings.TrimSpace(req.ProductID), eventType)
+		if eventType != "product_view" && eventType != "profile_view" {
+			recordBrandContactMemberEvent(r, userID, visitorID, brandID, cleanProductID, eventType)
+		}
+	}
+
+	if eventType == "whatsapp_click" {
+		RecordWhatsappClickAsync(r, WhatsappClickInput{
+			BrandID:       brandID,
+			ProductID:     cleanProductID,
+			UserID:        userID,
+			VisitorID:     visitorID,
+			TargetPhone:   strings.TrimSpace(req.TargetPhone),
+			SourceSurface: strings.TrimSpace(req.SourceSurface),
+			PagePath:      strings.TrimSpace(req.PagePath),
+			CountryCode:   countryCode,
+			LangCode:      langCode,
+		})
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)

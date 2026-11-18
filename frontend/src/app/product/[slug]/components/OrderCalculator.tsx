@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Minus, Plus, ShoppingBag, MessageSquare, Lock } from "lucide-react";
+import { Minus, Plus, ShoppingBag, MessageSquare, MessageCircle, Lock } from "lucide-react";
 import {
   useIsStoreAuthenticated,
   useIsStoreMemberLoggedIn,
@@ -27,6 +27,9 @@ interface OrderCalculatorProps {
   readonly handleAddToCart: () => void;
   readonly onOpenSupplierChat?: () => void;
   readonly isPriceLoading?: boolean;
+  readonly supplierWhatsappUrl?: string;
+  readonly supplierWhatsappPhone?: string;
+  readonly onSupplierWhatsappClick?: () => void;
 }
 
 const CHAT_CTA_COPY: Record<
@@ -34,6 +37,7 @@ const CHAT_CTA_COPY: Record<
   {
     askSupplier: string;
     loginForChat: string;
+    whatsappSupplierBtn: string;
     decPkg: string;
     incPkg: string;
     unlockHint: string;
@@ -43,6 +47,7 @@ const CHAT_CTA_COPY: Record<
   tr: {
     askSupplier: "Tedarikçiye Sor / Özel Fiyat İste (Canlı)",
     loginForChat: "Canlı Sohbet & Özel Fiyat İçin Giriş Yap",
+    whatsappSupplierBtn: "WhatsApp ile Tedarikçiye Yaz",
     decPkg: "Paket sayısını azalt",
     incPkg: "Paket sayısını artır",
     unlockHint: "Toptan fabrika fiyatlarını görmek, sepete seri eklemek ve üreticiyle canlı görüşmek için giriş yapın.",
@@ -51,6 +56,7 @@ const CHAT_CTA_COPY: Record<
   en: {
     askSupplier: "Ask Manufacturer / Request Custom Price (Live)",
     loginForChat: "Sign In for Live B2B Chat & Custom Pricing",
+    whatsappSupplierBtn: "Message Supplier on WhatsApp",
     decPkg: "Decrease pack quantity",
     incPkg: "Increase pack quantity",
     unlockHint: "Sign in to view factory wholesale prices, add series packs to cart, and chat live with the manufacturer.",
@@ -59,6 +65,7 @@ const CHAT_CTA_COPY: Record<
   ru: {
     askSupplier: "Написать фабрике / Запросить спеццену (Чат)",
     loginForChat: "Войдите для онлайн-чата с фабрикой и спеццены",
+    whatsappSupplierBtn: "Написать фабрике в WhatsApp",
     decPkg: "Уменьшить количество серий",
     incPkg: "Увеличить количество серий",
     unlockHint: "Войдите, чтобы видеть оптовые цены фабрики, добавлять серии в корзину и общаться напрямую.",
@@ -67,6 +74,7 @@ const CHAT_CTA_COPY: Record<
   ar: {
     askSupplier: "اسأل المصنع / اطلب سعر جملة خاص (مباشر)",
     loginForChat: "سجّل الدخول للدردشة المباشرة وطلب عرض سعر خاص",
+    whatsappSupplierBtn: "مراسلة المورد عبر واتساب",
     decPkg: "تقليل عدد الباكيتات",
     incPkg: "زيادة عدد الباكيتات",
     unlockHint: "سجّل الدخول لعرض أسعار الجملة المباشرة من المصنع، وإضافة الباكيتات للسلة، ومراسلة المنتج.",
@@ -75,6 +83,7 @@ const CHAT_CTA_COPY: Record<
   de: {
     askSupplier: "Hersteller fragen / Sonderpreis anfordern (Live)",
     loginForChat: "Anmelden für Live-B2B-Chat & Sonderpreise",
+    whatsappSupplierBtn: "Hersteller per WhatsApp schreiben",
     decPkg: "Paketanzahl verringern",
     incPkg: "Paketanzahl erhöhen",
     unlockHint: "Melden Sie sich an, um Fabrik-Großhandelspreise zu sehen, Serien in den Warenkorb zu legen und live zu chatten.",
@@ -83,6 +92,7 @@ const CHAT_CTA_COPY: Record<
   fr: {
     askSupplier: "Contacter le fabricant / Tarif sur mesure (Live)",
     loginForChat: "Connectez-vous pour le chat B2B & tarif spécial",
+    whatsappSupplierBtn: "Écrire au fournisseur sur WhatsApp",
     decPkg: "Diminuer le nombre de lots",
     incPkg: "Augmenter le nombre de lots",
     unlockHint: "Connectez-vous pour voir les prix d'usine en gros, ajouter des séries au panier et discuter en direct.",
@@ -91,6 +101,7 @@ const CHAT_CTA_COPY: Record<
   pl: {
     askSupplier: "Zapytaj producenta / Poproś o cenę specjalną (Live)",
     loginForChat: "Zaloguj się, aby otworzyć czat B2B i negocjować cenę",
+    whatsappSupplierBtn: "Napisz do producenta na WhatsApp",
     decPkg: "Zmniejsz liczbę pakietów",
     incPkg: "Zwiększ liczbę pakietów",
     unlockHint: "Zaloguj się, aby zobaczyć hurtowe ceny fabryczne, dodać pakiety do koszyka i rozmawiać na czacie.",
@@ -99,12 +110,44 @@ const CHAT_CTA_COPY: Record<
   bg: {
     askSupplier: "Попитай фабриката / Поискай специална цена (Чат)",
     loginForChat: "Влезте за чат на живо и индивидуална оферта",
+    whatsappSupplierBtn: "Пишете на фабриката в WhatsApp",
     decPkg: "Намали броя серии",
     incPkg: "Увеличи броя серии",
     unlockHint: "Влезте в профила си, за да видите фабричните цени на едро, да добавяте серии и да пишете в чата.",
     registerFree: "Безплатна B2B регистрация",
   },
 };
+
+function SupplierWhatsappCta({
+  href,
+  label,
+  phone,
+  onClick,
+}: Readonly<{
+  href?: string;
+  label: string;
+  phone?: string;
+  onClick?: () => void;
+}>) {
+  if (!href) {
+    return null;
+  }
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onClick}
+      className="w-full py-3 px-4 bg-[#15803D] hover:bg-[#166534] text-white rounded-md font-extrabold text-xs tracking-[0.4px] uppercase transition-colors border-none flex items-center justify-center gap-2 no-underline shadow-xs"
+    >
+      <MessageCircle className="w-4 h-4 shrink-0" />
+      <span>
+        {label}
+        {phone ? ` (${phone})` : ""}
+      </span>
+    </a>
+  );
+}
 
 export default function OrderCalculator({
   hasSeries,
@@ -122,6 +165,9 @@ export default function OrderCalculator({
   handleAddToCart,
   onOpenSupplierChat,
   isPriceLoading,
+  supplierWhatsappUrl,
+  supplierWhatsappPhone,
+  onSupplierWhatsappClick,
 }: OrderCalculatorProps) {
   const isAuthenticated = useIsStoreAuthenticated();
   const isMemberLoggedIn = useIsStoreMemberLoggedIn();
@@ -263,6 +309,13 @@ export default function OrderCalculator({
               <span>{isMemberLoggedIn ? cta.askSupplier : cta.loginForChat}</span>
             </button>
           )}
+
+          <SupplierWhatsappCta
+            href={supplierWhatsappUrl}
+            label={cta.whatsappSupplierBtn}
+            phone={supplierWhatsappPhone}
+            onClick={onSupplierWhatsappClick}
+          />
         </div>
       ) : (
         <div className="bg-[#FAF7F2] border border-[#D8C7A6] rounded-lg p-4 flex flex-col gap-3">
@@ -286,6 +339,12 @@ export default function OrderCalculator({
               <span>{cta.registerFree}</span>
             </button>
           </div>
+          <SupplierWhatsappCta
+            href={supplierWhatsappUrl}
+            label={cta.whatsappSupplierBtn}
+            phone={supplierWhatsappPhone}
+            onClick={onSupplierWhatsappClick}
+          />
         </div>
       )}
     </>

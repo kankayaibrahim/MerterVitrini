@@ -498,7 +498,12 @@ function SupplierProfileBanner({
               href={waUrl}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => trackBrandEvent(brand.id, "whatsapp_click")}
+              onClick={() =>
+                trackBrandEvent(brand.id, "whatsapp_click", "", {
+                  source_surface: "supplier_showcase",
+                  target_phone: waRaw,
+                })
+              }
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-[#15803D] hover:bg-[#166534] text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
             >
               <MessageCircle size={16} />

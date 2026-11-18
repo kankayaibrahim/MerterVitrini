@@ -264,12 +264,34 @@ export function showToast(message: string): void {
   }
 }
 
+export interface BrandEventExtra {
+  readonly source_surface?: string;
+  readonly target_phone?: string;
+  readonly page_path?: string;
+}
+
+export function normalizeWhatsappDigits(raw?: string): string {
+  if (!raw) return "";
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("0") && digits.length === 11) {
+    return "90" + digits.slice(1);
+  }
+  if (digits.length === 10 && digits.startsWith("5")) {
+    return "90" + digits;
+  }
+  return digits;
+}
+
 export function trackBrandEvent(
   brandId?: string,
   eventType?: string,
-  productId?: string
+  productId?: string,
+  extra?: BrandEventExtra
 ): void {
-  if (typeof window === "undefined" || !brandId || !eventType) return;
+  const cleanBrand = (brandId || "").trim();
+  const cleanType = (eventType || "").trim();
+  if (typeof window === "undefined" || !cleanType) return;
+  if (!cleanBrand && cleanType !== "whatsapp_click") return;
   const lang = localStorage.getItem("preferred_lang") || "tr";
   const visitorId = localStorage.getItem("mv_vid") || "";
   const authToken = localStorage.getItem("store_user_token") || "";
@@ -281,16 +303,33 @@ export function trackBrandEvent(
     method: "POST",
     headers,
     body: JSON.stringify({
-      brand_id: brandId,
+      brand_id: cleanBrand,
       product_id: productId || "",
-      event_type: eventType,
+      event_type: cleanType,
       visitor_id: visitorId,
       auth_token: authToken,
       language: lang,
+      source_surface: extra?.source_surface || "",
+      target_phone: extra?.target_phone || "",
+      page_path: extra?.page_path || window.location.pathname,
     }),
     keepalive: true,
   }).catch(() => {
     // Non-blocking telemetry
+  });
+}
+
+export function trackWhatsappClick(params: {
+  readonly brandId?: string;
+  readonly productId?: string;
+  readonly sourceSurface: string;
+  readonly targetPhone?: string;
+  readonly pagePath?: string;
+}): void {
+  trackBrandEvent(params.brandId || "", "whatsapp_click", params.productId || "", {
+    source_surface: params.sourceSurface,
+    target_phone: params.targetPhone || "",
+    page_path: params.pagePath,
   });
 }
 

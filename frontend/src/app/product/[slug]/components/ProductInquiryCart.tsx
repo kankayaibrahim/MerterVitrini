@@ -28,6 +28,7 @@ interface ProductInquiryCartProps {
   readonly showSuccessOverlay: boolean;
   readonly setShowSuccessOverlay: (v: boolean) => void;
   readonly whatsappUrl: string;
+  readonly onWhatsappClick?: () => void;
 }
 
 export default function ProductInquiryCart({
@@ -48,6 +49,7 @@ export default function ProductInquiryCart({
   showSuccessOverlay,
   setShowSuccessOverlay,
   whatsappUrl,
+  onWhatsappClick,
 }: ProductInquiryCartProps) {
   return (
     <>
@@ -75,6 +77,7 @@ export default function ProductInquiryCart({
         <SuccessModal
           lang={lang}
           whatsappUrl={whatsappUrl}
+          onWhatsappClick={onWhatsappClick}
           onClose={() => setShowSuccessOverlay(false)}
         />
       )}

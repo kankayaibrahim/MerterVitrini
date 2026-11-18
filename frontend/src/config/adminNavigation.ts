@@ -21,6 +21,7 @@ import {
   Sparkles,
   Compass,
   Bell,
+  MessageCircle,
   LucideIcon
 } from "lucide-react";
 
@@ -167,6 +168,15 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
         badge: "Canlı",
         badgeColor: "violet",
         description: "Üyelerin gezdiği sayfalar, okuduğu içerikler ve incelediği ürünlerin tarihçesi"
+      },
+      {
+        id: "whatsapp-logs",
+        title: "WhatsApp İletişim Logları",
+        href: "/admin/whatsapp-logs",
+        icon: MessageCircle,
+        badge: "Canlı",
+        badgeColor: "emerald",
+        description: "Kaç kişi WhatsApp'a tıkladı, hangi müşteri hangi tedarikçi ve ürüne yazdı"
       },
       {
         id: "rfq",
