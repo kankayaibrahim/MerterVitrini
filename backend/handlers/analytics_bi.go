@@ -1090,8 +1090,11 @@ func queryBIAcquisitionAttribution(ctx context.Context, win biTimeWindow) []BIAc
 				(COALESCE(click_id, '') <> '') AS paid_click,
 				CASE
 					WHEN COALESCE(click_id, '') <> '' OR LOWER(COALESCE(utm_medium, '')) IN ('cpc', 'ppc', 'paid', 'ads', 'paid_social') THEN 'Paid Ads'
-					WHEN referrer_host IN ('Google Arama', 'Yandex Arama', 'Bing Arama') OR LOWER(COALESCE(utm_medium, '')) = 'organic' THEN 'Organic Search'
-					WHEN referrer_host IN ('Instagram', 'Facebook', 'WhatsApp', 'Telegram', 'TikTok') OR LOWER(COALESCE(utm_medium, '')) = 'social' THEN 'Social & Messaging'
+					WHEN LOWER(COALESCE(utm_source, '') || ' ' || COALESCE(referrer_host, '')) ~ '(chatgpt|openai|perplexity|claude|anthropic|gemini|bard\.google|copilot\.microsoft|grok\.com|deepseek|meta\.ai|you\.com|phind)' THEN 'AI Assistant'
+					WHEN referrer_host IN ('Google Arama', 'Yandex Arama', 'Bing Arama', 'DuckDuckGo', 'Brave Search', 'Yahoo Arama', 'Baidu', 'Ecosia')
+					  OR LOWER(COALESCE(referrer_host, '')) ~ '(duckduckgo\.|search\.brave\.|yahoo\.|yandex\.|google\.|bing\.)'
+					  OR LOWER(COALESCE(utm_medium, '')) = 'organic' THEN 'Organic Search'
+					WHEN referrer_host IN ('Instagram', 'Facebook', 'WhatsApp', 'Telegram', 'TikTok', 'YouTube', 'LinkedIn', 'Pinterest', 'X (Twitter)') OR LOWER(COALESCE(utm_medium, '')) = 'social' THEN 'Social & Messaging'
 					WHEN COALESCE(utm_source, '') <> '' THEN 'Campaign / UTM'
 					WHEN COALESCE(referrer_host, '') IN ('', 'Doğrudan (Direct)') THEN 'Direct'
 					ELSE 'Referral'
@@ -1799,21 +1802,46 @@ func queryBIHourlyHeatmap(ctx context.Context, win biTimeWindow) []BIHourlyHeatm
 }
 
 const biBotCrawlUnionCTE = `
-	WITH bot_hits AS (
+	WITH hourly_bounds AS (
+		SELECT MIN(bucket_hour) AS first_hourly_at
+		FROM analytics.bot_crawl_hourly
+	),
+	bot_hits AS (
 		SELECT
-			COALESCE(NULLIF(b.bot_name, ''), 'UnknownBot') AS bot_name,
-			b.path,
-			b.created_at
-		FROM analytics.bot_crawl_logs b
-		WHERE b.created_at >= $1 AND b.created_at < $2
+			h.bucket_hour,
+			h.bot_name,
+			h.bot_category,
+			h.path,
+			h.hits,
+			h.last_seen_at AS created_at,
+			true AS from_hourly
+		FROM analytics.bot_crawl_hourly h
+		WHERE h.last_seen_at >= $1 AND h.bucket_hour < $2
 		UNION ALL
 		SELECT
+			date_trunc('hour', b.created_at) AS bucket_hour,
+			COALESCE(NULLIF(b.bot_name, ''), 'UnknownBot') AS bot_name,
+			''::text AS bot_category,
+			b.path,
+			1::bigint AS hits,
+			b.created_at,
+			false AS from_hourly
+		FROM analytics.bot_crawl_logs b, hourly_bounds hb
+		WHERE b.created_at >= $1 AND b.created_at < $2
+		  AND b.created_at < COALESCE(hb.first_hourly_at, '9999-12-31'::timestamptz)
+		UNION ALL
+		SELECT
+			date_trunc('hour', pv.created_at) AS bucket_hour,
 			COALESCE(NULLIF(pv.bot_name, ''), 'UnknownBot') AS bot_name,
+			''::text AS bot_category,
 			pv.path,
-			pv.created_at
-		FROM analytics.page_views pv
+			1::bigint AS hits,
+			pv.created_at,
+			false AS from_hourly
+		FROM analytics.page_views pv, hourly_bounds hb
 		WHERE pv.is_bot = true
 		  AND pv.created_at >= $1 AND pv.created_at < $2
+		  AND pv.created_at < COALESCE(hb.first_hourly_at, '9999-12-31'::timestamptz)
 		  AND COALESCE(pv.bot_name, '') <> 'EmptyUA'
 		  AND NOT EXISTS (
 			SELECT 1 FROM analytics.bot_crawl_logs b2
@@ -1834,16 +1862,16 @@ func queryBIBotCrawlMonitor(ctx context.Context, win biTimeWindow) BIBotCrawlMon
 	}
 
 	_ = db.Pool.QueryRow(ctx, biBotCrawlUnionCTE+`
-		SELECT COALESCE(COUNT(*), 0)
+		SELECT COALESCE(SUM(hits), 0)::int
 		FROM bot_hits
 	`, win.Since, win.Until).Scan(&out.TotalBotHits)
 
 	botRows, err := db.Pool.Query(ctx, biBotCrawlUnionCTE+`
 		SELECT
 			bot_name,
-			COUNT(*) AS hits,
-			COUNT(DISTINCT path) AS uniq_paths,
-			COUNT(*) FILTER (WHERE path LIKE '/product/%' OR path ~ '^/[a-z]{2}/product/') AS prod_crawled,
+			COALESCE(SUM(hits), 0)::int AS hits,
+			COUNT(DISTINCT path)::int AS uniq_paths,
+			COALESCE(SUM(hits) FILTER (WHERE path LIKE '/product/%' OR path ~ '^/[a-z]{2}/product/'), 0)::int AS prod_crawled,
 			MAX(created_at) AS last_at
 		FROM bot_hits
 		GROUP BY bot_name
@@ -1861,14 +1889,24 @@ func queryBIBotCrawlMonitor(ctx context.Context, win biTimeWindow) BIBotCrawlMon
 	}
 
 	pathRows, err := db.Pool.Query(ctx, biBotCrawlUnionCTE+`
+		WITH ranked_path_bots AS (
+			SELECT
+				path,
+				bot_name,
+				SUM(hits) AS bot_hits,
+				ROW_NUMBER() OVER (PARTITION BY path ORDER BY SUM(hits) DESC, bot_name ASC) AS rn
+			FROM bot_hits
+			GROUP BY path, bot_name
+		)
 		SELECT
-			path,
-			COUNT(*) AS hits,
-			COALESCE(MODE() WITHIN GROUP (ORDER BY bot_name), 'UnknownBot') AS top_bot,
-			COUNT(DISTINCT bot_name) AS uniq_bots,
-			MAX(created_at) AS last_at
-		FROM bot_hits
-		GROUP BY path
+			bh.path,
+			COALESCE(SUM(bh.hits), 0)::int AS hits,
+			COALESCE(MAX(rpb.bot_name) FILTER (WHERE rpb.rn = 1), 'UnknownBot') AS top_bot,
+			COUNT(DISTINCT bh.bot_name)::int AS uniq_bots,
+			MAX(bh.created_at) AS last_at
+		FROM bot_hits bh
+		LEFT JOIN ranked_path_bots rpb ON rpb.path = bh.path AND rpb.rn = 1
+		GROUP BY bh.path
 		ORDER BY hits DESC
 		LIMIT 20
 	`, win.Since, win.Until)

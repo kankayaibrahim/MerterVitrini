@@ -428,6 +428,7 @@ server {{
 
     root {cfg['remote_dir']}/public;
     index index.html index.htm;
+    access_log /var/log/nginx/mertervitrini_access.log main;
 
     # Security Headers
     server_tokens off;
@@ -536,6 +537,7 @@ server {{
 server {{
     listen 443 ssl;
     server_name api.mertervitrini.com.tr;
+    access_log /var/log/nginx/mertervitrini_access.log main;
 
     # Security Headers
     server_tokens off;

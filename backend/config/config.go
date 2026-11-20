@@ -32,6 +32,7 @@ type Config struct {
 	SMTPPort                 string `json:"smtp_port"`
 	SMTPFrom                 string `json:"smtp_from"`
 	AdminEmail               string `json:"admin_email"`
+	NginxAccessLogPath       string `json:"nginx_access_log_path,omitempty"`
 }
 
 // EffectiveReCaptchaSecret returns the configured Google reCAPTCHA secret key, if any.
@@ -84,6 +85,7 @@ func defaultConfiguration() *Config {
 		SMTPPort:             "25",
 		SMTPFrom:             "destek@mertervitrini.com.tr",
 		AdminEmail:           "kankayaibrahim@gmail.com",
+		NginxAccessLogPath:   "/var/log/nginx/mertervitrini_access.log",
 	}
 }
 
@@ -136,6 +138,7 @@ func applyEnvOverrides(cfg *Config) {
 	setIfPresent(&cfg.SMTPPort, "SMTP_PORT")
 	setIfPresent(&cfg.SMTPFrom, "SMTP_FROM")
 	setIfPresent(&cfg.AdminEmail, "ADMIN_EMAIL")
+	setIfPresent(&cfg.NginxAccessLogPath, "NGINX_ACCESS_LOG_PATH")
 
 	if val, ok := os.LookupEnv("DISABLE_OTP"); ok {
 		cfg.DisableOTP = (val == "true")

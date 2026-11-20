@@ -134,6 +134,7 @@ func initBackgroundWorkers(appCtx context.Context, cfg *config.Config) {
 	}
 
 	db.StartRatesWorker(appCtx)
+	handlers.StartNginxBotLogIngestor(appCtx, cfg)
 	handlers.StartUnverifiedApplicationsCleaner()
 	handlers.TriggerCustomerGeoBackfillAsync()
 }

@@ -21,6 +21,7 @@ import BiSearchMiningTab from "./BiSearchMiningTab";
 import BiGeoAndAttributionTab from "./BiGeoAndAttributionTab";
 import BiCatalogAndPagesTab from "./BiCatalogAndPagesTab";
 import BiTechAndBotMonitorTab from "./BiTechAndBotMonitorTab";
+import TrafficSourcesPanel from "./TrafficSourcesPanel";
 import WhatsappClicksPanel from "./WhatsappClicksPanel";
 
 export type {
@@ -145,6 +146,9 @@ export default function AnalyticsDashboardClient() {
   );
 
   function renderActiveTab() {
+    if (activeTab === "traffic") {
+      return <TrafficSourcesPanel embedded externalPeriod={period} />;
+    }
     if (activeTab === "funnel") {
       return (
         <BiFunnelAndLeadsTab

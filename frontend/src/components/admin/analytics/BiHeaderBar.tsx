@@ -11,6 +11,7 @@ import {
   Globe2,
   MessageCircle,
   PackageSearch,
+  Radar,
   Radio,
   RefreshCw,
   Search,
@@ -74,6 +75,12 @@ export default function BiHeaderBar({
       label: "Yönetici Özeti & Trendler",
       shortLabel: "Yönetici Özeti",
       icon: BarChart3,
+    },
+    {
+      id: "traffic",
+      label: "AI Bot & Trafik Kaynakları",
+      shortLabel: "AI & Kaynaklar",
+      icon: Radar,
     },
     {
       id: "funnel",

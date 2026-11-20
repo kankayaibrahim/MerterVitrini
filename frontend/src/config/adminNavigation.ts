@@ -22,6 +22,7 @@ import {
   Compass,
   Bell,
   MessageCircle,
+  Radar,
   LucideIcon
 } from "lucide-react";
 
@@ -65,6 +66,15 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
         badge: "BI",
         badgeColor: "emerald",
         description: "B2B dönüşüm hunisi, sıcak alıcı skorları, sıfır sonuçlu arama madenciliği, Web Vitals ve SEO bot radarı"
+      },
+      {
+        id: "traffic-sources",
+        title: "AI Bot & Trafik Kaynakları",
+        href: "/admin/traffic-sources",
+        icon: Radar,
+        badge: "Yeni",
+        badgeColor: "violet",
+        description: "Yapay zeka botları vs Google taramaları, ChatGPT / arama ziyaretleri ve geliş kelimeleri"
       }
     ]
   },

@@ -5,6 +5,7 @@ export type BiPeriod = "today" | "24h" | "7d" | "30d" | "90d";
 
 export type BiTabId =
   | "overview"
+  | "traffic"
   | "funnel"
   | "search"
   | "geo"

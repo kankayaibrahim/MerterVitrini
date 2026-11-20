@@ -113,3 +113,13 @@ Müşteri ve misafir ziyaretçilerin hangi tedarikçi, ürün ve vitrin alanı �
   - `target_phone` (`VARCHAR(64)` — tıklama anında açılan tedarikçi veya mağaza WhatsApp numarası), `source_surface` (`VARCHAR(64)` — örn. `product_calculator`, `product_supplier_card`, `product_quick_modal`, `supplier_directory`, `footer`), `page_path` (`VARCHAR(500)`).
   - `country_code`, `language_code`, `device_type`, `ip_address`, `referrer_host`, `created_at` (`TIMESTAMPTZ`).
 - **İndeksler:** `idx_whatsapp_clicks_created_at`, `idx_whatsapp_clicks_brand_created`, `idx_whatsapp_clicks_user_id` (`WHERE user_id <> ''`), `idx_whatsapp_clicks_visitor_id` (`WHERE visitor_id <> ''`).
+
+---
+
+## 7. `analytics` Şeması: AI & Arama Motoru Tarama ve Trafik Kaynağı Telemetrisi
+
+Nginx erişim loglarından yüksek hacimli bot taramalarını site hızını etkilemeden saatlik özetlemek ve geliş arama kelimelerini saklamak için [`0019_add_bot_crawl_hourly_and_referrer_keyword.sql`](file:///c:/Projects/mertervitrini.com.tr/database/0019_add_bot_crawl_hourly_and_referrer_keyword.sql) ve [`analytics.go`](file:///c:/Projects/mertervitrini.com.tr/backend/handlers/analytics.go) içinde şu yapılar tanımlıdır:
+
+- **`analytics.bot_crawl_hourly`:** Saatlik (`bucket_hour`), bot adı (`bot_name`), bot kategorisi (`bot_category`: `ai_bot`, `google`, `search_engine`, `seo_tool`, `social_preview`, `other_bot`), temizlenmiş URL yolu (`path`) ve HTTP durum sınıfı (`status_class`: `2xx`/`3xx`/`4xx`/`5xx`) kırılımında birleştirilmiş (`hits`, `last_seen_at`) bot tarama tablosu (`PRIMARY KEY (bucket_hour, bot_name, path, status_class)`).
+- **`analytics.log_ingest_cursors`:** Arka plandaki Nginx log okuyucusunun kaldığı `file_inode` ve `byte_offset` konumunu saklar; servis yeniden başlatmalarında veya log rotasyonunda çift sayımı ve veri kaybını önler.
+- **`analytics.page_views.referrer_keyword`:** Harici arama yönlendiricilerinden gelen sorgu parametrelerini (`q`, `text`, `p`, `query`, `wd`, `search`) tutan `VARCHAR(200)` sütunu ve `idx_analytics_pv_keywords_created` kısmi indeksi.

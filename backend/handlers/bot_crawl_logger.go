@@ -16,6 +16,21 @@ const (
 	botCrawlQueueCapacity   = 256
 	botCrawlThrottleWindow  = 30 * time.Second
 	botCrawlMaxThrottleKeys = 4096
+
+	// Exported crawler category identifiers shared by nginx ingestor & BI queries.
+	BotCategoryAI     = "ai_bot"
+	BotCategoryGoogle = "google"
+	BotCategorySearch = "search_engine"
+	BotCategorySEO    = "seo_tool"
+	BotCategorySocial = "social_preview"
+	BotCategoryOther  = "other_bot"
+
+	botNameGPTBot        = "GPTBot"
+	botNameClaudeBot     = "ClaudeBot"
+	botNamePerplexityBot = "PerplexityBot"
+	botNameBingbot       = "Bingbot"
+	botNamePinterestBot  = "Pinterestbot"
+	botNameCohereAI      = "Cohere-AI"
 )
 
 type botCrawlLogEntry struct {
@@ -27,6 +42,12 @@ type botCrawlLogEntry struct {
 	statusCode  int
 }
 
+type classifiedBotSignature struct {
+	token    string
+	name     string
+	category string
+}
+
 var (
 	botCrawlWorkerOnce sync.Once
 	botCrawlQueue      chan botCrawlLogEntry
@@ -34,50 +55,132 @@ var (
 	botThrottleSeen    = make(map[string]time.Time)
 )
 
-var seoAndAICrawlerSignatures = []botSignature{
-	{token: "googlebot", name: botNameGooglebot},
-	{token: "google-inspectiontool", name: botNameGooglebot},
-	{token: "storebot-google", name: botNameGooglebot},
-	{token: "adsbot-google", name: botNameGooglebot},
-	{token: "apis-google", name: botNameGooglebot},
-	{token: "yandexbot", name: botNameYandexBot},
-	{token: "yandeximages", name: botNameYandexBot},
-	{token: "yandexmobilebot", name: botNameYandexBot},
-	{token: "bingbot", name: "Bingbot"},
-	{token: "duckduckbot", name: "DuckDuckBot"},
-	{token: "applebot", name: "Applebot"},
-	{token: "baiduspider", name: "Baiduspider"},
-	{token: "gptbot", name: "GPTBot"},
-	{token: "chatgpt-user", name: "ChatGPT-User"},
-	{token: "oai-searchbot", name: "GPTBot"},
-	{token: "claudebot", name: "ClaudeBot"},
-	{token: "claude-web", name: "ClaudeBot"},
-	{token: "anthropic-ai", name: "ClaudeBot"},
-	{token: "perplexitybot", name: "PerplexityBot"},
-	{token: "bytespider", name: "Bytespider"},
-	{token: botNameFacebookExt, name: botNameFacebookExt},
-	{token: "meta-externalagent", name: botNameFacebookExt},
-	{token: "ahrefsbot", name: "AhrefsBot"},
-	{token: "semrushbot", name: "SemrushBot"},
-	{token: "mj12bot", name: "MJ12bot"},
-	{token: "telegrambot", name: "TelegramBot"},
-	{token: "whatsapp", name: "WhatsApp"},
-	{token: "linkedinbot", name: "LinkedInBot"},
-	{token: "twitterbot", name: "Twitterbot"},
+// Priority order matters: AI extended / search tokens must precede generic Googlebot, Applebot, Facebook, or GPT tokens.
+var classifiedCrawlerSignatures = []classifiedBotSignature{
+	// AI Bots & LLM Search Crawlers
+	{token: "oai-searchbot", name: "OAI-SearchBot", category: BotCategoryAI},
+	{token: "chatgpt-user", name: "ChatGPT-User", category: BotCategoryAI},
+	{token: "gptbot", name: botNameGPTBot, category: BotCategoryAI},
+	{token: "claude-searchbot", name: "Claude-SearchBot", category: BotCategoryAI},
+	{token: "claude-user", name: "Claude-User", category: BotCategoryAI},
+	{token: "claudebot", name: botNameClaudeBot, category: BotCategoryAI},
+	{token: "claude-web", name: botNameClaudeBot, category: BotCategoryAI},
+	{token: "anthropic-ai", name: botNameClaudeBot, category: BotCategoryAI},
+	{token: "perplexity-user", name: "Perplexity-User", category: BotCategoryAI},
+	{token: "perplexitybot", name: botNamePerplexityBot, category: BotCategoryAI},
+	{token: "google-extended", name: "Google-Extended", category: BotCategoryAI},
+	{token: "googleother", name: "GoogleOther", category: BotCategoryAI},
+	{token: "applebot-extended", name: "Applebot-Extended", category: BotCategoryAI},
+	{token: "meta-externalagent", name: "Meta-ExternalAgent", category: BotCategoryAI},
+	{token: "meta-externalfetcher", name: "Meta-ExternalFetcher", category: BotCategoryAI},
+	{token: "meta-webindexer", name: "Meta-WebIndexer", category: BotCategoryAI},
+	{token: "bytespider", name: "Bytespider", category: BotCategoryAI},
+	{token: "amazonbot", name: "Amazonbot", category: BotCategoryAI},
+	{token: "ccbot", name: "CCBot", category: BotCategoryAI},
+	{token: "deepseekbot", name: "DeepSeekBot", category: BotCategoryAI},
+	{token: "mistralai", name: "MistralAI", category: BotCategoryAI},
+	{token: "cohere-ai", name: botNameCohereAI, category: BotCategoryAI},
+	{token: "cohere-training-data-crawler", name: botNameCohereAI, category: BotCategoryAI},
+	{token: "duckassistbot", name: "DuckAssistBot", category: BotCategoryAI},
+	{token: "youbot", name: "YouBot", category: BotCategoryAI},
+	{token: "ai2bot", name: "AI2Bot", category: BotCategoryAI},
+	{token: "diffbot", name: "Diffbot", category: BotCategoryAI},
+	{token: "timpibot", name: "Timpibot", category: BotCategoryAI},
+	{token: "omgili", name: "Omgili", category: BotCategoryAI},
+	{token: "petalbot", name: "PetalBot", category: BotCategoryAI},
+
+	// Google Crawlers
+	{token: "googlebot", name: botNameGooglebot, category: BotCategoryGoogle},
+	{token: "google-inspectiontool", name: botNameGooglebot, category: BotCategoryGoogle},
+	{token: "storebot-google", name: botNameGooglebot, category: BotCategoryGoogle},
+	{token: "adsbot-google", name: botNameGooglebot, category: BotCategoryGoogle},
+	{token: "apis-google", name: botNameGooglebot, category: BotCategoryGoogle},
+	{token: "mediapartners-google", name: botNameGooglebot, category: BotCategoryGoogle},
+	{token: "feedfetcher-google", name: botNameGooglebot, category: BotCategoryGoogle},
+
+	// Other Search Engine Crawlers
+	{token: "yandexbot", name: botNameYandexBot, category: BotCategorySearch},
+	{token: "yandeximages", name: botNameYandexBot, category: BotCategorySearch},
+	{token: "yandexmobilebot", name: botNameYandexBot, category: BotCategorySearch},
+	{token: "yandexaccessibilitybot", name: botNameYandexBot, category: BotCategorySearch},
+	{token: "bingbot", name: botNameBingbot, category: BotCategorySearch},
+	{token: "adidxbot", name: botNameBingbot, category: BotCategorySearch},
+	{token: "bingpreview", name: botNameBingbot, category: BotCategorySearch},
+	{token: "duckduckbot", name: "DuckDuckBot", category: BotCategorySearch},
+	{token: "applebot", name: "Applebot", category: BotCategorySearch},
+	{token: "baiduspider", name: "Baiduspider", category: BotCategorySearch},
+	{token: "seznambot", name: "SeznamBot", category: BotCategorySearch},
+	{token: "sogou", name: "Sogou", category: BotCategorySearch},
+	{token: "slurp", name: "Yahoo Slurp", category: BotCategorySearch},
+	{token: "yeti", name: "Naver Yeti", category: BotCategorySearch},
+
+	// SEO & Audit Tools
+	{token: "semrushbot", name: "SemrushBot", category: BotCategorySEO},
+	{token: "ahrefsbot", name: "AhrefsBot", category: BotCategorySEO},
+	{token: "mj12bot", name: "MJ12bot", category: BotCategorySEO},
+	{token: "dotbot", name: "DotBot", category: BotCategorySEO},
+	{token: "barkrowler", name: "Barkrowler", category: BotCategorySEO},
+	{token: "dataforseobot", name: "DataForSeoBot", category: BotCategorySEO},
+	{token: "qlyzebot", name: "QlyzeBot", category: BotCategorySEO},
+	{token: "reflectionbot", name: "ReflectionBot", category: BotCategorySEO},
+	{token: "blexbot", name: "BLEXBot", category: BotCategorySEO},
+	{token: "screaming frog", name: "ScreamingFrog", category: BotCategorySEO},
+
+	// Social & Messaging Link Previews
+	{token: botNameFacebookExt, name: botNameFacebookExt, category: BotCategorySocial},
+	{token: "facebot", name: botNameFacebookExt, category: BotCategorySocial},
+	{token: "telegrambot", name: "TelegramBot", category: BotCategorySocial},
+	{token: "whatsapp", name: "WhatsApp", category: BotCategorySocial},
+	{token: "linkedinbot", name: "LinkedInBot", category: BotCategorySocial},
+	{token: "twitterbot", name: "Twitterbot", category: BotCategorySocial},
+	{token: "pinterestbot", name: botNamePinterestBot, category: BotCategorySocial},
+	{token: "slackbot", name: "Slackbot", category: BotCategorySocial},
+	{token: "discordbot", name: "Discordbot", category: BotCategorySocial},
+}
+
+// ClassifyBotUserAgent inspects User-Agent strings and classifies known AI, Google, search, SEO, and social crawlers.
+func ClassifyBotUserAgent(userAgent string) (bool, string, string) {
+	uaLower := strings.ToLower(strings.TrimSpace(userAgent))
+	if uaLower == "" {
+		return false, "", ""
+	}
+	for _, sig := range classifiedCrawlerSignatures {
+		if strings.Contains(uaLower, sig.token) {
+			return true, sig.name, sig.category
+		}
+	}
+	return false, "", ""
+}
+
+// ResolveBotCategory maps a normalized bot_name back to its canonical crawler category.
+func ResolveBotCategory(botName string) string {
+	switch botName {
+	case "OAI-SearchBot", "ChatGPT-User", botNameGPTBot,
+		"Claude-SearchBot", "Claude-User", botNameClaudeBot,
+		"Perplexity-User", botNamePerplexityBot,
+		"Google-Extended", "GoogleOther", "Applebot-Extended",
+		"Meta-ExternalAgent", "Meta-ExternalFetcher", "Meta-WebIndexer",
+		"Bytespider", "Amazonbot", "CCBot", "DeepSeekBot",
+		"MistralAI", botNameCohereAI, "DuckAssistBot", "YouBot",
+		"AI2Bot", "Diffbot", "Timpibot", "Omgili", "PetalBot":
+		return BotCategoryAI
+	case botNameGooglebot:
+		return BotCategoryGoogle
+	case botNameYandexBot, botNameBingbot, "DuckDuckBot", "Applebot", "Baiduspider", "SeznamBot", "Sogou", "Yahoo Slurp", "Naver Yeti":
+		return BotCategorySearch
+	case "SemrushBot", "AhrefsBot", "MJ12bot", "DotBot", "Barkrowler", "DataForSeoBot", "QlyzeBot", "ReflectionBot", "BLEXBot", "ScreamingFrog":
+		return BotCategorySEO
+	case botNameFacebookExt, "TelegramBot", "WhatsApp", "LinkedInBot", "Twitterbot", botNamePinterestBot, "Slackbot", "Discordbot":
+		return BotCategorySocial
+	default:
+		return BotCategoryOther
+	}
 }
 
 // DetectSEOOrAIBot inspects User-Agent strings for known search engine and AI crawlers.
 func DetectSEOOrAIBot(userAgent string) (bool, string) {
-	uaLower := strings.ToLower(strings.TrimSpace(userAgent))
-	if uaLower == "" {
-		return false, ""
-	}
-	for _, sig := range seoAndAICrawlerSignatures {
-		if strings.Contains(uaLower, sig.token) {
-			return true, sig.name
-		}
-	}
-	return false, ""
+	isBot, name, _ := ClassifyBotUserAgent(userAgent)
+	return isBot, name
 }
 
 func resolveCrawlerUserAgent(r *http.Request) string {

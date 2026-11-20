@@ -184,6 +184,34 @@ func ensureAnalyticsSchema(ctx context.Context) {
 			CREATE INDEX IF NOT EXISTS idx_bot_crawl_logs_bot_created
 				ON analytics.bot_crawl_logs (bot_name, created_at DESC);
 
+			CREATE TABLE IF NOT EXISTS analytics.bot_crawl_hourly (
+				bucket_hour TIMESTAMPTZ NOT NULL,
+				bot_name VARCHAR(60) NOT NULL,
+				bot_category VARCHAR(32) NOT NULL,
+				path VARCHAR(500) NOT NULL,
+				status_class VARCHAR(8) NOT NULL DEFAULT '2xx',
+				hits BIGINT NOT NULL DEFAULT 0,
+				last_seen_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY (bucket_hour, bot_name, path, status_class)
+			);
+			CREATE INDEX IF NOT EXISTS idx_bot_crawl_hourly_bucket
+				ON analytics.bot_crawl_hourly (bucket_hour DESC);
+			CREATE INDEX IF NOT EXISTS idx_bot_crawl_hourly_cat_bucket
+				ON analytics.bot_crawl_hourly (bot_category, bucket_hour DESC);
+
+			CREATE TABLE IF NOT EXISTS analytics.log_ingest_cursors (
+				source_key VARCHAR(120) PRIMARY KEY,
+				file_inode BIGINT NOT NULL DEFAULT 0,
+				byte_offset BIGINT NOT NULL DEFAULT 0,
+				updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+			);
+
+			ALTER TABLE analytics.page_views
+				ADD COLUMN IF NOT EXISTS referrer_keyword VARCHAR(200) NOT NULL DEFAULT '';
+			CREATE INDEX IF NOT EXISTS idx_analytics_pv_keywords_created
+				ON analytics.page_views (created_at DESC)
+				WHERE COALESCE(utm_term, '') <> '' OR COALESCE(referrer_keyword, '') <> '';
+
 			ALTER TABLE catalog.orders
 				ADD COLUMN IF NOT EXISTS currency VARCHAR(10) NOT NULL DEFAULT 'TRY';
 		`
@@ -210,6 +238,9 @@ func classifyVisitorBot(r *http.Request, ua string) (bool, string) {
 	trimmedUA := strings.TrimSpace(ua)
 	if trimmedUA == "" {
 		return true, "EmptyUA"
+	}
+	if ok, botName, _ := ClassifyBotUserAgent(trimmedUA); ok {
+		return true, botName
 	}
 	uaLower := strings.ToLower(trimmedUA)
 	for _, sig := range knownBotSignatures {
@@ -283,15 +314,16 @@ type attributionParams struct {
 }
 
 type pageViewRecord struct {
-	userID       string
-	visitorID    string
-	sessionID    string
-	pageTitle    string
-	url          string
-	path         string
-	referrer     string
-	referrerHost string
-	utmSource    string
+	userID          string
+	visitorID       string
+	sessionID       string
+	pageTitle       string
+	url             string
+	path            string
+	referrer        string
+	referrerHost    string
+	referrerKeyword string
+	utmSource       string
 	utmMedium    string
 	utmCampaign  string
 	utmTerm      string
@@ -451,15 +483,16 @@ func buildPageViewRecord(r *http.Request, req *TrackPageViewRequest, path string
 	ttfb := sanitizeVitalMs(req.TTFBMs, maxValidTTFBMs)
 
 	return pageViewRecord{
-		userID:       userID,
-		visitorID:    truncateStr(visitorID, 64),
-		sessionID:    truncateStr(sessionID, 64),
-		pageTitle:    truncateStr(req.PageTitle, 300),
-		url:          req.URL,
-		path:         truncateStr(path, 500),
-		referrer:     req.Referrer,
-		referrerHost: parseReferrerHost(req.Referrer),
-		utmSource:    truncateStr(attr.source, 100),
+		userID:          userID,
+		visitorID:       truncateStr(visitorID, 64),
+		sessionID:       truncateStr(sessionID, 64),
+		pageTitle:       truncateStr(req.PageTitle, 300),
+		url:             req.URL,
+		path:            truncateStr(path, 500),
+		referrer:        req.Referrer,
+		referrerHost:    parseReferrerHost(req.Referrer),
+		referrerKeyword: extractReferrerSearchKeyword(req.Referrer),
+		utmSource:       truncateStr(attr.source, 100),
 		utmMedium:    truncateStr(attr.medium, 100),
 		utmCampaign:  truncateStr(attr.campaign, 100),
 		utmTerm:      truncateStr(attr.term, 150),
@@ -587,12 +620,14 @@ func insertPageView(rec pageViewRecord) {
 			user_id, visitor_id, session_id, page_title, url, path, referrer, referrer_host,
 			utm_source, utm_medium, utm_campaign, utm_term, utm_content, click_id,
 			device_type, browser, os, language, country_code, city, currency,
-			screen_width, screen_height, ip_hash, is_bot, bot_name, is_new_visitor, ttfb_ms
+			screen_width, screen_height, ip_hash, is_bot, bot_name, is_new_visitor, ttfb_ms,
+			referrer_keyword
 		) VALUES (
 			NULLIF($1, ''), $2, $3, NULLIF($4, ''), $5, $6, $7, $8,
 			$9, $10, $11, $12, $13, $14,
 			$15, $16, $17, $18, $19, $20, $21,
-			$22, $23, $24, $25, $26, $27, $28
+			$22, $23, $24, $25, $26, $27, $28,
+			$29
 		)
 	`
 	_, _ = db.Pool.Exec(ctx, query,
@@ -600,6 +635,7 @@ func insertPageView(rec pageViewRecord) {
 		rec.utmSource, rec.utmMedium, rec.utmCampaign, rec.utmTerm, rec.utmContent, rec.clickID,
 		rec.deviceType, rec.browser, rec.os, rec.language, rec.countryCode, rec.city, rec.currency,
 		rec.screenWidth, rec.screenHeight, rec.ipHash, rec.isBot, rec.botName, isNewVisitor, rec.ttfbMs,
+		rec.referrerKeyword,
 	)
 
 	if rec.isBot {
@@ -986,27 +1022,87 @@ func parseReferrerHost(rawRef string) string {
 	return mapKnownReferrerHost(host)
 }
 
+type referrerHostRule struct {
+	substr string
+	label  string
+}
+
+// Ordered from most specific (e.g. gemini.google.com, copilot.microsoft.com) to generic search/social hosts.
+var knownReferrerHostRules = []referrerHostRule{
+	// AI Assistants
+	{substr: "gemini.google.", label: "Gemini"},
+	{substr: "bard.google.", label: "Gemini"},
+	{substr: "copilot.microsoft.", label: "Microsoft Copilot"},
+	{substr: "chatgpt.com", label: "ChatGPT"},
+	{substr: "chat.openai.", label: "ChatGPT"},
+	{substr: "openai.com", label: "ChatGPT"},
+	{substr: "perplexity.ai", label: "Perplexity"},
+	{substr: "claude.ai", label: "Claude"},
+	{substr: "grok.com", label: "Grok"},
+	{substr: "x.ai", label: "Grok"},
+	{substr: "deepseek.com", label: "DeepSeek"},
+	{substr: "meta.ai", label: "Meta AI"},
+	{substr: "you.com", label: "You.com"},
+	{substr: "phind.com", label: "Phind"},
+	// Search Engines
+	{substr: "google.", label: "Google Arama"},
+	{substr: "yandex.", label: "Yandex Arama"},
+	{substr: "bing.", label: "Bing Arama"},
+	{substr: "duckduckgo.", label: "DuckDuckGo"},
+	{substr: "search.brave.", label: "Brave Search"},
+	{substr: "yahoo.", label: "Yahoo Arama"},
+	{substr: "baidu.", label: "Baidu"},
+	{substr: "ecosia.", label: "Ecosia"},
+	// Social & Messaging
+	{substr: "instagram.", label: "Instagram"},
+	{substr: "facebook.", label: "Facebook"},
+	{substr: "fb.", label: "Facebook"},
+	{substr: "whatsapp.", label: "WhatsApp"},
+	{substr: "t.me", label: "Telegram"},
+	{substr: "telegram.", label: "Telegram"},
+	{substr: "tiktok.", label: "TikTok"},
+	{substr: "youtube.", label: "YouTube"},
+	{substr: "youtu.be", label: "YouTube"},
+	{substr: "linkedin.", label: "LinkedIn"},
+	{substr: "lnkd.in", label: "LinkedIn"},
+	{substr: "pinterest.", label: "Pinterest"},
+	{substr: "twitter.", label: "X (Twitter)"},
+	{substr: "x.com", label: "X (Twitter)"},
+	{substr: "t.co", label: "X (Twitter)"},
+}
+
 func mapKnownReferrerHost(host string) string {
-	switch {
-	case strings.Contains(host, "google."):
-		return "Google Arama"
-	case strings.Contains(host, "yandex."):
-		return "Yandex Arama"
-	case strings.Contains(host, "instagram."):
-		return "Instagram"
-	case strings.Contains(host, "facebook."):
-		return "Facebook"
-	case strings.Contains(host, "whatsapp."):
-		return "WhatsApp"
-	case strings.Contains(host, "t.me") || strings.Contains(host, "telegram."):
-		return "Telegram"
-	case strings.Contains(host, "tiktok."):
-		return "TikTok"
-	case strings.Contains(host, "bing."):
-		return "Bing Arama"
-	default:
-		return host
+	for _, rule := range knownReferrerHostRules {
+		if strings.Contains(host, rule.substr) {
+			return rule.label
+		}
 	}
+	return host
+}
+
+// extractReferrerSearchKeyword captures search terms when external referrers include query params (q, text, p, etc.).
+func extractReferrerSearchKeyword(rawRef string) string {
+	trimmed := strings.TrimSpace(rawRef)
+	if trimmed == "" {
+		return ""
+	}
+	u, err := url.Parse(trimmed)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	if strings.Contains(host, "mertervitrini.com.tr") || host == "localhost" || host == "127.0.0.1" {
+		return ""
+	}
+	q := u.Query()
+	for _, param := range []string{"q", "text", "p", "query", "wd", "search"} {
+		val := strings.TrimSpace(q.Get(param))
+		if val == "" || strings.HasPrefix(strings.ToLower(val), "http://") || strings.HasPrefix(strings.ToLower(val), "https://") {
+			continue
+		}
+		return truncateStr(val, 200)
+	}
+	return ""
 }
 
 func parseAttributionParams(rawURL string, req *TrackPageViewRequest) attributionParams {
