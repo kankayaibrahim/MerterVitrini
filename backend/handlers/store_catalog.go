@@ -98,7 +98,7 @@ func sanitizePublicStoreProducts(products []*models.Product, showPrices bool) {
 var catalogExtraFilterKeys = []string{
 	"brand_id", "category_id", "min_price", "max_price",
 	"gender", "season", "fason", "private_label",
-	"company_type", "max_moq", "export_country",
+	"company_type", "max_moq", "export_country", "new_days",
 }
 
 func hasCatalogExtraFilters(query url.Values) bool {
@@ -343,6 +343,29 @@ func appendCatalogB2BFilters(sqlBase *string, query url.Values, argIndex *int, a
 	}
 }
 
+func appendCatalogNewDaysFilter(sqlBase *string, query url.Values, argIndex *int, args *[]any) {
+	newDaysRaw := strings.TrimSpace(query.Get("new_days"))
+	var days int
+	if newDaysRaw != "" {
+		parsed, err := strconv.Atoi(newDaysRaw)
+		if err != nil || parsed <= 0 {
+			return
+		}
+		days = parsed
+	} else if strings.EqualFold(strings.TrimSpace(query.Get("category_id")), "yeni-urunler") {
+		days = 7
+	} else {
+		return
+	}
+
+	if days > 365 {
+		days = 365
+	}
+	*sqlBase += fmt.Sprintf(" AND p.created_at >= NOW() - make_interval(days => $%d)", *argIndex)
+	*args = append(*args, days)
+	*argIndex++
+}
+
 func buildCatalogFilterSQL(query url.Values, displayRate float64, sqlPriceInTRY string) (string, []any, int) {
 	sqlBase := `
 		FROM catalog.mv_products p
@@ -353,8 +376,8 @@ func buildCatalogFilterSQL(query url.Values, displayRate float64, sqlPriceInTRY 
 	appendCatalogSearchFilter(&sqlBase, query.Get("q"), &argIndex, &args)
 	appendCatalogInFilter(&sqlBase, "p.brand_id", query.Get("brand_id"), &argIndex, &args)
 
-	categoryID := query.Get("category_id")
-	if categoryID != "" {
+	categoryID := strings.TrimSpace(query.Get("category_id"))
+	if categoryID != "" && !strings.EqualFold(categoryID, "tum-urunler") && !strings.EqualFold(categoryID, "yeni-urunler") {
 		sqlBase += fmt.Sprintf(` AND (
 			p.category_id = (SELECT id FROM catalog.categories WHERE id::text = $%d OR slug = $%d LIMIT 1)
 			OR p.node_path <@ (
@@ -365,6 +388,7 @@ func buildCatalogFilterSQL(query url.Values, displayRate float64, sqlPriceInTRY 
 		argIndex++
 	}
 
+	appendCatalogNewDaysFilter(&sqlBase, query, &argIndex, &args)
 	appendCatalogDynamicAttributesFilter(&sqlBase, query, &argIndex, &args)
 	appendCatalogPriceFilter(&sqlBase, query, displayRate, sqlPriceInTRY, &argIndex, &args)
 	appendCatalogInFilter(&sqlBase, "p.gender", query.Get("gender"), &argIndex, &args)
@@ -390,9 +414,9 @@ func buildCatalogOrderBy(sortBy, sqlPriceInTRY string) string {
 	case "sku_desc":
 		return " ORDER BY p.custom_sku DESC"
 	case "newest":
-		return " ORDER BY p.created_at DESC"
+		return " ORDER BY p.created_at DESC, p.id DESC"
 	default:
-		return " ORDER BY p.created_at DESC"
+		return " ORDER BY p.created_at DESC, p.id DESC"
 	}
 }
 

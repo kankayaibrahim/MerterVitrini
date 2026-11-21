@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Product, Category } from "@/types/store";
-import { t, getCategoryPrefix, getCategoryTitle } from "@/app/i18n";
+import { t, getCategoryPrefix, getCategoryTitle, pickLangText, SupportedLangCode } from "@/app/i18n";
 import { ExchangeRate } from "@/app/utils";
 import ProductCard from "@/components/store/ProductCard";
 import { PortalSponsoredSuppliersSection } from "@/components/store/SponsoredShowcaseSection";
@@ -31,6 +31,23 @@ const NEXT_SLIDE_LABELS: Record<string, string> = {
   fr: "Diapositive suivante",
   pl: "Następny slajd",
   bg: "Следващ слайд",
+};
+
+interface PortalNewCategoryCopy {
+  readonly title: string;
+  readonly badge: string;
+  readonly viewAll: string;
+}
+
+const PORTAL_NEW_CATEGORY_COPY: Record<SupportedLangCode, PortalNewCategoryCopy> = {
+  tr: { title: "Yeni Ürünler", badge: "Son 7 Gün", viewAll: "Son 7 Günün Tüm Yeni Ürünleri →" },
+  en: { title: "New Arrivals", badge: "Last 7 Days", viewAll: "View All Last 7 Days Arrivals →" },
+  ru: { title: "Новые поступления", badge: "За 7 дней", viewAll: "Все новинки за 7 дней →" },
+  ar: { title: "وصل حديثاً", badge: "آخر 7 أيام", viewAll: "عرض كل جديد آخر 7 أيام ←" },
+  de: { title: "Neuheiten", badge: "Letzte 7 Tage", viewAll: "Alle Neuheiten der letzten 7 Tage →" },
+  fr: { title: "Nouveautés", badge: "7 derniers jours", viewAll: "Toutes les nouveautés (7 jours) →" },
+  pl: { title: "Nowości", badge: "Ostatnie 7 dni", viewAll: "Zobacz wszystkie nowości (7 dni) →" },
+  bg: { title: "Нови продукти", badge: "Последните 7 дни", viewAll: "Всички нови продукти (7 дни) →" },
 };
 
 interface PortalViewProps {
@@ -164,6 +181,7 @@ export default function PortalView({
 
   const safeLang = normalizeSeoLang(lang, "en");
   const seoCopy = GLOBAL_B2B_SEO_MATRIX[safeLang];
+  const newCatCopy = pickLangText(lang, PORTAL_NEW_CATEGORY_COPY);
   const prevSlideLabel = PREV_SLIDE_LABELS[safeLang] || PREV_SLIDE_LABELS.en;
   const nextSlideLabel = NEXT_SLIDE_LABELS[safeLang] || NEXT_SLIDE_LABELS.en;
 
@@ -288,6 +306,19 @@ export default function PortalView({
       {/* B. CATEGORY NAVIGATORS (Luxury editorial clean text badges) */}
       <div className="mb-12 select-none border-t border-b border-cultured py-6">
         <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 md:gap-6">
+          <Link
+            href={`/${getCategoryPrefix(lang)}/yeni-urunler`}
+            className="group cursor-pointer border-none bg-transparent transition-all no-underline"
+          >
+            <div className="border border-salmon-pink/40 group-hover:border-salmon-pink bg-white py-3 px-5 sm:px-6 text-center transition-all duration-300 flex items-center gap-2">
+              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-[2px] text-eerie-black group-hover:text-salmon-pink transition-colors">
+                {newCatCopy.title}
+              </span>
+              <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider bg-salmon-pink/10 text-salmon-pink rounded-full">
+                {newCatCopy.badge}
+              </span>
+            </div>
+          </Link>
           {categories.length === 0 ? (
             Array.from({ length: 5 }).map((_, idx) => (
               <div key={idx} className="h-10 w-28 bg-cultured animate-pulse" />
@@ -415,7 +446,17 @@ export default function PortalView({
 
       {/* D. NEW ARRIVALS PREVIEW CAROUSEL */}
       <div className="mb-16 select-none">
-        <h3 className="font-serif font-bold text-sm tracking-[2px] text-eerie-black uppercase mb-8 text-center">{t("portal_new_arrivals", lang)}</h3>
+        <div className="flex flex-col items-center gap-2 mb-8 text-center">
+          <h3 className="font-serif font-bold text-sm tracking-[2px] text-eerie-black uppercase">
+            {t("portal_new_arrivals", lang)}
+          </h3>
+          <Link
+            href={`/${getCategoryPrefix(lang)}/yeni-urunler`}
+            className="text-[11px] font-bold uppercase tracking-[1.5px] text-salmon-pink hover:text-eerie-black transition-colors no-underline"
+          >
+            {newCatCopy.viewAll}
+          </Link>
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {portalNewArrivals.length === 0 ? (
             Array.from({ length: 4 }).map((_, idx) => (

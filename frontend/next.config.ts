@@ -123,6 +123,11 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
+        source: "/yeni-urunler",
+        destination: "/tr/yeni-urunler",
+        permanent: true,
+      },
+      {
         source: "/tedarikci/sifre-olustur",
         destination: "/supplier/set-password",
         permanent: true,

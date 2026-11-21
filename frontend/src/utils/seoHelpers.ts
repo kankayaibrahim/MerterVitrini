@@ -61,6 +61,7 @@ export interface GlobalB2BSeoLocaleCopy {
   readonly keywords: string;
   readonly homeLabel: string;
   readonly allProductsLabel: string;
+  readonly newArrivalsLabel: string;
   readonly suppliersLabel: string;
   readonly portalTitle: string;
   readonly portalDescription: string;
@@ -68,6 +69,8 @@ export interface GlobalB2BSeoLocaleCopy {
   readonly portalLead: string;
   readonly allProductsTitle: string;
   readonly allProductsDescription: string;
+  readonly newArrivalsTitle: string;
+  readonly newArrivalsDescription: string;
 }
 
 export const GLOBAL_B2B_SEO_MATRIX: Record<
@@ -79,6 +82,7 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
       "Merter toptan giyim, İstanbul toptan tekstil üreticileri, seri toptan kadın giyim, fason üretim, doğrudan fabrikadan toptan kıyafet",
     homeLabel: "Ana Sayfa",
     allProductsLabel: "Tüm Toptan Ürünler",
+    newArrivalsLabel: "Yeni Ürünler",
     suppliersLabel: "Üretici Firmalar",
     portalTitle:
       "Merter Toptan Giyim & İstanbul B2B Tekstil Üreticileri",
@@ -92,12 +96,17 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
       "Tüm Toptan Giyim Koleksiyonları — Seri Bazlı Fabrikadan Toptan Kıyafet",
     allProductsDescription:
       "Merter toptan kadın giyim, elbise, takım, dış giyim ve erkek giyim modellerini seri/paket fiyatlarıyla doğrudan üretici fabrikalardan inceleyin.",
+    newArrivalsTitle:
+      "Yeni Ürünler (Son 7 Gün) — Merter Toptan Giyim Yeni Sezon Modelleri",
+    newArrivalsDescription:
+      "Son 7 günde Merter toptan giyim üreticileri tarafından eklenen en yeni sezon kadın ve erkek giyim modellerini eklenme tarihine göre inceleyin.",
   },
   en: {
     keywords:
       "Merter wholesale clothing Istanbul, Turkish wholesale fashion manufacturers, bulk women's dresses & streetwear packs, low MOQ private label apparel Turkey, direct factory B2B fashion",
     homeLabel: "Home",
     allProductsLabel: "All Wholesale Products",
+    newArrivalsLabel: "New Arrivals",
     suppliersLabel: "Manufacturers",
     portalTitle:
       "Merter Wholesale Clothing Istanbul — Direct Turkish Fashion Manufacturers B2B",
@@ -111,12 +120,17 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
       "All Turkish Wholesale Clothing Packs — Direct Merter Factory Catalog",
     allProductsDescription:
       "Browse thousands of wholesale women's & men's clothing packs from Merter Istanbul manufacturers with transparent size ratios, factory pricing, and fast export.",
+    newArrivalsTitle:
+      "New Arrivals (Last 7 Days) — Latest Merter Wholesale Clothing Packs",
+    newArrivalsDescription:
+      "Discover wholesale women's and men's fashion packs added by verified Merter Istanbul manufacturers in the last 7 days, sorted newest first.",
   },
   ru: {
     keywords:
       "Одежда оптом из Турции Мертер Стамбул, женская одежда оптом от производителя размерными рядами, фабрики одежды Мертер без посредников, карго доставка в СНГ и Россию",
     homeLabel: "Главная",
     allProductsLabel: "Все товары оптом",
+    newArrivalsLabel: "Новые поступления",
     suppliersLabel: "Фабрики и производители",
     portalTitle:
       "Одежда оптом из Турции (Мертер, Стамбул) — Напрямую от фабрик без посредников",
@@ -130,12 +144,17 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
       "Каталог одежды оптом из Турции Мертер — Закупка размерными рядами с фабрик",
     allProductsDescription:
       "Полный оптовый каталог фабрик Мертера (Стамбул): платья, костюмы, трикотаж и верхняя одежда оптом сериями напрямую от турецких производителей.",
+    newArrivalsTitle:
+      "Новые поступления (за 7 дней) — Свежие коллекции фабрик Мертера оптом",
+    newArrivalsDescription:
+      "Новые модели женской и мужской одежды, добавленные турецкими фабриками Мертера за последние 7 дней в порядке поступления.",
   },
   ar: {
     keywords:
       "ملابس تركية بالجملة مارتر إسطنبول، مصانع الملابس الجاهزة في تركيا بدون وسطاء، فساتين وملابس محجبات بالجملة بنظام الباكيدج، شحن دولي وتخليص جمركي",
     homeLabel: "الرئيسية",
     allProductsLabel: "جميع منتجات الجملة",
+    newArrivalsLabel: "وصل حديثاً",
     suppliersLabel: "المصانع التركية",
     portalTitle:
       "ملابس تركية بالجملة من مارتر إسطنبول — مباشرة من المصانع بدون وسطاء",
@@ -149,12 +168,17 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
       "كتالوج الملابس التركية بالجملة — فساتين وأزياء مارتر إسطنبول بنظام السيري",
     allProductsDescription:
       "استعرض آلاف موديلات الملابس التركية بالجملة بنظام الباكيدج مباشرة من مصانع مارتر إسطنبول بأسعار المصنع وشحن دولي موثوق.",
+    newArrivalsTitle:
+      "وصل حديثاً (آخر 7 أيام) — أحدث موديلات الجملة من مصانع مارتر إسطنبول",
+    newArrivalsDescription:
+      "استعرض أحدث موديلات الملابس التركية بالجملة المضافة خلال آخر 7 أيام مباشرة من مصانع مارتر حسب الأحدث.",
   },
   de: {
     keywords:
       "Großhandel Damenmode Türkei Merter Istanbul, Türkische Textilhersteller B2B direkt ab Werk, Mode Großhandel Serienpakete, Private Label Bekleidung Türkei",
     homeLabel: "Startseite",
     allProductsLabel: "Alle Großhandelsprodukte",
+    newArrivalsLabel: "Neuheiten",
     suppliersLabel: "Herstellerverzeichnis",
     portalTitle:
       "Großhandel Damenmode Türkei (Merter Istanbul) — B2B Direkt ab Werk",
@@ -168,12 +192,17 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
       "B2B Mode Großhandel Katalog — Türkische Bekleidung in Serienpaketen ab Werk",
     allProductsDescription:
       "Entdecken Sie Damen- und Herrenmode im Großhandel direkt von Merter Herstellern in Istanbul mit transparenten Größenläufen und Werkspreisen.",
+    newArrivalsTitle:
+      "Neuheiten (Letzte 7 Tage) — Neueste Großhandelsmode aus Merter Istanbul",
+    newArrivalsDescription:
+      "Entdecken Sie neue Damen- und Herrenmode-Serienpakete, die in den letzten 7 Tagen von Merter Herstellern hinzugefügt wurden.",
   },
   fr: {
     keywords:
       "Grossiste vêtement femme Turquie Merter Istanbul, fabricants textile turc en gros sans intermédiaire, achat en série B2B prêt-à-porter et mode modeste",
     homeLabel: "Accueil",
     allProductsLabel: "Tous les produits en gros",
+    newArrivalsLabel: "Nouveautés",
     suppliersLabel: "Fabricants",
     portalTitle:
       "Grossiste Vêtement Femme Turquie (Merter Istanbul) — Fabricants B2B en Direct",
@@ -187,12 +216,17 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
       "Catalogue Grossiste Mode Turque — Achat en Série Direct Fabricants Merter",
     allProductsDescription:
       "Parcourez toutes les collections de prêt-à-porter turc en gros vendues en paquets assortis directement auprès des ateliers vérifiés de Merter Istanbul.",
+    newArrivalsTitle:
+      "Nouveautés (7 derniers jours) — Nouvelles Collections Grossiste Merter",
+    newArrivalsDescription:
+      "Découvrez les lots de prêt-à-porter ajoutés ces 7 derniers jours par les fabricants de Merter Istanbul, classés du plus récent.",
   },
   pl: {
     keywords:
       "Hurtownia odzieży tureckiej Merter Stambuł, odzież damska hurt bezpośrednio od producenta w paczkach (seriach), sukienki i komplety z Turcji B2B",
     homeLabel: "Strona główna",
     allProductsLabel: "Wszystkie produkty hurtowe",
+    newArrivalsLabel: "Nowości",
     suppliersLabel: "Producenci",
     portalTitle:
       "Hurtownia Odzieży Tureckiej Merter Stambuł — Bezpośrednio od Producenta B2B",
@@ -206,12 +240,17 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
       "Katalog Hurtowy Odzieży z Turcji — Sukienki, Komplety i Moda w Paczkach",
     allProductsDescription:
       "Pełny katalog B2B tureckich producentów odzieży z Merter Stambuł: sprzedaż hurtowa w seriach rozmiarowych w cenach fabrycznych.",
+    newArrivalsTitle:
+      "Nowości (Ostatnie 7 dni) — Najnowsze Kolekcje Hurtowe z Merter",
+    newArrivalsDescription:
+      "Przeglądaj najnowsze modele odzieży hurtowej dodane przez producentów z Merter w ciągu ostatnich 7 dni.",
   },
   bg: {
     keywords:
       "Дрехи на едро от Турция Мертер Истанбул, дамска конфекция на едро директно от производители на серии, турски фабрики за облекло без посредници",
     homeLabel: "Начало",
     allProductsLabel: "Всички продукти на едро",
+    newArrivalsLabel: "Нови продукти",
     suppliersLabel: "Производители",
     portalTitle:
       "Дрехи на едро от Турция (Мертер Истанбул) — Директно от производители B2B",
@@ -225,6 +264,10 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
       "Каталог дрехи на едро от Турция — Дамска и мъжка мода на серии от Мертер",
     allProductsDescription:
       "Разгледайте хиляди модели турски дрехи на едро в серии директно от фабриките в Мертер Истанбул на производствени цени.",
+    newArrivalsTitle:
+      "Нови продукти (Последните 7 дни) — Най-новите серии на едро от Мертер",
+    newArrivalsDescription:
+      "Разгледайте най-новите модели облекла на едро, добавени през последните 7 дни от производители в Мертер Истанбул.",
   },
 };
 

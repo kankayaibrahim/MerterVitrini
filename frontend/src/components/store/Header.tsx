@@ -74,6 +74,8 @@ interface HeaderTexts {
   emailUnverifiedShort: string;
   emailUnverified: string;
   verifyNow: string;
+  newArrivals: string;
+  last7Days: string;
 }
 
 const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
@@ -92,6 +94,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     emailUnverifiedShort: "⚠️ Mail Onaysız",
     emailUnverified: "⚠️ E-Posta Onaysız",
     verifyNow: "Doğrula",
+    newArrivals: "YENİ ÜRÜNLER",
+    last7Days: "Son 7 Gün",
   },
   en: {
     manufacturers: "MANUFACTURERS",
@@ -108,6 +112,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     emailUnverifiedShort: "⚠️ Unverified Email",
     emailUnverified: "⚠️ Email Unverified",
     verifyNow: "Verify",
+    newArrivals: "NEW ARRIVALS",
+    last7Days: "Last 7 Days",
   },
   ru: {
     manufacturers: "ФАБРИКИ",
@@ -124,6 +130,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     emailUnverifiedShort: "⚠️ Почта не подтв.",
     emailUnverified: "⚠️ Email не подтвержден",
     verifyNow: "Подтвердить",
+    newArrivals: "НОВИНКИ",
+    last7Days: "За 7 дней",
   },
   ar: {
     manufacturers: "المصنّعون",
@@ -140,6 +148,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     emailUnverifiedShort: "⚠️ البريد غير مؤكد",
     emailUnverified: "⚠️ البريد الإلكتروني غير مؤكد",
     verifyNow: "تأكيد",
+    newArrivals: "وصل حديثاً",
+    last7Days: "آخر 7 أيام",
   },
   de: {
     manufacturers: "HERSTELLER",
@@ -156,6 +166,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     emailUnverifiedShort: "⚠️ E-Mail unbestätigt",
     emailUnverified: "⚠️ E-Mail nicht bestätigt",
     verifyNow: "Bestätigen",
+    newArrivals: "NEUHEITEN",
+    last7Days: "Letzte 7 Tage",
   },
   fr: {
     manufacturers: "FABRICANTS",
@@ -172,6 +184,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     emailUnverifiedShort: "⚠️ E-mail non vérifié",
     emailUnverified: "⚠️ Adresse e-mail non vérifiée",
     verifyNow: "Vérifier",
+    newArrivals: "NOUVEAUTÉS",
+    last7Days: "7 derniers jours",
   },
   pl: {
     manufacturers: "PRODUCENCI",
@@ -188,6 +202,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     emailUnverifiedShort: "⚠️ E-mail niezweryf.",
     emailUnverified: "⚠️ E-mail niezweryfikowany",
     verifyNow: "Zweryfikuj",
+    newArrivals: "NOWOŚCI",
+    last7Days: "Ostatnie 7 dni",
   },
   bg: {
     manufacturers: "ПРОИЗВОДИТЕЛИ",
@@ -204,6 +220,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     emailUnverifiedShort: "⚠️ Непотвърден имейл",
     emailUnverified: "⚠️ Имейлът не е потвърден",
     verifyNow: "Потвърди",
+    newArrivals: "НОВИ ПРОДУКТИ",
+    last7Days: "Последните 7 дни",
   },
 };
 
@@ -591,6 +609,10 @@ function isAllProductsPathname(pathname: string): boolean {
   return pathname === "/tum-urunler" || /^\/[a-z]{2}\/tum-urunler\/?$/.test(pathname);
 }
 
+function isNewArrivalsPathname(pathname: string): boolean {
+  return pathname === "/yeni-urunler" || /^\/[a-z]{2}\/yeni-urunler\/?$/.test(pathname);
+}
+
 function HeaderNavbar({
   lang,
   categories,
@@ -600,8 +622,13 @@ function HeaderNavbar({
   const router = useRouter();
   const pathname = usePathname() || "/";
   const [hoveredNavKey, setHoveredNavKey] = useState<string | null>(null);
+  const ui = pickLangText(lang, HEADER_TEXTS);
+  const isNewArrivalsActive =
+    isNewArrivalsPathname(pathname) &&
+    (hoveredNavKey === null || hoveredNavKey === "__new__");
   const isAllProductsActive =
     activeCategoryId === "" &&
+    !isNewArrivalsPathname(pathname) &&
     isAllProductsPathname(pathname) &&
     (hoveredNavKey === null || hoveredNavKey === "__all__");
 
@@ -610,7 +637,7 @@ function HeaderNavbar({
       className="bg-white border-b border-cultured py-3 hidden md:block"
       onMouseLeave={() => setHoveredNavKey(null)}
     >
-      <div className="max-w-[1720px] mx-auto px-4 flex items-center justify-center gap-8">
+      <div className="max-w-[1720px] mx-auto px-4 flex items-center justify-center gap-7 lg:gap-8">
         <button
           type="button"
           onMouseEnter={() => setHoveredNavKey("__all__")}
@@ -624,6 +651,22 @@ function HeaderNavbar({
           }`}
         >
           {t("all_products", lang)}
+        </button>
+
+        <button
+          type="button"
+          onMouseEnter={() => setHoveredNavKey("__new__")}
+          onClick={() => {
+            router.push(`/${getCategoryPrefix()}/yeni-urunler`);
+          }}
+          className={`inline-flex items-center gap-1.5 text-[13px] font-bold tracking-[0.5px] uppercase transition-colors border-none bg-transparent cursor-pointer relative after:absolute after:bottom-[-6px] after:left-0 after:right-0 after:h-[2px] after:bg-salmon-pink after:transition-all after:duration-200 ${
+            isNewArrivalsActive
+              ? "text-salmon-pink after:scale-x-100"
+              : "text-onyx hover:text-salmon-pink after:scale-x-0 hover:after:scale-x-100"
+          }`}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-salmon-pink shrink-0" />
+          <span>{ui.newArrivals}</span>
         </button>
 
         {categories.map((cat) => {
@@ -689,6 +732,9 @@ function MobileCategoryAccordion({
   getCategoryPrefix,
 }: Readonly<MobileCategoryAccordionProps>) {
   const router = useRouter();
+  const pathname = usePathname() || "/";
+  const isNewArrivals = isNewArrivalsPathname(pathname);
+  const ui = pickLangText(lang, HEADER_TEXTS);
 
   const findInTree = (cats: readonly Category[]): Category | null => {
     for (const c of cats) {
@@ -725,6 +771,13 @@ function MobileCategoryAccordion({
               >
                 {activeTitle}
               </span>
+            ) : isNewArrivals ? (
+              <span
+                style={{ backgroundColor: "rgba(230, 23, 48, 0.15)", color: "#e61730" }}
+                className="px-2 py-0.5 rounded-full text-[10px] font-extrabold max-w-[110px] xs:max-w-[140px] truncate animate-fade-in shrink-0"
+              >
+                {ui.newArrivals}
+              </span>
             ) : (
               <span className="px-2 py-0.5 bg-zinc-100 text-zinc-700 rounded-full text-[10px] font-extrabold max-w-[80px] xs:max-w-[120px] truncate">
                 {t("all_products", lang)}
@@ -756,10 +809,28 @@ function MobileCategoryAccordion({
                   setIsMobileMenuOpen(false);
                 }}
                 className={`w-full text-left text-xs font-bold uppercase transition-colors border-none bg-transparent cursor-pointer ${
-                  activeCategoryId === "" ? "text-salmon-pink" : "text-eerie-black hover:text-salmon-pink"
+                  activeCategoryId === "" && !isNewArrivals ? "text-salmon-pink" : "text-eerie-black hover:text-salmon-pink"
                 }`}
               >
                 ✨ {t("all_products", lang)}
+              </button>
+            </div>
+
+            <div className="py-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(`/${getCategoryPrefix()}/yeni-urunler`);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center justify-between gap-2 text-left text-xs font-extrabold uppercase transition-colors border-none bg-transparent cursor-pointer ${
+                  isNewArrivals ? "text-salmon-pink" : "text-eerie-black hover:text-salmon-pink"
+                }`}
+              >
+                <span>🆕 {ui.newArrivals}</span>
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-salmon-pink/10 text-salmon-pink">
+                  {ui.last7Days}
+                </span>
               </button>
             </div>
 

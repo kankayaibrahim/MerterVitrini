@@ -276,7 +276,17 @@ func mapStoreAPIToPublicPath(apiPath string, q url.Values) string {
 	case strings.HasPrefix(rest, "products/"):
 		return truncateStr("/product/"+strings.TrimPrefix(rest, "products/"), 500)
 	case rest == "products":
-		if cat := strings.TrimSpace(q.Get("category_id")); cat != "" {
+		cat := strings.TrimSpace(q.Get("category_id"))
+		if strings.TrimSpace(q.Get("new_days")) != "" && (cat == "" || strings.EqualFold(cat, "yeni-urunler")) {
+			return "/yeni-urunler"
+		}
+		if cat != "" {
+			if strings.EqualFold(cat, "yeni-urunler") {
+				return "/yeni-urunler"
+			}
+			if strings.EqualFold(cat, "tum-urunler") {
+				return "/tum-urunler"
+			}
 			return truncateStr("/"+strings.Trim(cat, "/"), 500)
 		}
 		return "/tum-urunler"

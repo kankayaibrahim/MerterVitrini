@@ -622,6 +622,8 @@ func resolveStaticStoreRoute(firstSeg string) (resolvedPathActivity, bool) {
 		return resolvedPathActivity{EventType: "page_view", EventCategory: "content", Title: "Mobil Uygulama tanıtım & indirme sayfasını inceledi", Subtitle: "Merter Vitrini Mobil", EntityType: "page", EntityID: "mobil-uygulama"}, true
 	case "tum-urunler":
 		return resolvedPathActivity{EventType: "category_view", EventCategory: "catalog", Title: "Tüm Ürünler kataloğunda gezindi", Subtitle: "Genel Toptan Katalog", EntityType: "category", EntityID: "tum-urunler"}, true
+	case "yeni-urunler":
+		return resolvedPathActivity{EventType: "category_view", EventCategory: "catalog", Title: "Yeni Ürünler (Son 7 Gün) bölümünde gezindi", Subtitle: "Son 7 Gün Yeni Eklenenler", EntityType: "category", EntityID: "yeni-urunler"}, true
 	case "blog":
 		return resolvedPathActivity{EventType: "blog_read", EventCategory: "content", Title: "B2B Blog & Tekstil Rehberleri listesine göz attı", Subtitle: "Blog Dizini", EntityType: "blog", EntityID: "blog-index"}, true
 	case "site-haritasi":

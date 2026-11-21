@@ -42,6 +42,7 @@ import CatalogView from "@/components/store/CatalogView";
 interface StorefrontLayoutProps {
   readonly mode: "portal" | "catalog";
   readonly initialCategorySlug?: string;
+  readonly newArrivalsDays?: number;
   readonly preFetchedCategories?: Category[];
   readonly defaultLang?: string;
   readonly initialProducts?: Product[];
@@ -87,6 +88,7 @@ interface CatalogQueryParams {
   sortBy: string;
   displayCurrency: string;
   activeCategoryId: string;
+  newArrivalsDays?: number;
   activeBrandIds: string[];
   activeSpecs: { gender: string[]; season: string[] };
   b2bFilters: B2BSourcingFilters;
@@ -120,8 +122,16 @@ function buildCatalogQueryParams(params: CatalogQueryParams): string {
   const offset = (params.currentPage - 1) * params.itemsPerPage;
   let queryParams = `?limit=${params.itemsPerPage}&offset=${offset}&sort_by=${params.sortBy}&display_currency=${params.displayCurrency}`;
 
-  if (params.activeCategoryId && params.activeCategoryId !== "tum-urunler") {
+  if (
+    params.activeCategoryId &&
+    params.activeCategoryId !== "tum-urunler" &&
+    params.activeCategoryId !== "yeni-urunler"
+  ) {
     queryParams += `&category_id=${params.activeCategoryId}`;
+  }
+
+  if (params.newArrivalsDays && params.newArrivalsDays > 0) {
+    queryParams += `&new_days=${params.newArrivalsDays}`;
   }
 
   if (params.activeBrandIds.length > 0) {
@@ -185,6 +195,7 @@ function getInitialLang(defaultLang?: string): string {
 export default function StorefrontLayout({
   mode,
   initialCategorySlug,
+  newArrivalsDays,
   preFetchedCategories,
   defaultLang,
   initialProducts,
@@ -525,6 +536,7 @@ export default function StorefrontLayout({
         sortBy,
         displayCurrency,
         activeCategoryId,
+        newArrivalsDays,
         activeBrandIds,
         activeSpecs,
         b2bFilters,
@@ -553,6 +565,7 @@ export default function StorefrontLayout({
     currentPage,
     itemsPerPage,
     activeCategoryId,
+    newArrivalsDays,
     activeBrandIds,
     searchQuery,
     sortBy,
@@ -949,6 +962,7 @@ const validateDrawerInquiryData = (
           lang={lang}
           categories={categories}
           activeCategoryId={activeCategoryId}
+          newArrivalsDays={newArrivalsDays}
           products={products}
           totalProductsCount={totalProductsCount}
           itemsPerPage={itemsPerPage}

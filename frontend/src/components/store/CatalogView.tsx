@@ -5,7 +5,15 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Home, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Product, Category } from "@/types/store";
-import { t, getCategoryTitle, getCategoryTrail, getCategoryUrl } from "@/app/i18n";
+import {
+  t,
+  getCategoryPrefix,
+  getCategoryTitle,
+  getCategoryTrail,
+  getCategoryUrl,
+  pickLangText,
+  SupportedLangCode,
+} from "@/app/i18n";
 import { ExchangeRate } from "@/app/utils";
 import { useIsStoreAuthenticated } from "@/app/storeAuth";
 import ProductCard from "@/components/store/ProductCard";
@@ -29,10 +37,104 @@ const CATEGORY_FAQ_HEADINGS: Record<string, string> = {
   bg: "Често задавани въпроси за търговия на едро",
 };
 
+interface NewArrivalsUiCopy {
+  readonly title: string;
+  readonly badge: string;
+  readonly subtitle: string;
+  readonly emptyTitle: string;
+  readonly emptyDesc: string;
+  readonly browseAllCta: string;
+  readonly seoDesc: string;
+}
+
+const NEW_ARRIVALS_UI: Record<SupportedLangCode, NewArrivalsUiCopy> = {
+  tr: {
+    title: "Yeni Ürünler",
+    badge: "Son 7 Gün",
+    subtitle: "Son 7 günde eklenen yeni sezon toptan modeller eklenme tarihine göre en üstte sıralanır.",
+    emptyTitle: "Son 7 günde yeni eklenen ürün bulunmuyor.",
+    emptyDesc: "Tüm güncel toptan giyim modellerini incelemek için kataloğun tamamına göz atabilirsiniz.",
+    browseAllCta: "Tüm Ürünleri İncele",
+    seoDesc:
+      "Merter Vitrini Yeni Ürünler bölümünde son 7 gün içerisinde Merter ve İstanbul tekstil üreticileri tarafından vitrine eklenen en yeni sezon kadın ve erkek toptan giyim modellerini eklenme tarihine göre ilk görenlerden olun. Doğrudan üreticiden serili paket avantajlarıyla sipariş oluşturabilirsiniz.",
+  },
+  en: {
+    title: "New Arrivals",
+    badge: "Last 7 Days",
+    subtitle: "Newest wholesale styles added in the last 7 days, ordered newest first.",
+    emptyTitle: "No new products added in the last 7 days.",
+    emptyDesc: "Browse our full wholesale catalog to explore all active collections.",
+    browseAllCta: "Browse All Products",
+    seoDesc:
+      "Explore the newest wholesale fashion packs added within the last 7 days by verified Merter Istanbul apparel manufacturers, sorted by arrival date so your boutique always stocks the latest styles first.",
+  },
+  ru: {
+    title: "Новые поступления",
+    badge: "За 7 дней",
+    subtitle: "Свежие оптовые модели, добавленные за последние 7 дней, отсортированы по дате добавления.",
+    emptyTitle: "За последние 7 дней новых поступлений не найдено.",
+    emptyDesc: "Перейдите в полный каталог, чтобы просмотреть все актуальные модели оптом.",
+    browseAllCta: "Смотреть все товары",
+    seoDesc:
+      "Новые поступления женской и мужской одежды оптом из Мертера (Стамбул) за последние 7 дней. Самые свежие модели с фабрик отсортированы сверху по дате добавления.",
+  },
+  ar: {
+    title: "وصل حديثاً",
+    badge: "آخر 7 أيام",
+    subtitle: "أحدث موديلات الجملة المضافة خلال آخر 7 أيام مرتبة من الأحدث.",
+    emptyTitle: "لا توجد منتجات جديدة مضافة خلال آخر 7 أيام.",
+    emptyDesc: "تصفح الكتالوج الكامل للاطلاع على جميع موديلات الجملة المتوفرة.",
+    browseAllCta: "تصفح جميع المنتجات",
+    seoDesc:
+      "تصفح أحدث موديلات الملابس التركية بالجملة التي أضافتها مصانع مارتر إسطنبول خلال آخر 7 أيام مرتبة حسب الأحدث لتصل إلى أحدث التشكيلات أولاً.",
+  },
+  de: {
+    title: "Neuheiten",
+    badge: "Letzte 7 Tage",
+    subtitle: "Neueste Großhandelsmodelle der letzten 7 Tage, zuerst nach Zugangsdatum sortiert.",
+    emptyTitle: "In den letzten 7 Tagen wurden keine neuen Produkte hinzugefügt.",
+    emptyDesc: "Durchsuchen Sie unseren gesamten Großhandelskatalog nach aktuellen Kollektionen.",
+    browseAllCta: "Alle Produkte ansehen",
+    seoDesc:
+      "Entdecken Sie die neuesten Großhandelskollektionen der letzten 7 Tage direkt von Textilherstellern aus Merter Istanbul, sortiert nach den aktuellsten Neuzugängen.",
+  },
+  fr: {
+    title: "Nouveautés",
+    badge: "7 derniers jours",
+    subtitle: "Les derniers modèles de gros ajoutés ces 7 derniers jours, triés du plus récent.",
+    emptyTitle: "Aucun nouveau produit ajouté au cours des 7 derniers jours.",
+    emptyDesc: "Parcourez l'ensemble du catalogue pour découvrir toutes les collections disponibles.",
+    browseAllCta: "Voir tous les produits",
+    seoDesc:
+      "Découvrez les nouveautés prêt-à-porter en gros ajoutées ces 7 derniers jours par les fabricants de Merter Istanbul, classées par ordre d'arrivée.",
+  },
+  pl: {
+    title: "Nowości",
+    badge: "Ostatnie 7 dni",
+    subtitle: "Najnowsze modele hurtowe dodane w ciągu ostatnich 7 dni, posortowane od najnowszych.",
+    emptyTitle: "Brak nowych produktów dodanych w ciągu ostatnich 7 dni.",
+    emptyDesc: "Przejrzyj cały katalog hurtowy, aby zobaczyć wszystkie aktualne kolekcje.",
+    browseAllCta: "Zobacz wszystkie produkty",
+    seoDesc:
+      "Sprawdź najnowsze kolekcje odzieży hurtowej dodane w ostatnich 7 dniach przez producentów z Merter w Stambule, ułożone od najnowszych dostaw.",
+  },
+  bg: {
+    title: "Нови продукти",
+    badge: "Последните 7 дни",
+    subtitle: "Най-новите модели на едро от последните 7 дни, подредени от най-новите.",
+    emptyTitle: "Няма добавени нови продукти през последните 7 дни.",
+    emptyDesc: "Разгледайте пълния каталог на едро, за да видите всички налични колекции.",
+    browseAllCta: "Разгледайте всички продукти",
+    seoDesc:
+      "Открийте най-новите модели облекла на едро, добавени през последните 7 дни от производители в Мертер Истанбул, подредени по дата на добавяне.",
+  },
+};
+
 interface CatalogViewProps {
   readonly lang: string;
   readonly categories: Category[];
   readonly activeCategoryId: string;
+  readonly newArrivalsDays?: number;
   readonly products: Product[];
   readonly totalProductsCount: number;
   readonly itemsPerPage: number;
@@ -71,6 +173,7 @@ interface CatalogProductSectionProps {
   readonly displayCurrency: string;
   readonly exchangeRates: ExchangeRate[];
   readonly sortBy?: string;
+  readonly newArrivalsCopy?: NewArrivalsUiCopy | null;
 }
 
 function CatalogProductSection({
@@ -82,6 +185,7 @@ function CatalogProductSection({
   displayCurrency,
   exchangeRates,
   sortBy,
+  newArrivalsCopy,
 }: Readonly<CatalogProductSectionProps>) {
   if (fetchError) {
     return (
@@ -112,6 +216,22 @@ function CatalogProductSection({
   }
 
   if (products.length === 0) {
+    if (newArrivalsCopy) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 text-center border border-dashed border-cultured bg-white rounded-[12px] p-8 select-none shadow-sm gap-3">
+          <span className="text-3xl">✨</span>
+          <p className="text-sm font-bold text-eerie-black">{newArrivalsCopy.emptyTitle}</p>
+          <p className="text-xs text-sonic-silver max-w-md leading-relaxed">{newArrivalsCopy.emptyDesc}</p>
+          <Link
+            href={`/${getCategoryPrefix(lang)}/tum-urunler`}
+            className="mt-2 px-5 py-2.5 bg-eerie-black hover:bg-salmon-pink text-white text-xs font-bold uppercase tracking-wider rounded-[8px] transition-colors no-underline"
+          >
+            {newArrivalsCopy.browseAllCta}
+          </Link>
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-cultured bg-white rounded-[10px] p-8 select-none shadow-sm">
         <span className="text-3xl mb-2">🔍</span>
@@ -269,6 +389,7 @@ export default function CatalogView({
   lang,
   categories,
   activeCategoryId,
+  newArrivalsDays,
   products,
   totalProductsCount,
   itemsPerPage,
@@ -287,10 +408,15 @@ export default function CatalogView({
   categoryFaqs,
 }: Readonly<CatalogViewProps>) {
   const isAuthenticated = useIsStoreAuthenticated();
+  const isNewArrivals = Boolean(newArrivalsDays && newArrivalsDays > 0);
+  const newArrivalsCopy = isNewArrivals ? pickLangText(lang, NEW_ARRIVALS_UI) : null;
   const activeCatObj = activeCategoryId ? findCategory(categories, activeCategoryId) : null;
   const categoryTitle = activeCatObj ? getCategoryTitle(activeCatObj, lang) : "";
   const rawSeoDesc = activeCatObj?.translations?.[lang]?.seo_description;
-  const effectiveSeoDesc = rawSeoDesc || (categoryTitle ? getCategoryB2BFallbackDesc(categoryTitle, lang) : "");
+  const effectiveSeoTitle = categoryTitle || newArrivalsCopy?.title || "";
+  const effectiveSeoDesc =
+    rawSeoDesc ||
+    (categoryTitle ? getCategoryB2BFallbackDesc(categoryTitle, lang) : newArrivalsCopy?.seoDesc || "");
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -311,7 +437,7 @@ export default function CatalogView({
   return (
     <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
       {/* Category Breadcrumbs */}
-      {activeCategoryId && (
+      {(activeCategoryId || newArrivalsCopy) && (
         <nav className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-sonic-silver mb-6 uppercase tracking-wider select-none">
           <Link
             href={lang && lang !== "en" ? `/${lang}` : "/"}
@@ -320,17 +446,24 @@ export default function CatalogView({
             <Home className="w-3.5 h-3.5" />
             <span>{t("home", lang)}</span>
           </Link>
-          {getCategoryTrail(categories, activeCategoryId)?.map((cat) => (
-            <React.Fragment key={cat.id}>
+          {newArrivalsCopy && !activeCategoryId ? (
+            <>
               <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
-              <Link
-                href={getCategoryUrl(categories, cat, lang)}
-                className="hover:text-[#1C1C1C] transition-colors no-underline text-sonic-silver last:text-[#1C1C1C] last:pointer-events-none last:font-extrabold"
-              >
-                {getCategoryTitle(cat, lang)}
-              </Link>
-            </React.Fragment>
-          ))}
+              <span className="text-[#1C1C1C] font-extrabold">{newArrivalsCopy.title}</span>
+            </>
+          ) : (
+            getCategoryTrail(categories, activeCategoryId)?.map((cat) => (
+              <React.Fragment key={cat.id}>
+                <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
+                <Link
+                  href={getCategoryUrl(categories, cat, lang)}
+                  className="hover:text-[#1C1C1C] transition-colors no-underline text-sonic-silver last:text-[#1C1C1C] last:pointer-events-none last:font-extrabold"
+                >
+                  {getCategoryTitle(cat, lang)}
+                </Link>
+              </React.Fragment>
+            ))
+          )}
         </nav>
       )}
 
@@ -351,15 +484,23 @@ export default function CatalogView({
           />
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-cultured pb-4 w-full">
             <div className="flex flex-col gap-1 select-none">
-              <h1 className="font-sans font-extrabold text-xl tracking-tight text-eerie-black">
-                {categoryTitle || t("all_products", lang)}
-              </h1>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="font-sans font-extrabold text-xl tracking-tight text-eerie-black">
+                  {categoryTitle || newArrivalsCopy?.title || t("all_products", lang)}
+                </h1>
+                {newArrivalsCopy && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-salmon-pink/10 text-salmon-pink border border-salmon-pink/25">
+                    {newArrivalsCopy.badge}
+                  </span>
+                )}
+              </div>
               {activeCatObj ? (
                 <span className="text-[11px] font-semibold text-sonic-silver">
                   {t("active_products_label", lang)} <strong className="text-salmon-pink">{activeCatObj.active_products || 0}</strong> • {t("total_products_label", lang)} <strong className="text-eerie-black">{activeCatObj.total_products || 0}</strong>
                 </span>
               ) : (
                 <span className="text-[11px] font-semibold text-sonic-silver">
+                  {newArrivalsCopy ? `${newArrivalsCopy.subtitle} • ` : ""}
                   {t("total_catalog_products_label", lang)} <strong className="text-salmon-pink">{totalProductsCount}</strong>
                 </span>
               )}
@@ -449,6 +590,7 @@ export default function CatalogView({
             displayCurrency={displayCurrency}
             exchangeRates={exchangeRates}
             sortBy={sortBy}
+            newArrivalsCopy={newArrivalsCopy}
           />
 
           {/* Pagination Controls */}
@@ -466,7 +608,7 @@ export default function CatalogView({
       {/* Category SEO Description Block */}
       {effectiveSeoDesc && (
         <SeoDescription
-          categoryTitle={categoryTitle}
+          categoryTitle={effectiveSeoTitle}
           seoDesc={effectiveSeoDesc}
           lang={lang}
         />
