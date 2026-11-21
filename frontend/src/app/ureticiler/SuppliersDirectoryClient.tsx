@@ -26,6 +26,14 @@ import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
+import InstagramIcon from "@/components/shared/InstagramIcon";
+import {
+  formatBrandInstagramLabel,
+  formatBrandInstagramUrl,
+  formatBrandLocationLine,
+  formatBrandWebsiteLabel,
+  formatBrandWebsiteUrl,
+} from "@/utils/brandContactHelpers";
 
 interface DirectoryLocaleCopy {
   readonly heroBadge: string;
@@ -366,7 +374,10 @@ function matchesSupplierFilter(
   const haystack = [
     brand.name,
     brand.description,
+    brand.city,
+    brand.district,
     brand.location_address,
+    brand.instagram_handle,
     brand.export_countries,
     brand.alias_code,
   ]
@@ -413,7 +424,14 @@ function SupplierCardContactDetails({
 }) {
   const waRaw = brand.whatsapp_phone || brand.phone || "";
   const callRaw = brand.phone || brand.whatsapp_phone || "";
-  const addressText = brand.location_address || copy.defaultAddress;
+  const addressText = formatBrandLocationLine(
+    brand.location_address,
+    brand.district,
+    brand.city,
+    copy.defaultAddress
+  );
+  const websiteUrl = formatBrandWebsiteUrl(brand.website);
+  const instagramUrl = formatBrandInstagramUrl(brand.instagram_handle);
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs text-slate-700">
@@ -456,6 +474,17 @@ function SupplierCardContactDetails({
           </a>
         </div>
       )}
+      {brand.landline_phone && brand.landline_phone !== callRaw && (
+        <div className="flex items-center gap-1.5">
+          <Phone size={13} className="text-slate-400 shrink-0" />
+          <a
+            href={`tel:${brand.landline_phone}`}
+            className="font-semibold text-slate-800 hover:text-[#1C1C1C] no-underline"
+          >
+            Sabit: {brand.landline_phone}
+          </a>
+        </div>
+      )}
       {brand.public_email && (
         <div className="flex items-center gap-1.5">
           <Mail size={13} className="text-slate-400 shrink-0" />
@@ -467,16 +496,29 @@ function SupplierCardContactDetails({
           </a>
         </div>
       )}
-      {brand.website && (
+      {websiteUrl && (
         <div className="flex items-center gap-1.5">
           <Globe size={13} className="text-slate-400 shrink-0" />
           <a
-            href={brand.website}
+            href={websiteUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="font-semibold text-slate-700 hover:text-[#1C1C1C] no-underline truncate"
           >
-            {brand.website.replace(/^https?:\/\//, "")}
+            {formatBrandWebsiteLabel(brand.website)}
+          </a>
+        </div>
+      )}
+      {instagramUrl && (
+        <div className="flex items-center gap-1.5">
+          <InstagramIcon size={13} className="text-rose-500 shrink-0" />
+          <a
+            href={instagramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-slate-800 hover:text-rose-600 no-underline truncate"
+          >
+            {formatBrandInstagramLabel(brand.instagram_handle)}
           </a>
         </div>
       )}

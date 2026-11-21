@@ -1524,27 +1524,91 @@ func updateSyncStatus(runID string, status string, summary map[string]any) {
 		log.Printf("[SYNC-%s] Failed to update sync status to %s: %v", runID, status, err)
 	}
 
-	// Proactively refresh storefront catalog cache first, then run IndexNow so search bots never crawl stale MV cache
+	// Proactively refresh storefront catalog cache first, then complete translations and run IndexNow
 	if status == "success" {
-		log.Printf("[SYNC-%s] Sync succeeded. Refreshing storefront catalog materialized view before IndexNow ping...", runID)
+		log.Printf("[SYNC-%s] Sync succeeded. Refreshing storefront catalog materialized view...", runID)
 		safe.Go("Storefront MV Refresh & IndexNow Pipeline", func() {
-			refreshCtx, refreshCancel := context.WithTimeout(context.Background(), 45*time.Second)
-			_, err := db.Pool.Exec(refreshCtx, "REFRESH MATERIALIZED VIEW CONCURRENTLY catalog.mv_products")
-			refreshCancel()
-			if err != nil {
+			refreshCtx, refreshCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer refreshCancel()
+
+			if err := refreshCatalogMV(refreshCtx); err != nil {
 				log.Printf("[SYNC-%s] Failed to auto-refresh storefront catalog materialized view: %v", runID, err)
 			} else {
 				log.Printf("[SYNC-%s] Storefront catalog materialized view successfully refreshed!", runID)
 			}
 
-			// Trigger autonomous IndexNow ping to Yandex & Bing for newly synced/updated products AFTER MV refresh
+			if isCronPipelineRunning() {
+				log.Printf("[SYNC-%s] Cron pipeline active — IndexNow notification deferred until Step 3 translations finish.", runID)
+				return
+			}
+
+			if prepareErr := prepareSyncProductsForIndexNow(refreshCtx, runID); prepareErr != nil {
+				log.Printf("[SYNC-%s] Pre-IndexNow auto-translation warning: %v", runID, prepareErr)
+			}
+
+			// Trigger autonomous IndexNow ping to Yandex & Bing AFTER translations & MV refresh
 			runIndexNowForSyncRun(runID)
 		})
 	}
 }
 
-// runIndexNowForSyncRun queries newly added (or updated) active products in the given sync run,
-// expands localized URLs, and submits them to IndexNow with persistent PostgreSQL audit logging.
+func prepareSyncProductsForIndexNow(ctx context.Context, runID string) error {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT p.id::text
+		FROM catalog.products p
+		WHERE p.last_sync_run_id = $1
+		  AND p.is_active = true
+		  AND COALESCE(p.is_archived, false) = false
+		  AND p.slug IS NOT NULL
+		  AND p.slug != ''
+		  AND p.indexnow_notified_at IS NULL
+		  AND NOT (`+indexNowProductReadyClause+`)
+		ORDER BY p.created_at DESC
+		LIMIT 200`, runID)
+	if err != nil {
+		return err
+	}
+	var missingIDs []string
+	for rows.Next() {
+		var id string
+		if scanErr := rows.Scan(&id); scanErr == nil && strings.TrimSpace(id) != "" {
+			missingIDs = append(missingIDs, id)
+		}
+	}
+	rows.Close()
+	if len(missingIDs) == 0 {
+		return nil
+	}
+
+	log.Printf("[SYNC-%s] Translating %d unnotified new product(s) before IndexNow...", runID, len(missingIDs))
+	translated, trErr := AutoTranslateProductsByIDs(ctx, missingIDs)
+	if translated > 0 {
+		if mvErr := refreshCatalogMV(ctx); mvErr != nil {
+			log.Printf("[SYNC-%s] Post-translation MV refresh warning: %v", runID, mvErr)
+		}
+	}
+	return trErr
+}
+
+func querySyncRunReadyProductRefs(ctx context.Context, query string, args ...any) ([]indexNowProductRef, error) {
+	rows, err := db.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var refs []indexNowProductRef
+	for rows.Next() {
+		var r indexNowProductRef
+		if scanErr := rows.Scan(&r.ID, &r.Slug); scanErr == nil && strings.TrimSpace(r.Slug) != "" {
+			refs = append(refs, r)
+		}
+	}
+	return refs, rows.Err()
+}
+
+// runIndexNowForSyncRun queries newly added (or updated) translation-ready active products in the given sync run,
+// expands localized URLs, submits them to IndexNow, and marks notified product IDs.
 func runIndexNowForSyncRun(runID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -1556,7 +1620,7 @@ func runIndexNowForSyncRun(runID string) {
 	var feedID, feedName, brandName string
 	var startedAt time.Time
 	err := db.Pool.QueryRow(ctx, `
-		SELECT sr.feed_id::text, sr.started_at, COALESCE(xf.feed_name, ''), COALESCE(b.name, '')
+		SELECT sr.feed_id::text, sr.started_at, COALESCE(xf.feed_name, ''), COALESCE(b.brand_name, '')
 		FROM integration.sync_runs sr
 		LEFT JOIN integration.xml_feeds xf ON xf.id = sr.feed_id
 		LEFT JOIN catalog.brands b ON b.id = xf.brand_id
@@ -1579,75 +1643,60 @@ func runIndexNowForSyncRun(runID string) {
 		feedLabel = "XML Feed"
 	}
 
-	// 1. Prioritize ALL newly inserted active products created during this sync run (no LIMIT 100 truncation)
-	newRows, err := db.Pool.Query(ctx, `
-		SELECT slug
-		FROM catalog.products
-		WHERE last_sync_run_id = $1
-		  AND is_active = true
-		  AND COALESCE(is_archived, false) = false
-		  AND slug IS NOT NULL
-		  AND slug != ''
-		  AND created_at >= ($2 - INTERVAL '2 minutes')
-		ORDER BY created_at DESC`, runID, startedAt)
+	// 1. Prioritize ALL unnotified / newly inserted translation-complete active products from this sync run
+	targetRefs, err := querySyncRunReadyProductRefs(ctx, `
+		SELECT p.id::text, p.slug
+		FROM catalog.products p
+		WHERE p.last_sync_run_id = $1
+		  AND (p.indexnow_notified_at IS NULL OR p.created_at >= ($2 - INTERVAL '2 minutes'))
+		  AND `+indexNowProductReadyClause+`
+		ORDER BY p.created_at DESC`, runID, startedAt)
 	if err != nil {
 		log.Printf("[IndexNow XML Sync] Failed to query new product slugs: %v", err)
 		return
 	}
 
-	var newSlugs []string
-	for newRows.Next() {
-		var slug string
-		if scanErr := newRows.Scan(&slug); scanErr == nil && strings.TrimSpace(slug) != "" {
-			newSlugs = append(newSlugs, slug)
-		}
-	}
-	newRows.Close()
+	sourceLabel := fmt.Sprintf("XML Senkronizasyon: %s (%d yeni ürün)", feedLabel, len(targetRefs))
 
-	targetSlugs := newSlugs
-	sourceLabel := fmt.Sprintf("XML Senkronizasyon: %s (%d yeni ürün)", feedLabel, len(newSlugs))
-
-	// 2. If no brand-new products were inserted, refresh up to 50 most recently updated active products
-	if len(targetSlugs) == 0 {
-		freshRows, freshErr := db.Pool.Query(ctx, `
-			SELECT slug
-			FROM catalog.products
-			WHERE last_sync_run_id = $1
-			  AND is_active = true
-			  AND COALESCE(is_archived, false) = false
-			  AND slug IS NOT NULL
-			  AND slug != ''
-			ORDER BY updated_at DESC
+	// 2. If no brand-new/unnotified ready products exist, refresh up to 50 most recently updated ready products
+	if len(targetRefs) == 0 {
+		targetRefs, err = querySyncRunReadyProductRefs(ctx, `
+			SELECT p.id::text, p.slug
+			FROM catalog.products p
+			WHERE p.last_sync_run_id = $1
+			  AND `+indexNowProductReadyClause+`
+			ORDER BY p.updated_at DESC
 			LIMIT 50`, runID)
-		if freshErr != nil {
-			log.Printf("[IndexNow XML Sync] Failed to query updated product slugs: %v", freshErr)
+		if err != nil {
+			log.Printf("[IndexNow XML Sync] Failed to query updated product slugs: %v", err)
 			return
 		}
-		for freshRows.Next() {
-			var slug string
-			if scanErr := freshRows.Scan(&slug); scanErr == nil && strings.TrimSpace(slug) != "" {
-				targetSlugs = append(targetSlugs, slug)
-			}
-		}
-		freshRows.Close()
-		sourceLabel = fmt.Sprintf("XML Senkronizasyon: %s (0 yeni, %d güncel ürün tazelendi)", feedLabel, len(targetSlugs))
+		sourceLabel = fmt.Sprintf("XML Senkronizasyon: %s (0 yeni, %d güncel ürün tazelendi)", feedLabel, len(targetRefs))
 	}
 
+	targetIDs, targetSlugs := extractProductRefIDsAndSlugs(targetRefs)
 	urls, productCount := BuildProductIndexNowURLs(targetSlugs)
 	if len(urls) == 0 {
-		log.Printf("[IndexNow XML Sync] No active product slugs found for sync run %s", runID)
+		log.Printf("[IndexNow XML Sync] No active translation-ready product slugs found for sync run %s", runID)
 		return
 	}
 
 	log.Printf("[IndexNow XML Sync] Submitting %d product(s) (%d localized URLs) for %s [run=%s]", productCount, len(urls), feedLabel, runID)
-	if _, submitErr := SubmitIndexNowSync(ctx, IndexNowSubmissionMeta{
+	entry, submitErr := SubmitIndexNowSync(ctx, IndexNowSubmissionMeta{
 		TriggerSource: "xml_sync",
 		SourceLabel:   sourceLabel,
 		FeedID:        &feedID,
 		SyncRunID:     &runID,
 		ProductCount:  productCount,
-	}, urls); submitErr != nil {
+	}, urls)
+	if submitErr != nil {
 		log.Printf("[IndexNow XML Sync] Submission failed for run %s: %v", runID, submitErr)
+		return
+	}
+	if entry != nil && entry.Status == "success" {
+		if markErr := markProductsIndexNowNotified(ctx, targetIDs); markErr != nil {
+			log.Printf("[IndexNow XML Sync] Failed to mark products notified: %v", markErr)
+		}
 	}
 }
 

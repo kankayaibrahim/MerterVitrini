@@ -31,36 +31,91 @@ func writeSupplierJSON(w http.ResponseWriter, status int, data any) {
 }
 
 func triggerProductMVRefresh() {
-	go func() {
+	safe.Go("Supplier MV Refresh", func() {
 		bgCtx, bgCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer bgCancel()
-		if _, err := db.Pool.Exec(bgCtx, refreshMaterializedViewSQL); err != nil {
+		if err := refreshCatalogMV(bgCtx); err != nil {
 			log.Printf("[SUPPLIER PORTAL] Async MV refresh error: %v", err)
 		}
-	}()
+	})
 }
 
-// triggerProductMVRefreshAndIndexNow refreshes catalog.mv_products first and then submits active slugs to IndexNow.
+func resolveActiveProductIDsBySlugs(ctx context.Context, slugs []string) []string {
+	cleanSlugs := dedupeNonEmptyStrings(slugs)
+	if db.Pool == nil || len(cleanSlugs) == 0 {
+		return nil
+	}
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id::text
+		FROM catalog.products
+		WHERE slug = ANY($1)
+		  AND is_active = true
+		  AND COALESCE(is_archived, false) = false`, cleanSlugs)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if scanErr := rows.Scan(&id); scanErr == nil && strings.TrimSpace(id) != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// triggerProductMVRefreshAndIndexNow auto-translates missing languages first, refreshes catalog.mv_products,
+// and submits only translation-complete active slugs to IndexNow.
 func triggerProductMVRefreshAndIndexNow(slugs []string, meta IndexNowSubmissionMeta) {
 	slugsCopy := append([]string(nil), slugs...)
-	safe.Go("Supplier MV Refresh & IndexNow", func() {
-		bgCtx, bgCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	safe.Go("Supplier Auto-Translate, MV Refresh & IndexNow", func() {
+		bgCtx, bgCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer bgCancel()
-		if _, err := db.Pool.Exec(bgCtx, refreshMaterializedViewSQL); err != nil {
+
+		productIDs := resolveActiveProductIDsBySlugs(bgCtx, slugsCopy)
+		if len(productIDs) > 0 {
+			if _, trErr := AutoTranslateProductsByIDs(bgCtx, productIDs); trErr != nil {
+				log.Printf("[SUPPLIER PORTAL] Pre-IndexNow auto-translation warning: %v", trErr)
+			}
+		}
+
+		if err := refreshCatalogMV(bgCtx); err != nil {
 			log.Printf("[SUPPLIER PORTAL] Async MV refresh error: %v", err)
 		}
-		if len(slugsCopy) == 0 {
+
+		if len(productIDs) == 0 {
 			return
 		}
-		urls, productCount := BuildProductIndexNowURLs(slugsCopy)
+
+		readyRefs, readyErr := filterTranslationCompleteProductRefs(bgCtx, productIDs)
+		if readyErr != nil {
+			log.Printf("[SUPPLIER PORTAL] Ready check error: %v", readyErr)
+			return
+		}
+		if len(readyRefs) == 0 {
+			log.Printf("[SUPPLIER PORTAL] IndexNow deferred until all target translations finish (products=%d)", len(productIDs))
+			return
+		}
+
+		readyIDs, readySlugs := extractProductRefIDsAndSlugs(readyRefs)
+		urls, productCount := BuildProductIndexNowURLs(readySlugs)
 		if len(urls) == 0 {
 			return
 		}
 		if meta.ProductCount <= 0 {
 			meta.ProductCount = productCount
 		}
-		if _, err := SubmitIndexNowSync(bgCtx, meta, urls); err != nil {
-			log.Printf("[SUPPLIER PORTAL] IndexNow submission error: %v", err)
+		entry, submitErr := SubmitIndexNowSync(bgCtx, meta, urls)
+		if submitErr != nil {
+			log.Printf("[SUPPLIER PORTAL] IndexNow submission error: %v", submitErr)
+			return
+		}
+		if entry != nil && entry.Status == "success" {
+			if markErr := markProductsIndexNowNotified(bgCtx, readyIDs); markErr != nil {
+				log.Printf("[SUPPLIER PORTAL] Failed to mark notified products: %v", markErr)
+			}
 		}
 	})
 }
@@ -387,7 +442,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 	_ = db.Pool.QueryRow(ctx, `SELECT count(*) FROM catalog.supplier_sub_orders WHERE brand_id = $1`, claims.BrandID).Scan(&totalOrders)
 
 	var brandProfile models.Brand
-	var descTransJSON []byte
+	var descTransJSON, addressesBytes []byte
 	brandQuery := `
 		SELECT 
 			b.id, b.brand_name, b.slug, b.alias_code,
@@ -395,6 +450,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 			coalesce(b.description, ''),
 			coalesce(b.description_translations, '{}'::jsonb),
 			b.website, b.phone,
+			coalesce(b.landline_phone, ''),
 			coalesce(
 				nullif(b.whatsapp_phone, ''),
 				nullif(b.phone, ''),
@@ -403,6 +459,8 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 			),
 			coalesce(b.public_email, ''),
 			coalesce(b.instagram_handle, ''),
+			coalesce(b.city, ''),
+			coalesce(b.district, ''),
 			coalesce(b.location_address, ''),
 			coalesce(b.export_countries, ''),
 			coalesce(b.min_order_quantity, 1),
@@ -412,19 +470,25 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 			coalesce(b.bank_name, ''),
 			coalesce(b.bank_account_holder, ''),
 			coalesce(b.iban, ''),
+			coalesce(b.addresses, '[]'::jsonb),
 			b.is_active, b.created_at, b.updated_at
 		FROM catalog.brands b
 		WHERE b.id = $1`
 	_ = db.Pool.QueryRow(ctx, brandQuery, claims.BrandID).Scan(
 		&brandProfile.ID, &brandProfile.Name, &brandProfile.Slug, &brandProfile.AliasCode,
 		&brandProfile.CompanyType, &brandProfile.Description, &descTransJSON,
-		&brandProfile.Website, &brandProfile.Phone,
+		&brandProfile.Website, &brandProfile.Phone, &brandProfile.LandlinePhone,
 		&brandProfile.WhatsappPhone, &brandProfile.PublicEmail, &brandProfile.InstagramHandle,
-		&brandProfile.LocationAddress, &brandProfile.ExportCountries, &brandProfile.MinOrderQuantity,
+		&brandProfile.City, &brandProfile.District, &brandProfile.LocationAddress,
+		&brandProfile.ExportCountries, &brandProfile.MinOrderQuantity,
 		&brandProfile.SupportsPrivateLabel, &brandProfile.SupportsFason, &brandProfile.IsVerified,
 		&brandProfile.BankName, &brandProfile.BankAccountHolder, &brandProfile.IBAN,
+		&addressesBytes,
 		&brandProfile.IsActive, &brandProfile.CreatedAt, &brandProfile.UpdatedAt,
 	)
+	if len(addressesBytes) > 0 {
+		_ = json.Unmarshal(addressesBytes, &brandProfile.Addresses)
+	}
 	brandProfile.DescriptionTranslations = make(map[string]string)
 	if len(descTransJSON) > 0 {
 		_ = json.Unmarshal(descTransJSON, &brandProfile.DescriptionTranslations)
@@ -453,11 +517,15 @@ type UpdateSupplierBrandProfileRequest struct {
 	Description             string            `json:"description"`
 	DescriptionTranslations map[string]string `json:"description_translations,omitempty"`
 	Phone                   string            `json:"phone"`
+	LandlinePhone           *string           `json:"landline_phone,omitempty"`
 	WhatsappPhone           string            `json:"whatsapp_phone"`
 	PublicEmail             string            `json:"public_email"`
 	Website                 string            `json:"website"`
 	InstagramHandle         string            `json:"instagram_handle"`
+	City                    *string           `json:"city,omitempty"`
+	District                *string           `json:"district,omitempty"`
 	LocationAddress         string            `json:"location_address"`
+	Addresses               []any             `json:"addresses,omitempty"`
 	ExportCountries         string            `json:"export_countries"`
 	MinOrderQuantity        int               `json:"min_order_quantity"`
 	SupportsPrivateLabel    bool              `json:"supports_private_label"`
@@ -512,10 +580,8 @@ func prepareBrandDescriptionTranslations(desc string, rawTrans map[string]string
 }
 
 func getOptionalContactPointers(website, phone, whatsapp string) (*string, *string) {
-	var websitePtr, phonePtr *string
-	if wStr := strings.TrimSpace(website); wStr != "" {
-		websitePtr = &wStr
-	}
+	websitePtr := normalizeBrandWebsite(website)
+	var phonePtr *string
 	pStr := strings.TrimSpace(phone)
 	if pStr == "" {
 		pStr = strings.TrimSpace(whatsapp)
@@ -580,6 +646,18 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 
 	websitePtr, phonePtr := getOptionalContactPointers(req.Website, req.Phone, req.WhatsappPhone)
 	descTrim, descTransBytes := prepareBrandDescriptionTranslations(req.Description, req.DescriptionTranslations)
+	landlinePtr := normalizeOptionalStringPtr(req.LandlinePhone, 50)
+	cityPtr := normalizeOptionalStringPtr(req.City, 100)
+	districtPtr := normalizeOptionalStringPtr(req.District, 100)
+	instagramClean := normalizeBrandInstagramHandle(req.InstagramHandle)
+
+	var addressesJSONPtr *string
+	if req.Addresses != nil {
+		if addrBytes, marshalErr := json.Marshal(req.Addresses); marshalErr == nil {
+			addrStr := string(addrBytes)
+			addressesJSONPtr = &addrStr
+		}
+	}
 
 	updateQuery := `
 		UPDATE catalog.brands
@@ -589,20 +667,24 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 			description = $3,
 			description_translations = $4::jsonb,
 			phone = $5,
-			whatsapp_phone = $6,
-			public_email = $7,
-			website = $8,
-			instagram_handle = $9,
-			location_address = $10,
-			export_countries = $11,
-			min_order_quantity = $12,
-			supports_private_label = $13,
-			supports_fason = $14,
-			bank_name = $15,
-			bank_account_holder = $16,
-			iban = $17,
+			landline_phone = COALESCE($6, landline_phone, ''),
+			whatsapp_phone = $7,
+			public_email = $8,
+			website = $9,
+			instagram_handle = $10,
+			city = COALESCE($11, city, ''),
+			district = COALESCE($12, district, ''),
+			location_address = $13,
+			addresses = COALESCE($14::jsonb, addresses),
+			export_countries = $15,
+			min_order_quantity = $16,
+			supports_private_label = $17,
+			supports_fason = $18,
+			bank_name = $19,
+			bank_account_holder = $20,
+			iban = $21,
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $18`
+		WHERE id = $22`
 
 	_, err := db.Pool.Exec(ctx, updateQuery,
 		brandName,
@@ -610,11 +692,15 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 		descTrim,
 		string(descTransBytes),
 		phonePtr,
+		landlinePtr,
 		strings.TrimSpace(req.WhatsappPhone),
 		strings.TrimSpace(req.PublicEmail),
 		websitePtr,
-		strings.TrimSpace(req.InstagramHandle),
+		instagramClean,
+		cityPtr,
+		districtPtr,
 		strings.TrimSpace(req.LocationAddress),
+		addressesJSONPtr,
 		strings.TrimSpace(req.ExportCountries),
 		minOrderQty,
 		req.SupportsPrivateLabel,

@@ -176,3 +176,104 @@ func TestServeKeyFile(t *testing.T) {
 		t.Fatalf("expected text/plain content type, got %q", ct)
 	}
 }
+
+func TestNormalizeLangCode2(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"en_US", "en"},
+		{"ar_001", "ar"},
+		{"tr_TR", "tr"},
+		{"PL", "pl"},
+		{"  fr-FR ", "fr"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		if got := normalizeLangCode2(tc.in); got != tc.want {
+			t.Fatalf("normalizeLangCode2(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestBuildCategoryTrailURLs(t *testing.T) {
+	cats := []indexNowCategoryNode{
+		{ID: "c1", ParentID: "", Slug: "kadin-giyim"},
+		{ID: "c2", ParentID: "c1", Slug: "ust-giyim"},
+		{ID: "c3", ParentID: "c2", Slug: "bluz"},
+	}
+
+	urls := BuildCategoryTrailURLs(cats)
+	expectedTotal := 3 * len(indexNowAllLangs)
+	if len(urls) != expectedTotal {
+		t.Fatalf("expected %d category URLs, got %d", expectedTotal, len(urls))
+	}
+
+	wanted := "https://mertervitrini.com.tr/en/kadin-giyim/ust-giyim/bluz"
+	found := false
+	for _, u := range urls {
+		if u == wanted {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected hierarchical category URL %q in %v", wanted, urls)
+	}
+}
+
+func TestBuildBrandBlogAndStaticIndexNowURLs(t *testing.T) {
+	brandURLs := BuildBrandIndexNowURLs([]string{"lustrin-toptan-tekstil"})
+	if len(brandURLs) != 2*len(indexNowAllLangs) {
+		t.Fatalf("expected %d brand URLs, got %d", 2*len(indexNowAllLangs), len(brandURLs))
+	}
+	if brandURLs[0] != "https://mertervitrini.com.tr/ureticiler/lustrin-toptan-tekstil" {
+		t.Fatalf("unexpected brand URL[0]: %q", brandURLs[0])
+	}
+
+	blogURLs := BuildBlogIndexNowURLs([]indexNowBlogRow{
+		{
+			ID:       "b1",
+			BaseSlug: "toptan-sezon-trendleri",
+			SlugsByLng: map[string]string{
+				"tr": "toptan-sezon-trendleri",
+				"en": "wholesale-season-trends",
+			},
+		},
+	})
+	if len(blogURLs) != len(indexNowAllLangs) {
+		t.Fatalf("expected %d blog URLs, got %d", len(indexNowAllLangs), len(blogURLs))
+	}
+	hasLocalized := false
+	for _, u := range blogURLs {
+		if u == "https://mertervitrini.com.tr/en/blog/wholesale-season-trends" {
+			hasLocalized = true
+			break
+		}
+	}
+	if !hasLocalized {
+		t.Fatalf("expected localized blog URL in %v", blogURLs)
+	}
+
+	staticURLs := BuildStaticAndCMSIndexNowURLs([]string{"hakkimizda", "iletisim-rehberi"})
+	if len(staticURLs) == 0 || staticURLs[0] != "https://mertervitrini.com.tr" {
+		t.Fatalf("expected root site URL first, got %v", staticURLs)
+	}
+}
+
+func TestChunkProductRefs(t *testing.T) {
+	items := make([]indexNowProductRef, 0, 2600)
+	for i := 0; i < 2600; i++ {
+		items = append(items, indexNowProductRef{
+			ID:   fmt.Sprintf("id-%d", i),
+			Slug: fmt.Sprintf("urun-%d", i),
+		})
+	}
+	chunks := chunkProductRefs(items, indexNowProductsPerChunk)
+	if len(chunks) != 3 {
+		t.Fatalf("expected 3 chunks of <=1250 products, got %d", len(chunks))
+	}
+	if len(chunks[0]) != 1250 || len(chunks[1]) != 1250 || len(chunks[2]) != 100 {
+		t.Fatalf("unexpected product chunk lengths: %d, %d, %d", len(chunks[0]), len(chunks[1]), len(chunks[2]))
+	}
+}

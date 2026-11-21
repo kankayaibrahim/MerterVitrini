@@ -76,6 +76,15 @@ export interface SiblingProduct {
   image_url: string;
 }
 
+export interface BrandAddress {
+  id?: string;
+  title?: string;
+  city?: string;
+  district?: string;
+  text?: string;
+  coordinates?: string;
+}
+
 export interface Brand {
   id: string;
   name: string;
@@ -85,10 +94,14 @@ export interface Brand {
   description?: string;
   website?: string;
   phone?: string;
+  landline_phone?: string;
   whatsapp_phone?: string;
   public_email?: string;
   instagram_handle?: string;
+  city?: string;
+  district?: string;
   location_address?: string;
+  addresses?: BrandAddress[];
   export_countries?: string;
   min_order_quantity?: number;
   supports_private_label?: boolean;

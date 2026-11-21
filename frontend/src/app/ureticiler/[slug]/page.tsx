@@ -16,6 +16,10 @@ import {
   fetchSsrCategories,
 } from "@/utils/seoHelpers";
 import SupplierShowcaseClient from "./SupplierShowcaseClient";
+import {
+  formatBrandInstagramUrl,
+  formatBrandWebsiteUrl,
+} from "@/utils/brandContactHelpers";
 
 interface SupplierShowcasePageProps {
   readonly params: Promise<{ slug: string }>;
@@ -122,6 +126,11 @@ export default async function SupplierShowcasePage({
   const seoCopy = GLOBAL_B2B_SEO_MATRIX[lang];
   const langSuffix = lang === "tr" ? "" : `?lang=${lang}`;
 
+  const sameAsLinks = [
+    formatBrandWebsiteUrl(brand?.website),
+    formatBrandInstagramUrl(brand?.instagram_handle),
+  ].filter(Boolean);
+
   const showcaseJsonLd = brand
     ? {
         "@context": "https://schema.org",
@@ -132,13 +141,14 @@ export default async function SupplierShowcasePage({
             name: brand.name,
             url: alternates.canonical,
             description: buildBrandMetaDesc(brand.name, brand.description, lang),
-            telephone: brand.phone || brand.whatsapp_phone || undefined,
+            telephone: brand.phone || brand.landline_phone || brand.whatsapp_phone || undefined,
             email: brand.public_email || undefined,
+            sameAs: sameAsLinks.length > 0 ? sameAsLinks : undefined,
             address: {
               "@type": "PostalAddress",
               streetAddress: brand.location_address || "Merter Tekstil Merkezi",
-              addressLocality: "Güngören",
-              addressRegion: "İstanbul",
+              addressLocality: brand.district || "Güngören",
+              addressRegion: brand.city || "İstanbul",
               addressCountry: "TR",
             },
           },

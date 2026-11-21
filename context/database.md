@@ -49,7 +49,7 @@ merterdevdb/
 
 ### B. `catalog` Şeması (Ana Katalog & Ticaret)
 1. **Tedarikçiler ve Markalar (`catalog.brands`):**
-   - Toptancı ve üretici firmaların vitrinde açıkça gösterilen gerçek isimleri (`brand_name`), iletişim bilgileri (`website`, `phone`, `addresses`) ve SKU ön eki olarak kullanılan kısa kodları (`alias_code`: MIMOZA, FLORA, EDUSA vb.).
+   - Toptancı ve üretici firmaların vitrinde açıkça gösterilen gerçek isimleri (`brand_name`), iletişim bilgileri (`website`, `phone`, `landline_phone`, `whatsapp_phone`, `public_email`, `instagram_handle`, `city`, `district`, `location_address`, `addresses`) ve SKU ön eki olarak kullanılan kısa kodları (`alias_code`: MIMOZA, FLORA, EDUSA vb.).
 2. **Kategori Ağacı (`catalog.categories` & `catalog.category_translations`):**
    - `node_path extensions.ltree`: Hiyerarşik kategori yolunu tutar (örn: `TopLevelId.SubLevelId`).
    - `idx_categories_node_path_gist`: GiST indeksi ile alt kategoriler milisaniyeler içinde tek sorguyla çekilir (`node_path <@ 'TopLevel'`).

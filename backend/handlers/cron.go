@@ -28,6 +28,13 @@ var (
 	cronIsRunning bool
 )
 
+func isCronPipelineRunning() bool {
+	cronMutex.Lock()
+	running := cronIsRunning
+	cronMutex.Unlock()
+	return running
+}
+
 // ProvisionCronTables creates cron tables and seeds defaults
 func ProvisionCronTables(ctx context.Context) error {
 	ddls := []string{
@@ -273,6 +280,7 @@ func runCronPipeline(manual bool) {
 		"xml_status":       "pending",
 		"image_status":     "pending",
 		"translate_status": "pending",
+		"indexnow_status":  "pending",
 	}
 
 	saveLogs := func(status string, errStr string) {
@@ -330,12 +338,42 @@ func runCronPipeline(manual bool) {
 	summary["translate_status"] = "success"
 
 	// ----------------------------------------------------
+	// STEP 4: MV REFRESH & INDEXNOW SUBMISSION (POST-TRANSLATION)
+	// ----------------------------------------------------
+	runCronIndexNowStep(ctx, summary, saveLogs)
+
+	// ----------------------------------------------------
 	// FINALIZATION
 	// ----------------------------------------------------
 	elapsed := time.Since(startTime).Round(time.Second).String()
 	summary["elapsed_time"] = elapsed
 	log.Printf("[CRON-%s] Job pipeline successfully finished in %s.", logID, elapsed)
 	saveLogs("success", "")
+}
+
+func runCronIndexNowStep(ctx context.Context, summary map[string]any, saveLogs func(string, string)) {
+	log.Println("[CRON] STEP 4: Refreshing catalog.mv_products & notifying IndexNow for translated products...")
+	summary["indexnow_status"] = "running"
+	saveLogs("running", "")
+
+	if mvErr := refreshCatalogMV(ctx); mvErr != nil {
+		log.Printf("[CRON WARNING] Step 4 MV refresh warning: %v", mvErr)
+	}
+
+	flushRes, flushErr := FlushReadyUnnotifiedProductsToIndexNow(ctx, "xml_sync", "Gece Cron (XML + Çeviri Tamamlandı)")
+	summary["indexnow_products_notified"] = flushRes.ProductsSubmitted
+	summary["indexnow_urls_submitted"] = flushRes.URLsSubmitted
+	if flushErr != nil || flushRes.ChunksFailed > 0 {
+		summary["indexnow_status"] = "warning"
+		if flushErr != nil {
+			summary["indexnow_error"] = flushErr.Error()
+		} else {
+			summary["indexnow_error"] = flushRes.LastError
+		}
+		log.Printf("[CRON WARNING] Step 4 IndexNow completed with warnings: %v", summary["indexnow_error"])
+		return
+	}
+	summary["indexnow_status"] = "success"
 }
 
 func collectImageResizeJobs(urls []string, mediaRoot string) []ResizeJob {

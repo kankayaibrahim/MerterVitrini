@@ -23,6 +23,14 @@ import {
 } from "@/app/storeAuth";
 import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
+import InstagramIcon from "@/components/shared/InstagramIcon";
+import {
+  formatBrandInstagramLabel,
+  formatBrandInstagramUrl,
+  formatBrandLocationLine,
+  formatBrandWebsiteLabel,
+  formatBrandWebsiteUrl,
+} from "@/utils/brandContactHelpers";
 
 function normalizeWaPhone(raw?: string): string {
   return normalizeWhatsappDigits(raw);
@@ -671,6 +679,19 @@ export default function SupplierDirectCard({
           </div>
         )}
 
+        {bp?.landline_phone && bp.landline_phone !== callRaw && (
+          <div className="flex items-center gap-1.5">
+            <Phone size={13} className="text-[#8C6D3F] shrink-0" />
+            <a
+              href={`tel:${bp.landline_phone}`}
+              onClick={() => trackBrandEvent(product.brand_id, "phone_click", product.id)}
+              className="font-bold hover:text-[#8C6D3F] no-underline text-[#1C1C1C]"
+            >
+              Sabit: {bp.landline_phone}
+            </a>
+          </div>
+        )}
+
         {bp?.public_email && (
           <div className="flex items-center gap-1.5">
             <Mail size={13} className="text-[#8C6D3F] shrink-0" />
@@ -684,25 +705,42 @@ export default function SupplierDirectCard({
           </div>
         )}
 
-        {bp?.website && (
+        {formatBrandWebsiteUrl(bp?.website) && (
           <div className="flex items-center gap-1.5">
             <Globe size={13} className="text-[#8C6D3F] shrink-0" />
             <a
-              href={bp.website}
+              href={formatBrandWebsiteUrl(bp?.website)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => trackBrandEvent(product.brand_id, "website_click", product.id)}
               className="font-semibold hover:text-[#8C6D3F] no-underline text-[#525252] truncate"
             >
-              {bp.website.replace(/^https?:\/\//, "")}
+              {formatBrandWebsiteLabel(bp?.website)}
             </a>
           </div>
         )}
 
-        {bp?.location_address && (
+        {formatBrandInstagramUrl(bp?.instagram_handle) && (
+          <div className="flex items-center gap-1.5">
+            <InstagramIcon size={13} className="text-rose-600 shrink-0" />
+            <a
+              href={formatBrandInstagramUrl(bp?.instagram_handle)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackBrandEvent(product.brand_id, "website_click", product.id)}
+              className="font-bold hover:text-rose-700 no-underline text-[#1C1C1C] truncate"
+            >
+              {formatBrandInstagramLabel(bp?.instagram_handle)}
+            </a>
+          </div>
+        )}
+
+        {(bp?.location_address || bp?.city || bp?.district) && (
           <div className="flex items-start gap-1.5 sm:col-span-2">
             <MapPin size={13} className="text-[#8C6D3F] shrink-0 mt-0.5" />
-            <span className="text-[11px] text-[#525252]">{bp.location_address}</span>
+            <span className="text-[11px] text-[#525252]">
+              {formatBrandLocationLine(bp?.location_address, bp?.district, bp?.city)}
+            </span>
           </div>
         )}
       </div>

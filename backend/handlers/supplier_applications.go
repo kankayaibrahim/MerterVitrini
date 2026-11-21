@@ -545,10 +545,23 @@ func (h *SupplierApplicationsHandler) getOrCreateBrand(ctx context.Context, app 
 		brandAlias = fmt.Sprintf("%s%s", brandAlias, strings.ToUpper(generateSecureToken(2)))
 	}
 
+	cityStr := truncateStr(derefTrimmed(app.City), 100)
+	districtStr := truncateStr(derefTrimmed(app.District), 100)
+	instagramStr := normalizeBrandInstagramHandle(derefTrimmed(app.Instagram))
+	websitePtr := normalizeBrandWebsite(derefTrimmed(app.Website))
+	waStr := truncateStr(strings.TrimSpace(app.Phone), 50)
+	emailStr := truncateStr(strings.TrimSpace(app.Email), 150)
+
 	insErr := db.Pool.QueryRow(ctx, `
-		INSERT INTO catalog.brands (brand_name, slug, alias_code, is_active, phone, website)
-		VALUES ($1, $2, $3, true, $4, $5)
-		RETURNING id`, app.CompanyName, brandSlug, brandAlias, app.Phone, app.Website).Scan(&brandID)
+		INSERT INTO catalog.brands (
+			brand_name, slug, alias_code, is_active, phone, whatsapp_phone,
+			public_email, website, instagram_handle, city, district
+		)
+		VALUES ($1, $2, $3, true, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id`,
+		app.CompanyName, brandSlug, brandAlias, app.Phone, waStr,
+		emailStr, websitePtr, instagramStr, cityStr, districtStr,
+	).Scan(&brandID)
 	if insErr != nil {
 		return "", fmt.Errorf("marka oluşturulamadı: %w", insErr)
 	}

@@ -38,6 +38,14 @@ import ProductCard from "@/components/store/ProductCard";
 import StoreChatDrawer from "@/components/store/StoreChatDrawer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
+import InstagramIcon from "@/components/shared/InstagramIcon";
+import {
+  formatBrandInstagramLabel,
+  formatBrandInstagramUrl,
+  formatBrandLocationLine,
+  formatBrandWebsiteLabel,
+  formatBrandWebsiteUrl,
+} from "@/utils/brandContactHelpers";
 
 interface EditorialCopy {
   readonly backToDirectory: string;
@@ -878,7 +886,12 @@ function EditorialArticleSections({
   copy,
 }: EditorialArticleSectionsProps) {
   const exportRegions = brand.export_countries || copy.defaultExportRegions;
-  const addressText = brand.location_address || copy.defaultAddress;
+  const addressText = formatBrandLocationLine(
+    brand.location_address,
+    brand.district,
+    brand.city,
+    copy.defaultAddress
+  );
   const groups = [copy.group1, copy.group2, copy.group3, copy.group4];
 
   return (
@@ -1077,7 +1090,7 @@ function SidebarIdentityCard({
           <div className="flex items-start justify-between gap-2 py-1.5 border-b border-slate-100">
             <dt className="text-slate-500 font-semibold shrink-0">{copy.dtHub}</dt>
             <dd className="font-semibold text-slate-700 text-right">
-              {brand.location_address || copy.defaultAddress}
+              {formatBrandLocationLine(brand.location_address, brand.district, brand.city, copy.defaultAddress)}
             </dd>
           </div>
           <div className="flex items-start justify-between gap-2 py-1.5">
@@ -1088,7 +1101,11 @@ function SidebarIdentityCard({
           </div>
         </dl>
 
-        {(callRaw || brand.public_email || brand.website) && (
+        {(callRaw ||
+          brand.landline_phone ||
+          brand.public_email ||
+          formatBrandWebsiteUrl(brand.website) ||
+          formatBrandInstagramUrl(brand.instagram_handle)) && (
           <div className="pt-2 border-t border-slate-100 space-y-2 text-xs">
             {callRaw && (
               <div className="flex items-center gap-2">
@@ -1098,6 +1115,17 @@ function SidebarIdentityCard({
                   className="font-bold text-slate-800 hover:text-emerald-700 no-underline"
                 >
                   {callRaw}
+                </a>
+              </div>
+            )}
+            {brand.landline_phone && brand.landline_phone !== callRaw && (
+              <div className="flex items-center gap-2">
+                <Phone size={13} className="text-slate-400 shrink-0" />
+                <a
+                  href={`tel:${brand.landline_phone}`}
+                  className="font-bold text-slate-800 hover:text-emerald-700 no-underline"
+                >
+                  Sabit: {brand.landline_phone}
                 </a>
               </div>
             )}
@@ -1112,16 +1140,29 @@ function SidebarIdentityCard({
                 </a>
               </div>
             )}
-            {brand.website && (
+            {formatBrandWebsiteUrl(brand.website) && (
               <div className="flex items-center gap-2">
                 <Globe size={13} className="text-slate-400 shrink-0" />
                 <a
-                  href={brand.website}
+                  href={formatBrandWebsiteUrl(brand.website)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-semibold text-slate-700 hover:text-emerald-700 no-underline truncate"
                 >
-                  {brand.website.replace(/^https?:\/\//, "")}
+                  {formatBrandWebsiteLabel(brand.website)}
+                </a>
+              </div>
+            )}
+            {formatBrandInstagramUrl(brand.instagram_handle) && (
+              <div className="flex items-center gap-2">
+                <InstagramIcon size={13} className="text-rose-500 shrink-0" />
+                <a
+                  href={formatBrandInstagramUrl(brand.instagram_handle)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold text-slate-800 hover:text-rose-600 no-underline truncate"
+                >
+                  {formatBrandInstagramLabel(brand.instagram_handle)}
                 </a>
               </div>
             )}

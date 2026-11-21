@@ -27,9 +27,20 @@ import {
   Filter,
   ChevronDown,
   Users,
-  FileText
+  FileText,
+  Mail,
+  MessageCircle
 } from "lucide-react";
-import { XmlFeed, Brand, CategoryNode } from "@/types/integration";
+import { XmlFeed, Brand, CategoryNode, SupplierAddress } from "@/types/integration";
+import TurkeyLocationSelects from "@/components/shared/TurkeyLocationSelects";
+import InstagramIcon from "@/components/shared/InstagramIcon";
+import {
+  formatBrandInstagramLabel,
+  formatBrandInstagramUrl,
+  formatBrandLocationLine,
+  formatBrandWebsiteLabel,
+  formatBrandWebsiteUrl,
+} from "@/utils/brandContactHelpers";
 import XmlImportWizard from "./XmlImportWizard";
 import SupplierUsersSection from "./SupplierUsersSection";
 import SupplierApplicationsSection from "./SupplierApplicationsSection";
@@ -79,14 +90,17 @@ const LABELS = {
   
   // Upgraded Labels
   WEBSITE: "Web Sitesi Adresi (URL)",
-  PHONE: "İletişim Telefonu",
-  ADDRESSES_HEADER: "Dükkan / Depo Adresleri",
-  ADD_ADDRESS: "Yeni Adres Satırı Ekle",
-  ADDRESS_TITLE: "Adres Başlığı (Örn: Merkez Ofis, Depo 1)",
+  INSTAGRAM: "Instagram Sayfası",
+  PUBLIC_EMAIL: "Kurumsal E-Posta",
+  PHONE: "Cep / Yetkili Telefonu",
+  LANDLINE_PHONE: "Sabit Telefon (Santral)",
+  ADDRESSES_HEADER: "Ek Dükkan / Depo / Şube Adresleri",
+  ADD_ADDRESS: "Yeni Şube / Adres Ekle",
+  ADDRESS_TITLE: "Şube / Adres Başlığı (Örn: Merkez Mağaza, Depo 1)",
   ADDRESS_TEXT: "Açık Adres Tarifi",
   COORDINATES: "Dükkan Harita Koordinatı (Örn: 41.0185, 28.8893)",
-  CONTACTS_INFO: "İletişim & Konum Bilgileri",
-  NO_ADDRESSES: "Tedarikçiye ait adres bilgisi tanımlanmamış.",
+  CONTACTS_INFO: "İletişim, Sosyal Medya & Konum Bilgileri",
+  NO_ADDRESSES: "Tedarikçiye ait ek şube / depo adresi tanımlanmamış.",
   GO_TO_MAPS: "Haritada Aç",
   SEARCH_PLACEHOLDER: "Tedarikçi adı veya rumuz ile arayın...",
   DEACTIVATE_PRODUCTS_CONFIRM: "Tedarikçi Ürünlerini Pasifleştir",
@@ -140,11 +154,38 @@ const LABELS = {
   OPTION_JANES: "parsers/janes.py (Jane's)"
 };
 
-interface SupplierAddress {
-  id?: string;
-  title: string;
-  text: string;
-  coordinates: string;
+interface SupplierBrandFormState {
+  name: string;
+  aliasCode: string;
+  website: string;
+  instagramHandle: string;
+  publicEmail: string;
+  phone: string;
+  landlinePhone: string;
+  whatsappPhone: string;
+  city: string;
+  district: string;
+  locationAddress: string;
+  addresses: SupplierAddress[];
+  isActive: boolean;
+}
+
+function createEmptyBrandFormState(): SupplierBrandFormState {
+  return {
+    name: "",
+    aliasCode: "",
+    website: "",
+    instagramHandle: "",
+    publicEmail: "",
+    phone: "",
+    landlinePhone: "",
+    whatsappPhone: "",
+    city: "",
+    district: "",
+    locationAddress: "",
+    addresses: [],
+    isActive: true,
+  };
 }
 
 export type SupplierSubTab = "suppliers" | "users" | "applications" | "billing";
@@ -467,36 +508,62 @@ function SupplierCard({
 
       {/* CONTACTS & ADDRESSES BLOCK */}
       <div className="flex flex-col gap-3.5 bg-zinc-50/50 rounded-2xl p-4 border border-zinc-100">
-        <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-200/50 pb-2">
-          <Globe size={13} />
-          {LABELS.CONTACTS_INFO}
-        </h4>
+        <div className="flex items-center justify-between gap-2 border-b border-zinc-200/50 pb-2 flex-wrap">
+          <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Globe size={13} />
+            {LABELS.CONTACTS_INFO}
+          </h4>
+          {(supplier.district || supplier.city) && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-[10px] font-bold">
+              <MapPin size={10} />
+              {[supplier.district, supplier.city].filter(Boolean).join(" / ")}
+            </span>
+          )}
+        </div>
 
-        {/* Website & Phone rows */}
+        {/* Website, Instagram, Email & Phones rows */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-          {supplier.website ? (
-            <a 
-              href={supplier.website.startsWith("http") ? supplier.website : `https://${supplier.website}`} 
-              target="_blank" 
+          {formatBrandWebsiteUrl(supplier.website) ? (
+            <a
+              href={formatBrandWebsiteUrl(supplier.website)}
+              target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 text-violet-600 hover:text-violet-700 font-semibold transition-colors"
             >
               <Globe size={15} className="text-violet-500 shrink-0" />
-              <span className="truncate">{supplier.website}</span>
+              <span className="truncate">{formatBrandWebsiteLabel(supplier.website)}</span>
               <ExternalLink size={11} className="shrink-0" />
             </a>
           ) : (
             <div className="flex items-center gap-2 text-zinc-400">
               <Globe size={15} className="shrink-0" />
-              <span className="italic text-xs">-</span>
+              <span className="italic text-xs">Web sitesi girilmedi</span>
             </div>
           )}
 
-          {(supplier.whatsapp_phone || supplier.phone) ? (
+          {formatBrandInstagramUrl(supplier.instagram_handle) ? (
+            <a
+              href={formatBrandInstagramUrl(supplier.instagram_handle)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 text-rose-600 hover:text-rose-700 font-semibold transition-colors"
+            >
+              <InstagramIcon size={15} className="text-rose-500 shrink-0" />
+              <span className="truncate">{formatBrandInstagramLabel(supplier.instagram_handle)}</span>
+              <ExternalLink size={11} className="shrink-0" />
+            </a>
+          ) : (
+            <div className="flex items-center gap-2 text-zinc-400">
+              <InstagramIcon size={15} className="shrink-0" />
+              <span className="italic text-xs">Instagram girilmedi</span>
+            </div>
+          )}
+
+          {(supplier.whatsapp_phone || supplier.phone || supplier.landline_phone) ? (
             <div className="flex flex-col gap-0.5 text-zinc-700 font-semibold">
               {supplier.whatsapp_phone && (
                 <div className="flex items-center gap-2 text-emerald-700 flex-wrap">
-                  <Phone size={15} className="text-emerald-600 shrink-0" />
+                  <MessageCircle size={15} className="text-emerald-600 shrink-0" />
                   <span>WhatsApp: {supplier.whatsapp_phone}</span>
                   <Link
                     href={`/admin/whatsapp-logs?brand_id=${encodeURIComponent(supplier.id)}`}
@@ -506,32 +573,62 @@ function SupplierCard({
                   </Link>
                 </div>
               )}
+              {supplier.landline_phone && (
+                <div className="flex items-center gap-2 text-zinc-700 text-xs">
+                  <Phone size={13} className="text-zinc-500 shrink-0" />
+                  <span>Sabit Hat: {supplier.landline_phone}</span>
+                </div>
+              )}
               {supplier.phone && supplier.phone !== supplier.whatsapp_phone && (
                 <div className="flex items-center gap-2 text-zinc-600 text-xs">
                   <Phone size={13} className="text-zinc-400 shrink-0" />
-                  <span>Tel: {supplier.phone}</span>
+                  <span>Cep: {supplier.phone}</span>
                 </div>
               )}
             </div>
           ) : (
             <div className="flex items-center gap-2 text-zinc-400">
               <Phone size={15} className="shrink-0" />
-              <span className="italic text-xs">-</span>
+              <span className="italic text-xs">Telefon girilmedi</span>
+            </div>
+          )}
+
+          {supplier.public_email && (
+            <div className="flex items-center gap-2 text-zinc-600 text-xs">
+              <Mail size={14} className="text-zinc-400 shrink-0" />
+              <span className="truncate">{supplier.public_email}</span>
             </div>
           )}
         </div>
+
+        {(supplier.location_address || supplier.city || supplier.district) && (
+          <div className="flex items-start gap-2 text-xs text-zinc-600 pt-1 border-t border-zinc-200/40">
+            <MapPin size={14} className="text-violet-600 shrink-0 mt-0.5" />
+            <span>
+              {formatBrandLocationLine(supplier.location_address, supplier.district, supplier.city)}
+            </span>
+          </div>
+        )}
 
         {/* Supplier Multiple Addresses display */}
         {addresses.length > 0 ? (
           <div className="flex flex-col gap-2 mt-1">
             {addresses.map((addr, idx) => {
               const addrKey = addr.id || `${supplier.id}-addr-${addr.title || idx}`;
+              const regionLabel = [addr.district, addr.city].filter(Boolean).join(" / ");
               return (
                 <div key={addrKey} className="flex items-start justify-between border-t border-zinc-200/40 pt-2 gap-3">
                   <div className="flex items-start gap-2 text-xs">
                     <MapPin size={14} className="text-red-500 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold text-zinc-800 block mb-0.5">{addr.title}</span>
+                      <span className="font-bold text-zinc-800 block mb-0.5">
+                        {addr.title}
+                        {regionLabel ? (
+                          <span className="ml-1.5 text-[10px] font-semibold text-zinc-500">
+                            ({regionLabel})
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="text-zinc-500 block leading-relaxed">{addr.text}</span>
                     </div>
                   </div>
@@ -554,7 +651,9 @@ function SupplierCard({
             })}
           </div>
         ) : (
-          <div className="text-xs text-zinc-400 italic pt-1">{LABELS.NO_ADDRESSES}</div>
+          !supplier.location_address && (
+            <div className="text-xs text-zinc-400 italic pt-1">{LABELS.NO_ADDRESSES}</div>
+          )
         )}
       </div>
 
@@ -658,22 +757,11 @@ function getModalTitle(modal: ActiveModalType): string {
 
 interface SupplierFormFieldsProps {
   activeModal: ActiveModalType;
-  supplierName: string;
-  supplierAlias: string;
-  supplierWebsite: string;
-  supplierPhone: string;
-  supplierWhatsapp: string;
-  supplierAddresses: SupplierAddress[];
-  supplierIsActive: boolean;
+  brandForm: SupplierBrandFormState;
   selectedParserScript: string;
   customParserScript: string;
   isPending: boolean;
-  onNameChange: (val: string) => void;
-  onAliasChange: (val: string) => void;
-  onWebsiteChange: (val: string) => void;
-  onPhoneChange: (val: string) => void;
-  onWhatsappChange: (val: string) => void;
-  onIsActiveToggle: () => void;
+  onFieldChange: <K extends keyof SupplierBrandFormState>(field: K, val: SupplierBrandFormState[K]) => void;
   onAddAddressLine: () => void;
   onRemoveAddressLine: (idx: number) => void;
   onUpdateAddressLine: (idx: number, field: keyof SupplierAddress, val: string) => void;
@@ -684,22 +772,11 @@ interface SupplierFormFieldsProps {
 
 function SupplierFormFields({
   activeModal,
-  supplierName,
-  supplierAlias,
-  supplierWebsite,
-  supplierPhone,
-  supplierWhatsapp,
-  supplierAddresses,
-  supplierIsActive,
+  brandForm,
   selectedParserScript,
   customParserScript,
   isPending,
-  onNameChange,
-  onAliasChange,
-  onWebsiteChange,
-  onPhoneChange,
-  onWhatsappChange,
-  onIsActiveToggle,
+  onFieldChange,
   onAddAddressLine,
   onRemoveAddressLine,
   onUpdateAddressLine,
@@ -714,8 +791,8 @@ function SupplierFormFields({
         <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.SUPPLIER_NAME}</label>
         <input 
           type="text"
-          value={supplierName}
-          onChange={(e) => onNameChange(e.target.value)}
+          value={brandForm.name}
+          onChange={(e) => onFieldChange("name", e.target.value)}
           className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
           placeholder="Örn: Janes Toptan Tekstil, Lustrin"
           required
@@ -730,8 +807,8 @@ function SupplierFormFields({
           <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.ALIAS_CODE}</label>
           <input 
             type="text"
-            value={supplierAlias}
-            onChange={(e) => onAliasChange(e.target.value)}
+            value={brandForm.aliasCode}
+            onChange={(e) => onFieldChange("aliasCode", e.target.value)}
             className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
             placeholder="Örn: EDUSA, MIMOZA, FLORA"
             disabled={isPending}
@@ -746,45 +823,82 @@ function SupplierFormFields({
           
           <button
             type="button"
-            onClick={onIsActiveToggle}
+            onClick={() => onFieldChange("isActive", !brandForm.isActive)}
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-              supplierIsActive ? "bg-violet-600" : "bg-zinc-200"
+              brandForm.isActive ? "bg-violet-600" : "bg-zinc-200"
             }`}
             disabled={isPending}
           >
             <span
               className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                supplierIsActive ? "translate-x-5" : "translate-x-0"
+                brandForm.isActive ? "translate-x-5" : "translate-x-0"
               }`}
             />
           </button>
         </div>
       </div>
 
-      {/* Website & Phone Row */}
+      {/* Website & Instagram Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Website */}
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.WEBSITE}</label>
           <input 
             type="text"
-            value={supplierWebsite}
-            onChange={(e) => onWebsiteChange(e.target.value)}
+            value={brandForm.website}
+            onChange={(e) => onFieldChange("website", e.target.value)}
             className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
-            placeholder="Örn: www.janestoptan.net"
+            placeholder="Örn: https://www.janestoptan.net"
             disabled={isPending}
           />
         </div>
 
-        {/* Phone */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.INSTAGRAM}</label>
+          <input 
+            type="text"
+            value={brandForm.instagramHandle}
+            onChange={(e) => onFieldChange("instagramHandle", e.target.value)}
+            className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-rose-500 focus:bg-white focus:ring-1 focus:ring-rose-500/20 text-sm font-semibold transition-all"
+            placeholder="Örn: @janestoptan veya instagram.com/..."
+            disabled={isPending}
+          />
+        </div>
+      </div>
+
+      {/* Phones & Public Email Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.PHONE}</label>
           <input 
             type="text"
-            value={supplierPhone}
-            onChange={(e) => onPhoneChange(e.target.value)}
-            className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
-            placeholder="Örn: +90 212 555 6677"
+            value={brandForm.phone}
+            onChange={(e) => onFieldChange("phone", e.target.value)}
+            className="w-full px-3.5 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white text-xs font-semibold transition-all"
+            placeholder="Örn: +90 532 000 00 00"
+            disabled={isPending}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.LANDLINE_PHONE}</label>
+          <input 
+            type="text"
+            value={brandForm.landlinePhone}
+            onChange={(e) => onFieldChange("landlinePhone", e.target.value)}
+            className="w-full px-3.5 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white text-xs font-semibold transition-all"
+            placeholder="Örn: +90 212 000 00 00"
+            disabled={isPending}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.PUBLIC_EMAIL}</label>
+          <input 
+            type="email"
+            value={brandForm.publicEmail}
+            onChange={(e) => onFieldChange("publicEmail", e.target.value)}
+            className="w-full px-3.5 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white text-xs font-semibold transition-all"
+            placeholder="Örn: satis@firmaniz.com"
             disabled={isPending}
           />
         </div>
@@ -797,12 +911,41 @@ function SupplierFormFields({
         </label>
         <input 
           type="text"
-          value={supplierWhatsapp}
-          onChange={(e) => onWhatsappChange(e.target.value)}
+          value={brandForm.whatsappPhone}
+          onChange={(e) => onFieldChange("whatsappPhone", e.target.value)}
           className="w-full px-4 py-2.5 border border-emerald-200 rounded-xl bg-emerald-50/30 focus:outline-none focus:border-emerald-500 focus:bg-white text-sm font-semibold transition-all"
-          placeholder="Örn: +90 532 000 00 00 (Ürün sayfasında doğrudan tedarikçi WhatsApp hattı olarak görünür)"
+          placeholder="Örn: +90 530 000 00 00 (Ürün sayfasında doğrudan tedarikçi WhatsApp hattı olarak görünür)"
           disabled={isPending}
         />
+      </div>
+
+      {/* Primary City, District & Open Address */}
+      <div className="flex flex-col gap-3 border-t border-zinc-150 pt-4">
+        <TurkeyLocationSelects
+          city={brandForm.city}
+          district={brandForm.district}
+          onCityChange={(v) => onFieldChange("city", v)}
+          onDistrictChange={(v) => onFieldChange("district", v)}
+          disabled={isPending}
+          cityId="admin-supplier-city"
+          districtId="admin-supplier-district"
+          cityLabel="Merkez İl"
+          districtLabel="Merkez İlçe"
+        />
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">
+            Ana Mağaza / Showroom Açık Adresi
+          </label>
+          <textarea
+            value={brandForm.locationAddress}
+            onChange={(e) => onFieldChange("locationAddress", e.target.value)}
+            rows={2}
+            className="w-full px-3.5 py-2 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white text-xs font-semibold transition-all resize-none"
+            placeholder="Örn: Mehmet Nesih Özmen Mah. Fatih Cad. No: ... Merter"
+            disabled={isPending}
+          />
+        </div>
       </div>
 
       {/* ADDRESSES SUB-FORM */}
@@ -821,10 +964,10 @@ function SupplierFormFields({
         </div>
 
         {/* Address Lines list */}
-        {supplierAddresses.length > 0 ? (
+        {brandForm.addresses.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {supplierAddresses.map((addr, idx) => (
-              <div key={addr.id || `addr-item-${idx}`} className="flex flex-col gap-2 p-3 bg-zinc-50 border border-zinc-200/50 rounded-2xl relative group">
+            {brandForm.addresses.map((addr, idx) => (
+              <div key={addr.id || `addr-item-${idx}`} className="flex flex-col gap-2.5 p-3.5 bg-zinc-50 border border-zinc-200/50 rounded-2xl relative group">
                 {/* Remove address button */}
                 <button
                   type="button"
@@ -848,8 +991,20 @@ function SupplierFormFields({
                   />
                 </div>
 
+                {/* Branch City & District */}
+                <TurkeyLocationSelects
+                  compact
+                  city={addr.city || ""}
+                  district={addr.district || ""}
+                  onCityChange={(val) => onUpdateAddressLine(idx, "city", val)}
+                  onDistrictChange={(val) => onUpdateAddressLine(idx, "district", val)}
+                  disabled={isPending}
+                  cityLabel="Şube İl"
+                  districtLabel="Şube İlçe"
+                />
+
                 {/* Text Input */}
-                <div className="flex flex-col gap-1 mt-1">
+                <div className="flex flex-col gap-1">
                   <textarea
                     value={addr.text}
                     onChange={(e) => onUpdateAddressLine(idx, "text", e.target.value)}
@@ -861,7 +1016,7 @@ function SupplierFormFields({
                 </div>
 
                 {/* Coordinates Input */}
-                <div className="flex flex-col gap-1 mt-1">
+                <div className="flex flex-col gap-1">
                   <input 
                     type="text"
                     value={addr.coordinates}
@@ -947,25 +1102,14 @@ interface SupplierModalsProps {
   activeModal: ActiveModalType;
   selectedSupplier: Brand | null;
   formError: string | null;
-  supplierName: string;
-  supplierAlias: string;
-  supplierWebsite: string;
-  supplierPhone: string;
-  supplierWhatsapp: string;
-  supplierAddresses: SupplierAddress[];
-  supplierIsActive: boolean;
+  brandForm: SupplierBrandFormState;
   selectedParserScript: string;
   customParserScript: string;
   deleteImages: boolean;
   isPending: boolean;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void;
-  onNameChange: (val: string) => void;
-  onAliasChange: (val: string) => void;
-  onWebsiteChange: (val: string) => void;
-  onPhoneChange: (val: string) => void;
-  onWhatsappChange: (val: string) => void;
-  onIsActiveToggle: () => void;
+  onFieldChange: <K extends keyof SupplierBrandFormState>(field: K, val: SupplierBrandFormState[K]) => void;
   onAddAddressLine: () => void;
   onRemoveAddressLine: (idx: number) => void;
   onUpdateAddressLine: (idx: number, field: keyof SupplierAddress, val: string) => void;
@@ -979,25 +1123,14 @@ function SupplierModals({
   activeModal,
   selectedSupplier,
   formError,
-  supplierName,
-  supplierAlias,
-  supplierWebsite,
-  supplierPhone,
-  supplierWhatsapp,
-  supplierAddresses,
-  supplierIsActive,
+  brandForm,
   selectedParserScript,
   customParserScript,
   deleteImages,
   isPending,
   onClose,
   onSubmit,
-  onNameChange,
-  onAliasChange,
-  onWebsiteChange,
-  onPhoneChange,
-  onWhatsappChange,
-  onIsActiveToggle,
+  onFieldChange,
   onAddAddressLine,
   onRemoveAddressLine,
   onUpdateAddressLine,
@@ -1102,22 +1235,11 @@ function SupplierModals({
             {(activeModal === "create_supplier" || activeModal === "edit_supplier") && (
               <SupplierFormFields
                 activeModal={activeModal}
-                supplierName={supplierName}
-                supplierAlias={supplierAlias}
-                supplierWebsite={supplierWebsite}
-                supplierPhone={supplierPhone}
-                supplierWhatsapp={supplierWhatsapp}
-                supplierAddresses={supplierAddresses}
-                supplierIsActive={supplierIsActive}
+                brandForm={brandForm}
                 selectedParserScript={selectedParserScript}
                 customParserScript={customParserScript}
                 isPending={isPending}
-                onNameChange={onNameChange}
-                onAliasChange={onAliasChange}
-                onWebsiteChange={onWebsiteChange}
-                onPhoneChange={onPhoneChange}
-                onWhatsappChange={onWhatsappChange}
-                onIsActiveToggle={onIsActiveToggle}
+                onFieldChange={onFieldChange}
                 onAddAddressLine={onAddAddressLine}
                 onRemoveAddressLine={onRemoveAddressLine}
                 onUpdateAddressLine={onUpdateAddressLine}
@@ -1191,13 +1313,16 @@ export default function SuppliersManager({
   const [deleteImages, setDeleteImages] = useState(false);
 
   // Form Fields (Supplier Brand)
-  const [supplierName, setSupplierName] = useState("");
-  const [supplierAlias, setSupplierAlias] = useState("");
-  const [supplierWebsite, setSupplierWebsite] = useState("");
-  const [supplierPhone, setSupplierPhone] = useState("");
-  const [supplierWhatsapp, setSupplierWhatsapp] = useState("");
-  const [supplierAddresses, setSupplierAddresses] = useState<SupplierAddress[]>([]);
-  const [supplierIsActive, setSupplierIsActive] = useState(true);
+  const [brandForm, setBrandForm] = useState<SupplierBrandFormState>(() =>
+    createEmptyBrandFormState()
+  );
+
+  const handleBrandFieldChange = useCallback(
+    <K extends keyof SupplierBrandFormState>(field: K, val: SupplierBrandFormState[K]) => {
+      setBrandForm((prev) => ({ ...prev, [field]: val }));
+    },
+    []
+  );
 
   const [selectedParserScript, setSelectedParserScript] = useState("parsers/etika.py");
   const [customParserScript, setCustomParserScript] = useState("");
@@ -1322,12 +1447,7 @@ export default function SuppliersManager({
 
   // Open Create Supplier
   const openCreateSupplier = () => {
-    setSupplierName("");
-    setSupplierAlias("");
-    setSupplierWebsite("");
-    setSupplierPhone("");
-    setSupplierWhatsapp("");
-    setSupplierAddresses([]);
+    setBrandForm(createEmptyBrandFormState());
     setFormError(null);
     setActiveModal("create_supplier");
   };
@@ -1335,18 +1455,26 @@ export default function SuppliersManager({
   // Open Edit Supplier
   const openEditSupplier = (supplier: Brand) => {
     setSelectedSupplier(supplier);
-    setSupplierName(supplier.name);
-    setSupplierAlias(supplier.alias_code || "");
-    setSupplierWebsite(supplier.website || "");
-    setSupplierPhone(supplier.phone || "");
-    setSupplierWhatsapp(supplier.whatsapp_phone || supplier.phone || "");
-    setSupplierAddresses(
-      ((supplier.addresses as SupplierAddress[]) || []).map((addr, i) => ({
+    setBrandForm({
+      name: supplier.name || "",
+      aliasCode: supplier.alias_code || "",
+      website: supplier.website || "",
+      instagramHandle: supplier.instagram_handle || "",
+      publicEmail: supplier.public_email || "",
+      phone: supplier.phone || "",
+      landlinePhone: supplier.landline_phone || "",
+      whatsappPhone: supplier.whatsapp_phone || supplier.phone || "",
+      city: supplier.city || "",
+      district: supplier.district || "",
+      locationAddress: supplier.location_address || "",
+      addresses: ((supplier.addresses as SupplierAddress[]) || []).map((addr, i) => ({
         ...addr,
-        id: addr.id || `addr-${i}-${Date.now()}`
-      }))
-    );
-    setSupplierIsActive(supplier.is_active);
+        city: addr.city || "",
+        district: addr.district || "",
+        id: addr.id || `addr-${i}-${Date.now()}`,
+      })),
+      isActive: supplier.is_active,
+    });
     
     // Determine default select based on alias
     setSelectedParserScript(getParserScriptForAlias(supplier.alias_code || ""));
@@ -1387,18 +1515,36 @@ export default function SuppliersManager({
 
   // Address sub-form controls
   const addAddressLine = () => {
-    setSupplierAddresses(prev => [
+    setBrandForm((prev) => ({
       ...prev,
-      { id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `addr-${Date.now()}-${prev.length + 1}`, title: "", text: "", coordinates: "" }
-    ]);
+      addresses: [
+        ...prev.addresses,
+        {
+          id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `addr-${Date.now()}-${prev.addresses.length + 1}`,
+          title: "",
+          city: prev.city || "",
+          district: prev.district || "",
+          text: "",
+          coordinates: "",
+        },
+      ],
+    }));
   };
 
   const removeAddressLine = (index: number) => {
-    setSupplierAddresses(supplierAddresses.filter((_, i) => i !== index));
+    setBrandForm((prev) => ({
+      ...prev,
+      addresses: prev.addresses.filter((_, i) => i !== index),
+    }));
   };
 
   const updateAddressLine = (index: number, field: keyof SupplierAddress, value: string) => {
-    setSupplierAddresses(prev => prev.map((addr, idx) => idx === index ? { ...addr, [field]: value } : addr));
+    setBrandForm((prev) => ({
+      ...prev,
+      addresses: prev.addresses.map((addr, idx) =>
+        idx === index ? { ...addr, [field]: value } : addr
+      ),
+    }));
   };
 
   const handleAddFeedDirect = () => {
@@ -1532,18 +1678,33 @@ export default function SuppliersManager({
     switch (activeModal) {
       case "create_supplier":
       case "edit_supplier":
-        if (!supplierName.trim()) {
+        if (!brandForm.name.trim()) {
           setFormError(LABELS.REQUIRED_FIELDS);
           return;
         }
         handleSupplierSave({
-          name: supplierName.trim(),
-          alias_code: supplierAlias.trim() || null,
-          website: supplierWebsite.trim() || null,
-          phone: supplierPhone.trim() || null,
-          whatsapp_phone: supplierWhatsapp.trim() || supplierPhone.trim() || null,
-          addresses: supplierAddresses.filter(addr => addr.title.trim() && addr.text.trim()),
-          is_active: supplierIsActive
+          name: brandForm.name.trim(),
+          alias_code: brandForm.aliasCode.trim() || null,
+          website: brandForm.website.trim() || null,
+          instagram_handle: brandForm.instagramHandle.trim(),
+          public_email: brandForm.publicEmail.trim(),
+          phone: brandForm.phone.trim() || null,
+          landline_phone: brandForm.landlinePhone.trim(),
+          whatsapp_phone: brandForm.whatsappPhone.trim() || brandForm.phone.trim() || "",
+          city: brandForm.city.trim(),
+          district: brandForm.district.trim(),
+          location_address: brandForm.locationAddress.trim(),
+          addresses: brandForm.addresses
+            .filter((addr) => addr.title.trim() && addr.text.trim())
+            .map((addr) => ({
+              ...addr,
+              title: addr.title.trim(),
+              city: (addr.city || "").trim(),
+              district: (addr.district || "").trim(),
+              text: addr.text.trim(),
+              coordinates: (addr.coordinates || "").trim(),
+            })),
+          is_active: brandForm.isActive,
         });
         break;
       case "delete_supplier":
@@ -1949,25 +2110,14 @@ export default function SuppliersManager({
         activeModal={activeModal}
         selectedSupplier={selectedSupplier}
         formError={formError}
-        supplierName={supplierName}
-        supplierAlias={supplierAlias}
-        supplierWebsite={supplierWebsite}
-        supplierPhone={supplierPhone}
-        supplierWhatsapp={supplierWhatsapp}
-        supplierAddresses={supplierAddresses}
-        supplierIsActive={supplierIsActive}
+        brandForm={brandForm}
         selectedParserScript={selectedParserScript}
         customParserScript={customParserScript}
         deleteImages={deleteImages}
         isPending={isPending}
         onClose={() => setActiveModal(null)}
         onSubmit={handleSubmit}
-        onNameChange={setSupplierName}
-        onAliasChange={setSupplierAlias}
-        onWebsiteChange={setSupplierWebsite}
-        onPhoneChange={setSupplierPhone}
-        onWhatsappChange={setSupplierWhatsapp}
-        onIsActiveToggle={() => setSupplierIsActive(!supplierIsActive)}
+        onFieldChange={handleBrandFieldChange}
         onAddAddressLine={addAddressLine}
         onRemoveAddressLine={removeAddressLine}
         onUpdateAddressLine={updateAddressLine}

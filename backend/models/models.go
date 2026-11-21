@@ -117,9 +117,12 @@ type Brand struct {
 	DescriptionTranslations map[string]string `json:"description_translations,omitempty"`
 	Website                 *string           `json:"website,omitempty"`
 	Phone                *string    `json:"phone,omitempty"`
+	LandlinePhone        string     `json:"landline_phone"`
 	WhatsappPhone        string     `json:"whatsapp_phone"`
 	PublicEmail          string     `json:"public_email"`
 	InstagramHandle      string     `json:"instagram_handle"`
+	City                 string     `json:"city"`
+	District             string     `json:"district"`
 	LocationAddress      string     `json:"location_address"`
 	ExportCountries      string     `json:"export_countries"`
 	MinOrderQuantity     int        `json:"min_order_quantity"`

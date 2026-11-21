@@ -120,6 +120,8 @@ export interface UserInfo {
 export interface SupplierAddress {
   id?: string;
   title: string;
+  city?: string;
+  district?: string;
   text: string;
   coordinates: string;
 }
@@ -133,9 +135,12 @@ export interface Brand {
   description?: string;
   website?: string | null;
   phone?: string | null;
+  landline_phone?: string | null;
   whatsapp_phone?: string | null;
   public_email?: string | null;
   instagram_handle?: string | null;
+  city?: string | null;
+  district?: string | null;
   location_address?: string | null;
   bank_name?: string | null;
   bank_account_holder?: string | null;

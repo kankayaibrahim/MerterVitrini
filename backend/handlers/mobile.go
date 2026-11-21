@@ -316,8 +316,11 @@ func fetchBootstrapBrands(ctx context.Context) []map[string]any {
 		           ''
 		       ),
 		       COALESCE(b.phone, ''),
+		       COALESCE(b.landline_phone, ''),
 		       COALESCE(b.public_email, ''),
 		       COALESCE(b.instagram_handle, ''),
+		       COALESCE(b.city, ''),
+		       COALESCE(b.district, ''),
 		       COALESCE(b.location_address, ''),
 		       COALESCE(b.export_countries, ''),
 		       COALESCE(b.min_order_quantity, 1),
@@ -337,17 +340,17 @@ func fetchBootstrapBrands(ctx context.Context) []map[string]any {
 	defer rows.Close()
 	for rows.Next() {
 		var (
-			id, displayName, slug, companyType, description, website string
-			whatsappPhone, phone, publicEmail, instagramHandle       string
-			locationAddress, exportCountries                         string
-			minOrderQty, activeProductCount                          int
-			supportsPrivateLabel, supportsFason, isVerified          bool
-			descTransBytes, addressesBytes                           []byte
+			id, displayName, slug, companyType, description, website     string
+			whatsappPhone, phone, landlinePhone, publicEmail, instagramHandle string
+			brandCity, brandDistrict, locationAddress, exportCountries   string
+			minOrderQty, activeProductCount                              int
+			supportsPrivateLabel, supportsFason, isVerified              bool
+			descTransBytes, addressesBytes                               []byte
 		)
 		if err := rows.Scan(
 			&id, &displayName, &slug, &companyType, &description, &descTransBytes,
-			&website, &whatsappPhone, &phone, &publicEmail, &instagramHandle,
-			&locationAddress, &exportCountries, &minOrderQty,
+			&website, &whatsappPhone, &phone, &landlinePhone, &publicEmail, &instagramHandle,
+			&brandCity, &brandDistrict, &locationAddress, &exportCountries, &minOrderQty,
 			&supportsPrivateLabel, &supportsFason, &isVerified,
 			&activeProductCount, &addressesBytes,
 		); err != nil {
@@ -363,18 +366,25 @@ func fetchBootstrapBrands(ctx context.Context) []map[string]any {
 			_ = json.Unmarshal(addressesBytes, &addresses)
 		}
 
+		effectiveCity := strings.TrimSpace(brandCity)
+		if effectiveCity == "" {
+			effectiveCity = extractBrandCity(locationAddress, addresses)
+		}
+
 		brands = append(brands, map[string]any{
 			"id":                       id,
 			"name":                     displayName,
 			"slug":                     slug,
 			"logo_url":                 "",
-			"city":                     extractBrandCity(locationAddress, addresses),
+			"city":                     effectiveCity,
+			"district":                 strings.TrimSpace(brandDistrict),
 			"company_type":             companyType,
 			"description":              description,
 			"description_translations": descTranslations,
 			"website":                  website,
 			"whatsapp_phone":           whatsappPhone,
 			"phone":                    phone,
+			"landline_phone":           landlinePhone,
 			"public_email":             publicEmail,
 			"instagram_handle":         instagramHandle,
 			"location_address":         locationAddress,

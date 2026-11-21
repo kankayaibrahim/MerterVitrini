@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -295,6 +296,12 @@ func (h *TranslateHandler) ListStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(contentTypeHeader, appJSON)
 	json.NewEncoder(w).Encode(stats)
+}
+
+func isTranslationManagerRunning() bool {
+	globalTranslationManager.mu.RLock()
+	defer globalTranslationManager.mu.RUnlock()
+	return globalTranslationManager.state.Status == StatusRunning
 }
 
 // GetStatus returns the current active translation job progress
@@ -622,13 +629,35 @@ func (m *TranslationManager) executeTranslationJob() {
 	m.runWorkerPool(ctx, table, language, items)
 
 	m.mu.Lock()
+	var completedTable, completedLang string
+	var completedSuccess int
+	shouldNotify := false
 	if ctx.Err() != nil {
 		m.state.Status = StatusPaused
 	} else {
 		m.state.Status = StatusCompleted
 		m.state.Speed = 0
+		completedTable = m.state.Table
+		completedLang = m.state.Language
+		completedSuccess = m.state.SuccessCount
+		shouldNotify = completedSuccess > 0 && (completedTable == "products" || completedTable == "product_descriptions")
 	}
 	m.mu.Unlock()
+
+	if shouldNotify && !isCronPipelineRunning() {
+		safe.Go("Post-Translation MV Refresh & IndexNow", func() {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+			defer cancel()
+			if mvErr := refreshCatalogMV(bgCtx); mvErr != nil {
+				log.Printf("[TRANSLATE-INDEXNOW] MV refresh warning: %v", mvErr)
+			}
+			_, _ = FlushReadyUnnotifiedProductsToIndexNow(
+				bgCtx,
+				"translation_complete",
+				fmt.Sprintf("Çeviri Tamamlandı (%s / %s)", completedTable, completedLang),
+			)
+		})
+	}
 }
 
 func (m *TranslationManager) translateProduct(ctx context.Context, source, target string, item TranslationItem) bool {
@@ -845,5 +874,229 @@ func (m *TranslationManager) translateAndSaveItem(ctx context.Context, table, la
 	default:
 		return false
 	}
+}
+
+type autoTranslateProductRow struct {
+	ID               string
+	Title            string
+	ShortDescription string
+	Description      string
+}
+
+type existingProductTranslationRow struct {
+	Title            string
+	ShortDescription string
+	Description      string
+}
+
+func normalizeLangCode2(code string) string {
+	trimmed := strings.ToLower(strings.TrimSpace(code))
+	if trimmed == "" {
+		return ""
+	}
+	if idx := strings.IndexAny(trimmed, "_-"); idx > 0 {
+		trimmed = trimmed[:idx]
+	}
+	if len(trimmed) > 2 {
+		trimmed = trimmed[:2]
+	}
+	return trimmed
+}
+
+func dedupeNonEmptyStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool, len(values))
+	result := make([]string, 0, len(values))
+	for _, v := range values {
+		trimmed := strings.TrimSpace(v)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		result = append(result, trimmed)
+	}
+	return result
+}
+
+func loadActiveTargetLanguages2(ctx context.Context) ([]string, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT code
+		FROM catalog.languages
+		WHERE is_active = true
+		  AND code NOT IN ('tr', 'tr_TR')
+		ORDER BY sort_order ASC, code ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var raw []string
+	for rows.Next() {
+		var code string
+		if scanErr := rows.Scan(&code); scanErr == nil {
+			if lang2 := normalizeLangCode2(code); lang2 != "" && lang2 != "tr" {
+				raw = append(raw, lang2)
+			}
+		}
+	}
+	return dedupeNonEmptyStrings(raw), rows.Err()
+}
+
+func loadAutoTranslateProducts(ctx context.Context, productIDs []string) ([]autoTranslateProductRow, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT id::text, title, COALESCE(short_description, ''), COALESCE(description, '')
+		FROM catalog.products
+		WHERE id = ANY($1::uuid[])
+		  AND is_active = true
+		  AND COALESCE(is_archived, false) = false`, productIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var products []autoTranslateProductRow
+	for rows.Next() {
+		var p autoTranslateProductRow
+		if scanErr := rows.Scan(&p.ID, &p.Title, &p.ShortDescription, &p.Description); scanErr == nil {
+			products = append(products, p)
+		}
+	}
+	return products, rows.Err()
+}
+
+func loadExistingProductTranslationsByLang(ctx context.Context, productID string) (map[string]existingProductTranslationRow, error) {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT language_code, COALESCE(title, ''), COALESCE(short_description, ''), COALESCE(description, '')
+		FROM catalog.product_translations
+		WHERE product_id = $1::uuid`, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	byLang := make(map[string]existingProductTranslationRow)
+	for rows.Next() {
+		var rawCode, t, sd, d string
+		if scanErr := rows.Scan(&rawCode, &t, &sd, &d); scanErr != nil {
+			continue
+		}
+		lang2 := normalizeLangCode2(rawCode)
+		if lang2 == "" {
+			continue
+		}
+		curr := byLang[lang2]
+		if curr.Title == "" && strings.TrimSpace(t) != "" {
+			curr.Title = strings.TrimSpace(t)
+		}
+		if curr.ShortDescription == "" && strings.TrimSpace(sd) != "" {
+			curr.ShortDescription = strings.TrimSpace(sd)
+		}
+		if curr.Description == "" && strings.TrimSpace(d) != "" {
+			curr.Description = strings.TrimSpace(d)
+		}
+		byLang[lang2] = curr
+	}
+	return byLang, rows.Err()
+}
+
+func translateFieldIfMissing(ctx context.Context, sourceText, existingTarget, targetLang string) string {
+	if strings.TrimSpace(existingTarget) != "" {
+		return existingTarget
+	}
+	trimmedSrc := strings.TrimSpace(sourceText)
+	if trimmedSrc == "" {
+		return ""
+	}
+	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	translated, err := translateText(callCtx, trimmedSrc, "tr", targetLang)
+	if err != nil {
+		log.Printf("[AUTO-TRANSLATE] Translate '%s'->'%s' warning: %v", "tr", targetLang, err)
+		return ""
+	}
+	return strings.TrimSpace(translated)
+}
+
+func upsertSingleProductTranslation(ctx context.Context, productID, lang2, title, shortDesc, desc string) error {
+	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	_, err := db.Pool.Exec(dbCtx, `
+		INSERT INTO catalog.product_translations (product_id, language_code, title, short_description, description)
+		VALUES ($1::uuid, $2, $3, $4, $5)
+		ON CONFLICT (product_id, language_code) DO UPDATE SET
+			title = CASE WHEN COALESCE(EXCLUDED.title, '') != '' THEN EXCLUDED.title ELSE catalog.product_translations.title END,
+			short_description = CASE WHEN COALESCE(EXCLUDED.short_description, '') != '' THEN EXCLUDED.short_description ELSE catalog.product_translations.short_description END,
+			description = CASE WHEN COALESCE(EXCLUDED.description, '') != '' THEN EXCLUDED.description ELSE catalog.product_translations.description END`,
+		productID, lang2, title, shortDesc, desc)
+	return err
+}
+
+func translateSingleProductLang(
+	ctx context.Context,
+	prod autoTranslateProductRow,
+	lang2 string,
+	existingMap map[string]existingProductTranslationRow,
+) int {
+	existing := existingMap[lang2]
+	nextTitle := translateFieldIfMissing(ctx, prod.Title, existing.Title, lang2)
+	nextDesc := translateFieldIfMissing(ctx, prod.Description, existing.Description, lang2)
+	nextShort := translateFieldIfMissing(ctx, prod.ShortDescription, existing.ShortDescription, lang2)
+
+	if nextTitle == "" {
+		return 0
+	}
+	if nextTitle == existing.Title && nextDesc == existing.Description && nextShort == existing.ShortDescription {
+		return 0
+	}
+	if err := upsertSingleProductTranslation(ctx, prod.ID, lang2, nextTitle, nextShort, nextDesc); err != nil {
+		log.Printf("[AUTO-TRANSLATE ERROR] Failed to write %s/%s: %v", prod.ID, lang2, err)
+		return 0
+	}
+	return 1
+}
+
+// AutoTranslateProductsByIDs translates missing title/short_description/description fields into all active target languages.
+func AutoTranslateProductsByIDs(ctx context.Context, productIDs []string) (int, error) {
+	if db.Pool == nil {
+		return 0, nil
+	}
+	cleanIDs := dedupeNonEmptyStrings(productIDs)
+	if len(cleanIDs) == 0 {
+		return 0, nil
+	}
+
+	targetLangs, err := loadActiveTargetLanguages2(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if len(targetLangs) == 0 {
+		return 0, nil
+	}
+
+	products, err := loadAutoTranslateProducts(ctx, cleanIDs)
+	if err != nil {
+		return 0, err
+	}
+
+	translatedCount := 0
+	for _, prod := range products {
+		if ctx.Err() != nil {
+			return translatedCount, ctx.Err()
+		}
+		existingMap, mapErr := loadExistingProductTranslationsByLang(ctx, prod.ID)
+		if mapErr != nil {
+			log.Printf("[AUTO-TRANSLATE] Existing map error for %s: %v", prod.ID, mapErr)
+			continue
+		}
+		for _, lang2 := range targetLangs {
+			if ctx.Err() != nil {
+				return translatedCount, ctx.Err()
+			}
+			translatedCount += translateSingleProductLang(ctx, prod, lang2, existingMap)
+		}
+	}
+	return translatedCount, nil
 }
 

@@ -14,9 +14,29 @@ import (
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/safe"
 
 	"github.com/jackc/pgx/v5"
 )
+
+func notifyCategoryIndexNowAsync(categoryID, title string, isActive bool) {
+	if !isActive || strings.TrimSpace(categoryID) == "" {
+		return
+	}
+	safe.Go("Category IndexNow Notify", func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		defer cancel()
+		urls := BuildSingleCategoryIndexNowURLs(bgCtx, categoryID)
+		if len(urls) == 0 {
+			return
+		}
+		NotifyIndexNowWithMeta(IndexNowSubmissionMeta{
+			TriggerSource: "category",
+			SourceLabel:   "Kategori: " + strings.TrimSpace(title),
+			ProductCount:  1,
+		}, urls)
+	})
+}
 
 type AdminCatalogHandler struct {
 	Cfg *config.Config
@@ -148,6 +168,8 @@ func (h *AdminCatalogHandler) CreateCategory(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	notifyCategoryIndexNowAsync(c.ID, c.Title, c.IsActive)
+
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(c)
@@ -239,6 +261,8 @@ func (h *AdminCatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Requ
 		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
 		return
 	}
+
+	notifyCategoryIndexNowAsync(c.ID, c.Title, c.IsActive)
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(c)

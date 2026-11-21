@@ -105,23 +105,32 @@ type IndexNowLogEntry struct {
 
 // IndexNowKpiSummary holds aggregate telemetry for the Admin IndexNow dashboard.
 type IndexNowKpiSummary struct {
-	TotalSubmissions      int        `json:"total_submissions"`
-	TotalURLsSubmitted    int        `json:"total_urls_submitted"`
-	TotalProductsNotified int        `json:"total_products_notified"`
-	TodaySubmissions      int        `json:"today_submissions"`
-	TodayURLsSubmitted    int        `json:"today_urls_submitted"`
-	XMLSyncSubmissions    int        `json:"xml_sync_submissions"`
-	SupplierSubmissions   int        `json:"supplier_submissions"`
-	SuccessCount          int        `json:"success_count"`
-	FailedCount           int        `json:"failed_count"`
-	SkippedDevCount       int        `json:"skipped_dev_count"`
-	SuccessRate           float64    `json:"success_rate"`
-	LastSubmittedAt       *time.Time `json:"last_submitted_at"`
-	Host                  string     `json:"host"`
-	KeyLocation           string     `json:"key_location"`
+	TotalSubmissions                int        `json:"total_submissions"`
+	TotalURLsSubmitted              int        `json:"total_urls_submitted"`
+	TotalProductsNotified           int        `json:"total_products_notified"`
+	TodaySubmissions                int        `json:"today_submissions"`
+	TodayURLsSubmitted              int        `json:"today_urls_submitted"`
+	XMLSyncSubmissions              int        `json:"xml_sync_submissions"`
+	SupplierSubmissions             int        `json:"supplier_submissions"`
+	SuccessCount                    int        `json:"success_count"`
+	FailedCount                     int        `json:"failed_count"`
+	SkippedDevCount                 int        `json:"skipped_dev_count"`
+	SuccessRate                     float64    `json:"success_rate"`
+	LastSubmittedAt                 *time.Time `json:"last_submitted_at"`
+	Host                            string     `json:"host"`
+	KeyLocation                     string     `json:"key_location"`
+	ActiveProductsCount             int        `json:"active_products_count"`
+	NotifiedProductsCount           int        `json:"notified_products_count"`
+	PendingReadyProductsCount       int        `json:"pending_ready_products_count"`
+	WaitingTranslationProductsCount int        `json:"waiting_translation_products_count"`
+	InitialBackfillStatus           string     `json:"initial_backfill_status"`
+	InitialBackfillCompletedAt      *time.Time `json:"initial_backfill_completed_at"`
+	AutoEnabled                     bool       `json:"auto_enabled"`
+	LastSweepAt                     *time.Time `json:"last_sweep_at"`
+	BackfillRunning                 bool       `json:"backfill_running"`
 }
 
-// EnsureIndexNowSchema idempotently creates catalog.indexnow_logs and supporting indexes.
+// EnsureIndexNowSchema idempotently creates catalog.indexnow_logs, tracking column, and automation state.
 func EnsureIndexNowSchema(ctx context.Context) error {
 	if db.Pool == nil {
 		return nil
@@ -130,6 +139,13 @@ func EnsureIndexNowSchema(ctx context.Context) error {
 	indexNowSchemaOnce.Do(func() {
 		ddl := `
 		CREATE SCHEMA IF NOT EXISTS catalog;
+		ALTER TABLE catalog.products
+			ADD COLUMN IF NOT EXISTS indexnow_notified_at TIMESTAMPTZ NULL;
+		CREATE INDEX IF NOT EXISTS idx_products_indexnow_pending
+			ON catalog.products (created_at DESC)
+			WHERE is_active = true
+			  AND COALESCE(is_archived, false) = false
+			  AND indexnow_notified_at IS NULL;
 		CREATE TABLE IF NOT EXISTS catalog.indexnow_logs (
 			id UUID PRIMARY KEY DEFAULT uuidv7(),
 			trigger_source VARCHAR(40) NOT NULL DEFAULT 'manual',
@@ -151,7 +167,20 @@ func EnsureIndexNowSchema(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS idx_indexnow_logs_source_created
 			ON catalog.indexnow_logs (trigger_source, created_at DESC);
 		CREATE INDEX IF NOT EXISTS idx_indexnow_logs_status_created
-			ON catalog.indexnow_logs (status, created_at DESC);`
+			ON catalog.indexnow_logs (status, created_at DESC);
+		CREATE TABLE IF NOT EXISTS catalog.indexnow_automation_state (
+			singleton_guard BOOLEAN PRIMARY KEY DEFAULT true CHECK (singleton_guard = true),
+			auto_enabled BOOLEAN NOT NULL DEFAULT true,
+			initial_backfill_completed_at TIMESTAMPTZ NULL,
+			initial_backfill_status VARCHAR(24) NOT NULL DEFAULT 'pending',
+			initial_backfill_last_error TEXT NOT NULL DEFAULT '',
+			last_sweep_at TIMESTAMPTZ NULL,
+			last_sweep_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		INSERT INTO catalog.indexnow_automation_state (singleton_guard, auto_enabled, initial_backfill_status)
+		VALUES (true, true, 'pending')
+		ON CONFLICT (singleton_guard) DO NOTHING;`
 		_, indexNowSchemaErr = db.Pool.Exec(ctx, ddl)
 	})
 	return indexNowSchemaErr
@@ -711,7 +740,7 @@ func (h *IndexNowHandler) SubmitRecentProducts(w http.ResponseWriter, r *http.Re
 	}
 
 	rows, err := db.Pool.Query(ctx, `
-		SELECT slug
+		SELECT id::text, slug
 		FROM catalog.products
 		WHERE is_active = true
 		  AND COALESCE(is_archived, false) = false
@@ -725,10 +754,11 @@ func (h *IndexNowHandler) SubmitRecentProducts(w http.ResponseWriter, r *http.Re
 	}
 	defer rows.Close()
 
-	var slugs []string
+	var productIDs, slugs []string
 	for rows.Next() {
-		var s string
-		if scanErr := rows.Scan(&s); scanErr == nil && strings.TrimSpace(s) != "" {
+		var id, s string
+		if scanErr := rows.Scan(&id, &s); scanErr == nil && strings.TrimSpace(s) != "" {
+			productIDs = append(productIDs, id)
 			slugs = append(slugs, s)
 		}
 	}
@@ -747,6 +777,11 @@ func (h *IndexNowHandler) SubmitRecentProducts(w http.ResponseWriter, r *http.Re
 	if submitErr != nil && entry == nil {
 		httpx.Error(w, http.StatusInternalServerError, "IndexNow gönderimi başarısız oldu: "+submitErr.Error())
 		return
+	}
+	if entry != nil && entry.Status == "success" {
+		if markErr := markProductsIndexNowNotified(ctx, productIDs); markErr != nil {
+			log.Printf("[IndexNow] Failed to mark recent products notified: %v", markErr)
+		}
 	}
 
 	var message string
@@ -805,6 +840,7 @@ func fetchIndexNowKpiSummary(ctx context.Context) (IndexNowKpiSummary, error) {
 	if attempted > 0 {
 		kpi.SuccessRate = float64(kpi.SuccessCount) * 100 / float64(attempted)
 	}
+	fetchIndexNowCoverageStats(ctx, &kpi)
 	return kpi, nil
 }
 

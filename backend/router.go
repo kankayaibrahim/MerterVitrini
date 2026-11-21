@@ -344,6 +344,7 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("POST /api/v1/indexnow/logs/{id}/retry", protect(h.IndexNow.RetryLog))
 	mux.Handle("POST /api/v1/indexnow/submit", protect(h.IndexNow.SubmitManual))
 	mux.Handle("POST /api/v1/indexnow/submit-recent-products", protect(h.IndexNow.SubmitRecentProducts))
+	mux.Handle("POST /api/v1/indexnow/submit-unnotified", protect(h.IndexNow.SubmitUnnotifiedCatalog))
 	mux.Handle("GET /api/v1/translate/stats", protect(h.Translate.ListStats))
 	mux.Handle("GET /api/v1/translate/status", protect(h.Translate.GetStatus))
 	mux.Handle("POST /api/v1/translate/start", protect(h.Translate.StartJob))

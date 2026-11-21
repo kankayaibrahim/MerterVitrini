@@ -123,6 +123,8 @@ func initBackgroundWorkers(appCtx context.Context, cfg *config.Config) {
 
 	if err := handlers.EnsureIndexNowSchema(cronInitCtx); err != nil {
 		log.Printf("[WARNING] Failed to provision IndexNow logs schema: %v\n", err)
+	} else {
+		handlers.StartIndexNowAutomationWorker(appCtx)
 	}
 	if err := handlers.EnsureCustomerImpersonationSchema(cronInitCtx); err != nil {
 		log.Printf("[WARNING] Failed to provision impersonation logs schema: %v\n", err)

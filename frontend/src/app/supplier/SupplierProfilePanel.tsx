@@ -14,7 +14,19 @@ import {
   ShieldCheck,
   Factory,
   Sparkles,
+  Plus,
+  Trash2,
+  ExternalLink,
 } from "lucide-react";
+import type { SupplierAddress } from "@/types/integration";
+import TurkeyLocationSelects from "@/components/shared/TurkeyLocationSelects";
+import InstagramIcon from "@/components/shared/InstagramIcon";
+import {
+  formatBrandInstagramLabel,
+  formatBrandInstagramUrl,
+  formatBrandWebsiteLabel,
+  formatBrandWebsiteUrl,
+} from "@/utils/brandContactHelpers";
 
 export interface SupplierBrandProfile {
   id: string;
@@ -26,10 +38,14 @@ export interface SupplierBrandProfile {
   description_translations?: Record<string, string>;
   website?: string;
   phone?: string;
+  landline_phone?: string;
   whatsapp_phone: string;
   public_email: string;
   instagram_handle: string;
+  city?: string;
+  district?: string;
   location_address: string;
+  addresses?: SupplierAddress[];
   export_countries: string;
   min_order_quantity: number;
   supports_private_label: boolean;
@@ -60,10 +76,14 @@ interface NormalizedBrandProfileForm {
   descTranslations: Record<string, string>;
   whatsappPhone: string;
   phone: string;
+  landlinePhone: string;
   publicEmail: string;
   website: string;
   instagramHandle: string;
+  city: string;
+  district: string;
   locationAddress: string;
+  addresses: SupplierAddress[];
   exportCountries: string;
   minOrderQty: number;
   supportsPrivateLabel: boolean;
@@ -91,10 +111,23 @@ function normalizeBrandProfileToForm(bp: SupplierBrandProfile): NormalizedBrandP
     },
     whatsappPhone: bp.whatsapp_phone || strOrEmpty(bp.phone),
     phone: strOrEmpty(bp.phone),
+    landlinePhone: strOrEmpty(bp.landline_phone),
     publicEmail: strOrEmpty(bp.public_email),
     website: strOrEmpty(bp.website),
     instagramHandle: strOrEmpty(bp.instagram_handle),
+    city: strOrEmpty(bp.city),
+    district: strOrEmpty(bp.district),
     locationAddress: strOrEmpty(bp.location_address),
+    addresses: Array.isArray(bp.addresses)
+      ? bp.addresses.map((addr, idx) => ({
+          id: addr.id || `supp-addr-${idx}-${Date.now()}`,
+          title: addr.title || "",
+          city: addr.city || "",
+          district: addr.district || "",
+          text: addr.text || "",
+          coordinates: addr.coordinates || "",
+        }))
+      : [],
     exportCountries: strOrEmpty(bp.export_countries),
     minOrderQty: bp.min_order_quantity || 1,
     supportsPrivateLabel: Boolean(bp.supports_private_label),
@@ -130,10 +163,14 @@ export default function SupplierProfilePanel({
   const [autoTranslatingDesc, setAutoTranslatingDesc] = useState(false);
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [phone, setPhone] = useState("");
+  const [landlinePhone, setLandlinePhone] = useState("");
   const [publicEmail, setPublicEmail] = useState("");
   const [website, setWebsite] = useState("");
   const [instagramHandle, setInstagramHandle] = useState("");
+  const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
+  const [addresses, setAddresses] = useState<SupplierAddress[]>([]);
   const [exportCountries, setExportCountries] = useState("");
   const [minOrderQty, setMinOrderQty] = useState<number>(1);
   const [supportsPrivateLabel, setSupportsPrivateLabel] = useState(false);
@@ -153,10 +190,14 @@ export default function SupplierProfilePanel({
       setDescTranslations(norm.descTranslations);
       setWhatsappPhone(norm.whatsappPhone);
       setPhone(norm.phone);
+      setLandlinePhone(norm.landlinePhone);
       setPublicEmail(norm.publicEmail);
       setWebsite(norm.website);
       setInstagramHandle(norm.instagramHandle);
+      setCity(norm.city);
+      setDistrict(norm.district);
       setLocationAddress(norm.locationAddress);
+      setAddresses(norm.addresses);
       setExportCountries(norm.exportCountries);
       setMinOrderQty(norm.minOrderQty);
       setSupportsPrivateLabel(norm.supportsPrivateLabel);
@@ -259,10 +300,23 @@ export default function SupplierProfilePanel({
           },
           whatsapp_phone: whatsappPhone,
           phone,
+          landline_phone: landlinePhone.trim(),
           public_email: publicEmail,
           website,
           instagram_handle: instagramHandle,
+          city: city.trim(),
+          district: district.trim(),
           location_address: locationAddress,
+          addresses: addresses
+            .filter((addr) => addr.title.trim() && addr.text.trim())
+            .map((addr) => ({
+              ...addr,
+              title: addr.title.trim(),
+              city: (addr.city || "").trim(),
+              district: (addr.district || "").trim(),
+              text: addr.text.trim(),
+              coordinates: (addr.coordinates || "").trim(),
+            })),
           export_countries: exportCountries,
           min_order_quantity: Number(minOrderQty) || 1,
           supports_private_label: supportsPrivateLabel,
@@ -533,18 +587,34 @@ export default function SupplierProfilePanel({
             </span>
           </div>
 
-          <div>
-            <label htmlFor="prof-phone" className="block text-xs font-bold text-slate-700 mb-1">
-              Mağaza / Santral Telefonu
-            </label>
-            <input
-              id="prof-phone"
-              type="text"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+90 212 000 00 00"
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="prof-phone" className="block text-xs font-bold text-slate-700 mb-1">
+                Cep / Yetkili Telefonu
+              </label>
+              <input
+                id="prof-phone"
+                type="text"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+90 532 000 00 00"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="prof-landline" className="block text-xs font-bold text-slate-700 mb-1">
+                Sabit Telefon (Santral)
+              </label>
+              <input
+                id="prof-landline"
+                type="text"
+                value={landlinePhone}
+                onChange={(e) => setLandlinePhone(e.target.value)}
+                placeholder="+90 212 000 00 00"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
+              />
+            </div>
           </div>
 
           <div>
@@ -564,7 +634,7 @@ export default function SupplierProfilePanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="prof-website" className="block text-xs font-bold text-slate-700 mb-1">
                 Web Sitesi
@@ -576,30 +646,67 @@ export default function SupplierProfilePanel({
                   type="text"
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
-                  placeholder="https://..."
+                  placeholder="https://www.firmaniz.com"
                   className="w-full pl-8 pr-2.5 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
                 />
               </div>
+              {formatBrandWebsiteUrl(website) && (
+                <a
+                  href={formatBrandWebsiteUrl(website)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:underline"
+                >
+                  <span className="truncate max-w-[160px]">{formatBrandWebsiteLabel(website)}</span>
+                  <ExternalLink size={10} />
+                </a>
+              )}
             </div>
 
             <div>
               <label htmlFor="prof-instagram" className="block text-xs font-bold text-slate-700 mb-1">
-                Instagram
+                Instagram Sayfası
               </label>
-              <input
-                id="prof-instagram"
-                type="text"
-                value={instagramHandle}
-                onChange={(e) => setInstagramHandle(e.target.value)}
-                placeholder="@firmaniz"
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
-              />
+              <div className="relative">
+                <InstagramIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-500" />
+                <input
+                  id="prof-instagram"
+                  type="text"
+                  value={instagramHandle}
+                  onChange={(e) => setInstagramHandle(e.target.value)}
+                  placeholder="@firmaniz veya link"
+                  className="w-full pl-8 pr-2.5 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
+                />
+              </div>
+              {formatBrandInstagramUrl(instagramHandle) && (
+                <a
+                  href={formatBrandInstagramUrl(instagramHandle)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 hover:underline"
+                >
+                  <span>{formatBrandInstagramLabel(instagramHandle)}</span>
+                  <ExternalLink size={10} />
+                </a>
+              )}
             </div>
           </div>
 
+          <TurkeyLocationSelects
+            compact
+            city={city}
+            district={district}
+            onCityChange={setCity}
+            onDistrictChange={setDistrict}
+            cityId="prof-city"
+            districtId="prof-district"
+            cityLabel="İl"
+            districtLabel="İlçe"
+          />
+
           <div>
             <label htmlFor="prof-address" className="block text-xs font-bold text-slate-700 mb-1">
-              Merter Mağaza / Showroom Açık Adresi
+              Mağaza / Showroom Açık Adresi
             </label>
             <div className="relative">
               <MapPin size={14} className="absolute left-3 top-2.5 text-slate-400" />
@@ -608,7 +715,7 @@ export default function SupplierProfilePanel({
                 rows={2}
                 value={locationAddress}
                 onChange={(e) => setLocationAddress(e.target.value)}
-                placeholder="Mehmet Nesih Özmen Mah. Fatih Cad. No:... Merter / Güngören / İstanbul"
+                placeholder="Mehmet Nesih Özmen Mah. Fatih Cad. No:..."
                 className="w-full pl-8 pr-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
               />
             </div>
@@ -674,6 +781,123 @@ export default function SupplierProfilePanel({
             />
           </div>
         </div>
+      </div>
+
+      {/* Additional Branches / Depots */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200/90 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+              <MapPin size={15} className="text-rose-600" />
+              <span>4. Ek Mağaza, Şube &amp; Depo Adresleri ({addresses.length})</span>
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Showroom dışında fabrika, depo veya ikinci satış noktanız varsa il/ilçe ve konum koordinatıyla ekleyebilirsiniz.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setAddresses((prev) => [
+                ...prev,
+                {
+                  id: `supp-branch-${Date.now()}-${prev.length + 1}`,
+                  title: "",
+                  city: city || "",
+                  district: district || "",
+                  text: "",
+                  coordinates: "",
+                },
+              ])
+            }
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer self-start sm:self-auto"
+          >
+            <Plus size={13} />
+            <span>Yeni Şube / Adres Ekle</span>
+          </button>
+        </div>
+
+        {addresses.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {addresses.map((addr, idx) => (
+              <div
+                key={addr.id || `supp-branch-row-${idx}`}
+                className="p-4 rounded-xl bg-slate-50/70 border border-slate-200 space-y-3 relative"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={addr.title}
+                    onChange={(e) =>
+                      setAddresses((prev) =>
+                        prev.map((a, i) => (i === idx ? { ...a, title: e.target.value } : a))
+                      )
+                    }
+                    placeholder="Başlık (Örn: Merter Showroom, Fabrika Depo)"
+                    className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-slate-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAddresses((prev) => prev.filter((_, i) => i !== idx))}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    title="Adresi Kaldır"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                <TurkeyLocationSelects
+                  compact
+                  city={addr.city || ""}
+                  district={addr.district || ""}
+                  onCityChange={(val) =>
+                    setAddresses((prev) =>
+                      prev.map((a, i) => (i === idx ? { ...a, city: val, district: "" } : a))
+                    )
+                  }
+                  onDistrictChange={(val) =>
+                    setAddresses((prev) =>
+                      prev.map((a, i) => (i === idx ? { ...a, district: val } : a))
+                    )
+                  }
+                  cityLabel="Şube İl"
+                  districtLabel="Şube İlçe"
+                />
+
+                <textarea
+                  rows={2}
+                  required
+                  value={addr.text}
+                  onChange={(e) =>
+                    setAddresses((prev) =>
+                      prev.map((a, i) => (i === idx ? { ...a, text: e.target.value } : a))
+                    )
+                  }
+                  placeholder="Sokak, bina no, kat / daire..."
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-slate-900"
+                />
+
+                <input
+                  type="text"
+                  value={addr.coordinates}
+                  onChange={(e) =>
+                    setAddresses((prev) =>
+                      prev.map((a, i) => (i === idx ? { ...a, coordinates: e.target.value } : a))
+                    )
+                  }
+                  placeholder="Harita Koordinatı (Örn: 41.0185, 28.8893)"
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-[11px] font-mono text-slate-700 focus:outline-none focus:border-slate-900"
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-6 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
+            Henüz ek mağaza veya depo adresi eklenmemiş.
+          </div>
+        )}
       </div>
     </form>
   );

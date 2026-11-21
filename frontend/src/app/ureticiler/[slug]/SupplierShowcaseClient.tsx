@@ -33,6 +33,14 @@ import ProductCard from "@/components/store/ProductCard";
 import StoreChatDrawer from "@/components/store/StoreChatDrawer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
+import InstagramIcon from "@/components/shared/InstagramIcon";
+import {
+  formatBrandInstagramLabel,
+  formatBrandInstagramUrl,
+  formatBrandLocationLine,
+  formatBrandWebsiteLabel,
+  formatBrandWebsiteUrl,
+} from "@/utils/brandContactHelpers";
 
 interface ShowcaseCopy {
   readonly typeManufacturer: string;
@@ -566,11 +574,13 @@ function SupplierProfileBanner({
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-[#E5E0D8] text-xs text-[#525252]">
-        {brand.location_address && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-3 border-t border-[#E5E0D8] text-xs text-[#525252]">
+        {(brand.location_address || brand.city || brand.district) && (
           <div className="flex items-start gap-2">
             <MapPin size={14} className="text-slate-400 shrink-0 mt-0.5" />
-            <span>{brand.location_address}</span>
+            <span>
+              {formatBrandLocationLine(brand.location_address, brand.district, brand.city)}
+            </span>
           </div>
         )}
         {callRaw && (
@@ -581,6 +591,17 @@ function SupplierProfileBanner({
               className="font-bold text-[#1C1C1C] hover:underline no-underline"
             >
               Tel: {callRaw}
+            </a>
+          </div>
+        )}
+        {brand.landline_phone && brand.landline_phone !== callRaw && (
+          <div className="flex items-center gap-2">
+            <Phone size={14} className="text-slate-400 shrink-0" />
+            <a
+              href={`tel:${brand.landline_phone}`}
+              className="font-bold text-[#1C1C1C] hover:underline no-underline"
+            >
+              Sabit: {brand.landline_phone}
             </a>
           </div>
         )}
@@ -595,16 +616,29 @@ function SupplierProfileBanner({
             </a>
           </div>
         )}
-        {brand.website && (
+        {formatBrandWebsiteUrl(brand.website) && (
           <div className="flex items-center gap-2">
             <Globe size={14} className="text-slate-400 shrink-0" />
             <a
-              href={brand.website}
+              href={formatBrandWebsiteUrl(brand.website)}
               target="_blank"
               rel="noopener noreferrer"
               className="font-semibold text-[#525252] hover:text-[#1C1C1C] no-underline truncate"
             >
-              {brand.website.replace(/^https?:\/\//, "")}
+              {formatBrandWebsiteLabel(brand.website)}
+            </a>
+          </div>
+        )}
+        {formatBrandInstagramUrl(brand.instagram_handle) && (
+          <div className="flex items-center gap-2">
+            <InstagramIcon size={14} className="text-rose-600 shrink-0" />
+            <a
+              href={formatBrandInstagramUrl(brand.instagram_handle)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold text-[#1C1C1C] hover:text-rose-700 no-underline truncate"
+            >
+              {formatBrandInstagramLabel(brand.instagram_handle)}
             </a>
           </div>
         )}

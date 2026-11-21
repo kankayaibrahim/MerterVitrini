@@ -34,6 +34,10 @@ type IndexNowTriggerSource =
   | "supplier_excel"
   | "mobile_supplier"
   | "bulk_recent"
+  | "initial_backfill"
+  | "translation_complete"
+  | "auto_sweep"
+  | "category"
   | "blog"
   | "cms_page"
   | "manual";
@@ -72,6 +76,15 @@ interface IndexNowKpiSummary {
   readonly last_submitted_at: string | null;
   readonly host: string;
   readonly key_location: string;
+  readonly active_products_count: number;
+  readonly notified_products_count: number;
+  readonly pending_ready_products_count: number;
+  readonly waiting_translation_products_count: number;
+  readonly initial_backfill_status: string;
+  readonly initial_backfill_completed_at: string | null;
+  readonly auto_enabled: boolean;
+  readonly last_sweep_at: string | null;
+  readonly backfill_running: boolean;
 }
 
 interface IndexNowLogsResponse {
@@ -87,6 +100,8 @@ interface IndexNowSubmitResponse {
   readonly message?: string;
   readonly error?: string;
   readonly log?: IndexNowLogEntry;
+  readonly pending_ready_products?: number;
+  readonly waiting_translation_products?: number;
 }
 
 interface FeedbackBanner {
@@ -99,11 +114,15 @@ const DEFAULT_KEY_LOCATION = "https://mertervitrini.com.tr/638d6e3eb8a743ec90026
 
 const SOURCE_OPTIONS: ReadonlyArray<{ value: "all" | IndexNowTriggerSource; label: string }> = [
   { value: "all", label: "Tüm Kaynaklar" },
+  { value: "initial_backfill", label: "İlk Tam Katalog" },
   { value: "xml_sync", label: "XML Senkronizasyon" },
+  { value: "translation_complete", label: "Çeviri Sonrası Oto" },
+  { value: "auto_sweep", label: "Otomatik Tarama" },
   { value: "supplier_portal", label: "Tedarikçi Stüdyosu" },
   { value: "supplier_excel", label: "Tedarikçi Excel" },
   { value: "mobile_supplier", label: "Mobil Stüdyo" },
   { value: "bulk_recent", label: "Toplu Son Ürünler" },
+  { value: "category", label: "Kategori" },
   { value: "blog", label: "Blog Yazısı" },
   { value: "cms_page", label: "Kurumsal Sayfa" },
   { value: "manual", label: "Manuel Gönderim" },
@@ -122,9 +141,21 @@ const STATUS_OPTIONS: ReadonlyArray<{
 const RECENT_LIMIT_OPTIONS = [25, 50, 100, 250, 500] as const;
 
 const SOURCE_META: Record<string, { label: string; badgeClass: string }> = {
+  initial_backfill: {
+    label: "İlk Tam Katalog",
+    badgeClass: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
+  },
   xml_sync: {
     label: "XML Senkronizasyon",
     badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  },
+  translation_complete: {
+    label: "Çeviri Sonrası Oto",
+    badgeClass: "bg-purple-50 text-purple-700 border-purple-200",
+  },
+  auto_sweep: {
+    label: "Otomatik Tarama",
+    badgeClass: "bg-lime-50 text-lime-800 border-lime-200",
   },
   supplier_portal: {
     label: "Tedarikçi Stüdyosu",
@@ -141,6 +172,10 @@ const SOURCE_META: Record<string, { label: string; badgeClass: string }> = {
   bulk_recent: {
     label: "Toplu Ürün Bildirimi",
     badgeClass: "bg-amber-50 text-amber-800 border-amber-200",
+  },
+  category: {
+    label: "Kategori",
+    badgeClass: "bg-orange-50 text-orange-700 border-orange-200",
   },
   blog: {
     label: "Blog Yazısı",
@@ -468,6 +503,113 @@ function IndexNowKpiGrid({ kpi }: Readonly<{ kpi: IndexNowKpiSummary | null }>) 
           Host: {kpi?.host || "mertervitrini.com.tr"}
         </span>
       </div>
+    </div>
+  );
+}
+
+function getBackfillStatusBadge(
+  status: string | undefined,
+  running: boolean
+): { label: string; badgeClass: string } {
+  if (running || status === "running") {
+    return {
+      label: "Gönderim Sürüyor",
+      badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    };
+  }
+  if (status === "completed") {
+    return {
+      label: "Tam Katalog Tamamlandı",
+      badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    };
+  }
+  if (status === "partial") {
+    return {
+      label: "Kısmi (Tekrar Denenecek)",
+      badgeClass: "bg-amber-50 text-amber-800 border-amber-200",
+    };
+  }
+  return {
+    label: "Beklemede",
+    badgeClass: "bg-zinc-100 text-zinc-700 border-zinc-200",
+  };
+}
+
+interface CoverageBannerProps {
+  readonly kpi: IndexNowKpiSummary | null;
+  readonly submittingUnnotified: boolean;
+  readonly onSubmitUnnotified: () => void;
+}
+
+function IndexNowCoverageBanner({
+  kpi,
+  submittingUnnotified,
+  onSubmitUnnotified,
+}: Readonly<CoverageBannerProps>) {
+  const activeCount = kpi?.active_products_count ?? 0;
+  const notifiedCount = kpi?.notified_products_count ?? 0;
+  const pendingReadyCount = kpi?.pending_ready_products_count ?? 0;
+  const waitingTransCount = kpi?.waiting_translation_products_count ?? 0;
+  const isRunning =
+    submittingUnnotified ||
+    Boolean(kpi?.backfill_running) ||
+    kpi?.initial_backfill_status === "running";
+  const coveragePct = activeCount > 0 ? Math.min(100, Math.round((notifiedCount * 100) / activeCount)) : 0;
+  const backfillMeta = getBackfillStatusBadge(kpi?.initial_backfill_status, isRunning);
+
+  return (
+    <div className="bg-white rounded-2xl border border-zinc-200/80 p-5 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+      <div className="space-y-3 flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h3 className="text-sm font-bold text-zinc-950 flex items-center gap-2">
+            <Globe2 size={16} className="text-emerald-600" />
+            Katalog İndeksleme Kapsamı &amp; Çeviri-Sonrası Otomasyon
+          </h3>
+          <span
+            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${backfillMeta.badgeClass}`}
+          >
+            {backfillMeta.label}
+          </span>
+          <span className="text-[11px] font-semibold text-zinc-500">
+            • Son Tarama: {formatDateTimeTr(kpi?.last_sweep_at)}
+          </span>
+        </div>
+
+        <div className="w-full h-2.5 rounded-full bg-zinc-100 overflow-hidden">
+          <div
+            className="h-full bg-emerald-600 transition-all duration-300"
+            style={{ width: `${coveragePct}%` }}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-zinc-600">
+          <span>
+            Bildirilmiş Ürün:{" "}
+            <strong className="text-zinc-950">
+              {formatNumberTr(notifiedCount)} / {formatNumberTr(activeCount)}
+            </strong>{" "}
+            (%{coveragePct})
+          </span>
+          <span>
+            Hazır Bekleyen:{" "}
+            <strong className="text-indigo-700">{formatNumberTr(pendingReadyCount)}</strong> ürün
+          </span>
+          <span>
+            Çeviri Bekleyen:{" "}
+            <strong className="text-amber-700">{formatNumberTr(waitingTransCount)}</strong> ürün
+          </span>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onSubmitUnnotified}
+        disabled={isRunning}
+        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-bold shadow-sm transition-colors cursor-pointer shrink-0"
+      >
+        {isRunning ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+        {isRunning ? "Katalog Gönderiliyor..." : "Bildirilmemiş Tüm Katalogu Gönder"}
+      </button>
     </div>
   );
 }
@@ -844,6 +986,7 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
   const [recentLimit, setRecentLimit] = useState<number>(50);
   const [submittingManual, setSubmittingManual] = useState(false);
   const [submittingRecent, setSubmittingRecent] = useState(false);
+  const [submittingUnnotified, setSubmittingUnnotified] = useState(false);
   const [retryingLogId, setRetryingLogId] = useState<string | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [clearingLogs, setClearingLogs] = useState(false);
@@ -926,9 +1069,51 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
     };
   }, [apiUrl, token, offset, sourceFilter, statusFilter, debouncedSearch]);
 
+  useEffect(() => {
+    const running = Boolean(kpi?.backfill_running) || kpi?.initial_backfill_status === "running";
+    if (!token || !running) {
+      return;
+    }
+    const timer = setInterval(() => {
+      void fetchLogs();
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [token, kpi?.backfill_running, kpi?.initial_backfill_status, fetchLogs]);
+
   const handleRefresh = async () => {
     setLoadingLogs(true);
     await fetchLogs();
+  };
+
+  const handleSubmitUnnotified = async () => {
+    setFeedback(null);
+    setSubmittingUnnotified(true);
+    try {
+      const data = await sendAuthorizedRequest<IndexNowSubmitResponse>(
+        `${apiUrl}/api/v1/indexnow/submit-unnotified`,
+        {
+          method: "POST",
+          token,
+          body: { include_site_pages: true, translate_first: true },
+          defaultError: "Tam katalog IndexNow gönderimi başlatılamadı.",
+        }
+      );
+      setFeedback({
+        type: "success",
+        message:
+          data.message ||
+          "Bildirilmemiş tüm katalog için çeviri + IndexNow gönderimi arka planda başlatıldı.",
+      });
+      setOffset(0);
+      await fetchLogs({ targetOffset: 0 });
+    } catch (err: unknown) {
+      setFeedback({
+        type: "error",
+        message: err instanceof Error ? err.message : "Toplu katalog bildirimi başlatılamadı.",
+      });
+    } finally {
+      setSubmittingUnnotified(false);
+    }
   };
 
   const applySubmitResultFeedback = (data: IndexNowSubmitResponse, fallbackMessage: string) => {
@@ -1071,6 +1256,14 @@ export default function IndexNowManager({ apiUrl, token }: Readonly<IndexNowMana
       <IndexNowFeedbackAlert feedback={feedback} />
 
       <IndexNowKpiGrid kpi={kpi} />
+
+      <IndexNowCoverageBanner
+        kpi={kpi}
+        submittingUnnotified={submittingUnnotified}
+        onSubmitUnnotified={() => {
+          void handleSubmitUnnotified();
+        }}
+      />
 
       <IndexNowActionForms
         recentLimit={recentLimit}
