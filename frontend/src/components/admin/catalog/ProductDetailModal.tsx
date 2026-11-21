@@ -1,7 +1,18 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
-import { X, ShoppingBag, Info, Grid, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  X,
+  ShoppingBag,
+  Info,
+  Grid,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  PauseCircle,
+  Trash2,
+} from "lucide-react";
 import { Product, XmlFeed, ProductImage, GroupProductColor } from "@/types/integration";
+import { BulkProductActionType } from "@/services/admin-api.service";
 
 // Localized labels dictionary to prevent JSX literal internationalization warnings
 const LABELS = {
@@ -26,7 +37,12 @@ const LABELS = {
   noOtherColors: "Bu modele ait başka renk seçeneği bulunmuyor.",
   currentColor: "Şu Anki Renk",
   stockSuffix: " Adet Stok",
-  colorSuffix: " Renk"
+  colorSuffix: " Renk",
+  activateProduct: "Aktife Al",
+  deactivateProduct: "Pasife Al",
+  deleteProduct: "Ürünü Sil",
+  onSale: "Satışta",
+  passive: "Pasif"
 };
 
 // Safe helper to strip HTML tags while preserving line breaks, avoiding dangerouslySetInnerHTML XSS
@@ -50,13 +66,18 @@ interface ProductDetailModalProps {
   readonly feeds: readonly XmlFeed[];
   readonly onClose: () => void;
   readonly onViewProduct?: (productId: string) => void;
+  readonly onRequestProductAction?: (
+    product: Product,
+    action: BulkProductActionType
+  ) => void;
 }
 
 export default function ProductDetailModal({
   product,
   feeds,
   onClose,
-  onViewProduct
+  onViewProduct,
+  onRequestProductAction
 }: Readonly<ProductDetailModalProps>) {
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [prevProductId, setPrevProductId] = useState(product?.id);
@@ -74,17 +95,27 @@ export default function ProductDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-      
+
       <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden border border-zinc-200/60 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
         {/* Modal Header */}
         <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200/60 flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-bold text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-              {product.custom_sku}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                {product.custom_sku}
+              </span>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${product.is_active
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-rose-100 text-rose-800"
+                  }`}
+              >
+                {product.is_active ? LABELS.onSale : LABELS.passive}
+              </span>
+            </div>
             <h3 className="text-lg font-bold text-zinc-900 mt-1 line-clamp-1">{product.title}</h3>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="p-1.5 hover:bg-zinc-200 rounded-xl transition-colors text-zinc-500"
           >
@@ -94,17 +125,17 @@ export default function ProductDetailModal({
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-          
+
           {/* Product Info Splitted Grid */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-            
+
             {/* Images side */}
             <div className="md:col-span-2 flex flex-col gap-3">
               <div className="w-full aspect-[4/5] bg-zinc-50 border border-zinc-200/50 rounded-2xl overflow-hidden flex items-center justify-center relative group select-none">
                 {images.length > 0 ? (
                   <>
-                    <img 
-                      src={activeImage?.image_url} 
+                    <img
+                      src={activeImage?.image_url}
                       alt={product.title}
                       className="w-full h-full object-cover transition-all duration-300 animate-in fade-in"
                     />
@@ -148,13 +179,12 @@ export default function ProductDetailModal({
               {images.length > 1 && (
                 <div className="flex gap-2 flex-wrap max-h-24 overflow-y-auto">
                   {images.map((img: ProductImage, idx: number) => (
-                    <button 
-                      key={img.id} 
+                    <button
+                      key={img.id}
                       type="button"
                       onClick={() => setActiveImageIdx(idx)}
-                      className={`w-12 h-15 rounded-lg border overflow-hidden cursor-pointer bg-zinc-50 transition-all ${
-                        activeImageIdx === idx ? "border-violet-600 ring-2 ring-violet-500/20 scale-95" : "border-zinc-200/60 hover:border-violet-400"
-                      }`}
+                      className={`w-12 h-15 rounded-lg border overflow-hidden cursor-pointer bg-zinc-50 transition-all ${activeImageIdx === idx ? "border-violet-600 ring-2 ring-violet-500/20 scale-95" : "border-zinc-200/60 hover:border-violet-400"
+                        }`}
                     >
                       <img src={img.image_url} alt="" className="w-full h-full object-cover" />
                     </button>
@@ -205,10 +235,10 @@ export default function ProductDetailModal({
                 {product.source_url && (
                   <div className="p-3 bg-zinc-50 border border-zinc-200/40 rounded-xl col-span-2 flex flex-col gap-0.5">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">{LABELS.sourceUrl}</span>
-                    <a 
-                      href={product.source_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
+                    <a
+                      href={product.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="font-semibold text-violet-600 hover:text-violet-800 break-all underline text-left"
                     >
                       {product.source_url}
@@ -245,7 +275,7 @@ export default function ProductDetailModal({
                 {product.group_products.map((item: GroupProductColor) => {
                   const isCurrent = item.id === product.id;
                   return (
-                    <button 
+                    <button
                       key={item.id}
                       type="button"
                       onClick={() => {
@@ -253,18 +283,17 @@ export default function ProductDetailModal({
                           onViewProduct(item.id);
                         }
                       }}
-                      className={`group border rounded-2xl overflow-hidden flex flex-col transition-all duration-200 select-none text-left ${
-                        isCurrent 
-                          ? "border-violet-600 ring-2 ring-violet-500/20 bg-violet-50/20 cursor-default" 
+                      className={`group border rounded-2xl overflow-hidden flex flex-col transition-all duration-200 select-none text-left ${isCurrent
+                          ? "border-violet-600 ring-2 ring-violet-500/20 bg-violet-50/20 cursor-default"
                           : "border-zinc-200 hover:border-violet-400 hover:shadow-md cursor-pointer active:scale-[0.98]"
-                      }`}
+                        }`}
                     >
                       {/* Cover image of the color */}
                       <div className="aspect-[4/5] w-full bg-zinc-50 border-b border-zinc-100 flex items-center justify-center relative overflow-hidden">
                         {item.cover_image_url ? (
-                          <img 
-                            src={item.cover_image_url} 
-                            alt={item.color || "Renk"} 
+                          <img
+                            src={item.cover_image_url}
+                            alt={item.color || "Renk"}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         ) : (
@@ -273,19 +302,19 @@ export default function ProductDetailModal({
                             <span className="text-[9px] mt-1 font-bold">{LABELS.noImage}</span>
                           </div>
                         )}
-                        
+
                         {/* Current color indicator badge */}
                         {isCurrent && (
                           <span className="absolute top-2 left-2 text-[9px] font-bold text-white bg-violet-600 px-2 py-0.5 rounded-full uppercase tracking-wider">
                             {LABELS.currentColor}
                           </span>
                         )}
-                        
+
                         <span className={`absolute bottom-2 right-2 text-[9px] font-bold px-2 py-0.5 rounded ${getStockBadgeClass(item.stock)}`}>
                           {item.stock}{LABELS.stockSuffix}
                         </span>
                       </div>
-                      
+
                       {/* Metadata */}
                       <div className="p-3 flex flex-col gap-0.5">
                         <span className="text-xs font-bold text-zinc-800 line-clamp-1 text-left">
@@ -309,10 +338,51 @@ export default function ProductDetailModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-200/60 flex justify-end">
-          <button 
+        <div className="px-6 py-4 bg-zinc-50 border-t border-zinc-200/60 flex flex-wrap items-center justify-between gap-3">
+          {onRequestProductAction ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  onRequestProductAction(
+                    product,
+                    product.is_active ? "deactivate" : "activate"
+                  )
+                }
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 transition-colors cursor-pointer ${product.is_active
+                    ? "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200"
+                    : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200"
+                  }`}
+              >
+                {product.is_active ? (
+                  <>
+                    <PauseCircle size={14} />
+                    {LABELS.deactivateProduct}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={14} />
+                    {LABELS.activateProduct}
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => onRequestProductAction(product, "delete")}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Trash2 size={14} />
+                {LABELS.deleteProduct}
+              </button>
+            </div>
+          ) : (
+            <div />
+          )}
+
+          <button
+            type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-zinc-900 text-white rounded-xl text-sm font-semibold hover:bg-zinc-800 transition-colors shadow-sm"
+            className="px-5 py-2 bg-zinc-900 text-white rounded-xl text-sm font-semibold hover:bg-zinc-800 transition-colors shadow-sm cursor-pointer"
           >
             {LABELS.close}
           </button>

@@ -27,6 +27,17 @@ export interface AdminProductsPage {
   total: number;
 }
 
+export type ProductStatusFilter = "" | "active" | "inactive";
+
+export type BulkProductActionType = "activate" | "deactivate" | "delete";
+
+export interface BulkProductActionResult {
+  success: boolean;
+  affected_count: number;
+  images_removed?: number;
+  message?: string;
+}
+
 export interface KeycloakCallbackResult {
   token: string;
   id_token?: string;
@@ -62,7 +73,20 @@ export interface IAdminCatalogService {
     offset?: number;
     categoryId?: string;
     search?: string;
+    brandId?: string;
+    status?: ProductStatusFilter;
   }): Promise<AdminProductsPage>;
+  activateSupplierProducts(brandId: string): Promise<BulkProductActionResult>;
+  deactivateSupplierProducts(brandId: string): Promise<BulkProductActionResult>;
+  deleteSupplierProducts(
+    brandId: string,
+    deleteImages: boolean
+  ): Promise<BulkProductActionResult>;
+  bulkProductAction(
+    action: BulkProductActionType,
+    productIds: string[],
+    deleteImages?: boolean
+  ): Promise<BulkProductActionResult>;
 }
 
 export interface IAdminSettingsService {
@@ -366,17 +390,23 @@ export class AdminApiService
     offset = 0,
     categoryId = "",
     search = "",
+    brandId = "",
+    status = "",
   }: {
     limit?: number;
     offset?: number;
     categoryId?: string;
     search?: string;
+    brandId?: string;
+    status?: ProductStatusFilter;
   }): Promise<AdminProductsPage> {
     const params = new URLSearchParams();
     params.set("limit", limit.toString());
     params.set("offset", offset.toString());
     if (categoryId) params.set("category_id", categoryId);
-    if (search) params.set("search", search);
+    if (search) params.set("q", search);
+    if (brandId) params.set("brand_id", brandId);
+    if (status) params.set("status", status);
 
     const res = await this.http.rawFetch(`/api/v1/products?${params.toString()}`);
     if (!res.ok) {
@@ -386,6 +416,40 @@ export class AdminApiService
       res.headers.get("X-Total-Count") ?? res.headers.get("x-total-count");
     const payload: unknown = await res.json();
     return normalizeProductsPayload(payload, headerTotal, limit, offset);
+  }
+
+  async activateSupplierProducts(brandId: string): Promise<BulkProductActionResult> {
+    return this.http.post<BulkProductActionResult>(
+      `/api/v1/suppliers/${encodeURIComponent(brandId)}/products/activate`
+    );
+  }
+
+  async deactivateSupplierProducts(brandId: string): Promise<BulkProductActionResult> {
+    return this.http.post<BulkProductActionResult>(
+      `/api/v1/suppliers/${encodeURIComponent(brandId)}/products/deactivate`
+    );
+  }
+
+  async deleteSupplierProducts(
+    brandId: string,
+    deleteImages: boolean
+  ): Promise<BulkProductActionResult> {
+    const query = deleteImages ? "true" : "false";
+    return this.http.delete<BulkProductActionResult>(
+      `/api/v1/suppliers/${encodeURIComponent(brandId)}/products?delete_images=${query}`
+    );
+  }
+
+  async bulkProductAction(
+    action: BulkProductActionType,
+    productIds: string[],
+    deleteImages = false
+  ): Promise<BulkProductActionResult> {
+    return this.http.post<BulkProductActionResult>("/api/v1/products/bulk-action", {
+      action,
+      product_ids: productIds,
+      delete_images: deleteImages,
+    });
   }
 
   async getStoreSettings(): Promise<StoreSettingsDTO> {

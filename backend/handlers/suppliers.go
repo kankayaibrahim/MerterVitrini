@@ -12,6 +12,7 @@ import (
 
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/httpx"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -523,32 +524,83 @@ func (h *SuppliersHandler) DeleteFeed(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DeactivateSupplierProducts sets is_active = false for all products of this supplier/brand
-func (h *SuppliersHandler) DeactivateSupplierProducts(w http.ResponseWriter, r *http.Request) {
+// ActivateSupplierProducts sets is_active = true for all non-deleted products of this supplier/brand
+func (h *SuppliersHandler) ActivateSupplierProducts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		httpx.Error(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
-	id := r.PathValue("id")
+	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
-		http.Error(w, `{"error":"Supplier ID is required"}`, http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "Supplier ID is required")
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	// Update all products under this brand (or associated feeds) to be inactive
+	prodQuery := `
+		UPDATE catalog.products
+		SET is_active = true, deactivated_at = NULL, updated_at = CURRENT_TIMESTAMP
+		WHERE (brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1))
+		  AND deleted_at IS NULL
+		  AND is_active = false`
+	cmdTag, err := db.Pool.Exec(ctx, prodQuery, id)
+	if err != nil {
+		log.Printf("Failed to activate products for supplier %s: %v", id, err)
+		httpx.Error(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	varQuery := `
+		UPDATE catalog.product_variants
+		SET is_active = true
+		WHERE product_id IN (
+			SELECT id FROM catalog.products
+			WHERE (brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1))
+			  AND deleted_at IS NULL
+		)
+		  AND COALESCE(stock, 0) > 0`
+	_, _ = db.Pool.Exec(ctx, varQuery, id)
+
+	triggerProductMVRefresh()
+
+	affected := cmdTag.RowsAffected()
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"success":        true,
+		"affected_count": affected,
+		"message":        fmt.Sprintf("Tedarikçiye ait %d ürün aktife alındı.", affected),
+	})
+}
+
+// DeactivateSupplierProducts sets is_active = false for all non-deleted products of this supplier/brand
+func (h *SuppliersHandler) DeactivateSupplierProducts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpx.Error(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		httpx.Error(w, http.StatusBadRequest, "Supplier ID is required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	// Update all active non-deleted products under this brand (or associated feeds) to be inactive
 	prodQuery := `
 		UPDATE catalog.products 
 		SET is_active = false, deactivated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
 		WHERE (brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1))
+		  AND deleted_at IS NULL
 		  AND is_active = true`
-	_, err := db.Pool.Exec(ctx, prodQuery, id)
+	cmdTag, err := db.Pool.Exec(ctx, prodQuery, id)
 	if err != nil {
 		log.Printf("Failed to deactivate products for supplier %s: %v", id, err)
-		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -558,53 +610,67 @@ func (h *SuppliersHandler) DeactivateSupplierProducts(w http.ResponseWriter, r *
 		SET is_active = false 
 		WHERE product_id IN (
 			SELECT id FROM catalog.products 
-			WHERE brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1)
+			WHERE (brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1))
+			  AND deleted_at IS NULL
 		)`
 	_, _ = db.Pool.Exec(ctx, varQuery, id)
 
-	w.Header().Set(headerContentType, mimeApplicationJSON)
-	w.Write([]byte(`{"success":true,"message":"All products of the supplier deactivated successfully"}`))
+	triggerProductMVRefresh()
+
+	affected := cmdTag.RowsAffected()
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"success":        true,
+		"affected_count": affected,
+		"message":        fmt.Sprintf("Tedarikçiye ait %d ürün pasife alındı.", affected),
+	})
 }
 
-// DeleteSupplierProducts deletes all products (and variants/images via cascade) of this supplier/brand
+func collectSupplierImageURLs(ctx context.Context, supplierID string) []string {
+	queryImages := `
+		SELECT DISTINCT image_url 
+		FROM catalog.product_images 
+		WHERE product_id IN (
+			SELECT id FROM catalog.products 
+			WHERE (brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1))
+			  AND deleted_at IS NULL
+		)`
+	rows, err := db.Pool.Query(ctx, queryImages, supplierID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var imageURLs []string
+	for rows.Next() {
+		var imgURL string
+		if scanErr := rows.Scan(&imgURL); scanErr == nil && imgURL != "" {
+			imageURLs = append(imageURLs, imgURL)
+		}
+	}
+	return imageURLs
+}
+
+// DeleteSupplierProducts soft-deletes all non-deleted products of this supplier/brand and optionally cleans up unreferenced disk images
 func (h *SuppliersHandler) DeleteSupplierProducts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
-		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		httpx.Error(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
-	id := r.PathValue("id")
+	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
-		http.Error(w, `{"error":"Supplier ID is required"}`, http.StatusBadRequest)
+		httpx.Error(w, http.StatusBadRequest, "Supplier ID is required")
 		return
 	}
 
-	deleteImagesQuery := r.URL.Query().Get("delete_images")
-	deleteImages := deleteImagesQuery == "true"
+	deleteImages := r.URL.Query().Get("delete_images") == "true"
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
 	var imageURLs []string
 	if deleteImages {
-		// Fetch all image URLs for products under this supplier before deleting them
-		queryImages := `
-			SELECT DISTINCT image_url 
-			FROM catalog.product_images 
-			WHERE product_id IN (
-				SELECT id FROM catalog.products 
-				WHERE brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1)
-			)`
-		rows, err := db.Pool.Query(ctx, queryImages, id)
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var imgURL string
-				if err := rows.Scan(&imgURL); err == nil && imgURL != "" {
-					imageURLs = append(imageURLs, imgURL)
-				}
-			}
-		}
+		imageURLs = collectSupplierImageURLs(ctx, id)
 	}
 
 	// Soft-delete: update is_active to false and deleted_at to current timestamp
@@ -616,10 +682,37 @@ func (h *SuppliersHandler) DeleteSupplierProducts(w http.ResponseWriter, r *http
 	cmdTag, err := db.Pool.Exec(ctx, query, id)
 	if err != nil {
 		log.Printf("Failed to soft-delete products for supplier %s: %v", id, err)
-		http.Error(w, `{"error":"Internal server error"}`, http.StatusInternalServerError)
+		httpx.Error(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	w.Header().Set(headerContentType, mimeApplicationJSON)
-	w.Write(fmt.Appendf(nil, `{"success":true,"message":"Soft-deleted %d products successfully"}`, cmdTag.RowsAffected()))
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE catalog.product_variants
+		SET is_active = false
+		WHERE product_id IN (
+			SELECT id FROM catalog.products
+			WHERE brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1)
+		)`, id)
+
+	imagesRemoved := 0
+	if deleteImages {
+		_, _ = db.Pool.Exec(ctx, `
+			DELETE FROM catalog.product_images
+			WHERE product_id IN (
+				SELECT id FROM catalog.products
+				WHERE (brand_id = $1 OR feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $1))
+				  AND deleted_at IS NOT NULL
+			)`, id)
+		imagesRemoved = cleanupUnreferencedProductImages(ctx, imageURLs)
+	}
+
+	triggerProductMVRefresh()
+
+	affected := cmdTag.RowsAffected()
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"success":        true,
+		"affected_count": affected,
+		"images_removed": imagesRemoved,
+		"message":        fmt.Sprintf("Tedarikçiye ait %d ürün silindi.", affected),
+	})
 }

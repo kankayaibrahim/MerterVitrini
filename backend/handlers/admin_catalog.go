@@ -14,6 +14,7 @@ import (
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/models"
+	"mertervitrini/backend/pkg/httpx"
 	"mertervitrini/backend/pkg/safe"
 
 	"github.com/jackc/pgx/v5"
@@ -368,8 +369,8 @@ func buildCategoryTree(flat []*models.Category) []*models.CategoryNode {
 
 // --- PRODUCT HANDLERS ---
 
-func buildProductFilterSQL(q, brandID, categoryID string) (string, []any) {
-	filterSQL := ""
+func buildProductFilterSQL(q, brandID, categoryID, status string) (string, []any) {
+	filterSQL := " AND p.deleted_at IS NULL"
 	var args []any
 	argIndex := 1
 
@@ -421,7 +422,7 @@ func buildProductFilterSQL(q, brandID, categoryID string) (string, []any) {
 	}
 
 	if brandID != "" {
-		filterSQL += fmt.Sprintf(" AND p.brand_id = $%d", argIndex)
+		filterSQL += fmt.Sprintf(" AND (p.brand_id = $%d OR p.feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $%d))", argIndex, argIndex)
 		args = append(args, brandID)
 		argIndex++
 	}
@@ -431,19 +432,30 @@ func buildProductFilterSQL(q, brandID, categoryID string) (string, []any) {
 		args = append(args, categoryID)
 	}
 
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "active":
+		filterSQL += " AND p.is_active = true"
+	case "inactive":
+		filterSQL += " AND p.is_active = false"
+	}
+
 	return filterSQL, args
 }
 
-// ListProducts lists products with support for pagination, search, category/brand filters
+// ListProducts lists products with support for pagination, search, category/brand/status filters
 func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
 
-	q := r.URL.Query().Get("q")
-	brandID := r.URL.Query().Get("brand_id")
-	categoryID := r.URL.Query().Get("category_id")
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		q = strings.TrimSpace(r.URL.Query().Get("search"))
+	}
+	brandID := strings.TrimSpace(r.URL.Query().Get("brand_id"))
+	categoryID := strings.TrimSpace(r.URL.Query().Get("category_id"))
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
 
 	limit := 20
 	offset := 0
@@ -458,7 +470,7 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
-	filterSQL, args := buildProductFilterSQL(q, brandID, categoryID)
+	filterSQL, args := buildProductFilterSQL(q, brandID, categoryID, status)
 
 	var totalCount int
 	countQuery := `
@@ -503,7 +515,7 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	}
 	defer rows.Close()
 
-	var products []*models.Product
+	products := make([]*models.Product, 0)
 	for rows.Next() {
 		var p models.Product
 		var imgJSON []byte
@@ -848,4 +860,182 @@ func (h *AdminCatalogHandler) RefreshProductCache(w http.ResponseWriter, r *http
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Write([]byte(`{"status":"success","message":"Ürün önbelleği başarıyla güncellendi."}`))
+}
+
+type bulkProductActionRequest struct {
+	Action       string   `json:"action"`
+	ProductIDs   []string `json:"product_ids"`
+	DeleteImages bool     `json:"delete_images"`
+}
+
+func parseBulkProductActionRequest(r *http.Request) (string, []string, bool, error) {
+	var req bulkProductActionRequest
+	if err := httpx.DecodeJSON(r, &req, 0); err != nil {
+		return "", nil, false, errors.New("geçersiz JSON istek gövdesi")
+	}
+
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	if action != "activate" && action != "deactivate" && action != "delete" {
+		return "", nil, false, errors.New("geçersiz işlem türü: activate, deactivate veya delete olmalıdır")
+	}
+
+	cleanIDs := dedupeNonEmptyStrings(req.ProductIDs)
+	if len(cleanIDs) == 0 {
+		return "", nil, false, errors.New("en az bir ürün seçilmelidir")
+	}
+	if len(cleanIDs) > 500 {
+		return "", nil, false, errors.New("tek seferde en fazla 500 ürün işlenebilir")
+	}
+	for _, id := range cleanIDs {
+		if !isValidUUIDString(id) {
+			return "", nil, false, fmt.Errorf("geçersiz ürün kimliği: %s", id)
+		}
+	}
+
+	return action, cleanIDs, req.DeleteImages, nil
+}
+
+func bulkActivateProducts(ctx context.Context, productIDs []string) (int64, error) {
+	cmdTag, err := db.Pool.Exec(ctx, `
+		UPDATE catalog.products
+		SET is_active = true, deactivated_at = NULL, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ANY($1::uuid[])
+		  AND deleted_at IS NULL
+		  AND is_active = false`, productIDs)
+	if err != nil {
+		return 0, err
+	}
+
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE catalog.product_variants
+		SET is_active = true
+		WHERE product_id = ANY($1::uuid[])
+		  AND COALESCE(stock, 0) > 0`, productIDs)
+
+	return cmdTag.RowsAffected(), nil
+}
+
+func bulkDeactivateProducts(ctx context.Context, productIDs []string) (int64, error) {
+	cmdTag, err := db.Pool.Exec(ctx, `
+		UPDATE catalog.products
+		SET is_active = false, deactivated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ANY($1::uuid[])
+		  AND deleted_at IS NULL
+		  AND is_active = true`, productIDs)
+	if err != nil {
+		return 0, err
+	}
+
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE catalog.product_variants
+		SET is_active = false
+		WHERE product_id = ANY($1::uuid[])`, productIDs)
+
+	return cmdTag.RowsAffected(), nil
+}
+
+func fetchProductImageURLsByIDs(ctx context.Context, productIDs []string) []string {
+	rows, err := db.Pool.Query(ctx, `
+		SELECT DISTINCT image_url
+		FROM catalog.product_images
+		WHERE product_id = ANY($1::uuid[])`, productIDs)
+	if err != nil {
+		log.Printf("[ADMIN BULK DELETE WARNING] Failed to read product images: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	var imageURLs []string
+	for rows.Next() {
+		var imgURL string
+		if scanErr := rows.Scan(&imgURL); scanErr == nil && imgURL != "" {
+			imageURLs = append(imageURLs, imgURL)
+		}
+	}
+	return imageURLs
+}
+
+func bulkDeleteProducts(ctx context.Context, productIDs []string, deleteImages bool) (int64, int, error) {
+	var imageURLs []string
+	if deleteImages {
+		imageURLs = fetchProductImageURLsByIDs(ctx, productIDs)
+	}
+
+	cmdTag, err := db.Pool.Exec(ctx, `
+		UPDATE catalog.products
+		SET is_active = false,
+		    deactivated_at = COALESCE(deactivated_at, CURRENT_TIMESTAMP),
+		    deleted_at = CURRENT_TIMESTAMP,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = ANY($1::uuid[])
+		  AND deleted_at IS NULL`, productIDs)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE catalog.product_variants
+		SET is_active = false
+		WHERE product_id = ANY($1::uuid[])`, productIDs)
+
+	imagesRemoved := 0
+	if deleteImages {
+		_, _ = db.Pool.Exec(ctx, `
+			DELETE FROM catalog.product_images
+			WHERE product_id = ANY($1::uuid[])`, productIDs)
+		imagesRemoved = cleanupUnreferencedProductImages(ctx, imageURLs)
+	}
+
+	return cmdTag.RowsAffected(), imagesRemoved, nil
+}
+
+// BulkProductAction applies activate, deactivate, or soft-delete (+ optional disk image cleanup)
+// across up to 500 selected product IDs and triggers an asynchronous materialized view refresh.
+func (h *AdminCatalogHandler) BulkProductAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		httpx.Error(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	action, productIDs, deleteImages, err := parseBulkProductActionRequest(r)
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	var affected int64
+	var imagesRemoved int
+	var opErr error
+	var message string
+
+	switch action {
+	case "activate":
+		affected, opErr = bulkActivateProducts(ctx, productIDs)
+		message = fmt.Sprintf("%d ürün aktife alındı.", affected)
+	case "deactivate":
+		affected, opErr = bulkDeactivateProducts(ctx, productIDs)
+		message = fmt.Sprintf("%d ürün pasife alındı.", affected)
+	case "delete":
+		affected, imagesRemoved, opErr = bulkDeleteProducts(ctx, productIDs, deleteImages)
+		message = fmt.Sprintf("%d ürün silindi.", affected)
+	}
+
+	if opErr != nil {
+		log.Printf("[ADMIN BULK ACTION ERROR] action=%s count=%d err=%v", action, len(productIDs), opErr)
+		httpx.Error(w, http.StatusInternalServerError, "Toplu ürün işlemi sırasında veritabanı hatası oluştu")
+		return
+	}
+
+	triggerProductMVRefresh()
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"success":        true,
+		"action":         action,
+		"affected_count": affected,
+		"images_removed": imagesRemoved,
+		"message":        message,
+	})
 }

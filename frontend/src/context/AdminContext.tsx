@@ -24,6 +24,9 @@ import {
 } from "@/services/http-client";
 import {
   AdminApiService,
+  BulkProductActionResult,
+  BulkProductActionType,
+  ProductStatusFilter,
   StoreSettingsDTO,
   normalizeCanonicalAdminUrl,
 } from "@/services/admin-api.service";
@@ -93,8 +96,21 @@ export interface AdminCatalogSlice {
     limit?: number,
     offset?: number,
     categoryId?: string,
-    search?: string
+    search?: string,
+    brandId?: string,
+    status?: ProductStatusFilter
   ) => Promise<void>;
+  activateSupplierProducts: (brandId: string) => Promise<BulkProductActionResult>;
+  deactivateSupplierProducts: (brandId: string) => Promise<BulkProductActionResult>;
+  deleteSupplierProducts: (
+    brandId: string,
+    deleteImages: boolean
+  ) => Promise<BulkProductActionResult>;
+  bulkProductAction: (
+    action: BulkProductActionType,
+    productIds: string[],
+    deleteImages?: boolean
+  ) => Promise<BulkProductActionResult>;
 }
 
 export interface AdminSettingsSlice {
@@ -336,7 +352,14 @@ export function AdminProvider({
   }, [adminService]);
 
   const loadProducts = useCallback(
-    async (limit = 24, offset = 0, categoryId = "", search = "") => {
+    async (
+      limit = 24,
+      offset = 0,
+      categoryId = "",
+      search = "",
+      brandId = "",
+      status: ProductStatusFilter = ""
+    ) => {
       setLoadingProducts(true);
       try {
         const page = await adminService.listProducts({
@@ -344,6 +367,8 @@ export function AdminProvider({
           offset,
           categoryId,
           search,
+          brandId,
+          status,
         });
         setProducts(page.products);
         setTotalProductsCount(page.total);
@@ -353,6 +378,28 @@ export function AdminProvider({
         setLoadingProducts(false);
       }
     },
+    [adminService]
+  );
+
+  const activateSupplierProducts = useCallback(
+    (brandId: string) => adminService.activateSupplierProducts(brandId),
+    [adminService]
+  );
+
+  const deactivateSupplierProducts = useCallback(
+    (brandId: string) => adminService.deactivateSupplierProducts(brandId),
+    [adminService]
+  );
+
+  const deleteSupplierProducts = useCallback(
+    (brandId: string, deleteImages: boolean) =>
+      adminService.deleteSupplierProducts(brandId, deleteImages),
+    [adminService]
+  );
+
+  const bulkProductAction = useCallback(
+    (action: BulkProductActionType, productIds: string[], deleteImages = false) =>
+      adminService.bulkProductAction(action, productIds, deleteImages),
     [adminService]
   );
 
@@ -502,6 +549,10 @@ export function AdminProvider({
       loadingProducts,
       setLoadingProducts,
       loadProducts,
+      activateSupplierProducts,
+      deactivateSupplierProducts,
+      deleteSupplierProducts,
+      bulkProductAction,
       storeSettings,
       setStoreSettings,
       loadingSettings,
@@ -547,6 +598,10 @@ export function AdminProvider({
       totalProductsCount,
       loadingProducts,
       loadProducts,
+      activateSupplierProducts,
+      deactivateSupplierProducts,
+      deleteSupplierProducts,
+      bulkProductAction,
       storeSettings,
       loadingSettings,
       savingSettings,
@@ -636,6 +691,10 @@ export function useAdminCatalog(): AdminCatalogSlice {
     loadingProducts: ctx.loadingProducts,
     setLoadingProducts: ctx.setLoadingProducts,
     loadProducts: ctx.loadProducts,
+    activateSupplierProducts: ctx.activateSupplierProducts,
+    deactivateSupplierProducts: ctx.deactivateSupplierProducts,
+    deleteSupplierProducts: ctx.deleteSupplierProducts,
+    bulkProductAction: ctx.bulkProductAction,
   };
 }
 

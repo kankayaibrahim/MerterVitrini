@@ -249,6 +249,7 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("PUT /api/v1/categories/{id}", protect(h.AdminCatalog.UpdateCategory))
 	mux.Handle("DELETE /api/v1/categories/{id}", protect(h.AdminCatalog.DeleteCategory))
 	mux.Handle("GET /api/v1/products", protect(h.AdminCatalog.ListProducts))
+	mux.Handle("POST /api/v1/products/bulk-action", protect(h.AdminCatalog.BulkProductAction))
 	mux.Handle("GET /api/v1/products/{id}", protect(h.AdminCatalog.GetProductByID))
 	mux.Handle("POST /api/v1/products/refresh-cache", protect(h.AdminCatalog.RefreshProductCache))
 	mux.Handle("GET /api/v1/settings", protect(h.AdminCatalog.GetSettings))
@@ -277,6 +278,7 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("DELETE /api/v1/suppliers/{id}", protect(h.Suppliers.DeleteSupplier))
 	mux.Handle("POST /api/v1/suppliers/{id}/feeds", protect(h.Suppliers.AddFeedToSupplier))
 	mux.Handle("DELETE /api/v1/feeds/{feed_id}", protect(h.Suppliers.DeleteFeed))
+	mux.Handle("POST /api/v1/suppliers/{id}/products/activate", protect(h.Suppliers.ActivateSupplierProducts))
 	mux.Handle("POST /api/v1/suppliers/{id}/products/deactivate", protect(h.Suppliers.DeactivateSupplierProducts))
 	mux.Handle("DELETE /api/v1/suppliers/{id}/products", protect(h.Suppliers.DeleteSupplierProducts))
 
