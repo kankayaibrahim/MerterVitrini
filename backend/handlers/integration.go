@@ -816,13 +816,10 @@ func fetchSyncFeedConfig(ctx context.Context, runID string) (feedID string, bran
 	}
 
 	var mappingConfigBytes, categoryMappingBytes []byte
-	query := `SELECT feed_url, mapping_config, category_mapping, brand_id FROM integration.xml_feeds WHERE id = $1`
+	query := `SELECT coalesce(feed_url, ''), mapping_config, category_mapping, brand_id FROM integration.xml_feeds WHERE id = $1`
 	err = db.Pool.QueryRow(ctx, query, feedID).Scan(&feedURL, &mappingConfigBytes, &categoryMappingBytes, &brandID)
 	if err != nil {
 		return "", nil, "", nil, nil, fmt.Errorf("failed to fetch XML feed config: %w", err)
-	}
-	if feedURL == "" {
-		return "", nil, "", nil, nil, errors.New("XML Feed URL is empty")
 	}
 
 	if len(mappingConfigBytes) > 0 {
@@ -1010,21 +1007,29 @@ func simulateBackgroundSync(runID string, ctx context.Context) {
 		return
 	}
 
-	if err := validateSafeExternalFeedURL(feedURL); err != nil {
-		log.Printf("[SYNC-%s] Unsafe feed URL blocked: %v", runID, err)
-		updateSyncStatus(runID, "failed", map[string]any{"error": "Güvenli olmayan XML URL engellendi: " + err.Error()})
-		progressMu.Lock()
-		delete(progressMap, runID)
-		progressMu.Unlock()
+	if strings.TrimSpace(feedURL) != "" {
+		if err := validateSafeExternalFeedURL(feedURL); err != nil {
+			log.Printf("[SYNC-%s] Unsafe feed URL blocked: %v", runID, err)
+			updateSyncStatus(runID, "failed", map[string]any{"error": "Güvenli olmayan XML URL engellendi: " + err.Error()})
+			progressMu.Lock()
+			delete(progressMap, runID)
+			progressMu.Unlock()
+			return
+		}
+	}
+
+	if isAutonomousPythonScriptConfig(mappingConfig) {
+		script := resolvePythonScriptPathFromConfig(mappingConfig)
+		runPythonParser(ctx, runID, feedID, brandID, feedURL, script, categoryMapping)
 		return
 	}
 
-	if parserType, _ := mappingConfig["parser_type"].(string); parserType == "python_script" {
-		script, _ := mappingConfig["python_script"].(string)
-		if script == "" {
-			script = "parsers/janes.py"
-		}
-		runPythonParser(ctx, runID, feedID, brandID, feedURL, script, categoryMapping)
+	if strings.TrimSpace(feedURL) == "" {
+		log.Printf("[SYNC-%s] XML Feed URL is empty for generic XML parser", runID)
+		updateSyncStatus(runID, "failed", map[string]any{"error": "XML Feed URL is empty"})
+		progressMu.Lock()
+		delete(progressMap, runID)
+		progressMu.Unlock()
 		return
 	}
 
@@ -1749,7 +1754,49 @@ func resolvePythonScriptPath(scriptPath string) (string, error) {
 	return "", fmt.Errorf("Python script bulunamadı: %s", scriptPath)
 }
 
-func startPythonProcess(ctx context.Context, scriptPath, runID string, stderrBuf *bytes.Buffer) (*exec.Cmd, io.ReadCloser, error) {
+func isAutonomousPythonScriptConfig(mappingConfig map[string]any) bool {
+	if mappingConfig == nil {
+		return false
+	}
+	parserType, _ := mappingConfig["parser_type"].(string)
+	return strings.TrimSpace(parserType) == "python_script"
+}
+
+func resolvePythonScriptPathFromConfig(mappingConfig map[string]any) string {
+	if mappingConfig != nil {
+		if script, ok := mappingConfig["python_script"].(string); ok && strings.TrimSpace(script) != "" {
+			return strings.TrimSpace(script)
+		}
+	}
+	return "parsers/janes.py"
+}
+
+func buildPythonParserEnv(baseEnv []string, runID, feedID, feedURL string, cfg *config.Config) []string {
+	env := make([]string, len(baseEnv), len(baseEnv)+9)
+	copy(env, baseEnv)
+	env = append(env, "SYNC_RUN_ID="+runID)
+	if trimmedFeedID := strings.TrimSpace(feedID); trimmedFeedID != "" {
+		env = append(env, "FEED_ID="+trimmedFeedID)
+	}
+	if trimmedFeedURL := strings.TrimSpace(feedURL); trimmedFeedURL != "" {
+		env = append(env, "FEED_URL="+trimmedFeedURL)
+	}
+	if cfg != nil {
+		env = append(env,
+			"DB_HOST="+cfg.DBHost,
+			"DB_PORT="+cfg.DBPort,
+			"DB_USER="+cfg.DBUser,
+			"DB_PASSWORD="+cfg.DBPassword,
+			"DB_NAME="+cfg.DBName,
+		)
+		if trimmedRedis := strings.TrimSpace(cfg.RedisURL); trimmedRedis != "" {
+			env = append(env, "REDIS_URL="+trimmedRedis)
+		}
+	}
+	return env
+}
+
+func startPythonProcess(ctx context.Context, scriptPath, runID, feedID, feedURL string, stderrBuf *bytes.Buffer) (*exec.Cmd, io.ReadCloser, error) {
 	pythonCmd := "python3"
 	if os.PathSeparator == '\\' {
 		pythonCmd = "python"
@@ -1757,16 +1804,7 @@ func startPythonProcess(ctx context.Context, scriptPath, runID string, stderrBuf
 
 	buildCmd := func(cmdName string) (*exec.Cmd, io.ReadCloser, error) {
 		cmd := exec.CommandContext(ctx, cmdName, scriptPath, "--sync-run-id", runID, "--production")
-		cmd.Env = append(os.Environ(), "SYNC_RUN_ID="+runID)
-		if globalConfig != nil {
-			cmd.Env = append(cmd.Env,
-				"DB_HOST="+globalConfig.DBHost,
-				"DB_PORT="+globalConfig.DBPort,
-				"DB_USER="+globalConfig.DBUser,
-				"DB_PASSWORD="+globalConfig.DBPassword,
-				"DB_NAME="+globalConfig.DBName,
-			)
-		}
+		cmd.Env = buildPythonParserEnv(os.Environ(), runID, feedID, feedURL, globalConfig)
 		cmd.Stderr = stderrBuf
 		pipe, err := cmd.StdoutPipe()
 		if err != nil {
@@ -1856,7 +1894,7 @@ func handlePythonExit(ctx context.Context, runID string, err error, stderrStr st
 	updateSyncStatus(runID, "success", summary)
 }
 
-// runPythonParser runs python script as a subprocess, passing SYNC_RUN_ID via environment
+// runPythonParser runs python script as a subprocess, passing SYNC_RUN_ID, FEED_ID and FEED_URL via environment
 func runPythonParser(ctx context.Context, runID string, feedID string, brandID *string, feedUrl string, scriptPath string, categoryMapping map[string]any) {
 	defer func() {
 		progressMu.Lock()
@@ -1864,11 +1902,9 @@ func runPythonParser(ctx context.Context, runID string, feedID string, brandID *
 		progressMu.Unlock()
 	}()
 
-	_ = feedID
 	_ = brandID
-	_ = feedUrl
 	_ = categoryMapping
-	log.Printf("[SYNC-%s] Starting autonomous Python script parser: %s", runID, scriptPath)
+	log.Printf("[SYNC-%s] Starting autonomous Python script parser: %s (feed_id=%s)", runID, scriptPath, feedID)
 
 	absScriptPath, err := resolvePythonScriptPath(scriptPath)
 	if err != nil {
@@ -1878,7 +1914,7 @@ func runPythonParser(ctx context.Context, runID string, feedID string, brandID *
 	}
 
 	var stderrBuf bytes.Buffer
-	cmd, stdoutPipe, err := startPythonProcess(ctx, absScriptPath, runID, &stderrBuf)
+	cmd, stdoutPipe, err := startPythonProcess(ctx, absScriptPath, runID, feedID, feedUrl, &stderrBuf)
 	if err != nil {
 		log.Printf("[SYNC-%s] Python command execution failed: %v", runID, err)
 		updateSyncStatus(runID, "failed", map[string]any{"error": "Python script başlatılamadı: " + err.Error()})
@@ -2129,6 +2165,8 @@ func parseXMLSupplierName(filename string) (feedID, supplierName string) {
 			supplierName = "Etika Fashion"
 		case "janes":
 			supplierName = "Jane's"
+		case "black_fashion":
+			supplierName = "Black Fashion"
 		default:
 			supplierName = strings.Title(feedID)
 		}

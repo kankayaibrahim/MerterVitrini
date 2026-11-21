@@ -41,7 +41,7 @@ import {
   formatBrandWebsiteLabel,
   formatBrandWebsiteUrl,
 } from "@/utils/brandContactHelpers";
-import XmlImportWizard from "./XmlImportWizard";
+import XmlImportWizard, { getDefaultFeedUrlForScript } from "./XmlImportWizard";
 import SupplierUsersSection from "./SupplierUsersSection";
 import SupplierApplicationsSection from "./SupplierApplicationsSection";
 import SupplierBillingAdminSection from "./SupplierBillingAdminSection";
@@ -236,7 +236,11 @@ function getDeleteHistoryConfirmMsg(options: { filenames?: string[]; feedId?: st
     return "TÜM XML indirme geçmişini kalıcı olarak silmek istediğinize emin misiniz?";
   }
   if (options.feedId) {
-    const feedNames: Record<string, string> = { etika: "Etika", janes: "Jane's" };
+    const feedNames: Record<string, string> = {
+      etika: "Etika",
+      janes: "Jane's",
+      black_fashion: "Black Fashion",
+    };
     const supplierName = feedNames[options.feedId] || options.feedId;
     return `${supplierName} tedarikçisine ait tüm XML geçmişini kalıcı olarak silmek istediğinize emin misiniz?`;
   }
@@ -248,7 +252,7 @@ function getDeleteHistoryConfirmMsg(options: { filenames?: string[]; feedId?: st
 
 function getParserScriptForAlias(rawAlias: string): string {
   const alias = rawAlias.toUpperCase();
-  if (alias === "FLORM") return "parsers/etika.py";
+  if (alias === "FLORM" || alias === "FLORA") return "parsers/etika.py";
   if (alias === "EDUSA") return "parsers/janes.py";
   if (alias === "BLACK_FASHION") return "parsers/black_fashion.py";
   return "parsers/custom.py";
@@ -309,6 +313,7 @@ function filterHistoryItems(historyList: XmlHistoryRecord[], searchQuery: string
 function getHistoryBadgeClass(feedId: string): string {
   if (feedId === "etika") return "bg-violet-50 text-violet-700 border-violet-100";
   if (feedId === "janes") return "bg-indigo-50 text-indigo-700 border-indigo-100";
+  if (feedId === "black_fashion") return "bg-zinc-900 text-white border-zinc-800";
   return "bg-zinc-100 text-zinc-700 border-zinc-200";
 }
 
@@ -1607,7 +1612,7 @@ export default function SuppliersManager({
       id: feedId,
       name: feedName,
       alias_code: alias,
-      feed_url: "",
+      feed_url: getDefaultFeedUrlForScript(scriptPath),
       is_active: true
     };
 

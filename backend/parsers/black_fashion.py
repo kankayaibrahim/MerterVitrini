@@ -30,6 +30,7 @@ import re
 import shutil
 import sys
 import time
+import urllib.error
 import urllib.request
 import uuid
 from collections import Counter
@@ -73,6 +74,9 @@ FAILED_IMAGES_CSV = os.path.join(SCRIPT_DIR, "failed_images_black_fashion.csv")
 
 EXT_WEBP = ".webp"
 DB_IMAGE_PREFIX = "/uploads/products/black_fashion"
+RETRY_HTTP_STATUSES = {429, 502, 503, 504}
+RETRY_BACKOFF_SECONDS = (10, 25, 45)
+XML_HISTORY_PREFIX = "black_fashion-"
 
 COLOR_KIRMIZI = "Kırmızı"
 COLOR_YESIL = "Yeşil"
@@ -691,7 +695,88 @@ def resolve_category_id(title_raw, shopify_cat_id, packing_ratio, slug_to_id, pl
 
 # ==================== SYNC RUN, PROGRESS & XML DOWNLOAD ====================
 
-def _download_xml_to_temp(xml_file_override=None):
+def _resolve_feed_url(conn, feed_id, cli_url=None):
+    if cli_url and cli_url.strip():
+        return cli_url.strip()
+    env_url = (os.environ.get("FEED_URL") or "").strip()
+    if env_url:
+        return env_url
+    if conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT coalesce(feed_url, '') FROM integration.xml_feeds WHERE id = %s", (feed_id,))
+                row = cur.fetchone()
+                if row and (row[0] or "").strip():
+                    return row[0].strip()
+        except Exception as exc:
+            sys.stderr.write(f"Warning: Failed querying feed_url for {feed_id}: {exc}\n")
+    return XML_URL
+
+
+def _parse_retry_after_seconds(headers, fallback):
+    if not headers:
+        return fallback
+    raw = (headers.get("Retry-After") or "").strip()
+    if not raw:
+        return fallback
+    try:
+        return max(5, min(60, int(raw)))
+    except ValueError:
+        return fallback
+
+
+def _fetch_xml_bytes_with_retry(target_url, max_attempts=4):
+    last_exc = None
+    for attempt in range(max_attempts):
+        req = urllib.request.Request(
+            target_url,
+            headers={"User-Agent": "MerterVitriniB2B-Sync/1.0 (+https://mertervitrini.com.tr)"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as exc:
+            last_exc = exc
+            if exc.code not in RETRY_HTTP_STATUSES or attempt + 1 >= max_attempts:
+                raise
+            wait_sec = _parse_retry_after_seconds(
+                exc.headers,
+                RETRY_BACKOFF_SECONDS[min(attempt, len(RETRY_BACKOFF_SECONDS) - 1)],
+            )
+            print(f"XML HTTP {exc.code} received; retrying in {wait_sec}s (attempt {attempt + 1}/{max_attempts})...")
+            sys.stdout.flush()
+            time.sleep(wait_sec)
+        except urllib.error.URLError as exc:
+            last_exc = exc
+            if attempt + 1 >= max_attempts:
+                raise
+            wait_sec = RETRY_BACKOFF_SECONDS[min(attempt, len(RETRY_BACKOFF_SECONDS) - 1)]
+            print(f"XML network error ({exc}); retrying in {wait_sec}s...")
+            sys.stdout.flush()
+            time.sleep(wait_sec)
+    raise last_exc
+
+
+def _cleanup_old_xml_history(prefix=XML_HISTORY_PREFIX, keep_latest=10):
+    if not os.path.isdir(XML_HISTORY_DIR):
+        return
+    try:
+        files = sorted(
+            f for f in os.listdir(XML_HISTORY_DIR)
+            if f.startswith(prefix) and f.endswith(".xml")
+        )
+        if len(files) <= keep_latest:
+            return
+        for stale in files[: len(files) - keep_latest]:
+            try:
+                os.remove(os.path.join(XML_HISTORY_DIR, stale))
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def _download_xml_to_temp(xml_file_override=None, xml_url=None):
     t_start = time.time()
     if xml_file_override:
         if not os.path.isfile(xml_file_override):
@@ -700,17 +785,14 @@ def _download_xml_to_temp(xml_file_override=None):
         print(f"Loaded local XML file ({os.path.getsize(XML_TEMP_FILE):,} bytes) in {time.time() - t_start:.2f}s")
         return XML_TEMP_FILE
 
+    target_url = (xml_url or "").strip() or XML_URL
     os.makedirs(XML_HISTORY_DIR, exist_ok=True)
-    req = urllib.request.Request(
-        XML_URL,
-        headers={"User-Agent": "MerterVitriniB2B-Sync/1.0 (+https://mertervitrini.com.tr)"},
-    )
-    print(f"Downloading Black Fashion XML feed from {XML_URL} ...")
-    with urllib.request.urlopen(req, timeout=90) as resp:
-        raw_bytes = resp.read()
+    print(f"Downloading Black Fashion XML feed from {target_url} ...")
+    sys.stdout.flush()
+    raw_bytes = _fetch_xml_bytes_with_retry(target_url)
     with open(XML_TEMP_FILE, "wb") as f:
         f.write(raw_bytes)
-    ts_name = f"black_fashion-{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
+    ts_name = f"{XML_HISTORY_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
     with open(os.path.join(XML_HISTORY_DIR, ts_name), "wb") as hf:
         hf.write(raw_bytes)
     print(f"Downloaded XML feed ({len(raw_bytes):,} bytes) in {time.time() - t_start:.2f}s")
@@ -935,6 +1017,9 @@ async def _download_all_images(unique_downloads, conn, redis_client, sync_run_id
         pct = done * 100 // total
         print(f"-> Downloaded {done}/{total} images ({pct}%)...")
         sys.stdout.flush()
+
+    if not pending:
+        return done, failed
 
     sem = asyncio.Semaphore(14)
     connector = aiohttp.TCPConnector(limit=20)
@@ -1337,6 +1422,14 @@ def _process_single_urun(elem, feed_id, brand_id, sync_run_id, meta, parsed_data
     stats["items_parsed"] += 1
 
 
+def _log_parsed_progress(stats):
+    print(
+        f"-> Parsed {stats['items_parsed']} products... "
+        f"(Added: {stats['items_added']}, Updated: {stats['items_updated']}, Errors: {stats['errors_skipped']})"
+    )
+    sys.stdout.flush()
+
+
 def _stream_parse_xml(xml_path, feed_id, brand_id, sync_run_id, meta, download_inactive_images=False):
     parsed_data, stats = _init_parse_state()
     context = ET.iterparse(xml_path, events=("end",), tag="urun")
@@ -1346,11 +1439,7 @@ def _stream_parse_xml(xml_path, feed_id, brand_id, sync_run_id, meta, download_i
                 elem, feed_id, brand_id, sync_run_id, meta, parsed_data, stats, download_inactive_images
             )
             if stats["items_parsed"] > 0 and stats["items_parsed"] % 250 == 0:
-                print(
-                    f"-> Parsed {stats['items_parsed']} products... "
-                    f"(Added: {stats['items_added']}, Updated: {stats['items_updated']}, Errors: {stats['errors_skipped']})"
-                )
-                sys.stdout.flush()
+                _log_parsed_progress(stats)
         except Exception as exc:
             stats["errors_skipped"] += 1
             sys.stderr.write(f"Warning: Failed parsing <urun>: {exc}\n")
@@ -1358,6 +1447,7 @@ def _stream_parse_xml(xml_path, feed_id, brand_id, sync_run_id, meta, download_i
             elem.clear()
             while elem.getprevious() is not None:
                 del elem.getparent()[0]
+    _log_parsed_progress(stats)
     return parsed_data, stats
 
 
@@ -1516,10 +1606,11 @@ def _bulk_write_all(conn, parsed_data, timings):
 
 def _run_dry_run(args):
     xml_path = args.xml_file or (DEFAULT_LOCAL_XML if os.path.isfile(DEFAULT_LOCAL_XML) else None)
+    feed_url = _resolve_feed_url(None, args.feed_id, args.xml_url)
     if xml_path:
-        temp_xml = _download_xml_to_temp(xml_path)
+        temp_xml = _download_xml_to_temp(xml_path, xml_url=feed_url)
     else:
-        temp_xml = _download_xml_to_temp(None)
+        temp_xml = _download_xml_to_temp(None, xml_url=feed_url)
 
     meta = {
         "slug_to_id": dict(LIVE_CATEGORY_SLUG_PATHS),
@@ -1601,9 +1692,10 @@ def _run_production_sync(args):
     try:
         sync_run_id = _init_sync_run(conn, args.feed_id, args.sync_run_id)
         brand_id = _resolve_brand_id(conn, args.feed_id)
+        feed_url = _resolve_feed_url(conn, args.feed_id, args.xml_url)
         meta = _load_db_metadata(conn, args.feed_id)
 
-        temp_xml = _download_xml_to_temp(args.xml_file)
+        temp_xml = _download_xml_to_temp(args.xml_file, xml_url=feed_url)
         t_parse = time.time()
         parsed_data, stats = _stream_parse_xml(
             temp_xml,
@@ -1675,6 +1767,7 @@ def _run_production_sync(args):
             update_sync_progress(conn, redis_client, sync_run_id, "failed", 0, 0, 0, 0, 0, 0, 0)
         raise
     finally:
+        _cleanup_old_xml_history()
         if os.path.exists(XML_TEMP_FILE):
             try:
                 os.remove(XML_TEMP_FILE)
@@ -1692,7 +1785,13 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Parse XML locally without writing to DB or downloading images")
     parser.add_argument("--samples", type=int, default=3, help="Number of sample products to print in --dry-run")
     parser.add_argument("--xml-file", type=str, default=None, help="Path to local XML file override")
-    parser.add_argument("--feed-id", type=str, default=DEFAULT_FEED_ID, help="Target integration.xml_feeds.id")
+    parser.add_argument("--xml-url", type=str, default=None, help="XML feed URL override")
+    parser.add_argument(
+        "--feed-id",
+        type=str,
+        default=os.environ.get("FEED_ID") or DEFAULT_FEED_ID,
+        help="Target integration.xml_feeds.id",
+    )
     parser.add_argument("--sync-run-id", type=str, default=None, help="Sync run UUID")
     parser.add_argument("--production", action="store_true", help="Run in production mode (accepted by Go worker)")
     parser.add_argument("--download-inactive-images", action="store_true", help="Also download images for stok=0 products")

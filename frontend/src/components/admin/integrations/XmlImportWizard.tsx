@@ -12,8 +12,32 @@ import {
 import { XmlFeed, CategoryNode } from "@/types/integration";
 
 // Safe LABELS for the Parser Configuration Panel
+const DEFAULT_FEED_URLS_BY_SCRIPT: Readonly<Record<string, string>> = {
+  "parsers/black_fashion.py":
+    "https://panel.toserof.com/feeds/cc5b687cc5c0bee2e642697247869dad94a89800a0204207.xml",
+  "parsers/etika.py": "https://etikafashion.com/xml/products/merchant/952",
+  "parsers/janes.py": "https://janestoptan.net/production/xml/janestoptanxmltr",
+};
+
+export function getDefaultFeedUrlForScript(scriptPath: string): string {
+  const normalized = scriptPath.trim();
+  if (normalized in DEFAULT_FEED_URLS_BY_SCRIPT) {
+    return DEFAULT_FEED_URLS_BY_SCRIPT[normalized];
+  }
+  for (const [key, url] of Object.entries(DEFAULT_FEED_URLS_BY_SCRIPT)) {
+    const fileName = key.split("/").pop() || key;
+    if (normalized.endsWith(fileName)) {
+      return url;
+    }
+  }
+  return "";
+}
+
 const LABELS = {
   TITLE: "XML Entegrasyon & Parser Ayarları",
+  FEED_URL_LABEL: "XML Kaynak Adresi (URL)",
+  FEED_URL_PLACEHOLDER: "https://tedarikci.com/feed.xml",
+  FEED_URL_DESC: "Python parser ve senkronizasyon servisinin ürün çekeceği resmi XML bağlantısı.",
   SCRIPT_PATH: "Python Script Dosya Yolu",
   SCRIPT_PATH_PLACEHOLDER: "Örn: parsers/janes.py",
   SCRIPT_PATH_DESC: "Sunucudaki `admin/backend` klasörüne göre custom Python parser script dosyasının göreceli yolu.",
@@ -44,8 +68,11 @@ export default function XmlImportWizard({
   
   // Extract initial mapping config fields - always defaults to python_script
   const initialConfig = (feed.mapping_config as Record<string, unknown>) || {};
-  const [pythonScript, setPythonScript] = useState<string>(
-    typeof initialConfig.python_script === "string" ? initialConfig.python_script : "parsers/janes.py"
+  const initialScript =
+    typeof initialConfig.python_script === "string" ? initialConfig.python_script : "parsers/janes.py";
+  const [pythonScript, setPythonScript] = useState<string>(initialScript);
+  const [feedUrl, setFeedUrl] = useState<string>(
+    (feed.feed_url || "").trim() || getDefaultFeedUrlForScript(initialScript)
   );
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -79,7 +106,7 @@ export default function XmlImportWizard({
             id: feed.id,
             name: feed.name,
             alias_code: feed.alias_code,
-            feed_url: feed.feed_url || "", // Preserve the original feed URL
+            feed_url: feedUrl.trim(),
             is_active: feed.is_active
           })
         });
@@ -163,13 +190,45 @@ export default function XmlImportWizard({
               </div>
             )}
 
+            {/* XML Source URL Input */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="wizard-feed-url" className="text-xs font-bold text-zinc-600 uppercase tracking-wider">
+                {LABELS.FEED_URL_LABEL}
+              </label>
+              <input
+                id="wizard-feed-url"
+                type="url"
+                value={feedUrl}
+                onChange={(e) => setFeedUrl(e.target.value)}
+                className="w-full px-4 py-3 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-xs sm:text-sm font-semibold transition-all shadow-sm font-mono"
+                placeholder={LABELS.FEED_URL_PLACEHOLDER}
+                disabled={isPending}
+              />
+              <span className="text-[10px] text-zinc-400 font-semibold block leading-relaxed mt-0.5 px-1">
+                {LABELS.FEED_URL_DESC}
+              </span>
+            </div>
+
             {/* Python Script File Path Input */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.SCRIPT_PATH}</label>
               <input 
                 type="text"
                 value={pythonScript}
-                onChange={(e) => setPythonScript(e.target.value)}
+                onChange={(e) => {
+                  const nextScript = e.target.value;
+                  setPythonScript(nextScript);
+                  const currentTrimmed = feedUrl.trim();
+                  const isKnownDefault =
+                    currentTrimmed === "" ||
+                    Object.values(DEFAULT_FEED_URLS_BY_SCRIPT).includes(currentTrimmed);
+                  if (isKnownDefault) {
+                    const suggested = getDefaultFeedUrlForScript(nextScript);
+                    if (suggested) {
+                      setFeedUrl(suggested);
+                    }
+                  }
+                }}
                 className="w-full px-4 py-3 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all shadow-sm font-mono"
                 placeholder={LABELS.SCRIPT_PATH_PLACEHOLDER}
                 required
