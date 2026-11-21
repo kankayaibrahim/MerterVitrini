@@ -15,6 +15,7 @@ import {
   isRealisticPhoneNumber,
   validateAndNormalizeRealisticPhone,
 } from "@/utils/phoneValidation";
+import { getAuthLegalCopy } from "@/utils/legalNotices";
 
 interface AuthModalUser {
   id?: string;
@@ -54,6 +55,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
   const [pendingAuthToken, setPendingAuthToken] = useState("");
   const [pendingAuthUser, setPendingAuthUser] = useState<AuthModalUser | null>(null);
   const [websiteHp, setWebsiteHp] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [rememberMe, setRememberMe] = useState<boolean>(() => Boolean(readRememberedEmail()));
   const [showForgotHelp, setShowForgotHelp] = useState<boolean>(false);
 
@@ -97,6 +99,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
       setPendingAuthToken("");
       setPendingAuthUser(null);
       setWebsiteHp("");
+      setAcceptedTerms(false);
     }
   }
 
@@ -293,6 +296,12 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
       return;
     }
 
+    const authLegal = getAuthLegalCopy(lang);
+    if (!acceptedTerms) {
+      setError(authLegal.requiredError);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -308,6 +317,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
           phone: phoneCheck.normalized,
           password,
           visitor_id: getOrSetVisitorId(),
+          terms_accepted: acceptedTerms,
           captcha_token: captchaToken,
           website_hp: websiteHp,
         }),
@@ -772,18 +782,33 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
 
               <div className="flex items-start text-[11px] font-bold text-sonic-silver leading-relaxed">
                 <label className="flex items-start gap-2 cursor-pointer mt-0.5">
-                  <input type="checkbox" required className="rounded text-salmon-pink focus:ring-salmon-pink mt-0.5" />
+                  <input
+                    type="checkbox"
+                    required
+                    checked={acceptedTerms}
+                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                    className="rounded text-salmon-pink focus:ring-salmon-pink mt-0.5 shrink-0"
+                  />
                   <span>
-                    {t("terms_accept_1", lang)}{" "}
+                    {getAuthLegalCopy(lang).prefix}{" "}
                     <a
                       href={`/${getCategoryPrefix(lang)}/pages/kullanici-sozlesmesi`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-salmon-pink underline hover:text-eerie-black transition-colors"
                     >
-                      {t("terms_accept_2", lang)}
+                      {getAuthLegalCopy(lang).termsLinkLabel}
                     </a>{" "}
-                    {t("terms_accept_3", lang)}
+                    {getAuthLegalCopy(lang).middleAnd}{" "}
+                    <a
+                      href={`/${getCategoryPrefix(lang)}/pages/yer-saglayici-bildirimi`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-salmon-pink underline hover:text-eerie-black transition-colors"
+                    >
+                      {getAuthLegalCopy(lang).hostingLinkLabel}
+                    </a>{" "}
+                    {getAuthLegalCopy(lang).suffix}
                   </span>
                 </label>
               </div>

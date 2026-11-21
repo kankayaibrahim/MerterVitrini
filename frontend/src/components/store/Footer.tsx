@@ -14,6 +14,7 @@ import {
   sanitizePublicStoreAddress,
   sanitizePublicStoreEmail,
 } from "@/utils/formatters";
+import { getFooterLegalNoticeCopy } from "@/utils/legalNotices";
 
 interface Settings {
   id: string;
@@ -70,6 +71,7 @@ function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
   const prefix = getCategoryPrefix(lang);
   const linksMap: Record<string, B2BWholesaleLink[]> = {
     tr: [
+      { label: "Yeni Ürünler (Son 7 Gün)", href: `/${prefix}/yeni-urunler` },
       { label: "Toptan Kadın Giyim", href: `/${prefix}/kadin-giyim` },
       { label: "Toptan Triko & Kazak", href: `/${prefix}/kadin-giyim/triko-hirka-kazak` },
       { label: "Toptan Elbise Modelleri", href: `/${prefix}/kadin-giyim/elbise-abiye` },
@@ -81,6 +83,7 @@ function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
       { label: "Merter B2B Alıcı Rehberi", href: `/${prefix}/b2b` },
     ],
     en: [
+      { label: "New Arrivals (Last 7 Days)", href: `/${prefix}/yeni-urunler` },
       { label: "Wholesale Women Clothing", href: `/${prefix}/kadin-giyim` },
       { label: "Wholesale Knitwear & Sweaters", href: `/${prefix}/kadin-giyim/triko-hirka-kazak` },
       { label: "Wholesale Dresses Turkey", href: `/${prefix}/kadin-giyim/elbise-abiye` },
@@ -92,6 +95,7 @@ function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
       { label: "Merter B2B Sourcing Guide", href: `/${prefix}/b2b` },
     ],
     ru: [
+      { label: "Новые поступления (за 7 дней)", href: `/${prefix}/yeni-urunler` },
       { label: "Женская одежда оптом Турция", href: `/${prefix}/kadin-giyim` },
       { label: "Трикотаж и свитера оптом", href: `/${prefix}/kadin-giyim/triko-hirka-kazak` },
       { label: "Платья оптом Стамбул", href: `/${prefix}/kadin-giyim/elbise-abiye` },
@@ -103,6 +107,7 @@ function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
       { label: "Гид по закупкам в Мертер", href: `/${prefix}/b2b` },
     ],
     ar: [
+      { label: "وصل حديثاً (آخر 7 أيام)", href: `/${prefix}/yeni-urunler` },
       { label: "ملابس نسائية بالجملة تركيا", href: `/${prefix}/kadin-giyim` },
       { label: "تريكو وكنزات صوفية بالجملة", href: `/${prefix}/kadin-giyim/triko-hirka-kazak` },
       { label: "فساتين نسائية بالجملة إسطنبول", href: `/${prefix}/kadin-giyim/elbise-abiye` },
@@ -114,6 +119,7 @@ function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
       { label: "دليل المشتريات من مارتر", href: `/${prefix}/b2b` },
     ],
     de: [
+      { label: "Neuheiten (Letzte 7 Tage)", href: `/${prefix}/yeni-urunler` },
       { label: "Großhandel Damenbekleidung Türkei", href: `/${prefix}/kadin-giyim` },
       { label: "Großhandel Strickwaren & Pullover", href: `/${prefix}/kadin-giyim/triko-hirka-kazak` },
       { label: "Großhandel Kleider Istanbul", href: `/${prefix}/kadin-giyim/elbise-abiye` },
@@ -123,6 +129,7 @@ function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
       { label: "Merter B2B Einkaufsführer", href: `/${prefix}/b2b` },
     ],
     fr: [
+      { label: "Nouveautés (7 derniers jours)", href: `/${prefix}/yeni-urunler` },
       { label: "Vêtements Femme en Gros Turquie", href: `/${prefix}/kadin-giyim` },
       { label: "Tricot et Pulls en Gros", href: `/${prefix}/kadin-giyim/triko-hirka-kazak` },
       { label: "Robes en Gros Istanbul", href: `/${prefix}/kadin-giyim/elbise-abiye` },
@@ -132,6 +139,7 @@ function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
       { label: "Guide d'Achat B2B Merter", href: `/${prefix}/b2b` },
     ],
     pl: [
+      { label: "Nowości (Ostatnie 7 dni)", href: `/${prefix}/yeni-urunler` },
       { label: "Hurtownia Odzieży Damskiej Turcja", href: `/${prefix}/kadin-giyim` },
       { label: "Swetry i Dzianiny Hurt", href: `/${prefix}/kadin-giyim/triko-hirka-kazak` },
       { label: "Sukienki Hurtownia Stambuł", href: `/${prefix}/kadin-giyim/elbise-abiye` },
@@ -141,6 +149,7 @@ function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
       { label: "Przewodnik Zakupów B2B Merter", href: `/${prefix}/b2b` },
     ],
     bg: [
+      { label: "Нови продукти (Последните 7 дни)", href: `/${prefix}/yeni-urunler` },
       { label: "Дамски Дрехи на Едро Турция", href: `/${prefix}/kadin-giyim` },
       { label: "Плетива и Пуловери на Едро", href: `/${prefix}/kadin-giyim/triko-hirka-kazak` },
       { label: "Рокли на Едро Истанбул", href: `/${prefix}/kadin-giyim/elbise-abiye` },
@@ -350,6 +359,26 @@ function FooterCustomerServiceColumn({ lang, onOpenPolicy }: CustomerServiceProp
           </Link>
         </li>
         <li>
+          <Link href={`/${prefix}/pages/kullanici-sozlesmesi`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
+            {getFooterLegalNoticeCopy(lang).termsLink}
+          </Link>
+        </li>
+        <li>
+          <Link href={`/${prefix}/pages/tedarikci-sozlesmesi`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
+            {getFooterLegalNoticeCopy(lang).supplierAgreementLink}
+          </Link>
+        </li>
+        <li>
+          <Link href={`/${prefix}/pages/yer-saglayici-bildirimi`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
+            {getFooterLegalNoticeCopy(lang).hostingNoticeLink}
+          </Link>
+        </li>
+        <li>
+          <Link href={`/${prefix}/pages/telif-hakki-ve-uyar-kaldir`} className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
+            {getFooterLegalNoticeCopy(lang).copyrightLink}
+          </Link>
+        </li>
+        <li>
           <button
             type="button"
             onClick={() => openPolicyOrFallback("privacy_policy", prefix, onOpenPolicy)}
@@ -467,6 +496,36 @@ function FooterWholesaleHub({ lang }: { readonly lang: string }) {
   );
 }
 
+function FooterHostingNoticeBanner({ lang }: { readonly lang: string }) {
+  const prefix = getCategoryPrefix(lang);
+  const copy = getFooterLegalNoticeCopy(lang);
+  return (
+    <div className="max-w-[1720px] mx-auto mt-8 rounded-lg border border-cultured bg-[#FAF8F5] px-4 py-3.5 text-[11px] leading-relaxed text-[#525252]">
+      <div className="font-extrabold text-[#1C1C1C] uppercase tracking-[0.6px] mb-1">
+        {copy.badge}
+      </div>
+      <p className="m-0">{copy.summary}</p>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-bold text-[#1C1C1C]">
+        <Link href={`/${prefix}/pages/yer-saglayici-bildirimi`} className="hover:underline">
+          {copy.hostingNoticeLink}
+        </Link>
+        <Link href={`/${prefix}/pages/tedarikci-sozlesmesi`} className="hover:underline">
+          {copy.supplierAgreementLink}
+        </Link>
+        <Link href={`/${prefix}/pages/telif-hakki-ve-uyar-kaldir`} className="hover:underline">
+          {copy.copyrightLink}
+        </Link>
+        <Link href={`/${prefix}/pages/iptal-iade-kosullari`} className="hover:underline">
+          {copy.cancellationLink}
+        </Link>
+        <Link href={`/${prefix}/pages/gizlilik-politikasi`} className="hover:underline">
+          {copy.privacyLink}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 interface FooterBottomBarProps {
   readonly lang: string;
   readonly onOpenPolicy?: (type: PolicyType) => void;
@@ -574,6 +633,7 @@ export default function Footer({
         </div>
 
         <FooterWholesaleHub lang={lang} />
+        <FooterHostingNoticeBanner lang={lang} />
         <FooterBottomBar lang={lang} onOpenPolicy={onOpenPolicy} />
       </footer>
     </>

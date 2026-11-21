@@ -20,6 +20,7 @@ import {
   Trash2,
   Loader2,
 } from "lucide-react";
+import { SupplierContentLegalConsentBox } from "./SupplierContentLegalConsentBox";
 import type {
   SizeDefinitionDTO,
   SeriesTemplateDTO,
@@ -1582,6 +1583,8 @@ export interface SupplierProductModalProps {
   ) => void;
   autoTranslating: boolean;
   onAutoTranslateFromTurkish: () => void;
+  contentLegalAccepted: boolean;
+  setContentLegalAccepted: (val: boolean) => void;
 }
 
 export function SupplierProductModal(props: Readonly<SupplierProductModalProps>) {
@@ -1830,6 +1833,13 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
                 onAutoTranslateFromTurkish={props.onAutoTranslateFromTurkish}
               />
             )}
+
+            <SupplierContentLegalConsentBox
+              checked={props.contentLegalAccepted}
+              onChange={props.setContentLegalAccepted}
+              idPrefix="product-modal"
+              compact
+            />
           </div>
 
           {/* Sticky Multi-Action Footer */}

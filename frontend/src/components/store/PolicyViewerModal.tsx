@@ -19,7 +19,13 @@ interface LegalPolicy {
 interface PolicyViewerModalProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  readonly policyType: "cancellation_and_return" | "terms_of_service" | "privacy_policy" | "";
+  readonly policyType:
+    | "cancellation_and_return"
+    | "terms_of_service"
+    | "privacy_policy"
+    | "supplier_agreement"
+    | "copyright_and_takedown"
+    | "";
   readonly lang: string;
 }
 

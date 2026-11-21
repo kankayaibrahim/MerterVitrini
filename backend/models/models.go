@@ -562,9 +562,10 @@ type SupplierProductInput struct {
 	MinOrderSeries          int                                 `json:"min_order_series,omitempty"`
 	SeriesStock             int                                 `json:"series_stock,omitempty"`
 	SelectedSizes           []string                            `json:"selected_sizes,omitempty"`
-	IsActive                bool                                `json:"is_active"`
-	IsDraft                 *bool                               `json:"is_draft,omitempty"`
-	SourceProductGroupID    *string                             `json:"source_product_group_id,omitempty"`
+	IsActive                    bool                                `json:"is_active"`
+	IsDraft                     *bool                               `json:"is_draft,omitempty"`
+	ContentResponsibilityAccepted *bool                             `json:"content_responsibility_accepted,omitempty"`
+	SourceProductGroupID        *string                             `json:"source_product_group_id,omitempty"`
 	LinkWithProductID       *string                             `json:"link_with_product_id,omitempty"`
 	Images                  []string                            `json:"images,omitempty"`
 	Variants                []SupplierProductVariantInput       `json:"variants,omitempty"`
@@ -605,6 +606,7 @@ type CreateSupplierApplicationRequest struct {
 	Instagram          string `json:"instagram,omitempty"`
 	Website            string `json:"website,omitempty"`
 	Notes              string `json:"notes,omitempty"`
+	LegalTermsAccepted *bool  `json:"legal_terms_accepted,omitempty"`
 	ReCaptchaToken     string `json:"recaptcha_token,omitempty"`
 	ChallengeToken     string `json:"challenge_token,omitempty"`
 	FormChallengeToken string `json:"form_challenge_token,omitempty"`

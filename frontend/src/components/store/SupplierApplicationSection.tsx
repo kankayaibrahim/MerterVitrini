@@ -16,6 +16,7 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { SUPPLIER_TRANSLATIONS, SupplierPageTranslations } from "@/app/[categoryPrefix]/tedarikci-basvuru/translations";
+import { getCategoryPrefix } from "@/app/i18n";
 import turkeyLocationsData from "@/data/turkeyLocations.json";
 import { ensureRecaptchaLoaded, executeRecaptchaAction, resolveRecaptchaSiteKey } from "@/utils/recaptcha";
 import {
@@ -136,6 +137,7 @@ export default function SupplierApplicationSection({
   const [instagram, setInstagram] = useState("");
   const [website, setWebsite] = useState("");
   const [notes, setNotes] = useState("");
+  const [legalTermsAccepted, setLegalTermsAccepted] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -171,6 +173,7 @@ export default function SupplierApplicationSection({
     setInstagram("");
     setWebsite("");
     setNotes("");
+    setLegalTermsAccepted(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -195,6 +198,11 @@ export default function SupplierApplicationSection({
       return;
     }
 
+    if (!legalTermsAccepted) {
+      setError(t.error_legal_terms);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -216,6 +224,7 @@ export default function SupplierApplicationSection({
           instagram: instagram.trim(),
           website: website.trim(),
           notes: notes.trim(),
+          legal_terms_accepted: legalTermsAccepted,
           recaptcha_token: recaptchaToken,
         }),
       });
@@ -474,6 +483,40 @@ export default function SupplierApplicationSection({
                   placeholder={t.notes_placeholder}
                   className="w-full bg-zinc-50/60 hover:bg-white focus:bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-zinc-950 focus:ring-1 focus:ring-zinc-950 transition-all resize-none"
                 />
+              </div>
+
+              {/* Mandatory Supplier Legal & IP Responsibility Consent */}
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3.5 sm:p-4">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={legalTermsAccepted}
+                    onChange={(e) => setLegalTermsAccepted(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-950 focus:ring-zinc-950 shrink-0 cursor-pointer"
+                  />
+                  <span className="text-xs leading-relaxed text-zinc-700 font-medium">
+                    {t.legal_terms_prefix ? `${t.legal_terms_prefix} ` : ""}
+                    <Link
+                      href={`/${getCategoryPrefix(lang)}/pages/tedarikci-sozlesmesi`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-bold text-zinc-950 underline hover:text-zinc-700"
+                    >
+                      {t.legal_terms_supplier_link}
+                    </Link>{" "}
+                    {t.legal_terms_and}{" "}
+                    <Link
+                      href={`/${getCategoryPrefix(lang)}/pages/telif-hakki-ve-uyar-kaldir`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-bold text-zinc-950 underline hover:text-zinc-700"
+                    >
+                      {t.legal_terms_copyright_link}
+                    </Link>{" "}
+                    {t.legal_terms_suffix}
+                  </span>
+                </label>
               </div>
 
               {/* Security and Submit Footer */}

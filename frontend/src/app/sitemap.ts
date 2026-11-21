@@ -87,6 +87,7 @@ function appendPrefixedStaticRoutes(
   }> = [
     { subPath: "", freq: "daily", priority: 0.95 },
     { subPath: "tum-urunler", freq: "daily", priority: 0.9 },
+    { subPath: "yeni-urunler", freq: "daily", priority: 0.92 },
     { subPath: "b2b", freq: "weekly", priority: 0.85 },
     { subPath: "faq", freq: "weekly", priority: 0.8 },
     { subPath: "contact", freq: "monthly", priority: 0.8 },
@@ -175,6 +176,10 @@ function appendCmsPages(
   const defaultSlugs = [
     "hakkimizda",
     "gizlilik-politikasi",
+    "kullanici-sozlesmesi",
+    "tedarikci-sozlesmesi",
+    "yer-saglayici-bildirimi",
+    "telif-hakki-ve-uyar-kaldir",
     "mesafeli-satis-sozlesmesi",
     "iptal-iade-kosullari",
   ];

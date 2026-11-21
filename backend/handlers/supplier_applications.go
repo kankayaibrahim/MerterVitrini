@@ -115,6 +115,9 @@ func normalizeAndValidateSupplierApplicationRequest(req *models.CreateSupplierAp
 	if phoneErr != nil {
 		return phoneErr.Error()
 	}
+	if req.LegalTermsAccepted != nil && !*req.LegalTermsAccepted {
+		return supplierLegalAgreementMsg
+	}
 	req.Phone = normalizedPhone
 	return ""
 }
@@ -137,11 +140,14 @@ func (h *SupplierApplicationsHandler) createSupplierApplication(w http.ResponseW
 	verificationToken := generateSecureToken(32)
 	verificationExpires := time.Now().Add(30 * time.Minute)
 
+	policyVer := resolveActivePolicyVersion(ctx, "supplier_agreement")
+	legalAccepted := isExplicitlyAccepted(req.LegalTermsAccepted)
+
 	query := `
 		INSERT INTO catalog.supplier_applications 
-			(company_name, contact_name, email, phone, city, district, category, instagram, website, notes, status, ip_address, verification_token, verification_expires_at, email_verified)
+			(company_name, contact_name, email, phone, city, district, category, instagram, website, notes, status, ip_address, verification_token, verification_expires_at, email_verified, legal_terms_accepted, legal_terms_accepted_at, legal_terms_version)
 		VALUES 
-			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12, $13, false)
+			($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11, $12, $13, false, $14, CASE WHEN $14 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $14 THEN $15 ELSE NULL END)
 		RETURNING id, created_at`
 
 	var newID string
@@ -160,12 +166,29 @@ func (h *SupplierApplicationsHandler) createSupplierApplication(w http.ResponseW
 		ip,
 		verificationToken,
 		verificationExpires,
+		legalAccepted,
+		policyVer,
 	).Scan(&newID, &createdAt)
 
 	if err != nil {
 		log.Printf("[SUPPLIER APPLICATION ERROR] Insert failed: %v", err)
 		http.Error(w, `{"error":"Başvurunuz kaydedilirken bir hata oluştu. Lütfen daha sonra tekrar deneyiniz."}`, http.StatusInternalServerError)
 		return
+	}
+
+	if req.LegalTermsAccepted != nil && *req.LegalTermsAccepted {
+		recordLegalConsentAsync(legalConsentLogEntry{
+			ConsentType:  "supplier_application",
+			PolicyType:   "supplier_agreement",
+			ActorRole:    "supplier_applicant",
+			EntityType:   "supplier_application",
+			EntityID:     newID,
+			Email:        req.Email,
+			IPAddress:    ip,
+			UserAgent:    r.UserAgent(),
+			AcceptedText: supplierLegalAgreementMsg,
+			Metadata:     map[string]any{"company_name": req.CompanyName},
+		})
 	}
 
 	// Send verification email to applicant (valid for 30 minutes)

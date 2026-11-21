@@ -31,6 +31,7 @@ import {
   getWhatsappOrderingCopy,
   buildProductWhatsappOrderLink,
 } from "@/utils/whatsappOrdering";
+import { getDirectSellerNoticeCopy } from "@/utils/legalNotices";
 
 interface ModalLocalizedTexts {
   selectMinOneItem: string;
@@ -748,6 +749,11 @@ export default function ProductDetailsModal({
                   )}
                 </>
               )}
+
+              <div className="rounded-md bg-[#FAF7F2] border border-[#E5E0D8] px-3 py-2 text-[10.5px] leading-snug text-[#525252]">
+                <strong className="text-[#1C1C1C]">{getDirectSellerNoticeCopy(lang).directSellerTag}:</strong>{" "}
+                {getDirectSellerNoticeCopy(lang).buyerNotice}
+              </div>
 
             </div>
 

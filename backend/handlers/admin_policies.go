@@ -79,7 +79,7 @@ func (h *PoliciesHandler) GetPolicyHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate enum type
-	if policyType != "cancellation_and_return" && policyType != "terms_of_service" && policyType != "privacy_policy" {
+	if !isValidPolicyType(policyType) {
 		http.Error(w, `{"error":"Invalid policy type"}`, http.StatusBadRequest)
 		return
 	}
@@ -140,7 +140,7 @@ func (h *PoliciesHandler) CreatePolicyVersion(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if req.Type != "cancellation_and_return" && req.Type != "terms_of_service" && req.Type != "privacy_policy" {
+	if !isValidPolicyType(req.Type) {
 		http.Error(w, `{"error":"Invalid policy type"}`, http.StatusBadRequest)
 		return
 	}
@@ -288,7 +288,7 @@ func (h *PoliciesHandler) GetActivePolicyByType(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if policyType != "cancellation_and_return" && policyType != "terms_of_service" && policyType != "privacy_policy" {
+	if !isValidPolicyType(policyType) {
 		http.Error(w, `{"error":"Invalid policy type"}`, http.StatusBadRequest)
 		return
 	}

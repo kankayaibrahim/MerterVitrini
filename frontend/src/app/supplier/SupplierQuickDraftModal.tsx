@@ -18,6 +18,7 @@ import {
   performMultiImageUpload,
   reorderImageList,
 } from "./SupplierPhotoDropzone";
+import { SupplierContentLegalConsentBox } from "./SupplierContentLegalConsentBox";
 
 export type BatchDraftMode = "per_photo" | "color_siblings" | "single_product";
 
@@ -86,6 +87,7 @@ export function SupplierQuickDraftModal({
   const [currency, setCurrency] = useState(defaultCurrency || "TRY");
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [contentLegalAccepted, setContentLegalAccepted] = useState(false);
 
   const hierarchicalCategories = React.useMemo(
     () => buildHierarchicalCategoryOptions(categories),
@@ -128,6 +130,10 @@ export function SupplierQuickDraftModal({
       setErrorMsg("Lütfen en az 1 ürün fotoğrafı yükleyin.");
       return;
     }
+    if (!contentLegalAccepted) {
+      setErrorMsg("Lütfen telif hakkı, marka ve hukuki sorumluluk beyanını onaylayın.");
+      return;
+    }
     const token = getToken();
     if (!token) {
       setErrorMsg("Oturum süreniz dolmuş olabilir. Lütfen tekrar giriş yapın.");
@@ -153,6 +159,7 @@ export function SupplierQuickDraftModal({
           selected_sizes: [...defaultSizes],
           series_ratio: defaultSeriesRatio,
           series_stock: defaultSeriesStock,
+          content_responsibility_accepted: contentLegalAccepted,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -347,6 +354,13 @@ export function SupplierQuickDraftModal({
                 </div>
               </div>
             </section>
+
+            <SupplierContentLegalConsentBox
+              checked={contentLegalAccepted}
+              onChange={setContentLegalAccepted}
+              idPrefix="quick-draft"
+              compact
+            />
           </div>
 
           {/* Sticky Footer */}

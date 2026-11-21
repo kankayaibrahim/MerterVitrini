@@ -15,9 +15,11 @@ import { LegalPolicy } from "@/types/integration";
 
 const LABELS = {
   TITLE: "Sözleşme & Hukuki Politika Yönetimi",
-  DESC: "E-ticaret sitenizin yasal mevzuatlara tam uyumlu kalması için İptal & İade Politikası, Kullanıcı Sözleşmesi ve Gizlilik Sözleşmesi metinlerini sürüm geçmişleriyle birlikte yönetebilirsiniz.",
+  DESC: "E-ticaret sitenizin 5651 Yer Sağlayıcı, FSEK/SMK ve TTK uyumu için İptal & İade, Kullanıcı Sözleşmesi, Tedarikçi Sorumluluk Sözleşmesi, Telif/Uyar-Kaldır ve Gizlilik Politikası metinlerini sürüm geçmişleriyle birlikte yönetebilirsiniz.",
   TAB_RETURN: "İptal & İade Politikası",
   TAB_TERMS: "Kullanıcı Sözleşmesi",
+  TAB_SUPPLIER: "Tedarikçi Sözleşmesi",
+  TAB_COPYRIGHT: "Telif & Uyar-Kaldır",
   TAB_PRIVACY: "Gizlilik Politikası",
   
   ACTIVE_VERSION: "Aktif Sürüm",
@@ -53,7 +55,20 @@ interface PoliciesManagerProps {
   readonly token: string | null;
 }
 
-type PolicyType = "cancellation_and_return" | "terms_of_service" | "privacy_policy";
+type PolicyType =
+  | "cancellation_and_return"
+  | "terms_of_service"
+  | "supplier_agreement"
+  | "copyright_and_takedown"
+  | "privacy_policy";
+
+const POLICY_TABS: ReadonlyArray<{ type: PolicyType; label: string }> = [
+  { type: "cancellation_and_return", label: LABELS.TAB_RETURN },
+  { type: "terms_of_service", label: LABELS.TAB_TERMS },
+  { type: "supplier_agreement", label: LABELS.TAB_SUPPLIER },
+  { type: "copyright_and_takedown", label: LABELS.TAB_COPYRIGHT },
+  { type: "privacy_policy", label: LABELS.TAB_PRIVACY },
+];
 
 export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesManagerProps>) {
   const [isPending, startTransition] = useTransition();
@@ -273,39 +288,21 @@ export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesMana
       </div>
 
       {/* Policy Selection Tabs */}
-      <div className="flex gap-6 border-b border-zinc-200/50 pb-2">
-        <button
-          onClick={() => handleTabChange("cancellation_and_return")}
-          className={`pb-2 text-sm font-bold transition-all relative cursor-pointer ${
-            activeTab === "cancellation_and_return"
-              ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
-              : "text-zinc-500 hover:text-zinc-900"
-          }`}
-        >
-          {LABELS.TAB_RETURN}
-        </button>
-
-        <button
-          onClick={() => handleTabChange("terms_of_service")}
-          className={`pb-2 text-sm font-bold transition-all relative cursor-pointer ${
-            activeTab === "terms_of_service"
-              ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
-              : "text-zinc-500 hover:text-zinc-900"
-          }`}
-        >
-          {LABELS.TAB_TERMS}
-        </button>
-
-        <button
-          onClick={() => handleTabChange("privacy_policy")}
-          className={`pb-2 text-sm font-bold transition-all relative cursor-pointer ${
-            activeTab === "privacy_policy"
-              ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
-              : "text-zinc-500 hover:text-zinc-900"
-          }`}
-        >
-          {LABELS.TAB_PRIVACY}
-        </button>
+      <div className="flex flex-wrap gap-4 sm:gap-6 border-b border-zinc-200/50 pb-2">
+        {POLICY_TABS.map((tab) => (
+          <button
+            key={tab.type}
+            type="button"
+            onClick={() => handleTabChange(tab.type)}
+            className={`pb-2 text-sm font-bold transition-all relative cursor-pointer ${
+              activeTab === tab.type
+                ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
+                : "text-zinc-500 hover:text-zinc-900"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Success alert message */}

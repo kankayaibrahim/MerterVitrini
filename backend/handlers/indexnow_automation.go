@@ -51,6 +51,7 @@ var (
 	indexNowStaticSubRoutes = []string{
 		"",
 		"tum-urunler",
+		"yeni-urunler",
 		"b2b",
 		"faq",
 		"contact",
@@ -69,6 +70,10 @@ var (
 	indexNowDefaultCMSSlugs = []string{
 		"hakkimizda",
 		"gizlilik-politikasi",
+		"kullanici-sozlesmesi",
+		"tedarikci-sozlesmesi",
+		"yer-saglayici-bildirimi",
+		"telif-hakki-ve-uyar-kaldir",
 		"mesafeli-satis-sozlesmesi",
 		"iptal-iade-kosullari",
 	}

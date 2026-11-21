@@ -5,7 +5,8 @@ import Link from "next/link";
 import { X, ShoppingBag, Lock } from "lucide-react";
 import { CartItem } from "@/types/store";
 import { t, getCategoryPrefix, pickLangText, SupportedLangCode } from "@/app/i18n";
-import { convertPrice, fetchStoreSettingsCached, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
+import { convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
+import { getDirectSellerNoticeCopy } from "@/utils/legalNotices";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { persistStoreCart } from "@/utils/cartSync";
 import { UserAddress } from "@/app/profile/components/types";
@@ -92,7 +93,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Bir ağ hatası oluştu.",
     missingAddressesToast: "Lütfen fatura ve teslimat adreslerini doldurunuz.",
     orderSuccessToast:
-      "Siparişiniz başarıyla alındı! Sipariş No: {orderNo}\nKurumsal IBAN / SWIFT bilgileriniz proforma faturanızla iletilecektir.",
+      "Sipariş talebiniz ({orderNo}) doğrudan ilgili tedarikçiye iletildi!\nFiyat teyidi, fatura ve kurumsal IBAN / SWIFT ödeme bilgileri satıcı tedarikçi tarafından paylaşılır.",
     confirmB2bOrder: "Siparişi Onayla",
     addressPaymentHeader: "Adres ve Ödeme Bilgileri",
     backToCart: "Sepete Dön",
@@ -104,12 +105,12 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Fatura adresini yazınız...",
     customBillingOption: "+ Yeni Fatura Adresi Girişi",
     noBillingAddresses: "Profilinizde kayıtlı fatura adresi bulunamadı.",
-    bankTransferHeader: "Kurumsal Banka Havale / SWIFT Bilgileri",
-    beneficiaryPrefix: "Alıcı Unvanı",
+    bankTransferHeader: "Doğrudan Tedarikçi Ödeme ve Proforma Bilgisi",
+    beneficiaryPrefix: "Muhatap",
     proformaIbanNotice:
-      "Sipariş onayının ardından seçtiğiniz döviz cinsine (TRY / USD / EUR) ait kurumsal banka hesap ve SWIFT bilgileri proforma faturanızla birlikte iletilir.",
+      "Merter Vitrini ödeme tahsil etmez. Talebiniz onaylandığında seçtiğiniz ürünlerin doğrudan satıcısı olan ilgili tedarikçi firma, kurumsal banka/IBAN bilgilerini ve proforma faturanızı doğrudan sizinle paylaşır.",
     paymentReferenceNote:
-      "* Havale / SWIFT açıklamasına sipariş numaranızı eklemeyi ve ödeme sonrasında profilinizden ödeme bildirimi oluşturmayı unutmayınız.",
+      "* Ödeme, fatura, kargo ve tüm satış sonrası süreçler doğrudan satışı yapan tedarikçi firma ile yürütülür.",
     requestQuoteFormTitle: "Fiyat Teklifi Talep Formu",
     goToCheckout: "Sipariş Adımına Dön",
     orderViaBankTransfer: "Banka Havalesi ile Sipariş Ver",
@@ -127,7 +128,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "A network error occurred.",
     missingAddressesToast: "Please select or enter both billing and delivery addresses.",
     orderSuccessToast:
-      "Your B2B order has been received! Order No: {orderNo}\nCorporate IBAN & SWIFT details will be shared with your proforma invoice.",
+      "Your B2B inquiry ({orderNo}) has been sent directly to the Supplier!\nProforma invoice & bank IBAN/SWIFT details will be provided directly by the selling Supplier.",
     confirmB2bOrder: "Confirm B2B Order",
     addressPaymentHeader: "Shipping & Payment Details",
     backToCart: "Back to Cart",
@@ -139,12 +140,12 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Enter billing address...",
     customBillingOption: "+ Enter New Billing Address",
     noBillingAddresses: "No saved billing addresses found in your profile.",
-    bankTransferHeader: "Corporate Bank Transfer & SWIFT Details",
-    beneficiaryPrefix: "Beneficiary",
+    bankTransferHeader: "Direct Supplier Payment & Proforma Notice",
+    beneficiaryPrefix: "Counterparty",
     proformaIbanNotice:
-      "Following order confirmation, corporate bank account (IBAN) and SWIFT details for your selected currency (TRY / USD / EUR) will be provided alongside your proforma invoice.",
+      "Merter Vitrini does not collect payments. Once submitted, the independent selling Supplier sends its own corporate IBAN / SWIFT details and proforma invoice directly to you.",
     paymentReferenceNote:
-      "* Please include your order number as the payment reference and submit a payment notification from your profile after transfer.",
+      "* Payments, commercial invoices, shipping, returns, and any commercial disputes are settled directly with the selling Supplier.",
     requestQuoteFormTitle: "Request Wholesale Quote Form",
     goToCheckout: "Go to Checkout",
     orderViaBankTransfer: "Order via Bank Transfer",
@@ -162,7 +163,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Произошла сетевая ошибка.",
     missingAddressesToast: "Пожалуйста, укажите адрес доставки и платежный адрес.",
     orderSuccessToast:
-      "Ваш оптовый заказ успешно принят! № заказа: {orderNo}\nКорпоративные реквизиты IBAN / SWIFT будут направлены вместе с проформа-инвойсом.",
+      "Ваш запрос № {orderNo} передан напрямую Поставщику!\nРеквизиты IBAN / SWIFT и проформа-инвойс предоставляются непосредственно продавцом-поставщиком.",
     confirmB2bOrder: "Подтвердить B2B заказ",
     addressPaymentHeader: "Адрес доставки и реквизиты оплаты",
     backToCart: "Назад в корзину",
@@ -174,12 +175,12 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Введите платежный адрес...",
     customBillingOption: "+ Ввести новый платежный адрес",
     noBillingAddresses: "В вашем профиле нет сохраненных платежных адресов.",
-    bankTransferHeader: "Корпоративные банковские реквизиты / SWIFT",
-    beneficiaryPrefix: "Получатель",
+    bankTransferHeader: "Прямой расчет с Поставщиком / Проформа",
+    beneficiaryPrefix: "Сторона сделки",
     proformaIbanNotice:
-      "После подтверждения заказа корпоративные банковские счета (IBAN) и реквизиты SWIFT для выбранной валюты (TRY / USD / EUR) предоставляются вместе с проформа-инвойсом.",
+      "Merter Vitrini не принимает оплату за товары. После отправки заявки прямой продавец (Поставщик) направит вам свои реквизиты IBAN / SWIFT и проформа-инвойс.",
     paymentReferenceNote:
-      "* Пожалуйста, укажите номер заказа в назначении платежа и отправьте уведомление об оплате в личном кабинете.",
+      "* Все расчеты, документы, отгрузка, возвраты и претензии решаются напрямую с продающим Поставщиком.",
     requestQuoteFormTitle: "Форма запроса коммерческого предложения",
     goToCheckout: "Перейти к оформлению",
     orderViaBankTransfer: "Оформить заказ банковским переводом",
@@ -197,7 +198,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "حدث خطأ في الشبكة.",
     missingAddressesToast: "يرجى تحديد أو إدخال عنوان الشحن وعنوان الفوترة.",
     orderSuccessToast:
-      "تم استلام طلب الجملة بنجاح! رقم الطلب: {orderNo}\nسيتم إرسال تفاصيل الحساب البنكي المؤسسي (IBAN / SWIFT) مع الفاتورة المبدئية (Proforma).",
+      "تم إرسال طلبك رقم {orderNo} مباشرة إلى المورد!\nسيقوم المورد البائع بإرسال تفاصيل الحساب البنكي والفاتورة المبدئية مباشرة إليك.",
     confirmB2bOrder: "تأكيد طلب الجملة B2B",
     addressPaymentHeader: "معلومات العنوان والدفع",
     backToCart: "العودة إلى السلة",
@@ -209,12 +210,12 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "اكتب عنوان الفوترة...",
     customBillingOption: "+ إدخال عنوان فوترة جديد",
     noBillingAddresses: "لا توجد عناوين فوترة محفوظة في ملفك الشخصي.",
-    bankTransferHeader: "معلومات التحويل البنكي المؤسسي / SWIFT",
-    beneficiaryPrefix: "المستفيد",
+    bankTransferHeader: "إشعار الدفع والفاتورة المباشرة مع المورد",
+    beneficiaryPrefix: "الطرف المتعاقد",
     proformaIbanNotice:
-      "بعد تأكيد الطلب، سيتم تزويدكم بتفاصيل الحساب البنكي المؤسسي (IBAN) ورمز SWIFT للعملة المختارة (TRY / USD / EUR) مع الفاتورة المبدئية (Proforma).",
+      "لا تحصل منصة Merter Vitrini مبالغ المنتجات. بعد إرسال الطلب، يتولى المورد البائع مباشرة تزويدكم بتفاصيل الحساب البنكي (IBAN / SWIFT) والفاتورة المبدئية.",
     paymentReferenceNote:
-      "* يرجى كتابة رقم الطلب في بيان التحويل البنكي وإرسال إشعار الدفع من ملفك الشخصي بعد التحويل.",
+      "* تتم جميع المدفوعات والفواتير والشحن والمرتجعات والنزاعات التجارية مباشرة مع المورد البائع.",
     requestQuoteFormTitle: "نموذج طلب عرض سعر بالجملة",
     goToCheckout: "الانتقال لإتمام الطلب",
     orderViaBankTransfer: "الطلب عبر التحويل البنكي",
@@ -232,7 +233,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Ein Netzwerkfehler ist aufgetreten.",
     missingAddressesToast: "Bitte wählen oder geben Sie Rechnungs- und Lieferadresse ein.",
     orderSuccessToast:
-      "Ihre B2B-Bestellung ist eingegangen! Bestell-Nr.: {orderNo}\nDie Firmen-IBAN- und SWIFT-Daten erhalten Sie zusammen mit Ihrer Proforma-Rechnung.",
+      "Ihre B2B-Anfrage ({orderNo}) wurde direkt an den Lieferanten gesendet!\nIBAN/SWIFT-Daten und Proforma-Rechnung erhalten Sie direkt vom verkaufenden Lieferanten.",
     confirmB2bOrder: "B2B-Bestellung bestätigen",
     addressPaymentHeader: "Adress- & Zahlungsinformationen",
     backToCart: "Zurück zum Warenkorb",
@@ -244,12 +245,12 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Rechnungsadresse eingeben...",
     customBillingOption: "+ Neue Rechnungsadresse eingeben",
     noBillingAddresses: "Keine gespeicherten Rechnungsadressen im Profil gefunden.",
-    bankTransferHeader: "Firmen-Banküberweisung & SWIFT-Daten",
-    beneficiaryPrefix: "Zahlungsempfänger",
+    bankTransferHeader: "Direktzahlung an den Lieferanten / Proforma",
+    beneficiaryPrefix: "Vertragspartner",
     proformaIbanNotice:
-      "Nach der Bestellbestätigung werden Ihnen die Firmenbankverbindung (IBAN) und SWIFT-Daten für Ihre gewählte Währung (TRY / USD / EUR) zusammen mit Ihrer Proforma-Rechnung übermittelt.",
+      "Merter Vitrini zieht keine Zahlungen ein. Der jeweils verkaufende Lieferant stellt Ihnen nach Prüfung seine eigene Firmen-IBAN/SWIFT-Verbindung und Proforma-Rechnung direkt bereit.",
     paymentReferenceNote:
-      "* Bitte geben Sie Ihre Bestellnummer als Verwendungszweck an und senden Sie nach der Überweisung eine Zahlungsbestätigung in Ihrem Profil.",
+      "* Zahlung, Rechnungsstellung, Versand, Rückgaben und Reklamationen erfolgen ausschließlich direkt mit dem Lieferanten.",
     requestQuoteFormTitle: "Angebotsanfrage-Formular",
     goToCheckout: "Zur Bestellabwicklung",
     orderViaBankTransfer: "Per Banküberweisung bestellen",
@@ -267,7 +268,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Une erreur réseau s'est produite.",
     missingAddressesToast: "Veuillez sélectionner ou saisir les adresses de facturation et de livraison.",
     orderSuccessToast:
-      "Votre commande B2B a bien été enregistrée ! N° de commande : {orderNo}\nLes coordonnées bancaires IBAN / SWIFT vous seront transmises avec votre facture proforma.",
+      "Votre demande B2B ({orderNo}) a été transmise directement au fournisseur !\nLa facture proforma et l'IBAN/SWIFT vous seront fournis directement par le fournisseur vendeur.",
     confirmB2bOrder: "Confirmer la commande B2B",
     addressPaymentHeader: "Adresses & Modalités de Paiement",
     backToCart: "Retour au panier",
@@ -279,12 +280,12 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Saisissez l'adresse de facturation...",
     customBillingOption: "+ Saisir une nouvelle adresse de facturation",
     noBillingAddresses: "Aucune adresse de facturation enregistrée dans votre profil.",
-    bankTransferHeader: "Coordonnées Bancaires Professionnelles & SWIFT",
-    beneficiaryPrefix: "Bénéficiaire",
+    bankTransferHeader: "Paiement Direct au Fournisseur & Proforma",
+    beneficiaryPrefix: "Cocontractant",
     proformaIbanNotice:
-      "Après confirmation de votre commande, les coordonnées bancaires professionnelles (IBAN) et SWIFT correspondant à la devise choisie (TRY / USD / EUR) vous seront communiquées avec votre facture proforma.",
+      "Merter Vitrini n'encaisse aucun règlement. Le fournisseur vendeur direct vous communique personnellement ses coordonnées IBAN/SWIFT et sa facture proforma.",
     paymentReferenceNote:
-      "* Veuillez indiquer votre numéro de commande en référence de virement et soumettre un avis de paiement depuis votre profil.",
+      "* Les paiements, factures, expéditions, retours et litiges relèvent exclusivement du fournisseur vendeur.",
     requestQuoteFormTitle: "Formulaire de Demande de Devis",
     goToCheckout: "Aller au paiement",
     orderViaBankTransfer: "Commander par virement bancaire",
@@ -302,7 +303,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Wystąpił błąd sieci.",
     missingAddressesToast: "Proszę wybrać lub wpisać adres rozliczeniowy oraz adres dostawy.",
     orderSuccessToast:
-      "Twoje zamówienie B2B zostało przyjęte! Nr zamówienia: {orderNo}\nFirmowe dane bankowe IBAN / SWIFT zostaną przekazane wraz z fakturą proforma.",
+      "Twoje zapytanie B2B ({orderNo}) zostało przekazane bezpośrednio Dostawcy!\nFaktura proforma i dane IBAN / SWIFT zostaną przekazane bezpośrednio przez sprzedającego Dostawcę.",
     confirmB2bOrder: "Potwierdź zamówienie B2B",
     addressPaymentHeader: "Adresy i Dane Płatności",
     backToCart: "Powrót do koszyka",
@@ -314,12 +315,12 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Wpisz adres do faktury...",
     customBillingOption: "+ Wprowadź nowy adres do faktury",
     noBillingAddresses: "Brak zapisanych adresów do faktury w profilu.",
-    bankTransferHeader: "Firmowe Dane do Przelewu Bankowego / SWIFT",
-    beneficiaryPrefix: "Odbiorca",
+    bankTransferHeader: "Płatność Bezpośrednia do Dostawcy / Proforma",
+    beneficiaryPrefix: "Strona umowy",
     proformaIbanNotice:
-      "Po potwierdzeniu zamówienia firmowe dane konta bankowego (IBAN) oraz SWIFT dla wybranej waluty (TRY / USD / EUR) zostaną przesłane wraz z fakturą proforma.",
+      "Merter Vitrini nie pobiera płatności za towary. Po złożeniu zamówienia bezpośredni Dostawca przekaże swoje firmowe dane IBAN / SWIFT oraz fakturę proforma.",
     paymentReferenceNote:
-      "* Prosimy o podanie numeru zamówienia w tytule przelewu oraz zgłoszenie płatności w panelu profilu.",
+      "* Wszelkie płatności, faktury, dostawy, zwroty i reklamacje są załatwiane bezpośrednio ze sprzedającym Dostawcą.",
     requestQuoteFormTitle: "Formularz Zapytania Ofertowego",
     goToCheckout: "Przejdź do zamówienia",
     orderViaBankTransfer: "Zamów przelewem bankowym",
@@ -337,7 +338,7 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Възникна мрежова грешка.",
     missingAddressesToast: "Моля, изберете или въведете адрес за доставка и фактуриране.",
     orderSuccessToast:
-      "Вашата B2B поръчка е приета успешно! Поръчка №: {orderNo}\nКорпоративните банкови сметки (IBAN / SWIFT) ще бъдат изпратени с вашата проформа фактура.",
+      "Вашата B2B заявка ({orderNo}) беше изпратена директно към Доставчика!\nПроформа фактура и IBAN / SWIFT данни се предоставят директно от продаващия Доставчик.",
     confirmB2bOrder: "Потвърди B2B поръчката",
     addressPaymentHeader: "Адрес и Данни за Плащане",
     backToCart: "Обратно към количката",
@@ -349,12 +350,12 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Въведете адрес за фактуриране...",
     customBillingOption: "+ Въвеждане на нов адрес за фактуриране",
     noBillingAddresses: "Няма запазени адреси за фактуриране във вашия профил.",
-    bankTransferHeader: "Корпоративен Банков Превод и SWIFT Данни",
-    beneficiaryPrefix: "Получател",
+    bankTransferHeader: "Директно плащане към Доставчика / Проформа",
+    beneficiaryPrefix: "Контрагент",
     proformaIbanNotice:
-      "След потвърждение на поръчката корпоративните банкови сметки (IBAN) и SWIFT данни за избраната валута (TRY / USD / EUR) се предоставят заедно с вашата проформа фактура.",
+      "Merter Vitrini не събира плащания за стоки. Продаващият Доставчик директно ви изпраща своите IBAN / SWIFT данни и проформа фактура.",
     paymentReferenceNote:
-      "* Моля, впишете номера на поръчката като основание за превода и подайте известие за плащане от профила си.",
+      "* Всички плащания, фактури, доставки, връщания и спорове се уреждат директно с продаващия Доставчик.",
     requestQuoteFormTitle: "Формуляр за Оферта на Едро",
     goToCheckout: "Към завършване на поръчката",
     orderViaBankTransfer: "Поръчай с банков превод",
@@ -364,50 +365,6 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     removeItemAria: "Премахни продукта от количката",
   },
 };
-
-interface DynamicBankAccount {
-  readonly bank_name: string;
-  readonly iban: string;
-  readonly currency?: string;
-  readonly swift?: string;
-}
-
-interface StoreBankSettings {
-  readonly bank_accounts?: readonly DynamicBankAccount[];
-  readonly iban_try?: string;
-  readonly iban_usd?: string;
-  readonly iban_eur?: string;
-}
-
-function isValidConfiguredIban(raw?: string): boolean {
-  if (!raw) return false;
-  const trimmed = raw.trim();
-  if (trimmed.length < 10) return false;
-  return !/^x+$/i.test(trimmed);
-}
-
-function extractValidBankAccounts(settings: StoreBankSettings | null): DynamicBankAccount[] {
-  if (!settings) return [];
-  const list: DynamicBankAccount[] = [];
-  if (Array.isArray(settings.bank_accounts)) {
-    for (const acc of settings.bank_accounts) {
-      if (acc && isValidConfiguredIban(acc.iban)) {
-        list.push(acc);
-      }
-    }
-  }
-  if (list.length > 0) return list;
-  if (isValidConfiguredIban(settings.iban_try)) {
-    list.push({ bank_name: "TRY IBAN", iban: settings.iban_try!.trim(), currency: "TRY" });
-  }
-  if (isValidConfiguredIban(settings.iban_usd)) {
-    list.push({ bank_name: "USD IBAN", iban: settings.iban_usd!.trim(), currency: "USD" });
-  }
-  if (isValidConfiguredIban(settings.iban_eur)) {
-    list.push({ bank_name: "EUR IBAN", iban: settings.iban_eur!.trim(), currency: "EUR" });
-  }
-  return list;
-}
 
 const SAME_BILLING_LABELS: Record<string, string> = {
   tr: "Fatura adresi teslimat adresiyle aynı olsun",
@@ -864,56 +821,22 @@ interface CartCheckoutFormProps {
 
 function BankTransferInfo({ lang }: { readonly lang: string }) {
   const labels = pickLangText(lang, CART_DRAWER_LABELS);
-  const [bankAccounts, setBankAccounts] = React.useState<DynamicBankAccount[]>([]);
-
-  React.useEffect(() => {
-    let active = true;
-    fetchStoreSettingsCached()
-      .then((data) => {
-        if (active) {
-          setBankAccounts(extractValidBankAccounts(data as StoreBankSettings | null));
-        }
-      })
-      .catch(() => {
-        // Fallback cleanly to proforma IBAN notice
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const directNotice = getDirectSellerNoticeCopy(lang);
 
   return (
-    <div className="bg-[#F8F6F2] border border-[#E5E0D8] rounded-lg p-3.5 flex flex-col gap-2.5 text-xs text-[#1C1C1C] leading-normal">
+    <div className="bg-[#F8F6F2] border border-[#E5E0D8] rounded-lg p-3.5 flex flex-col gap-2 text-xs text-[#1C1C1C] leading-normal">
       <div className="font-extrabold uppercase tracking-[0.5px] border-b border-[#E5E0D8] pb-1.5 text-[11px] text-[#1C1C1C]">
         {labels.bankTransferHeader}
       </div>
       <div className="text-[11px] font-bold text-[#1C1C1C] bg-white border border-[#E5E0D8] px-2.5 py-1.5 rounded">
-        {labels.beneficiaryPrefix}: <span className="font-extrabold">Merter Vitrini B2B Tekstil</span>
+        {labels.beneficiaryPrefix}: <span className="font-extrabold">{directNotice.directSellerTag}</span>
       </div>
-      {bankAccounts.length > 0 ? (
-        <div className="flex flex-col gap-1.5 font-semibold text-[11px]">
-          {bankAccounts.map((acc) => (
-            <div key={`${acc.bank_name}-${acc.iban}`} className="bg-white px-2.5 py-1.5 rounded border border-[#E5E0D8]">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-[#1C1C1C]">{acc.bank_name}</span>
-                {acc.currency && (
-                  <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-[#FAF7F2] border border-[#D8C7A6] text-[#6E542E]">
-                    {acc.currency}
-                  </span>
-                )}
-              </div>
-              <div className="font-mono text-[10.5px] text-zinc-800 select-all mt-0.5">{acc.iban}</div>
-              {acc.swift && (
-                <div className="font-mono text-[10px] text-[#525252] mt-0.5">SWIFT: {acc.swift}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-[11px] font-semibold text-[#525252] bg-white border border-[#E5E0D8] rounded px-2.5 py-2 leading-relaxed">
-          {labels.proformaIbanNotice}
-        </p>
-      )}
+      <p className="text-[11px] font-semibold text-[#525252] bg-white border border-[#E5E0D8] rounded px-2.5 py-2 leading-relaxed m-0">
+        {labels.proformaIbanNotice}
+      </p>
+      <p className="text-[10.5px] font-semibold text-[#525252] leading-snug m-0">
+        {directNotice.buyerNotice}
+      </p>
       <div className="text-[10px] font-semibold text-[#525252] italic border-t border-[#E5E0D8] pt-1.5 leading-snug">
         {labels.paymentReferenceNote}
       </div>
@@ -999,6 +922,10 @@ function CartCheckoutForm({
       )}
 
       <BankTransferInfo lang={lang} />
+
+      <p className="text-[10px] font-semibold text-[#525252] bg-[#FAF8F5] border border-[#E5E0D8] rounded px-2.5 py-2 leading-snug m-0">
+        {getDirectSellerNoticeCopy(lang).buyerNotice}
+      </p>
 
       <p className="text-[10px] font-medium text-neutral-500 text-center leading-snug m-0">
         {getRecaptchaLegalNotice(lang)}
@@ -1140,6 +1067,10 @@ function CartInquiryForm({
           placeholder={t("placeholder_message", lang)}
         />
       </div>
+
+      <p className="text-[10px] font-semibold text-[#525252] bg-[#FAF8F5] border border-[#E5E0D8] rounded px-2.5 py-2 leading-snug m-0">
+        {getDirectSellerNoticeCopy(lang).buyerNotice}
+      </p>
 
       <p className="text-[10px] font-medium text-neutral-500 text-center leading-snug m-0">
         {getRecaptchaLegalNotice(lang)}

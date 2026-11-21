@@ -341,6 +341,7 @@ interface ProductPayloadParams {
   additionalColorVariants?: readonly InlineColorVariantDraft[];
   images: string[];
   translations: ProductTranslationsFormMap;
+  contentResponsibilityAccepted: boolean;
 }
 
 function buildProductPayload(params: ProductPayloadParams) {
@@ -406,6 +407,7 @@ function buildProductPayload(params: ProductPayloadParams) {
       is_single: false,
     })),
     translations: translationsPayload,
+    content_responsibility_accepted: params.contentResponsibilityAccepted,
   };
 }
 
@@ -2040,6 +2042,7 @@ export default function SupplierDashboardClient() {
   const [imageUploadLoading, setImageUploadLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [formContentLegalAccepted, setFormContentLegalAccepted] = useState(false);
 
   // Debounced auto-save for in-progress Create modal state
   useEffect(() => {
@@ -2217,6 +2220,7 @@ export default function SupplierDashboardClient() {
     setModalViewMode("express");
     setFormNotice("");
     setFormError("");
+    setFormContentLegalAccepted(false);
     setActiveModal("create");
   };
 
@@ -2315,6 +2319,7 @@ export default function SupplierDashboardClient() {
     setSupplierSiblings([]);
     setFormNotice("");
     setFormError("");
+    setFormContentLegalAccepted(false);
     setActiveModal("edit");
 
     const token = getToken() ?? "";
@@ -2367,6 +2372,7 @@ export default function SupplierDashboardClient() {
       `"${prod.title || prod.custom_sku}" modeli baz alınarak yeni renk açılıyor. Sadece yeni rengin fotoğrafını ve rengini seçin.`
     );
     setFormError("");
+    setFormContentLegalAccepted(false);
 
     const initialLinkTarget: SupplierSiblingItemDTO = {
       id: prod.id,
@@ -2478,6 +2484,10 @@ export default function SupplierDashboardClient() {
       setFormError(errMsg);
       return null;
     }
+    if (!formContentLegalAccepted) {
+      setFormError("Lütfen telif hakkı, marka ve hukuki sorumluluk beyanını onaylayın.");
+      return null;
+    }
 
     const payload = buildProductPayload({
       title: formTitle,
@@ -2504,6 +2514,7 @@ export default function SupplierDashboardClient() {
         activeModal === "create" ? additionalColorVariants : undefined,
       images: formImages,
       translations: formTranslations,
+      contentResponsibilityAccepted: formContentLegalAccepted,
     });
 
     const saved = await performProductSave(
@@ -2849,6 +2860,8 @@ export default function SupplierDashboardClient() {
           onUpdateTranslationField={handleUpdateTranslationField}
           autoTranslating={autoTranslating}
           onAutoTranslateFromTurkish={() => void handleAutoTranslateFromTurkish()}
+          contentLegalAccepted={formContentLegalAccepted}
+          setContentLegalAccepted={setFormContentLegalAccepted}
         />
       )}
 

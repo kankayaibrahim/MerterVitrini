@@ -528,6 +528,8 @@ func insertSingleImportedRow(
 	rowIdx int,
 	row []string,
 	cats categoryLookupMap,
+	contentAccepted bool,
+	contentVersion int,
 ) (string, error) {
 	title := cellAt(row, 0)
 	catRaw := cellAt(row, 1)
@@ -582,18 +584,20 @@ func insertSingleImportedRow(
 			brand_id, feed_id, source_product_id, title, short_description, description,
 			category_id, color_id, fabric_id, gender, season,
 			buying_price, price, currency, packing_ratio, series_ratio,
-			minimum_order_quantity, stock, is_active
+			minimum_order_quantity, stock, is_active,
+			content_responsibility_accepted, content_responsibility_accepted_at, content_responsibility_version
 		) VALUES (
 			$1, NULL, $2, $3, $4, $5,
 			$6, $7, $8, $9, $10,
 			0, $11, $12, $13, $14,
-			$15, $16, true
+			$15, $16, true,
+			$17, CASE WHEN $17 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $17 THEN $18 ELSE NULL END
 		) RETURNING id::text, coalesce(slug, '')
 	`,
 		brandID, sourceProductID, title, shortDesc, desc,
 		catID, colorID, fabricID, gender, season,
 		price, currency, packingRatio, seriesRatio,
-		moq, totalStock,
+		moq, totalStock, contentAccepted, contentVersion,
 	).Scan(&newProductID, &newSlug)
 	if err != nil {
 		return "", fmt.Errorf("Satır %d (%s): Kayıt hatası", rowIdx, title)
@@ -622,6 +626,12 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 		return
 	}
 
+	declAccepted, declErr := validateSupplierMultipartContentDeclaration(r)
+	if declErr != nil {
+		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": declErr.Error()})
+		return
+	}
+
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": "Yüklenecek Excel (.xlsx) veya CSV dosyası seçilmedi"})
@@ -643,6 +653,7 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 	defer cancel()
 	ensureProductArchiveSchema(ctx)
 	cats := loadCategoryLookupMap(ctx)
+	contentVer := resolveActivePolicyVersion(ctx, "supplier_agreement")
 
 	importedCount := 0
 	skippedCount := 0
@@ -654,7 +665,7 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 		if len(row) == 0 || cellAt(row, 0) == "" {
 			continue
 		}
-		slug, err := insertSingleImportedRow(ctx, claims.BrandID, i+1, row, cats)
+		slug, err := insertSingleImportedRow(ctx, claims.BrandID, i+1, row, cats, declAccepted, contentVer)
 		if err != nil {
 			skippedCount++
 			if len(rowErrors) < 15 {
@@ -676,6 +687,23 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 		})
 	} else if importedCount > 0 {
 		triggerProductMVRefresh()
+	}
+
+	if importedCount > 0 && strings.TrimSpace(r.FormValue("content_responsibility_accepted")) != "" {
+		recordLegalConsentAsync(legalConsentLogEntry{
+			ConsentType:  "supplier_excel_import",
+			PolicyType:   "supplier_agreement",
+			ActorRole:    "supplier",
+			ActorUserID:  claims.UserID,
+			BrandID:      claims.BrandID,
+			EntityType:   "brand",
+			EntityID:     claims.BrandID,
+			Email:        claims.Email,
+			IPAddress:    getClientIP(r),
+			UserAgent:    r.UserAgent(),
+			AcceptedText: supplierContentDeclarationMsg,
+			Metadata:     map[string]any{"imported_count": importedCount},
+		})
 	}
 
 	writeSupplierJSON(w, http.StatusOK, map[string]any{

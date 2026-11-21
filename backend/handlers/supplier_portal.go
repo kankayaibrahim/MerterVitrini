@@ -1040,6 +1040,10 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 		httpx.Error(w, http.StatusBadRequest, "Geçersiz veri biçimi")
 		return
 	}
+	if declErr := validateSupplierContentDeclaration(req.ContentResponsibilityAccepted); declErr != nil {
+		httpx.Error(w, http.StatusBadRequest, declErr.Error())
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
@@ -1082,9 +1086,39 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 		httpx.Error(w, http.StatusBadRequest, sibErr.Error())
 		return
 	}
+
+	allCreatedIDs := make([]string, 0, 1+len(siblingIDs))
+	allCreatedIDs = append(allCreatedIDs, mainItem.ID)
+	allCreatedIDs = append(allCreatedIDs, siblingIDs...)
+	contentVer := resolveActivePolicyVersion(ctx, "supplier_agreement")
+	if stampErr := stampProductsContentResponsibilityTx(ctx, tx, allCreatedIDs, isExplicitlyAccepted(req.ContentResponsibilityAccepted), contentVer); stampErr != nil {
+		httpx.Error(w, http.StatusInternalServerError, "Hukuki sorumluluk onayı kaydedilemedi")
+		return
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "İşlem onaylanamadı")
 		return
+	}
+
+	if req.ContentResponsibilityAccepted != nil && *req.ContentResponsibilityAccepted {
+		recordLegalConsentAsync(legalConsentLogEntry{
+			ConsentType:  "supplier_product_publish",
+			PolicyType:   "supplier_agreement",
+			ActorRole:    "supplier",
+			ActorUserID:  claims.UserID,
+			BrandID:      claims.BrandID,
+			EntityType:   "product",
+			EntityID:     formatConsentEntityIDs(allCreatedIDs),
+			Email:        claims.Email,
+			IPAddress:    getClientIP(r),
+			UserAgent:    r.UserAgent(),
+			AcceptedText: supplierContentDeclarationMsg,
+			Metadata: map[string]any{
+				"product_count": len(allCreatedIDs),
+				"is_active":     req.IsActive,
+			},
+		})
 	}
 
 	var notifySlugs []string
@@ -1148,6 +1182,10 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 	var req models.SupplierProductInput
 	if err := httpx.DecodeJSON(r, &req, httpx.DefaultMaxJSONBytes); err != nil {
 		httpx.Error(w, http.StatusBadRequest, "Geçersiz veri biçimi")
+		return
+	}
+	if declErr := validateSupplierContentDeclaration(req.ContentResponsibilityAccepted); declErr != nil {
+		httpx.Error(w, http.StatusBadRequest, declErr.Error())
 		return
 	}
 
@@ -1220,10 +1258,34 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 	upsertSupplierProductTranslations(ctx, tx, id, req.Title, req.ShortDescription, req.Description, req.Translations)
 	updateProductVariants(ctx, tx, id, req.Variants)
 	updateProductImages(ctx, tx, id, req.Images)
+	if req.ContentResponsibilityAccepted != nil && *req.ContentResponsibilityAccepted {
+		contentVer := resolveActivePolicyVersion(ctx, "supplier_agreement")
+		if stampErr := stampProductsContentResponsibilityTx(ctx, tx, []string{id}, true, contentVer); stampErr != nil {
+			httpx.Error(w, http.StatusInternalServerError, "Hukuki sorumluluk onayı güncellenemedi")
+			return
+		}
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "İşlem kaydedilemedi")
 		return
+	}
+
+	if req.ContentResponsibilityAccepted != nil && *req.ContentResponsibilityAccepted {
+		recordLegalConsentAsync(legalConsentLogEntry{
+			ConsentType:  "supplier_product_update",
+			PolicyType:   "supplier_agreement",
+			ActorRole:    "supplier",
+			ActorUserID:  claims.UserID,
+			BrandID:      claims.BrandID,
+			EntityType:   "product",
+			EntityID:     id,
+			Email:        claims.Email,
+			IPAddress:    getClientIP(r),
+			UserAgent:    r.UserAgent(),
+			AcceptedText: supplierContentDeclarationMsg,
+			Metadata:     map[string]any{"is_active": req.IsActive},
+		})
 	}
 
 	if req.IsActive && strings.TrimSpace(updatedSlug) != "" {

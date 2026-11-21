@@ -10,6 +10,7 @@ import {
   AlertCircle,
   X,
 } from "lucide-react";
+import { SupplierContentLegalConsentBox } from "./SupplierContentLegalConsentBox";
 
 export async function toggleSupplierProductArchiveApi(
   token: string,
@@ -107,6 +108,7 @@ export function SupplierExcelImportModal({
   const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [result, setResult] = useState<ExcelImportResult | null>(null);
+  const [contentLegalAccepted, setContentLegalAccepted] = useState(false);
 
   if (!isOpen) return null;
 
@@ -123,6 +125,10 @@ export function SupplierExcelImportModal({
       setErrorMsg("Lütfen yüklenecek bir Excel (.xlsx) veya CSV (.csv) dosyası seçin.");
       return;
     }
+    if (!contentLegalAccepted) {
+      setErrorMsg("Lütfen telif hakkı, marka ve hukuki sorumluluk beyanını onaylayın.");
+      return;
+    }
 
     setUploading(true);
     setErrorMsg("");
@@ -131,6 +137,7 @@ export function SupplierExcelImportModal({
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
+      formData.append("content_responsibility_accepted", "true");
       const res = await fetch("/api/v1/supplier/products/import-excel", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -243,6 +250,13 @@ export function SupplierExcelImportModal({
               )}
             </div>
           )}
+
+          <SupplierContentLegalConsentBox
+            checked={contentLegalAccepted}
+            onChange={setContentLegalAccepted}
+            idPrefix="excel-import"
+            compact
+          />
 
           <div className="flex justify-end gap-2 pt-2">
             <button

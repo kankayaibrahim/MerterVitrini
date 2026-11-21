@@ -99,6 +99,7 @@ type RegisterRequest struct {
 	Password           string `json:"password"`
 	Phone              string `json:"phone"`
 	VisitorID          string `json:"visitor_id,omitempty"`
+	TermsAccepted      *bool  `json:"terms_accepted,omitempty"`
 	CaptchaToken       string `json:"captcha_token"`
 	ChallengeToken     string `json:"challenge_token,omitempty"`
 	FormChallengeToken string `json:"form_challenge_token,omitempty"`
@@ -345,6 +346,9 @@ func normalizeAndValidateRegisterInput(req *RegisterRequest) string {
 	if err != nil {
 		return fmt.Sprintf(`{"error":%q}`, err.Error())
 	}
+	if req.TermsAccepted != nil && !*req.TermsAccepted {
+		return fmt.Sprintf(`{"error":%q}`, customerTermsAgreementMsg)
+	}
 	req.Phone = normalizedPhone
 	return ""
 }
@@ -439,12 +443,19 @@ func (h *StoreAuthHandler) completeCustomerRegistration(w http.ResponseWriter, r
 	verificationToken, _ := generateVerificationToken()
 	verificationExpires := time.Now().Add(24 * time.Hour)
 
+	policyVer := resolveActivePolicyVersion(ctx, "terms_of_service")
+	termsAccepted := isExplicitlyAccepted(req.TermsAccepted)
+
 	_, dbErr := db.Pool.Exec(ctx, `
 		INSERT INTO identity.users (
 			id, first_name, last_name, email, phone, user_role, is_active, is_blocked, registration_ip,
-			email_verified, email_verification_token, email_verification_expires_at
+			email_verified, email_verification_token, email_verification_expires_at,
+			terms_accepted, terms_accepted_at, terms_accepted_version
 		)
-		VALUES ($1, $2, $3, $4, $5, 'customer', true, false, $6, false, $7, $8)
+		VALUES (
+			$1, $2, $3, $4, $5, 'customer', true, false, $6, false, $7, $8,
+			$9, CASE WHEN $9 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $9 THEN $10 ELSE NULL END
+		)
 		ON CONFLICT (email) DO UPDATE SET
 			id = EXCLUDED.id,
 			first_name = EXCLUDED.first_name,
@@ -455,11 +466,30 @@ func (h *StoreAuthHandler) completeCustomerRegistration(w http.ResponseWriter, r
 			email_verified = COALESCE(identity.users.email_verified, false),
 			email_verification_token = EXCLUDED.email_verification_token,
 			email_verification_expires_at = EXCLUDED.email_verification_expires_at,
+			terms_accepted = COALESCE(identity.users.terms_accepted, false) OR EXCLUDED.terms_accepted,
+			terms_accepted_at = COALESCE(identity.users.terms_accepted_at, EXCLUDED.terms_accepted_at),
+			terms_accepted_version = COALESCE(identity.users.terms_accepted_version, EXCLUDED.terms_accepted_version),
 			updated_at = CURRENT_TIMESTAMP
-	`, keycloakUserID, req.FirstName, req.LastName, req.Email, req.Phone, ip, verificationToken, verificationExpires)
+	`, keycloakUserID, req.FirstName, req.LastName, req.Email, req.Phone, ip, verificationToken, verificationExpires, termsAccepted, policyVer)
 
 	if dbErr != nil {
 		log.Printf("[AUTH DB ERROR] Failed to save user to local postgres: %v", dbErr)
+	}
+
+	if req.TermsAccepted != nil && *req.TermsAccepted {
+		recordLegalConsentAsync(legalConsentLogEntry{
+			ConsentType:  "customer_registration",
+			PolicyType:   "terms_of_service",
+			ActorRole:    "customer",
+			ActorUserID:  keycloakUserID,
+			EntityType:   "user",
+			EntityID:     keycloakUserID,
+			Email:        req.Email,
+			IPAddress:    ip,
+			UserAgent:    r.UserAgent(),
+			AcceptedText: customerTermsAgreementMsg,
+			Metadata:     map[string]any{"mobile": isMobile},
+		})
 	}
 
 	meta := mailer.ExtractClientMeta(r)

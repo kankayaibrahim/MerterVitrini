@@ -731,8 +731,9 @@ type BatchDraftCreateRequest struct {
 	Currency          string   `json:"currency"`
 	SelectedSizes     []string `json:"selected_sizes,omitempty"`
 	SeriesRatio       string   `json:"series_ratio,omitempty"`
-	SeriesStock       int      `json:"series_stock,omitempty"`
-	LinkWithProductID *string  `json:"link_with_product_id,omitempty"`
+	SeriesStock                   int      `json:"series_stock,omitempty"`
+	ContentResponsibilityAccepted *bool    `json:"content_responsibility_accepted,omitempty"`
+	LinkWithProductID             *string  `json:"link_with_product_id,omitempty"`
 }
 
 func normalizeBatchDraftMode(raw string) (string, error) {
@@ -823,6 +824,10 @@ func (h *SupplierPortalHandler) BatchCreateDraftProducts(w http.ResponseWriter, 
 		httpx.Error(w, http.StatusBadRequest, "Geçersiz veri biçimi")
 		return
 	}
+	if declErr := validateSupplierContentDeclaration(req.ContentResponsibilityAccepted); declErr != nil {
+		httpx.Error(w, http.StatusBadRequest, declErr.Error())
+		return
+	}
 
 	imageURLs := cleanNonEmptyStrings(req.ImageURLs)
 	if len(imageURLs) == 0 {
@@ -898,9 +903,36 @@ func (h *SupplierPortalHandler) BatchCreateDraftProducts(w http.ResponseWriter, 
 		return
 	}
 
+	createdIDs := make([]string, 0, len(created))
+	for _, item := range created {
+		createdIDs = append(createdIDs, item.ID)
+	}
+	contentVer := resolveActivePolicyVersion(ctx, "supplier_agreement")
+	if stampErr := stampProductsContentResponsibilityTx(ctx, tx, createdIDs, isExplicitlyAccepted(req.ContentResponsibilityAccepted), contentVer); stampErr != nil {
+		httpx.Error(w, http.StatusInternalServerError, "Taslak hukuki onayı kaydedilemedi")
+		return
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "Taslak işlemi onaylanamadı")
 		return
+	}
+
+	if req.ContentResponsibilityAccepted != nil && *req.ContentResponsibilityAccepted {
+		recordLegalConsentAsync(legalConsentLogEntry{
+			ConsentType:  "supplier_batch_draft",
+			PolicyType:   "supplier_agreement",
+			ActorRole:    "supplier",
+			ActorUserID:  claims.UserID,
+			BrandID:      claims.BrandID,
+			EntityType:   "product",
+			EntityID:     formatConsentEntityIDs(createdIDs),
+			Email:        claims.Email,
+			IPAddress:    getClientIP(r),
+			UserAgent:    r.UserAgent(),
+			AcceptedText: supplierContentDeclarationMsg,
+			Metadata:     map[string]any{"created_count": len(created), "mode": mode},
+		})
 	}
 
 	triggerProductMVRefresh()

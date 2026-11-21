@@ -32,6 +32,7 @@ import {
   formatBrandWebsiteUrl,
 } from "@/utils/brandContactHelpers";
 import { isProductWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
+import { getDirectSellerNoticeCopy } from "@/utils/legalNotices";
 
 function normalizeWaPhone(raw?: string): string {
   return normalizeWhatsappDigits(raw);
@@ -884,6 +885,11 @@ export default function SupplierDirectCard({
           </button>
         </form>
       )}
+
+      <div className="mt-2 pt-2.5 border-t border-[#E5E0D8] text-[10.5px] leading-snug text-[#525252]">
+        <strong className="text-[#1C1C1C]">{getDirectSellerNoticeCopy(lang).directSellerTag}:</strong>{" "}
+        {getDirectSellerNoticeCopy(lang).buyerNotice}
+      </div>
     </div>
   );
 }
