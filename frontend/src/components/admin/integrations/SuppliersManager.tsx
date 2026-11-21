@@ -151,7 +151,8 @@ const LABELS = {
   ACTIVATE_SCRIPT_BTN: "Entegrasyon Scriptini Aktifleştir",
   OPTION_CUSTOM: "Diğer / Özel Script Yolu...",
   OPTION_ETIKA: "parsers/etika.py (Etika Fashion)",
-  OPTION_JANES: "parsers/janes.py (Jane's)"
+  OPTION_JANES: "parsers/janes.py (Jane's)",
+  OPTION_BLACK_FASHION: "parsers/black_fashion.py (Black Fashion)"
 };
 
 interface SupplierBrandFormState {
@@ -168,6 +169,7 @@ interface SupplierBrandFormState {
   locationAddress: string;
   addresses: SupplierAddress[];
   isActive: boolean;
+  whatsappOnlyOrdering: boolean;
 }
 
 function createEmptyBrandFormState(): SupplierBrandFormState {
@@ -185,6 +187,7 @@ function createEmptyBrandFormState(): SupplierBrandFormState {
     locationAddress: "",
     addresses: [],
     isActive: true,
+    whatsappOnlyOrdering: false,
   };
 }
 
@@ -247,12 +250,14 @@ function getParserScriptForAlias(rawAlias: string): string {
   const alias = rawAlias.toUpperCase();
   if (alias === "FLORM") return "parsers/etika.py";
   if (alias === "EDUSA") return "parsers/janes.py";
+  if (alias === "BLACK_FASHION") return "parsers/black_fashion.py";
   return "parsers/custom.py";
 }
 
 function resolveTargetFeedId(alias: string, scriptPath: string): string {
   if (scriptPath.includes("etika.py")) return "etika";
   if (scriptPath.includes("janes.py")) return "janes";
+  if (scriptPath.includes("black_fashion.py")) return "black_fashion";
   const baseName = scriptPath.split("/").pop()?.split("\\").pop()?.replace(/\.py$/, "");
   return baseName ? baseName.toLowerCase() : `${alias.toLowerCase()}_feed`;
 }
@@ -453,7 +458,7 @@ function SupplierCard({
             <Building size={20} />
           </div>
           <div>
-            <h3 className="font-bold text-base text-zinc-900 flex items-center gap-2">
+            <h3 className="font-bold text-base text-zinc-900 flex items-center gap-2 flex-wrap">
               {supplier.name}
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex ${
                 supplier.is_active 
@@ -462,6 +467,11 @@ function SupplierCard({
               }`}>
                 {supplier.is_active ? LABELS.ACTIVE : LABELS.PASSIVE}
               </span>
+              {supplier.whatsapp_only_ordering && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex bg-green-50 text-green-700 border border-green-200">
+                  Yalnızca WhatsApp Sipariş
+                </span>
+              )}
             </h3>
             <p className="text-xs font-mono text-zinc-400 mt-1 uppercase">
               {LABELS.ALIAS_PREFIX}<span className="font-bold text-zinc-700">{supplier.alias_code || "-"}</span>
@@ -919,6 +929,33 @@ function SupplierFormFields({
         />
       </div>
 
+      {/* WhatsApp-Only Ordering Mode Toggle */}
+      <div className="flex items-center justify-between gap-4 border border-emerald-200 rounded-2xl px-4 py-3 bg-emerald-50/40">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-extrabold text-emerald-950 uppercase tracking-wider">
+            Yalnızca WhatsApp ile Sipariş / Fiyat Sorunuz Modu
+          </span>
+          <span className="text-[11px] font-medium text-emerald-800/90 leading-snug">
+            Aktif edildiğinde vitrinde fiyat yerine &quot;Toptan Fiyat İçin WhatsApp&apos;tan Ulaşın&quot; rozeti çıkar, sepete ekleme kapatılır ve alışveriş akışı doğrudan WhatsApp&apos;a yönlendirilir. Tedarikçi kendi portalından da değiştirebilir.
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => onFieldChange("whatsappOnlyOrdering", !brandForm.whatsappOnlyOrdering)}
+          aria-pressed={brandForm.whatsappOnlyOrdering}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+            brandForm.whatsappOnlyOrdering ? "bg-emerald-600" : "bg-zinc-200"
+          }`}
+          disabled={isPending}
+        >
+          <span
+            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              brandForm.whatsappOnlyOrdering ? "translate-x-5" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
+
       {/* Primary City, District & Open Address */}
       <div className="flex flex-col gap-3 border-t border-zinc-150 pt-4">
         <TurkeyLocationSelects
@@ -1059,6 +1096,7 @@ function SupplierFormFields({
                 >
                   <option value="parsers/etika.py">{LABELS.OPTION_ETIKA}</option>
                   <option value="parsers/janes.py">{LABELS.OPTION_JANES}</option>
+                  <option value="parsers/black_fashion.py">{LABELS.OPTION_BLACK_FASHION}</option>
                   <option value="parsers/custom.py">{LABELS.OPTION_CUSTOM}</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-zinc-400">
@@ -1474,6 +1512,7 @@ export default function SuppliersManager({
         id: addr.id || `addr-${i}-${Date.now()}`,
       })),
       isActive: supplier.is_active,
+      whatsappOnlyOrdering: Boolean(supplier.whatsapp_only_ordering),
     });
     
     // Determine default select based on alias
@@ -1705,6 +1744,7 @@ export default function SuppliersManager({
               coordinates: (addr.coordinates || "").trim(),
             })),
           is_active: brandForm.isActive,
+          whatsapp_only_ordering: brandForm.whatsappOnlyOrdering,
         });
         break;
       case "delete_supplier":

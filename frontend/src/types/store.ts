@@ -107,6 +107,7 @@ export interface Brand {
   supports_private_label?: boolean;
   supports_fason?: boolean;
   is_verified?: boolean;
+  whatsapp_only_ordering?: boolean;
   bank_name?: string;
   bank_account_holder?: string;
   iban?: string;

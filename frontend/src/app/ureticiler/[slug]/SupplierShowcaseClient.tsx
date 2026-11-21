@@ -41,6 +41,7 @@ import {
   formatBrandWebsiteLabel,
   formatBrandWebsiteUrl,
 } from "@/utils/brandContactHelpers";
+import { isBrandWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
 
 interface ShowcaseCopy {
   readonly typeManufacturer: string;
@@ -482,6 +483,16 @@ function SupplierProfileBanner({
                   <span>{copy.verifiedBadge}</span>
                 </span>
               )}
+              {isBrandWhatsappOnly(brand) && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#F0FDF4] text-[#166534] border border-[#BBF7D0] text-xs font-extrabold">
+                  <MessageCircle size={13} />
+                  <span>
+                    {getWhatsappOrderingCopy(
+                      langSuffix.match(/lang=([a-z]+)/i)?.[1] || "tr"
+                    ).supplierBadge}
+                  </span>
+                </span>
+              )}
             </div>
             <p className="text-xs sm:text-sm font-bold text-[#525252]">
               {companyLabel} • {copy.zeroCommissionSubtitle}
@@ -779,6 +790,8 @@ export default function SupplierShowcaseClient({
     void loadInitial();
   }, [slug, initialBrand, initialCategories.length]);
 
+  const isSupplierWhatsappOnly = isBrandWhatsappOnly(brand);
+
   useEffect(() => {
     if (!brand?.id) return;
     const brandId: string = brand.id;
@@ -789,7 +802,9 @@ export default function SupplierShowcaseClient({
       await Promise.resolve();
       if (cancelled) return;
 
-      const ssrHasPrices = initialProducts.some((p) => Number(p.price) > 0);
+      const ssrHasPrices =
+        initialProducts.some((p) => Number(p.price) > 0) ||
+        isSupplierWhatsappOnly;
       if (
         !trimmed &&
         initialProducts.length > 0 &&
@@ -821,6 +836,7 @@ export default function SupplierShowcaseClient({
   }, [
     brand?.id,
     brand?.active_product_count,
+    isSupplierWhatsappOnly,
     searchQuery,
     initialProducts,
     initialTotalProducts,

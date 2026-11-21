@@ -129,6 +129,7 @@ type Brand struct {
 	SupportsPrivateLabel bool       `json:"supports_private_label"`
 	SupportsFason        bool       `json:"supports_fason"`
 	IsVerified           bool       `json:"is_verified"`
+	WhatsappOnlyOrdering bool       `json:"whatsapp_only_ordering"`
 	BankName             string     `json:"bank_name"`
 	BankAccountHolder    string     `json:"bank_account_holder"`
 	IBAN                 string     `json:"iban"`

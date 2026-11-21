@@ -15,6 +15,7 @@ import {
   useIsStoreMemberLoggedIn,
 } from "@/app/storeAuth";
 import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
+import { isProductWhatsappOnly } from "@/utils/whatsappOrdering";
 import { validateStructuredLocationMeta } from "@/components/store/StructuredLocationFields";
 import {
   validateHumanAddressClient,
@@ -380,6 +381,7 @@ export default function StorefrontLayout({
       }>;
       if (!customEvent.detail?.product) return;
       const { product, quantity } = customEvent.detail;
+      if (isProductWhatsappOnly(product)) return;
 
       const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
       const weightPerUnit = product.shipping_weight_kg || 0.35;

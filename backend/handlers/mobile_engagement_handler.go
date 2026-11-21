@@ -123,11 +123,10 @@ func (h *MobileHandler) ListWishlist(w http.ResponseWriter, r *http.Request) {
 	if prods == nil {
 		prods = []*models.Product{}
 	}
+	fetchCatalogBrandProfiles(ctx, prods)
 	ids := make([]string, 0, len(prods))
 	for _, p := range prods {
-		p.BuyingPrice = nil
-		p.FeedID = nil
-		p.SourceProductID = ""
+		sanitizePublicStoreProduct(p, true)
 		ids = append(ids, p.ID)
 	}
 

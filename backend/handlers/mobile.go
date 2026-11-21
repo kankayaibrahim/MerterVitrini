@@ -196,7 +196,7 @@ func sanitizeMobileBootstrapProducts(prods []*models.Product, hidePrices bool) [
 		p.BuyingPrice = nil
 		p.FeedID = nil
 		p.SourceProductID = ""
-		if hidePrices {
+		if hidePrices || (p.BrandProfile != nil && p.BrandProfile.WhatsappOnlyOrdering) {
 			p.Price = 0
 			p.DiscountedPrice = nil
 			p.SinglePrice = nil
@@ -327,6 +327,7 @@ func fetchBootstrapBrands(ctx context.Context) []map[string]any {
 		       COALESCE(b.supports_private_label, false),
 		       COALESCE(b.supports_fason, false),
 		       COALESCE(b.is_verified, true),
+		       COALESCE(b.whatsapp_only_ordering, false),
 		       (SELECT COUNT(*)::int FROM catalog.products p WHERE p.brand_id = b.id AND p.is_active = true) AS active_product_count,
 		       COALESCE(b.addresses, '[]'::jsonb)
 		FROM catalog.brands b
@@ -344,14 +345,14 @@ func fetchBootstrapBrands(ctx context.Context) []map[string]any {
 			whatsappPhone, phone, landlinePhone, publicEmail, instagramHandle string
 			brandCity, brandDistrict, locationAddress, exportCountries   string
 			minOrderQty, activeProductCount                              int
-			supportsPrivateLabel, supportsFason, isVerified              bool
+			supportsPrivateLabel, supportsFason, isVerified, whatsappOnlyOrdering bool
 			descTransBytes, addressesBytes                               []byte
 		)
 		if err := rows.Scan(
 			&id, &displayName, &slug, &companyType, &description, &descTransBytes,
 			&website, &whatsappPhone, &phone, &landlinePhone, &publicEmail, &instagramHandle,
 			&brandCity, &brandDistrict, &locationAddress, &exportCountries, &minOrderQty,
-			&supportsPrivateLabel, &supportsFason, &isVerified,
+			&supportsPrivateLabel, &supportsFason, &isVerified, &whatsappOnlyOrdering,
 			&activeProductCount, &addressesBytes,
 		); err != nil {
 			continue
@@ -394,6 +395,7 @@ func fetchBootstrapBrands(ctx context.Context) []map[string]any {
 			"supports_private_label":   supportsPrivateLabel,
 			"supports_fason":           supportsFason,
 			"is_verified":              isVerified,
+			"whatsapp_only_ordering":   whatsappOnlyOrdering,
 			"product_count":            activeProductCount,
 			"active_product_count":     activeProductCount,
 			"addresses":                addresses,
@@ -425,6 +427,7 @@ func fetchBootstrapProducts(ctx context.Context, orderAndLimit string) []*models
 	if err != nil {
 		return []*models.Product{}
 	}
+	fetchCatalogBrandProfiles(ctx, prods)
 	return prods
 }
 

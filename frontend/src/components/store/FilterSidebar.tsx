@@ -5,6 +5,7 @@ import { ChevronDown, Lock } from "lucide-react";
 import { Brand } from "@/types/store";
 import { t, pickLangText, SupportedLangCode } from "@/app/i18n";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
+import { isBrandWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
 
 export interface B2BSourcingFilters {
   readonly fason: boolean;
@@ -258,59 +259,59 @@ const EXPORT_COUNTRY_OPTIONS: readonly {
   readonly value: string;
   readonly labels: Record<SupportedLangCode, string>;
 }[] = [
-  {
-    value: "Almanya",
-    labels: { tr: "Almanya", en: "Germany", ru: "Германия", ar: "ألمانيا", de: "Deutschland", fr: "Allemagne", pl: "Niemcy", bg: "Германия" },
-  },
-  {
-    value: "Rusya",
-    labels: { tr: "Rusya", en: "Russia", ru: "Россия", ar: "روسيا", de: "Russland", fr: "Russie", pl: "Rosja", bg: "Русия" },
-  },
-  {
-    value: "İngiltere",
-    labels: { tr: "İngiltere", en: "United Kingdom", ru: "Великобритания", ar: "المملكة المتحدة", de: "Vereinigtes Königreich", fr: "Royaume-Uni", pl: "Wielka Brytania", bg: "Великобритания" },
-  },
-  {
-    value: "Polonya",
-    labels: { tr: "Polonya", en: "Poland", ru: "Польша", ar: "بولندا", de: "Polen", fr: "Pologne", pl: "Polska", bg: "Полша" },
-  },
-  {
-    value: "BAE",
-    labels: { tr: "BAE", en: "UAE", ru: "ОАЭ", ar: "الإمارات", de: "VAE", fr: "Émirats arabes unis", pl: "ZEA", bg: "ОАЕ" },
-  },
-  {
-    value: "Suudi Arabistan",
-    labels: { tr: "Suudi Arabistan", en: "Saudi Arabia", ru: "Саудовская Аравия", ar: "السعودية", de: "Saudi-Arabien", fr: "Arabie saoudite", pl: "Arabia Saudyjska", bg: "Саудитска Арабия" },
-  },
-  {
-    value: "Fransa",
-    labels: { tr: "Fransa", en: "France", ru: "Франция", ar: "فرنسا", de: "Frankreich", fr: "France", pl: "Francja", bg: "Франция" },
-  },
-  {
-    value: "Hollanda",
-    labels: { tr: "Hollanda", en: "Netherlands", ru: "Нидерланды", ar: "هولندا", de: "Niederlande", fr: "Pays-Bas", pl: "Holandia", bg: "Нидерландия" },
-  },
-  {
-    value: "İtalya",
-    labels: { tr: "İtalya", en: "Italy", ru: "Италия", ar: "إيطاليا", de: "Italien", fr: "Italie", pl: "Włochy", bg: "Италия" },
-  },
-  {
-    value: "Kazakistan",
-    labels: { tr: "Kazakistan", en: "Kazakhstan", ru: "Казахстан", ar: "كازاخستان", de: "Kasachstan", fr: "Kazakhstan", pl: "Kazachstan", bg: "Казахстан" },
-  },
-  {
-    value: "Ukrayna",
-    labels: { tr: "Ukrayna", en: "Ukraine", ru: "Украина", ar: "أوكرانيا", de: "Ukraine", fr: "Ukraine", pl: "Ukraina", bg: "Украйна" },
-  },
-  {
-    value: "Romanya",
-    labels: { tr: "Romanya", en: "Romania", ru: "Румыния", ar: "رومانيا", de: "Rumänien", fr: "Roumanie", pl: "Rumunia", bg: "Румъния" },
-  },
-  {
-    value: "Bulgaristan",
-    labels: { tr: "Bulgaristan", en: "Bulgaria", ru: "Болгария", ar: "بلغاريا", de: "Bulgarien", fr: "Bulgarie", pl: "Bułgaria", bg: "България" },
-  },
-];
+    {
+      value: "Almanya",
+      labels: { tr: "Almanya", en: "Germany", ru: "Германия", ar: "ألمانيا", de: "Deutschland", fr: "Allemagne", pl: "Niemcy", bg: "Германия" },
+    },
+    {
+      value: "Rusya",
+      labels: { tr: "Rusya", en: "Russia", ru: "Россия", ar: "روسيا", de: "Russland", fr: "Russie", pl: "Rosja", bg: "Русия" },
+    },
+    {
+      value: "İngiltere",
+      labels: { tr: "İngiltere", en: "United Kingdom", ru: "Великобритания", ar: "المملكة المتحدة", de: "Vereinigtes Königreich", fr: "Royaume-Uni", pl: "Wielka Brytania", bg: "Великобритания" },
+    },
+    {
+      value: "Polonya",
+      labels: { tr: "Polonya", en: "Poland", ru: "Польша", ar: "بولندا", de: "Polen", fr: "Pologne", pl: "Polska", bg: "Полша" },
+    },
+    {
+      value: "BAE",
+      labels: { tr: "BAE", en: "UAE", ru: "ОАЭ", ar: "الإمارات", de: "VAE", fr: "Émirats arabes unis", pl: "ZEA", bg: "ОАЕ" },
+    },
+    {
+      value: "Suudi Arabistan",
+      labels: { tr: "Suudi Arabistan", en: "Saudi Arabia", ru: "Саудовская Аравия", ar: "السعودية", de: "Saudi-Arabien", fr: "Arabie saoudite", pl: "Arabia Saudyjska", bg: "Саудитска Арабия" },
+    },
+    {
+      value: "Fransa",
+      labels: { tr: "Fransa", en: "France", ru: "Франция", ar: "فرنسا", de: "Frankreich", fr: "France", pl: "Francja", bg: "Франция" },
+    },
+    {
+      value: "Hollanda",
+      labels: { tr: "Hollanda", en: "Netherlands", ru: "Нидерланды", ar: "هولندا", de: "Niederlande", fr: "Pays-Bas", pl: "Holandia", bg: "Нидерландия" },
+    },
+    {
+      value: "İtalya",
+      labels: { tr: "İtalya", en: "Italy", ru: "Италия", ar: "إيطاليا", de: "Italien", fr: "Italie", pl: "Włochy", bg: "Италия" },
+    },
+    {
+      value: "Kazakistan",
+      labels: { tr: "Kazakistan", en: "Kazakhstan", ru: "Казахстан", ar: "كازاخستان", de: "Kasachstan", fr: "Kazakhstan", pl: "Kazachstan", bg: "Казахстан" },
+    },
+    {
+      value: "Ukrayna",
+      labels: { tr: "Ukrayna", en: "Ukraine", ru: "Украина", ar: "أوكرانيا", de: "Ukraine", fr: "Ukraine", pl: "Ukraina", bg: "Украйна" },
+    },
+    {
+      value: "Romanya",
+      labels: { tr: "Romanya", en: "Romania", ru: "Румыния", ar: "رومانيا", de: "Rumänien", fr: "Roumanie", pl: "Rumunia", bg: "Румъния" },
+    },
+    {
+      value: "Bulgaristan",
+      labels: { tr: "Bulgaristan", en: "Bulgaria", ru: "Болгария", ar: "بلغاريا", de: "Bulgarien", fr: "Bulgarie", pl: "Bułgaria", bg: "България" },
+    },
+  ];
 
 function B2bProductionSourcingSection({
   lang,
@@ -542,6 +543,11 @@ export default function FilterSidebar({
     Object.values(activeAttributes).some(values => values && values.length > 0);
 
   const isAuthenticated = useIsStoreAuthenticated();
+  const selectedBrands = brands.filter((b) => activeBrandIds.includes(b.id));
+  const allSelectedBrandsWhatsappOnly =
+    selectedBrands.length > 0 && selectedBrands.every((b) => isBrandWhatsappOnly(b));
+  const hasAnyWhatsappOnlyBrand = brands.some((b) => isBrandWhatsappOnly(b));
+  const waCopy = getWhatsappOrderingCopy(lang);
   const isBrandsOpen = isSectionOpen("brands");
   const isB2bSourcingOpen = isSectionOpen("b2bSourcing");
   const isB2bOpen = isSectionOpen("b2b");
@@ -722,6 +728,7 @@ export default function FilterSidebar({
           >
             <span className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px] group-hover:text-salmon-pink transition-colors">
               {t("Price Range", lang)}
+              {allSelectedBrandsWhatsappOnly ? ` (${waCopy.priceUnknown})` : ""}
             </span>
             <ChevronDown
               size={14}
@@ -732,7 +739,16 @@ export default function FilterSidebar({
 
           {isPriceRangeOpen && (
             <div className="mt-3.5 flex flex-col gap-2.5 animate-in fade-in duration-200">
-              {isAuthenticated ? (
+              {allSelectedBrandsWhatsappOnly ? (
+                <div className="bg-[#F0FDF4] border border-[#BBF7D0] rounded-[6px] p-2.5 flex flex-col gap-1">
+                  <span className="text-[11px] font-extrabold text-[#166534]">
+                    {waCopy.priceRangeUnknownTitle}
+                  </span>
+                  <p className="text-[10px] font-semibold text-[#15803D] leading-snug">
+                    {waCopy.priceRangeUnknownNote}
+                  </p>
+                </div>
+              ) : isAuthenticated ? (
                 <>
                   <div className="flex items-center gap-2">
                     <div className="relative flex-grow min-w-0">
@@ -765,16 +781,28 @@ export default function FilterSidebar({
                   >
                     {t("Apply", lang)}
                   </button>
+                  {hasAnyWhatsappOnlyBrand && (
+                    <p className="text-[10px] font-medium text-sonic-silver leading-snug">
+                      {waCopy.priceRangeUnknownNote}
+                    </p>
+                  )}
                 </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => openStoreAuthModal("login")}
-                  className="w-full py-2 px-3 bg-[#1C1C1C] hover:bg-[#333333] border-none text-white text-[10.5px] font-bold uppercase rounded-md flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-                >
-                  <Lock className="w-3.5 h-3.5 shrink-0" />
-                  <span>{getShortMemberPriceLabel(lang)}</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => openStoreAuthModal("login")}
+                    className="w-full py-2 px-3 bg-[#1C1C1C] hover:bg-[#333333] border-none text-white text-[10.5px] font-bold uppercase rounded-md flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Lock className="w-3.5 h-3.5 shrink-0" />
+                    <span>{getShortMemberPriceLabel(lang)}</span>
+                  </button>
+                  {hasAnyWhatsappOnlyBrand && (
+                    <p className="text-[10px] font-medium text-sonic-silver leading-snug">
+                      {waCopy.priceRangeUnknownNote}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}

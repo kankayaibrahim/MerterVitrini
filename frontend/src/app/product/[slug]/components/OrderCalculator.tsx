@@ -10,6 +10,7 @@ import {
   getShortMemberPriceLabel,
 } from "@/app/storeAuth";
 import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
+import { getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
 
 interface OrderCalculatorProps {
   readonly hasSeries: boolean;
@@ -27,6 +28,7 @@ interface OrderCalculatorProps {
   readonly handleAddToCart: () => void;
   readonly onOpenSupplierChat?: () => void;
   readonly isPriceLoading?: boolean;
+  readonly isWhatsappOnly?: boolean;
   readonly supplierWhatsappUrl?: string;
   readonly supplierWhatsappPhone?: string;
   readonly onSupplierWhatsappClick?: () => void;
@@ -165,6 +167,7 @@ export default function OrderCalculator({
   handleAddToCart,
   onOpenSupplierChat,
   isPriceLoading,
+  isWhatsappOnly = false,
   supplierWhatsappUrl,
   supplierWhatsappPhone,
   onSupplierWhatsappClick,
@@ -173,6 +176,7 @@ export default function OrderCalculator({
   const isMemberLoggedIn = useIsStoreMemberLoggedIn();
   const safeLang = normalizeSeoLang(lang, "tr");
   const cta = CHAT_CTA_COPY[safeLang];
+  const waCopy = getWhatsappOrderingCopy(lang);
   const safeTotalWeight = Number.isFinite(totalWeight) ? totalWeight : 0;
   const safeTotalPrice = Number.isFinite(totalPrice) ? totalPrice : 0;
 
@@ -267,7 +271,12 @@ export default function OrderCalculator({
             <span className="select-none text-[#1C1C1C]">
               {t("total_price_calc", lang)} ({t("excluding_vat", lang)}):
             </span>
-            {isAuthenticated ? (
+            {isWhatsappOnly ? (
+              <span className="inline-flex items-center gap-1 text-xs font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-2.5 py-1 rounded">
+                <MessageCircle className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
+                <span>{waCopy.priceBadge}</span>
+              </span>
+            ) : isAuthenticated ? (
               isPriceLoading ? (
                 <span
                   className="inline-block h-5 w-20 rounded bg-[#E5E0D8] animate-pulse"
@@ -287,7 +296,26 @@ export default function OrderCalculator({
         </div>
       </div>
 
-      {isAuthenticated ? (
+      {isWhatsappOnly ? (
+        <div className="flex flex-col gap-2.5">
+          <SupplierWhatsappCta
+            href={supplierWhatsappUrl}
+            label={waCopy.ctaButton}
+            phone={supplierWhatsappPhone}
+            onClick={onSupplierWhatsappClick}
+          />
+          {onOpenSupplierChat && (
+            <button
+              type="button"
+              onClick={isMemberLoggedIn ? onOpenSupplierChat : () => openStoreAuthModal("login")}
+              className="w-full py-3 bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border border-[#D6D1C7] hover:border-[#1C1C1C] flex items-center justify-center gap-2.5 cursor-pointer select-none active:scale-[0.99]"
+            >
+              <MessageSquare className="w-4 h-4 text-[#8C6D3F]" />
+              <span>{isMemberLoggedIn ? cta.askSupplier : cta.loginForChat}</span>
+            </button>
+          )}
+        </div>
+      ) : isAuthenticated ? (
         <div className="flex flex-col gap-2.5">
           <button
             type="button"

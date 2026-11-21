@@ -142,17 +142,18 @@ func getLocalImagePath(imgURL string) string {
 }
 
 type orderCartItem struct {
-	ProductID       string
-	BrandID         string
-	Quantity        int
-	Title           string
-	CustomSku       string
-	Price           float64
-	DiscountedPrice *float64
-	Currency        string
-	SeriesRatio     string
-	CurrentStock    int
-	ImageUrl        string
+	ProductID            string
+	BrandID              string
+	WhatsappOnlyOrdering bool
+	Quantity             int
+	Title                string
+	CustomSku            string
+	Price                float64
+	DiscountedPrice      *float64
+	Currency             string
+	SeriesRatio          string
+	CurrentStock         int
+	ImageUrl             string
 }
 
 type variantStockUpdate struct {
@@ -162,7 +163,8 @@ type variantStockUpdate struct {
 
 func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, float64, error) {
 	rows, err := db.Pool.Query(ctx, `
-		SELECT ci.product_id, COALESCE(p.brand_id::text, ''), ci.quantity, p.title, p.custom_sku, p.price, COALESCE(ci.custom_unit_price, p.discounted_price),
+		SELECT ci.product_id, COALESCE(p.brand_id::text, ''), COALESCE(b.whatsapp_only_ordering, false),
+		       ci.quantity, p.title, p.custom_sku, p.price, COALESCE(ci.custom_unit_price, p.discounted_price),
 		       COALESCE(NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY') as currency,
 		       p.series_ratio, p.stock,
 		       COALESCE(
@@ -171,6 +173,7 @@ func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, fl
 		       ) as image_url
 		FROM catalog.cart_items ci
 		INNER JOIN catalog.products p ON ci.product_id = p.id
+		LEFT JOIN catalog.brands b ON b.id = p.brand_id
 		WHERE ci.cart_id = $1 AND p.deleted_at IS NULL
 	`, cartID)
 	if err != nil {
@@ -184,7 +187,8 @@ func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, fl
 	for rows.Next() {
 		var item orderCartItem
 		err := rows.Scan(
-			&item.ProductID, &item.BrandID, &item.Quantity, &item.Title, &item.CustomSku, &item.Price, &item.DiscountedPrice,
+			&item.ProductID, &item.BrandID, &item.WhatsappOnlyOrdering,
+			&item.Quantity, &item.Title, &item.CustomSku, &item.Price, &item.DiscountedPrice,
 			&item.Currency, &item.SeriesRatio, &item.CurrentStock, &item.ImageUrl,
 		)
 		if err != nil {
@@ -389,6 +393,12 @@ func (h *StoreOrdersHandler) CreateOrder(w http.ResponseWriter, r *http.Request)
 	if err != nil || len(items) == 0 {
 		http.Error(w, `{"error":"Sepetiniz boş"}`, http.StatusBadRequest)
 		return
+	}
+	for _, item := range items {
+		if item.WhatsappOnlyOrdering {
+			http.Error(w, `{"error":"Sepetinizde yalnızca WhatsApp üzerinden sipariş edilebilen ürünler bulunmaktadır. Lütfen ilgili ürün sayfasından WhatsApp ile sipariş verin."}`, http.StatusBadRequest)
+			return
+		}
 	}
 
 	rates := loadLatestExchangeRatesMap(ctx)

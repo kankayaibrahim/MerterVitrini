@@ -70,6 +70,7 @@ interface CatalogProductSectionProps {
   readonly handleOpenModal: (productId: string) => void;
   readonly displayCurrency: string;
   readonly exchangeRates: ExchangeRate[];
+  readonly sortBy?: string;
 }
 
 function CatalogProductSection({
@@ -80,6 +81,7 @@ function CatalogProductSection({
   handleOpenModal,
   displayCurrency,
   exchangeRates,
+  sortBy,
 }: Readonly<CatalogProductSectionProps>) {
   if (fetchError) {
     return (
@@ -129,6 +131,7 @@ function CatalogProductSection({
           priority={idx < 4}
           displayCurrency={displayCurrency}
           exchangeRates={exchangeRates}
+          sortBy={sortBy}
         />
       ))}
     </div>
@@ -445,6 +448,7 @@ export default function CatalogView({
             handleOpenModal={handleOpenModal}
             displayCurrency={displayCurrency}
             exchangeRates={exchangeRates}
+            sortBy={sortBy}
           />
 
           {/* Pagination Controls */}

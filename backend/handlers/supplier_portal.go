@@ -467,6 +467,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 			coalesce(b.supports_private_label, false),
 			coalesce(b.supports_fason, false),
 			coalesce(b.is_verified, true),
+			coalesce(b.whatsapp_only_ordering, false),
 			coalesce(b.bank_name, ''),
 			coalesce(b.bank_account_holder, ''),
 			coalesce(b.iban, ''),
@@ -482,6 +483,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 		&brandProfile.City, &brandProfile.District, &brandProfile.LocationAddress,
 		&brandProfile.ExportCountries, &brandProfile.MinOrderQuantity,
 		&brandProfile.SupportsPrivateLabel, &brandProfile.SupportsFason, &brandProfile.IsVerified,
+		&brandProfile.WhatsappOnlyOrdering,
 		&brandProfile.BankName, &brandProfile.BankAccountHolder, &brandProfile.IBAN,
 		&addressesBytes,
 		&brandProfile.IsActive, &brandProfile.CreatedAt, &brandProfile.UpdatedAt,
@@ -533,6 +535,7 @@ type UpdateSupplierBrandProfileRequest struct {
 	BankName                string            `json:"bank_name"`
 	BankAccountHolder       string            `json:"bank_account_holder"`
 	IBAN                    string            `json:"iban"`
+	WhatsappOnlyOrdering    *bool             `json:"whatsapp_only_ordering,omitempty"`
 	QuickWhatsappOnly       bool              `json:"quick_whatsapp_only"`
 }
 
@@ -683,8 +686,9 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 			bank_name = $19,
 			bank_account_holder = $20,
 			iban = $21,
+			whatsapp_only_ordering = COALESCE($22, whatsapp_only_ordering, false),
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $22`
+		WHERE id = $23`
 
 	_, err := db.Pool.Exec(ctx, updateQuery,
 		brandName,
@@ -708,6 +712,7 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 		strings.TrimSpace(req.BankName),
 		strings.TrimSpace(req.BankAccountHolder),
 		ibanClean,
+		req.WhatsappOnlyOrdering,
 		claims.BrandID,
 	)
 	if err != nil {

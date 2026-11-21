@@ -249,13 +249,21 @@ func buildInquiryWhatsAppURL(inquiryID string, req *models.B2bInquiry, res inqui
 
 	for idx, item := range res.OrderItems {
 		messageLines = append(messageLines, fmt.Sprintf("%d. *%s* (SKU: %s)", idx+1, item.Title, item.CustomSku))
-		messageLines = append(messageLines, fmt.Sprintf("    adet/seri: %d x %s", item.Quantity, formatOrderMoney(item.Price, item.Currency)))
+		if item.Price <= 0 {
+			messageLines = append(messageLines, fmt.Sprintf("    adet/seri: %d (Fiyat: WhatsApp üzerinden bildirilecek)", item.Quantity))
+		} else {
+			messageLines = append(messageLines, fmt.Sprintf("    adet/seri: %d x %s", item.Quantity, formatOrderMoney(item.Price, item.Currency)))
+		}
 	}
 	messageLines = append(messageLines, "-----------------------------------")
-	totalLabel := formatCurrencyBreakdownSummary(res.CurrencyTotals, res.TotalAmount, res.Currency)
-	messageLines = append(messageLines, fmt.Sprintf("*Toplam Sipariş Tutarı:* %s", totalLabel))
-	if res.Currency != "TRY" || len(res.CurrencyTotals) > 1 {
-		messageLines = append(messageLines, fmt.Sprintf("_TCMB Karşılığı:_ ≈ %s", formatOrderMoney(res.TotalAmountTRY, "TRY")))
+	if res.TotalAmount <= 0 {
+		messageLines = append(messageLines, "*Toplam Sipariş Tutarı:* Toptan Fiyat İçin WhatsApp'tan Ulaşın")
+	} else {
+		totalLabel := formatCurrencyBreakdownSummary(res.CurrencyTotals, res.TotalAmount, res.Currency)
+		messageLines = append(messageLines, fmt.Sprintf("*Toplam Sipariş Tutarı:* %s", totalLabel))
+		if res.Currency != "TRY" || len(res.CurrencyTotals) > 1 {
+			messageLines = append(messageLines, fmt.Sprintf("_TCMB Karşılığı:_ ≈ %s", formatOrderMoney(res.TotalAmountTRY, "TRY")))
+		}
 	}
 	messageLines = append(messageLines, "", "_Merter Vitrini üzerinden doğrudan üretici/tedarikçi firmaya oluşturulmuştur._")
 

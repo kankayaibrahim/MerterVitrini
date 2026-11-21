@@ -26,6 +26,11 @@ import {
 } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getMemberPriceLabel, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
+import {
+  isProductWhatsappOnly,
+  getWhatsappOrderingCopy,
+  buildProductWhatsappOrderLink,
+} from "@/utils/whatsappOrdering";
 
 interface ModalLocalizedTexts {
   selectMinOneItem: string;
@@ -150,6 +155,7 @@ function buildSupplierWhatsAppMessage(params: {
 
 function ModalUnitPriceValue({
   isAuthenticated,
+  isWhatsappOnly,
   hasDiscount,
   unitPrice,
   discountedPrice,
@@ -157,12 +163,23 @@ function ModalUnitPriceValue({
   lang,
 }: Readonly<{
   isAuthenticated: boolean;
+  isWhatsappOnly: boolean;
   hasDiscount: boolean;
   unitPrice: number;
   discountedPrice: number;
   currency: string;
   lang: string;
 }>) {
+  if (isWhatsappOnly) {
+    const waCopy = getWhatsappOrderingCopy(lang);
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-2.5 py-1 rounded">
+        <MessageCircle className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
+        <span>{waCopy.priceBadge}</span>
+      </span>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#6E542E]">
@@ -317,13 +334,25 @@ export default function ProductDetailsModal({
   const totalPrice = hasSeries ? (pkgQty * finalPkgPrice) : 0;
 
   const modalTexts = pickLangText(lang, MODAL_LOCALIZED_TEXTS);
+  const isWhatsappOnly = isProductWhatsappOnly(product);
+  const waCopy = getWhatsappOrderingCopy(lang);
   const supplierName = product.brand_profile?.name || product.brand_name || t("merter_manufacturer", lang);
   const supplierWaRaw = product.brand_profile?.whatsapp_phone || product.brand_profile?.phone || "";
   const supplierCallRaw = product.brand_profile?.phone || product.brand_profile?.whatsapp_phone || "";
   const supplierWaDigits = normalizeWhatsappDigits(supplierWaRaw);
+  const waOrderLink = isWhatsappOnly
+    ? buildProductWhatsappOrderLink({
+        product,
+        lang,
+        title,
+        pkgQty,
+        totalPieces,
+        fallbackPhone: supplierWaRaw,
+      })
+    : null;
   const directWaMessage = buildSupplierWhatsAppMessage({
     lang,
-    isAuthenticated,
+    isAuthenticated: isAuthenticated && !isWhatsappOnly,
     supplierName,
     title,
     sku: product.custom_sku || "-",
@@ -332,11 +361,16 @@ export default function ProductDetailsModal({
     totalPrice,
     currency,
   });
-  const directWaUrl = supplierWaDigits
-    ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(directWaMessage)}`
-    : "";
+  const directWaUrl = waOrderLink
+    ? waOrderLink.url
+    : supplierWaDigits
+      ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(directWaMessage)}`
+      : "";
 
   const handleAddClick = () => {
+    if (isWhatsappOnly) {
+      return;
+    }
     if (!isAuthenticated) {
       onClose();
       openStoreAuthModal("login");
@@ -435,6 +469,7 @@ export default function ProductDetailsModal({
                 </span>
                 <ModalUnitPriceValue
                   isAuthenticated={isAuthenticated}
+                  isWhatsappOnly={isWhatsappOnly}
                   hasDiscount={hasDiscount}
                   unitPrice={unitPrice}
                   discountedPrice={discountedPrice}
@@ -605,7 +640,12 @@ export default function ProductDetailsModal({
                   </div>
                   <div className="flex justify-between items-center text-sm text-[#1C1C1C] font-extrabold pt-2 border-t border-[#E5E0D8] mt-1.5">
                     <span>{t("total_price_calc", lang)} ({t("excluding_vat", lang)}):</span>
-                    {isAuthenticated ? (
+                    {isWhatsappOnly ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-2 py-0.5 rounded">
+                        <MessageCircle className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
+                        <span>{waCopy.priceBadge}</span>
+                      </span>
+                    ) : isAuthenticated ? (
                       <span>{totalPrice.toFixed(2)} {currency}</span>
                     ) : (
                       <span className="text-xs font-bold text-[#6E542E]">
@@ -616,27 +656,8 @@ export default function ProductDetailsModal({
                 </div>
               </div>
 
-              {/* Add To Cart Trigger */}
-              <button
-                type="button"
-                onClick={handleAddClick}
-                className="w-full py-3 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border-none flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.99]"
-              >
-                {isAuthenticated ? (
-                  <>
-                    <ShoppingBag className="w-4 h-4 text-white" />
-                    {t("add_to_cart", lang)}
-                  </>
-                ) : (
-                  <>
-                    <Lock className="w-4 h-4 text-white" />
-                    {getMemberPriceLabel(lang)}
-                  </>
-                )}
-              </button>
-
-              {/* Direct Supplier WhatsApp & Call Actions */}
-              {(directWaUrl || supplierCallRaw) && (
+              {/* Add To Cart or WhatsApp-Only CTA */}
+              {isWhatsappOnly ? (
                 <div className="flex flex-col sm:flex-row gap-2">
                   {directWaUrl && (
                     <a
@@ -648,28 +669,84 @@ export default function ProductDetailsModal({
                           brandId: product.brand_id,
                           productId: product.id,
                           sourceSurface: "product_quick_modal",
-                          targetPhone: supplierWaRaw,
+                          targetPhone: waOrderLink?.targetPhone || supplierWaRaw,
                         })
                       }
-                      className="flex-1 py-2.5 px-3 bg-[#15803D] hover:bg-[#166534] text-white rounded-md font-extrabold text-xs tracking-[0.3px] transition-colors flex items-center justify-center gap-2 no-underline"
+                      className="flex-1 py-3 px-4 bg-[#15803D] hover:bg-[#166534] text-white rounded-md font-extrabold text-xs tracking-[0.4px] uppercase transition-colors flex items-center justify-center gap-2 no-underline"
                     >
                       <MessageCircle className="w-4 h-4 shrink-0" />
-                      <span>
-                        {modalTexts.whatsappWriteSupplier} {supplierWaRaw ? `(${supplierWaRaw})` : ""}
-                      </span>
+                      <span>{waCopy.ctaButton}</span>
                     </a>
                   )}
                   {supplierCallRaw && (
                     <a
                       href={`tel:${supplierCallRaw}`}
                       onClick={() => trackBrandEvent(product.brand_id, "phone_click", product.id)}
-                      className="py-2.5 px-3.5 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 no-underline shrink-0"
+                      className="py-3 px-4 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 no-underline shrink-0"
                     >
                       <Phone className="w-3.5 h-3.5 shrink-0" />
                       <span>{modalTexts.callSupplier}</span>
                     </a>
                   )}
                 </div>
+              ) : (
+                <>
+                  {/* Add To Cart Trigger */}
+                  <button
+                    type="button"
+                    onClick={handleAddClick}
+                    className="w-full py-3 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border-none flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.99]"
+                  >
+                    {isAuthenticated ? (
+                      <>
+                        <ShoppingBag className="w-4 h-4 text-white" />
+                        {t("add_to_cart", lang)}
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4 text-white" />
+                        {getMemberPriceLabel(lang)}
+                      </>
+                    )}
+                  </button>
+
+                  {/* Direct Supplier WhatsApp & Call Actions */}
+                  {(directWaUrl || supplierCallRaw) && (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      {directWaUrl && (
+                        <a
+                          href={directWaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() =>
+                            trackWhatsappClick({
+                              brandId: product.brand_id,
+                              productId: product.id,
+                              sourceSurface: "product_quick_modal",
+                              targetPhone: supplierWaRaw,
+                            })
+                          }
+                          className="flex-1 py-2.5 px-3 bg-[#15803D] hover:bg-[#166534] text-white rounded-md font-extrabold text-xs tracking-[0.3px] transition-colors flex items-center justify-center gap-2 no-underline"
+                        >
+                          <MessageCircle className="w-4 h-4 shrink-0" />
+                          <span>
+                            {modalTexts.whatsappWriteSupplier} {supplierWaRaw ? `(${supplierWaRaw})` : ""}
+                          </span>
+                        </a>
+                      )}
+                      {supplierCallRaw && (
+                        <a
+                          href={`tel:${supplierCallRaw}`}
+                          onClick={() => trackBrandEvent(product.brand_id, "phone_click", product.id)}
+                          className="py-2.5 px-3.5 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs transition-colors flex items-center justify-center gap-1.5 no-underline shrink-0"
+                        >
+                          <Phone className="w-3.5 h-3.5 shrink-0" />
+                          <span>{modalTexts.callSupplier}</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
 
             </div>

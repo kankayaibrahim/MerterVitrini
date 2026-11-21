@@ -32,6 +32,10 @@ import {
 import { trackMemberEvent } from "@/components/analytics/AnalyticsTracker";
 import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
 import {
+  isProductWhatsappOnly,
+  buildProductWhatsappOrderLink,
+} from "@/utils/whatsappOrdering";
+import {
   normalizeSeoLang,
   stripBrandTitleSuffix,
   SupportedSeoLang,
@@ -302,9 +306,11 @@ export default function ProductDetailClient({
       ? hydratedAuthProduct
       : product;
 
+  const isWhatsappOnly = isProductWhatsappOnly(activeProduct);
   const needsAuthPriceHydration = Boolean(
     isAuthenticated &&
     product &&
+    !isWhatsappOnly &&
     !(Number(product.price) > 0) &&
     hydratedAuthProduct?.id !== product.id &&
     authFetchAttemptedForId !== product.id
@@ -312,7 +318,7 @@ export default function ProductDetailClient({
   const isPriceLoading = needsAuthPriceHydration;
 
   useEffect(() => {
-    if (!isAuthenticated || !product || Number(product.price) > 0) {
+    if (!isAuthenticated || !product || isProductWhatsappOnly(product) || Number(product.price) > 0) {
       return;
     }
     if (hydratedAuthProduct?.id === product.id) {
@@ -505,6 +511,9 @@ export default function ProductDetailClient({
   };
 
   const handleAddToCart = () => {
+    if (isWhatsappOnly) {
+      return;
+    }
     if (!isAuthenticated) {
       openStoreAuthModal("login");
       return;
@@ -782,9 +791,22 @@ export default function ProductDetailClient({
   const calcWaSupplierName =
     activeProduct.brand_profile?.name || activeProduct.brand_name || copy.defaultBrand;
   const calcWaMessage = `${calcWaSupplierName} — *${title}* (SKU: ${activeProduct.custom_sku || "-"}) • ${pkgQty} ${t("package", safeLang)} (${totalPieces} ${t("piece", safeLang)})`;
-  const calcWaUrl = supplierWaDigits
-    ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(calcWaMessage)}`
-    : "";
+  const waOrderLink = isWhatsappOnly
+    ? buildProductWhatsappOrderLink({
+      product: activeProduct,
+      lang: safeLang,
+      title,
+      color: selectedColor,
+      pkgQty,
+      totalPieces,
+      fallbackPhone: supplierWaRaw,
+    })
+    : null;
+  const calcWaUrl = waOrderLink
+    ? waOrderLink.url
+    : supplierWaDigits
+      ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(calcWaMessage)}`
+      : "";
 
   return (
     <div
@@ -891,6 +913,7 @@ export default function ProductDetailClient({
                 t={t}
                 handleAddToCart={handleAddToCart}
                 isPriceLoading={isPriceLoading}
+                isWhatsappOnly={isWhatsappOnly}
                 supplierWhatsappUrl={calcWaUrl}
                 supplierWhatsappPhone={supplierWaRaw}
                 onSupplierWhatsappClick={() =>

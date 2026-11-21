@@ -227,7 +227,7 @@ class DeployPipeline:
     def _upload_backend_parsers(self, ssh, sftp, remote_bin_dir):
         remote_parsers_dir = f"{remote_bin_dir}/parsers"
         self._ssh_cmd(ssh, f"mkdir -p {remote_parsers_dir}")
-        for parser_name in ["janes.py", "etika.py", "banned_images.txt"]:
+        for parser_name in ["janes.py", "etika.py", "black_fashion.py", "banned_images.txt"]:
             local_parser = os.path.abspath(os.path.join(self.root_dir, "backend", "parsers", parser_name))
             if os.path.exists(local_parser):
                 self.log(f"[UPLOAD] SFTP Uploading Parser: {parser_name} -> {remote_parsers_dir}/{parser_name}")

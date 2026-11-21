@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import { Lock } from "lucide-react";
+import { Lock, MessageCircle } from "lucide-react";
 import { Product } from "@/types/store";
 import { useIsStoreAuthenticated, getMemberPriceLabel } from "@/app/storeAuth";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
+import { isProductWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
 
 interface DynamicAttr {
   readonly name: string;
@@ -50,6 +51,8 @@ function ProductSpecsHeader({
 }>) {
   const safeUnitPrice = Number.isFinite(unitPrice) ? unitPrice : 0;
   const safeDiscountedPrice = Number.isFinite(discountedPrice) ? discountedPrice : 0;
+  const isWhatsappOnly = isProductWhatsappOnly(product);
+  const waCopy = getWhatsappOrderingCopy(lang);
 
   return (
     <div className="flex flex-col gap-5">
@@ -69,7 +72,12 @@ function ProductSpecsHeader({
         <span className="text-[10px] font-extrabold text-[#1C1C1C] uppercase tracking-[0.5px] shrink-0">
           {t("unit_price_label", lang)}
         </span>
-        {isAuthenticated ? (
+        {isWhatsappOnly ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-3 py-1.5 rounded-md">
+            <MessageCircle className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
+            <span>{waCopy.priceBadge}</span>
+          </span>
+        ) : isAuthenticated ? (
           isPriceLoading ? (
             <span
               className="inline-block h-6 w-24 rounded bg-[#E5E0D8] animate-pulse"

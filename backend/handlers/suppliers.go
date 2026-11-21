@@ -46,6 +46,7 @@ func fetchSuppliers(ctx context.Context) ([]*models.Brand, map[string]*models.Br
 			COALESCE(b.supports_private_label, false),
 			COALESCE(b.supports_fason, false),
 			COALESCE(b.is_verified, true),
+			COALESCE(b.whatsapp_only_ordering, false),
 			COALESCE(b.bank_name, ''),
 			COALESCE(b.bank_account_holder, ''),
 			COALESCE(b.iban, ''),
@@ -70,7 +71,7 @@ func fetchSuppliers(ctx context.Context) ([]*models.Brand, map[string]*models.Br
 			&s.Website, &s.Phone, &s.LandlinePhone,
 			&s.WhatsappPhone, &s.PublicEmail, &s.InstagramHandle,
 			&s.City, &s.District, &s.LocationAddress, &s.ExportCountries, &s.MinOrderQuantity,
-			&s.SupportsPrivateLabel, &s.SupportsFason, &s.IsVerified,
+			&s.SupportsPrivateLabel, &s.SupportsFason, &s.IsVerified, &s.WhatsappOnlyOrdering,
 			&s.BankName, &s.BankAccountHolder, &s.IBAN,
 			&s.Addresses, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
 		); err != nil {
@@ -144,22 +145,23 @@ func (h *SuppliersHandler) ListSuppliers(w http.ResponseWriter, r *http.Request)
 }
 
 type adminSupplierUpsertRequest struct {
-	Name              string  `json:"name"`
-	AliasCode         *string `json:"alias_code"`
-	Website           *string `json:"website"`
-	Phone             *string `json:"phone"`
-	LandlinePhone     *string `json:"landline_phone"`
-	WhatsappPhone     *string `json:"whatsapp_phone"`
-	PublicEmail       *string `json:"public_email"`
-	InstagramHandle   *string `json:"instagram_handle"`
-	City              *string `json:"city"`
-	District          *string `json:"district"`
-	LocationAddress   *string `json:"location_address"`
-	BankName          *string `json:"bank_name"`
-	BankAccountHolder *string `json:"bank_account_holder"`
-	IBAN              *string `json:"iban"`
-	Addresses         []any   `json:"addresses"`
-	IsActive          bool    `json:"is_active"`
+	Name                 string  `json:"name"`
+	AliasCode            *string `json:"alias_code"`
+	Website              *string `json:"website"`
+	Phone                *string `json:"phone"`
+	LandlinePhone        *string `json:"landline_phone"`
+	WhatsappPhone        *string `json:"whatsapp_phone"`
+	PublicEmail          *string `json:"public_email"`
+	InstagramHandle      *string `json:"instagram_handle"`
+	City                 *string `json:"city"`
+	District             *string `json:"district"`
+	LocationAddress      *string `json:"location_address"`
+	BankName             *string `json:"bank_name"`
+	BankAccountHolder    *string `json:"bank_account_holder"`
+	IBAN                 *string `json:"iban"`
+	WhatsappOnlyOrdering *bool   `json:"whatsapp_only_ordering"`
+	Addresses            []any   `json:"addresses"`
+	IsActive             bool    `json:"is_active"`
 }
 
 func scanAdminSupplierRow(row pgx.Row) (models.Brand, error) {
@@ -169,12 +171,12 @@ func scanAdminSupplierRow(row pgx.Row) (models.Brand, error) {
 		&s.WhatsappPhone, &s.PublicEmail, &s.InstagramHandle,
 		&s.City, &s.District, &s.LocationAddress,
 		&s.BankName, &s.BankAccountHolder, &s.IBAN,
-		&s.Addresses, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
+		&s.WhatsappOnlyOrdering, &s.Addresses, &s.IsActive, &s.CreatedAt, &s.UpdatedAt,
 	)
 	return s, err
 }
 
-const adminSupplierReturningCols = `id, brand_name AS name, slug, alias_code, website, phone, COALESCE(landline_phone, ''), COALESCE(whatsapp_phone, ''), COALESCE(public_email, ''), COALESCE(instagram_handle, ''), COALESCE(city, ''), COALESCE(district, ''), COALESCE(location_address, ''), COALESCE(bank_name, ''), COALESCE(bank_account_holder, ''), COALESCE(iban, ''), addresses, is_active, created_at, updated_at`
+const adminSupplierReturningCols = `id, brand_name AS name, slug, alias_code, website, phone, COALESCE(landline_phone, ''), COALESCE(whatsapp_phone, ''), COALESCE(public_email, ''), COALESCE(instagram_handle, ''), COALESCE(city, ''), COALESCE(district, ''), COALESCE(location_address, ''), COALESCE(bank_name, ''), COALESCE(bank_account_holder, ''), COALESCE(iban, ''), COALESCE(whatsapp_only_ordering, false), addresses, is_active, created_at, updated_at`
 
 func resolveAliasForCreate(reqAlias *string, name string) string {
 	if reqAlias != nil && strings.TrimSpace(*reqAlias) != "" {
@@ -236,20 +238,21 @@ func (h *SuppliersHandler) CreateSupplier(w http.ResponseWriter, r *http.Request
 
 	ibanStr := strings.ToUpper(strings.ReplaceAll(derefTrimmed(req.IBAN), " ", ""))
 	addressesJSON, _ := json.Marshal(req.Addresses)
+	whatsappOnly := req.WhatsappOnlyOrdering != nil && *req.WhatsappOnlyOrdering
 
 	query := `
 		INSERT INTO catalog.brands (
 			brand_name, slug, alias_code, website, phone, landline_phone, whatsapp_phone,
 			public_email, instagram_handle, city, district, location_address,
-			bank_name, bank_account_holder, iban, addresses, is_active
+			bank_name, bank_account_holder, iban, whatsapp_only_ordering, addresses, is_active
 		)
-		VALUES ($1, $2, UPPER($3), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		VALUES ($1, $2, UPPER($3), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		RETURNING ` + adminSupplierReturningCols
 
 	s, err := scanAdminSupplierRow(db.Pool.QueryRow(ctx, query,
 		strings.TrimSpace(req.Name), slug, aliasCode, websitePtr, phonePtr, landlineStr, waStr,
 		derefTrimmed(req.PublicEmail), instagramStr, truncateStr(cityStr, 100), truncateStr(districtStr, 100), locStr,
-		derefTrimmed(req.BankName), derefTrimmed(req.BankAccountHolder), ibanStr, addressesJSON, req.IsActive,
+		derefTrimmed(req.BankName), derefTrimmed(req.BankAccountHolder), ibanStr, whatsappOnly, addressesJSON, req.IsActive,
 	))
 	if err != nil {
 		log.Printf("Failed to create supplier: %v", err)
@@ -339,10 +342,11 @@ func (h *SuppliersHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request
 		    bank_name = COALESCE($13, bank_name, ''),
 		    bank_account_holder = COALESCE($14, bank_account_holder, ''),
 		    iban = COALESCE($15, iban, ''),
-		    addresses = COALESCE($16::jsonb, addresses),
-		    is_active = $17,
+		    whatsapp_only_ordering = COALESCE($16, whatsapp_only_ordering, false),
+		    addresses = COALESCE($17::jsonb, addresses),
+		    is_active = $18,
 		    updated_at = CURRENT_TIMESTAMP
-		WHERE id = $18
+		WHERE id = $19
 		RETURNING ` + adminSupplierReturningCols
 
 	s, err := scanAdminSupplierRow(db.Pool.QueryRow(ctx, query,
@@ -357,6 +361,7 @@ func (h *SuppliersHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request
 		normalizeOptionalStringPtr(req.BankName, 150),
 		normalizeOptionalStringPtr(req.BankAccountHolder, 200),
 		ibanPtr,
+		req.WhatsappOnlyOrdering,
 		addressesJSONPtr,
 		req.IsActive, id,
 	))

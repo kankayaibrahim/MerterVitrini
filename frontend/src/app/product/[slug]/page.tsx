@@ -276,6 +276,7 @@ function buildProductJsonLdGraph(
     absoluteImages.push(`${SITE_ORIGIN}/og-image.jpg`);
   }
 
+  const isWhatsappOnly = Boolean(product.brand_profile?.whatsapp_only_ordering);
   const availability = isProductInStock(product)
     ? "https://schema.org/InStock"
     : "https://schema.org/OutOfStock";
@@ -284,6 +285,51 @@ function buildProductJsonLdGraph(
   const effectiveOfferPrice = hasDiscount
     ? product.discounted_price || 0
     : product.price || 0;
+  const skuValue = product.custom_sku || product.source_product_id || product.id;
+  const breadcrumbs = buildProductBreadcrumbElements(
+    product,
+    categories,
+    lang,
+    localizedTitle,
+    canonicalProductUrl
+  );
+
+  // WhatsApp-only suppliers and genuinely unpriced items must not emit Product/Offer schema without price
+  const omitProductOfferSchema =
+    isWhatsappOnly || (Boolean(settings?.show_prices_to_guests) && effectiveOfferPrice <= 0);
+  if (omitProductOfferSchema) {
+    return {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "ItemPage",
+          "@id": `${canonicalProductUrl}#webpage`,
+          url: canonicalProductUrl,
+          name: localizedTitle,
+          description: localizedDesc,
+          inLanguage: lang,
+          primaryImageOfPage: absoluteImages[0],
+          about: {
+            "@type": "Thing",
+            name: localizedTitle,
+            description: localizedDesc,
+            image: absoluteImages,
+            url: canonicalProductUrl,
+          },
+          potentialAction: {
+            "@type": "CommunicateAction",
+            name: tpl.b2bSuffix,
+            target: canonicalProductUrl,
+          },
+        },
+        {
+          "@type": "BreadcrumbList",
+          itemListElement: breadcrumbs,
+        },
+      ],
+    };
+  }
+
   const moq =
     product.minimum_order_quantity && product.minimum_order_quantity > 0
       ? product.minimum_order_quantity
@@ -347,15 +393,6 @@ function buildProductJsonLdGraph(
       description: "Wholesale member pricing upon verification",
     },
   };
-
-  const skuValue = product.custom_sku || product.source_product_id || product.id;
-  const breadcrumbs = buildProductBreadcrumbElements(
-    product,
-    categories,
-    lang,
-    localizedTitle,
-    canonicalProductUrl
-  );
 
   return {
     "@context": "https://schema.org",

@@ -58,6 +58,8 @@ func isStorePriceVisibleToCaller(ctx context.Context, r *http.Request) bool {
 	return resolveAuthenticatedMemberID(r, "") != ""
 }
 
+const sqlBrandWhatsappOnlyExists = `EXISTS (SELECT 1 FROM catalog.brands b_wo WHERE b_wo.id = p.brand_id AND COALESCE(b_wo.whatsapp_only_ordering, false) = true)`
+
 func sanitizePublicStoreProduct(p *models.Product, showPrices bool) {
 	if p == nil {
 		return
@@ -67,18 +69,20 @@ func sanitizePublicStoreProduct(p *models.Product, showPrices bool) {
 	p.SourceProductID = ""
 	p.SourceURL = nil
 
+	effectiveShowPrices := showPrices && (p.BrandProfile == nil || !p.BrandProfile.WhatsappOnlyOrdering)
+
 	for _, v := range p.Variants {
 		if v == nil {
 			continue
 		}
 		v.SourceVariantID = ""
-		if !showPrices {
+		if !effectiveShowPrices {
 			v.Price = 0
 			v.DiscountedPrice = nil
 		}
 	}
 
-	if !showPrices {
+	if !effectiveShowPrices {
 		p.Price = 0
 		p.DiscountedPrice = nil
 		p.SinglePrice = nil
@@ -291,11 +295,13 @@ func appendCatalogDynamicAttributesFilter(sqlBase *string, query url.Values, arg
 func appendCatalogPriceFilter(sqlBase *string, query url.Values, displayRate float64, sqlPriceInTRY string, argIndex *int, args *[]any) {
 	minPriceStr := query.Get("min_price")
 	maxPriceStr := query.Get("max_price")
+	hasPriceFilter := false
 	if minPriceStr != "" {
 		if minP, err := strconv.ParseFloat(minPriceStr, 64); err == nil {
 			*sqlBase += fmt.Sprintf(" AND %s >= $%d", sqlPriceInTRY, *argIndex)
 			*args = append(*args, minP*displayRate)
 			*argIndex++
+			hasPriceFilter = true
 		}
 	}
 	if maxPriceStr != "" {
@@ -303,7 +309,11 @@ func appendCatalogPriceFilter(sqlBase *string, query url.Values, displayRate flo
 			*sqlBase += fmt.Sprintf(" AND %s <= $%d", sqlPriceInTRY, *argIndex)
 			*args = append(*args, maxP*displayRate)
 			*argIndex++
+			hasPriceFilter = true
 		}
+	}
+	if hasPriceFilter {
+		*sqlBase += " AND NOT " + sqlBrandWhatsappOnlyExists + " AND COALESCE(p.discounted_price, p.price) > 0"
 	}
 }
 
@@ -365,11 +375,12 @@ func buildCatalogFilterSQL(query url.Values, displayRate float64, sqlPriceInTRY 
 }
 
 func buildCatalogOrderBy(sortBy, sqlPriceInTRY string) string {
+	unknownPriceRank := fmt.Sprintf("CASE WHEN %s OR COALESCE(p.discounted_price, p.price) <= 0 THEN 1 ELSE 0 END", sqlBrandWhatsappOnlyExists)
 	switch sortBy {
 	case "price_asc":
-		return fmt.Sprintf(" ORDER BY %s ASC", sqlPriceInTRY)
+		return fmt.Sprintf(" ORDER BY %s ASC, %s ASC, p.created_at DESC", unknownPriceRank, sqlPriceInTRY)
 	case "price_desc":
-		return fmt.Sprintf(" ORDER BY %s DESC", sqlPriceInTRY)
+		return fmt.Sprintf(" ORDER BY %s ASC, %s DESC, p.created_at DESC", unknownPriceRank, sqlPriceInTRY)
 	case "name_asc":
 		return " ORDER BY p.title ASC"
 	case "name_desc":
@@ -741,6 +752,7 @@ func fetchCatalogBrandProfiles(ctx context.Context, products []*models.Product) 
 		       COALESCE(b.supports_private_label, false),
 		       COALESCE(b.supports_fason, false),
 		       COALESCE(b.is_verified, true),
+		       COALESCE(b.whatsapp_only_ordering, false),
 		       COALESCE(b.bank_name, ''),
 		       COALESCE(b.bank_account_holder, ''),
 		       COALESCE(b.iban, '')
@@ -761,7 +773,7 @@ func fetchCatalogBrandProfiles(ctx context.Context, products []*models.Product) 
 			&b.Website, &b.Phone, &b.LandlinePhone,
 			&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
 			&b.City, &b.District, &b.LocationAddress, &b.ExportCountries, &b.MinOrderQuantity,
-			&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified,
+			&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified, &b.WhatsappOnlyOrdering,
 			&b.BankName, &b.BankAccountHolder, &b.IBAN,
 		); err == nil {
 			b.IsActive = true
@@ -812,6 +824,7 @@ func fetchProductBase(ctx context.Context, id string) (*models.Product, error) {
 		       COALESCE(b.supports_private_label, false),
 		       COALESCE(b.supports_fason, false),
 		       COALESCE(b.is_verified, true),
+		       COALESCE(b.whatsapp_only_ordering, false),
 		       COALESCE(b.bank_name, ''),
 		       COALESCE(b.bank_account_holder, ''),
 		       COALESCE(b.iban, ''),
@@ -840,7 +853,7 @@ func fetchProductBase(ctx context.Context, id string) (*models.Product, error) {
 		&b.Website, &b.Phone, &b.LandlinePhone,
 		&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
 		&b.City, &b.District, &b.LocationAddress, &b.ExportCountries, &b.MinOrderQuantity,
-		&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified,
+		&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified, &b.WhatsappOnlyOrdering,
 		&b.BankName, &b.BankAccountHolder, &b.IBAN,
 		&translationsBytes,
 	)
@@ -1200,6 +1213,7 @@ func (h *StoreCatalogHandler) ListBrands(w http.ResponseWriter, r *http.Request)
 		       COALESCE(b.supports_private_label, false),
 		       COALESCE(b.supports_fason, false),
 		       COALESCE(b.is_verified, true),
+		       COALESCE(b.whatsapp_only_ordering, false),
 		       COALESCE(b.bank_name, ''),
 		       COALESCE(b.bank_account_holder, ''),
 		       COALESCE(b.iban, ''),
@@ -1228,7 +1242,7 @@ func (h *StoreCatalogHandler) ListBrands(w http.ResponseWriter, r *http.Request)
 			&b.Website, &b.Phone, &b.LandlinePhone,
 			&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
 			&b.City, &b.District, &b.LocationAddress, &b.ExportCountries, &b.MinOrderQuantity,
-			&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified,
+			&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified, &b.WhatsappOnlyOrdering,
 			&b.BankName, &b.BankAccountHolder, &b.IBAN,
 			&b.ActiveProductCount,
 			&addressesBytes, &b.IsActive, &b.CreatedAt, &b.UpdatedAt,
@@ -1287,6 +1301,7 @@ func (h *StoreCatalogHandler) GetBrandBySlug(w http.ResponseWriter, r *http.Requ
 		       COALESCE(b.supports_private_label, false),
 		       COALESCE(b.supports_fason, false),
 		       COALESCE(b.is_verified, true),
+		       COALESCE(b.whatsapp_only_ordering, false),
 		       COALESCE(b.bank_name, ''),
 		       COALESCE(b.bank_account_holder, ''),
 		       COALESCE(b.iban, ''),
@@ -1304,7 +1319,7 @@ func (h *StoreCatalogHandler) GetBrandBySlug(w http.ResponseWriter, r *http.Requ
 		&b.Website, &b.Phone, &b.LandlinePhone,
 		&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
 		&b.City, &b.District, &b.LocationAddress, &b.ExportCountries, &b.MinOrderQuantity,
-		&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified,
+		&b.SupportsPrivateLabel, &b.SupportsFason, &b.IsVerified, &b.WhatsappOnlyOrdering,
 		&b.BankName, &b.BankAccountHolder, &b.IBAN,
 		&b.ActiveProductCount,
 		&addressesBytes, &b.IsActive, &b.CreatedAt, &b.UpdatedAt,
@@ -2132,9 +2147,12 @@ func (h *StoreCatalogHandler) GoogleMerchantFeed(w http.ResponseWriter, r *http.
 		       p.images_json, p.source_product_group_id,
 		       p.series_ratio, p.minimum_order_quantity, p.kumas_fabric
 		FROM catalog.mv_products p
+		LEFT JOIN catalog.brands b ON b.id = p.brand_id
 		LEFT JOIN catalog.product_translations pt ON pt.product_id = p.id AND pt.language_code = $1
 		LEFT JOIN catalog.category_translations ct ON ct.category_id = p.category_id AND ct.language_code = $1
-		WHERE p.is_active = true`
+		WHERE p.is_active = true
+		  AND p.price > 0
+		  AND COALESCE(b.whatsapp_only_ordering, false) = false`
 
 	rows, err := db.Pool.Query(ctx, query, lang)
 	if err != nil {
@@ -2474,8 +2492,11 @@ func (h *StoreCatalogHandler) YandexMarketFeed(w http.ResponseWriter, r *http.Re
 		       p.brand_name, p.category_id::text, p.images_json, p.source_product_group_id,
 		       p.series_ratio, p.minimum_order_quantity, p.kumas_fabric
 		FROM catalog.mv_products p
+		LEFT JOIN catalog.brands b ON b.id = p.brand_id
 		LEFT JOIN catalog.product_translations pt ON pt.product_id = p.id AND pt.language_code = $1
-		WHERE p.is_active = true AND p.price > 0`
+		WHERE p.is_active = true
+		  AND p.price > 0
+		  AND COALESCE(b.whatsapp_only_ordering, false) = false`
 
 	rows, err := db.Pool.Query(ctx, offerQuery, lang)
 	if err != nil {
@@ -2570,8 +2591,10 @@ func (h *StoreCatalogHandler) CatalogDelta(w http.ResponseWriter, r *http.Reques
 		SELECT 
 			p.id, p.title, p.slug, COALESCE(p.brand_name, 'Merter Vitrini'), COALESCE(p.category_id::text, ''),
 			p.gender, p.season, p.kumas_fabric, p.price, p.discounted_price, COALESCE(p.currency, 'TRY'),
-			p.stock, p.series_ratio, COALESCE(p.minimum_order_quantity, 1), p.images_json, p.color, p.updated_at
+			p.stock, p.series_ratio, COALESCE(p.minimum_order_quantity, 1), p.images_json, p.color, p.updated_at,
+			COALESCE(b.whatsapp_only_ordering, false)
 		FROM catalog.mv_products p
+		LEFT JOIN catalog.brands b ON b.id = p.brand_id
 		WHERE p.is_active = true
 		  AND ($1::timestamptz IS NULL OR p.updated_at >= $1)
 		ORDER BY p.updated_at DESC
@@ -2594,21 +2617,22 @@ func (h *StoreCatalogHandler) CatalogDelta(w http.ResponseWriter, r *http.Reques
 	items := make([]CatalogDeltaItem, 0, limit)
 	for rows.Next() {
 		var (
-			item        CatalogDeltaItem
-			imagesBytes []byte
-			color       *string
-			updatedAt   time.Time
+			item           CatalogDeltaItem
+			imagesBytes    []byte
+			color          *string
+			updatedAt      time.Time
+			waOnlyOrdering bool
 		)
 
 		if scanErr := rows.Scan(
 			&item.ID, &item.Title, &item.Slug, &item.Brand, &item.CategorySlug,
 			&item.Gender, &item.Season, &item.Fabric, &item.Price, &item.DiscountedPrice, &item.Currency,
-			&item.Stock, &item.SeriesRatio, &item.MOQ, &imagesBytes, &color, &updatedAt,
+			&item.Stock, &item.SeriesRatio, &item.MOQ, &imagesBytes, &color, &updatedAt, &waOnlyOrdering,
 		); scanErr != nil {
 			continue
 		}
 
-		if !showPrices {
+		if !showPrices || waOnlyOrdering {
 			item.Price = 0
 			item.DiscountedPrice = nil
 		}

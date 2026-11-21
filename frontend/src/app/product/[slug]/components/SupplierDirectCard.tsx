@@ -31,6 +31,7 @@ import {
   formatBrandWebsiteLabel,
   formatBrandWebsiteUrl,
 } from "@/utils/brandContactHelpers";
+import { isProductWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
 
 function normalizeWaPhone(raw?: string): string {
   return normalizeWhatsappDigits(raw);
@@ -477,6 +478,8 @@ export default function SupplierDirectCard({
   const isAuthenticated = useIsStoreAuthenticated();
   const isMemberLoggedIn = useIsStoreMemberLoggedIn();
   const bp: Brand | undefined = product.brand_profile;
+  const isWhatsappOnly = isProductWhatsappOnly(product);
+  const waCopy = getWhatsappOrderingCopy(safeLang);
   const supplierName = bp?.name || product.brand_name || copy.defaultSupplier;
   const waRaw = bp?.whatsapp_phone || bp?.phone || "";
   const callRaw = bp?.phone || bp?.whatsapp_phone || "";
@@ -494,17 +497,18 @@ export default function SupplierDirectCard({
   const localizedProdTitle =
     product.translations?.[safeLang]?.title || product.title;
 
-  const directWaMessage = isAuthenticated
-    ? copy.waAuthenticated(
-        supplierName,
-        localizedProdTitle,
-        skuCode,
-        pkgQty,
-        totalPieces,
-        formattedTotalPrice,
-        currency
-      )
-    : copy.waGuest(supplierName, localizedProdTitle, skuCode, pkgQty, totalPieces);
+  const directWaMessage =
+    !isWhatsappOnly && isAuthenticated
+      ? copy.waAuthenticated(
+          supplierName,
+          localizedProdTitle,
+          skuCode,
+          pkgQty,
+          totalPieces,
+          formattedTotalPrice,
+          currency
+        )
+      : copy.waGuest(supplierName, localizedProdTitle, skuCode, pkgQty, totalPieces);
 
   const directWaUrl = waDigits
     ? `https://wa.me/${waDigits}?text=${encodeURIComponent(directWaMessage)}`
@@ -598,6 +602,12 @@ export default function SupplierDirectCard({
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 text-[10px] font-bold">
                   <ShieldCheck size={11} />
                   <span>{copy.verifiedBadge}</span>
+                </span>
+              )}
+              {isWhatsappOnly && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#F0FDF4] text-[#166534] border border-[#BBF7D0] text-[10px] font-bold">
+                  <MessageCircle size={11} />
+                  <span>{waCopy.supplierBadge}</span>
                 </span>
               )}
             </div>

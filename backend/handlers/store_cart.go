@@ -176,6 +176,20 @@ func (h *CartHandler) GetCart(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(items)
 }
 
+func isProductWhatsappOnly(ctx context.Context, productID string) bool {
+	if db.Pool == nil || strings.TrimSpace(productID) == "" {
+		return false
+	}
+	var waOnly bool
+	err := db.Pool.QueryRow(ctx, `
+		SELECT COALESCE(b.whatsapp_only_ordering, false)
+		FROM catalog.products p
+		INNER JOIN catalog.brands b ON b.id = p.brand_id
+		WHERE p.id = $1
+	`, productID).Scan(&waOnly)
+	return err == nil && waOnly
+}
+
 func (h *CartHandler) AddToCart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
@@ -200,6 +214,11 @@ func (h *CartHandler) AddToCart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+
+	if isProductWhatsappOnly(ctx, req.ProductID) {
+		http.Error(w, `{"error":"Bu tedarikçinin ürünleri yalnızca WhatsApp üzerinden sipariş edilebilir"}`, http.StatusBadRequest)
+		return
+	}
 
 	// Use transaction
 	tx, err := db.Pool.Begin(ctx)
@@ -499,7 +518,16 @@ func deduplicateSyncCartItems(items []SyncCartRequestItem) ([]SyncCartRequestIte
 }
 
 func syncCartItemsPreservingOffers(ctx context.Context, tx pgx.Tx, cartID string, items []SyncCartRequestItem) error {
-	deduped, keepIDs := deduplicateSyncCartItems(items)
+	rawDeduped, _ := deduplicateSyncCartItems(items)
+	deduped := make([]SyncCartRequestItem, 0, len(rawDeduped))
+	keepIDs := make([]string, 0, len(rawDeduped))
+	for _, item := range rawDeduped {
+		if isProductWhatsappOnly(ctx, item.ProductID) {
+			continue
+		}
+		deduped = append(deduped, item)
+		keepIDs = append(keepIDs, item.ProductID)
+	}
 	if len(keepIDs) == 0 {
 		_, err := tx.Exec(ctx, "DELETE FROM catalog.cart_items WHERE cart_id = $1", cartID)
 		return err

@@ -145,6 +145,7 @@ export interface Brand {
   bank_name?: string | null;
   bank_account_holder?: string | null;
   iban?: string | null;
+  whatsapp_only_ordering?: boolean;
   addresses?: SupplierAddress[] | null;
   is_active: boolean;
   created_at: string;

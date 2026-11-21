@@ -15,6 +15,7 @@ import { apiFetch, convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
 import { useRouter } from "next/navigation";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
+import { isProductWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
 
 interface WishlistUiTexts {
   title: string;
@@ -112,6 +113,7 @@ const WISHLIST_UI_TEXTS: Record<SupportedLangCode, WishlistUiTexts> = {
 
 function WishlistItemPriceBlock({
   isAuthenticated,
+  isWhatsappOnly,
   hasDiscount,
   origPrice,
   discPrice,
@@ -120,6 +122,7 @@ function WishlistItemPriceBlock({
   onClose,
 }: Readonly<{
   isAuthenticated: boolean;
+  isWhatsappOnly: boolean;
   hasDiscount: boolean;
   origPrice: number;
   discPrice: number;
@@ -127,6 +130,15 @@ function WishlistItemPriceBlock({
   lang: string;
   onClose: () => void;
 }>) {
+  if (isWhatsappOnly) {
+    const waCopy = getWhatsappOrderingCopy(lang);
+    return (
+      <span className="inline-flex items-center justify-end text-[9.5px] font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-1.5 py-0.5 rounded max-w-[140px] leading-tight">
+        {waCopy.priceBadge}
+      </span>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <button
@@ -249,6 +261,7 @@ function WishlistItemCard({
       <div className="shrink-0 self-center text-right pl-1 flex flex-col gap-0.5 justify-center">
         <WishlistItemPriceBlock
           isAuthenticated={isAuthenticated}
+          isWhatsappOnly={isProductWhatsappOnly(product)}
           hasDiscount={hasDiscount}
           origPrice={origPrice}
           discPrice={discPrice}

@@ -10,12 +10,17 @@ import {
   SupportedLangCode,
   t,
 } from "@/app/i18n";
-import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, ExchangeRate } from "@/app/utils";
+import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, ExchangeRate, trackWhatsappClick } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
-import { Heart, ShoppingBag, Eye, ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { Heart, ShoppingBag, Eye, ChevronLeft, ChevronRight, Lock, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useWishlistStore } from "@/store/useWishlistStore";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
+import {
+  isProductWhatsappOnly,
+  getWhatsappOrderingCopy,
+  buildProductWhatsappOrderLink,
+} from "@/utils/whatsappOrdering";
 
 interface ProductCardProps {
   readonly product: Product;
@@ -24,6 +29,7 @@ interface ProductCardProps {
   readonly priority?: boolean;
   readonly displayCurrency?: string;
   readonly exchangeRates?: readonly ExchangeRate[];
+  readonly sortBy?: string;
 }
 
 interface CardUiLabels {
@@ -187,6 +193,8 @@ function getSortedProductImages(product: Product): string[] {
 
 function ProductCardPriceBlock({
   isAuthenticated,
+  isWhatsappOnly,
+  showPriceUnknown,
   hasDiscount,
   origPrice,
   discPrice,
@@ -195,6 +203,8 @@ function ProductCardPriceBlock({
   lang,
 }: Readonly<{
   isAuthenticated: boolean;
+  isWhatsappOnly: boolean;
+  showPriceUnknown: boolean;
   hasDiscount: boolean;
   origPrice: number;
   discPrice: number;
@@ -202,6 +212,23 @@ function ProductCardPriceBlock({
   currency: string;
   lang: string;
 }>) {
+  if (isWhatsappOnly) {
+    const waCopy = getWhatsappOrderingCopy(lang);
+    return (
+      <div className="flex flex-col items-end gap-0.5 text-right max-w-full">
+        {showPriceUnknown && (
+          <span className="text-[10px] font-bold text-[#6B6B6B] select-none">
+            {waCopy.priceUnknownLabel}
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-2 py-0.5 rounded leading-tight max-w-full">
+          <MessageCircle className="w-3 h-3 text-[#15803D] shrink-0" />
+          <span className="truncate">{waCopy.priceBadge}</span>
+        </span>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#6E542E] select-none">
@@ -234,6 +261,7 @@ export default function ProductCard({
   priority = false,
   displayCurrency,
   exchangeRates,
+  sortBy,
 }: Readonly<ProductCardProps>) {
   const title = getProductTitle(product, lang);
   const cardLabels = pickLangText(lang, CARD_UI_LABELS);
@@ -296,6 +324,16 @@ export default function ProductCard({
   };
 
   const isAuthenticated = useIsStoreAuthenticated();
+  const isWhatsappOnly = isProductWhatsappOnly(product);
+  const waCopy = getWhatsappOrderingCopy(lang);
+  const showPriceUnknown = sortBy === "price_asc" || sortBy === "price_desc";
+  const waOrderLink = isWhatsappOnly
+    ? buildProductWhatsappOrderLink({
+        product,
+        lang,
+        title,
+      })
+    : null;
   const displayImages = getSortedProductImages(product);
   const units = getUnitsFromSeriesRatio(product.series_ratio);
   const colorText = getColorText(product, lang);
@@ -411,15 +449,15 @@ export default function ProductCard({
           </div>
         )}
 
-        {/* Discount Badge (Only for authenticated members) */}
-        {isAuthenticated && hasDiscount && (
+        {/* Discount Badge (Only for authenticated members & priced suppliers) */}
+        {!isWhatsappOnly && isAuthenticated && hasDiscount && (
           <span className="absolute top-3 left-3 bg-[#A30000] text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10 pointer-events-none">
             {discountPct}% {cardLabels.discountSuffix}
           </span>
         )}
 
         {/* Gender Badge */}
-        {(!isAuthenticated || !hasDiscount) && product.gender && (
+        {(isWhatsappOnly || !isAuthenticated || !hasDiscount) && product.gender && (
           <span className="absolute top-3 left-3 bg-white border border-black/10 text-onyx text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10 pointer-events-none">
             {t(product.gender, lang)}
           </span>
@@ -501,6 +539,8 @@ export default function ProductCard({
         <div className="flex items-baseline justify-end gap-2 mt-auto pt-2 border-t border-cultured">
           <ProductCardPriceBlock
             isAuthenticated={isAuthenticated}
+            isWhatsappOnly={isWhatsappOnly}
+            showPriceUnknown={showPriceUnknown}
             hasDiscount={hasDiscount}
             origPrice={origPrice}
             discPrice={discPrice}
@@ -510,37 +550,58 @@ export default function ProductCard({
           />
         </div>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!isAuthenticated) {
-              openStoreAuthModal("login");
-              return;
-            }
-            const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
-            const minPkgs = Math.max(1, Math.ceil((product.minimum_order_quantity || 1) / (unitsPerPkg || 1)));
-            window.dispatchEvent(
-              new CustomEvent("merter-add-to-cart", {
-                detail: { product, quantity: minPkgs },
-              })
-            );
-          }}
-          className="mt-3 relative z-10 w-full bg-[#1C1C1C] hover:bg-[#333333] text-white text-[10px] sm:text-[11px] font-bold uppercase py-2 sm:py-2.5 px-2 sm:px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-none select-none border-none cursor-pointer tracking-wider"
-        >
-          {isAuthenticated ? (
-            <>
-              <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
-              <span>{btnText}</span>
-            </>
-          ) : (
-            <>
-              <Lock className="w-3.5 h-3.5 shrink-0" />
-              <span>{cardLabels.loginToSeePrice}</span>
-            </>
-          )}
-        </button>
+        {isWhatsappOnly ? (
+          <a
+            href={waOrderLink?.url || "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              e.stopPropagation();
+              trackWhatsappClick({
+                brandId: product.brand_id,
+                productId: product.id,
+                sourceSurface: "product_card",
+                targetPhone: waOrderLink?.targetPhone,
+              });
+            }}
+            className="mt-3 relative z-10 w-full bg-[#15803D] hover:bg-[#166534] text-white text-[10px] sm:text-[11px] font-bold uppercase py-2 sm:py-2.5 px-2 sm:px-3 rounded-md transition-colors duration-200 flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-none select-none no-underline tracking-wider"
+          >
+            <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{waCopy.ctaButton}</span>
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!isAuthenticated) {
+                openStoreAuthModal("login");
+                return;
+              }
+              const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
+              const minPkgs = Math.max(1, Math.ceil((product.minimum_order_quantity || 1) / (unitsPerPkg || 1)));
+              window.dispatchEvent(
+                new CustomEvent("merter-add-to-cart", {
+                  detail: { product, quantity: minPkgs },
+                })
+              );
+            }}
+            className="mt-3 relative z-10 w-full bg-[#1C1C1C] hover:bg-[#333333] text-white text-[10px] sm:text-[11px] font-bold uppercase py-2 sm:py-2.5 px-2 sm:px-4 rounded-md transition-colors duration-200 flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-none select-none border-none cursor-pointer tracking-wider"
+          >
+            {isAuthenticated ? (
+              <>
+                <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+                <span>{btnText}</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-3.5 h-3.5 shrink-0" />
+                <span>{cardLabels.loginToSeePrice}</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
     </article>
   );

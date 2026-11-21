@@ -51,6 +51,7 @@ export interface SupplierBrandProfile {
   supports_private_label: boolean;
   supports_fason: boolean;
   is_verified: boolean;
+  whatsapp_only_ordering?: boolean;
   bank_name: string;
   bank_account_holder: string;
   iban: string;
@@ -92,6 +93,7 @@ interface NormalizedBrandProfileForm {
   bankAccountHolder: string;
   iban: string;
   isVerified: boolean;
+  whatsappOnlyOrdering: boolean;
 }
 
 function strOrEmpty(val?: string): string {
@@ -136,6 +138,7 @@ function normalizeBrandProfileToForm(bp: SupplierBrandProfile): NormalizedBrandP
     bankAccountHolder: strOrEmpty(bp.bank_account_holder),
     iban: strOrEmpty(bp.iban),
     isVerified: bp.is_verified !== false,
+    whatsappOnlyOrdering: Boolean(bp.whatsapp_only_ordering),
   };
 }
 
@@ -179,6 +182,7 @@ export default function SupplierProfilePanel({
   const [bankAccountHolder, setBankAccountHolder] = useState("");
   const [iban, setIban] = useState("");
   const [isVerified, setIsVerified] = useState(true);
+  const [whatsappOnlyOrdering, setWhatsappOnlyOrdering] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -206,6 +210,7 @@ export default function SupplierProfilePanel({
       setBankAccountHolder(norm.bankAccountHolder);
       setIban(norm.iban);
       setIsVerified(norm.isVerified);
+      setWhatsappOnlyOrdering(norm.whatsappOnlyOrdering);
     };
 
     async function initBrandProfile() {
@@ -321,6 +326,7 @@ export default function SupplierProfilePanel({
           min_order_quantity: Number(minOrderQty) || 1,
           supports_private_label: supportsPrivateLabel,
           supports_fason: supportsFason,
+          whatsapp_only_ordering: whatsappOnlyOrdering,
           bank_name: bankName,
           bank_account_holder: bankAccountHolder,
           iban,
@@ -585,6 +591,26 @@ export default function SupplierProfilePanel({
             <span className="text-[10px] text-slate-500 mt-0.5 block">
               Ürün sayfasındaki &quot;WhatsApp ile Doğrudan Sipariş Ver&quot; butonu bu numaraya yönlenir.
             </span>
+          </div>
+
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 flex items-start justify-between gap-3">
+            <div>
+              <span className="block text-xs font-extrabold text-emerald-950">
+                Yalnızca WhatsApp ile Sipariş &amp; Fiyat Sorunuz Modu
+              </span>
+              <span className="block text-[11px] text-emerald-800/90 mt-0.5 leading-relaxed">
+                Aktif edildiğinde vitrinde ürünlerinizin fiyatı gizlenir, &quot;Toptan Fiyat İçin WhatsApp&apos;tan Ulaşın&quot; rozeti gösterilir ve müşteriler doğrudan WhatsApp üzerinden sipariş verir. Sepete ekleme kapatılır.
+              </span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+              <input
+                type="checkbox"
+                checked={whatsappOnlyOrdering}
+                onChange={(e) => setWhatsappOnlyOrdering(e.target.checked)}
+                className="sr-only peer"
+              />
+              <span className="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600" />
+            </label>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
