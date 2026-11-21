@@ -147,4 +147,50 @@ export interface CartItem {
   currency?: string;
   title_translations?: Record<string, string>;
   slug?: string;
+  brand_id?: string;
+  brand_name?: string;
+  brand_slug?: string;
+  brand_whatsapp?: string;
+  brand_phone?: string;
+  brand_city?: string;
+  brand_district?: string;
+  brand_location_address?: string;
+  brand_verified?: boolean;
+}
+
+export interface SupplierDirectOrderItem {
+  product_id: string;
+  title: string;
+  custom_sku: string;
+  packages_qty: number;
+  pieces_qty: number;
+  units_per_package: number;
+  unit_price: number;
+  total_price: number;
+  currency: string;
+}
+
+export interface SupplierDirectOrderSummary {
+  sub_order_id: string;
+  sub_order_number: string;
+  brand_id: string;
+  brand_name: string;
+  brand_slug?: string;
+  brand_city?: string;
+  brand_district?: string;
+  brand_verified?: boolean;
+  gross_amount: number;
+  currency: string;
+  whatsapp_phone?: string;
+  phone?: string;
+  public_email?: string;
+  location_address?: string;
+  bank_name?: string;
+  bank_account_holder?: string;
+  iban?: string;
+  whatsapp_url: string;
+  item_count?: number;
+  total_packages?: number;
+  total_pieces?: number;
+  items?: SupplierDirectOrderItem[];
 }

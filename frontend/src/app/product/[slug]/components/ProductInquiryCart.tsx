@@ -1,7 +1,7 @@
 import React from "react";
 import CartDrawer, { InquiryFormData } from "@/components/store/CartDrawer";
 import SuccessModal from "@/components/store/SuccessModal";
-import { CartItem } from "@/types/store";
+import { CartItem, SupplierDirectOrderSummary } from "@/types/store";
 import { ExchangeRate } from "@/app/utils";
 
 interface ProductInquiryCartProps {
@@ -16,9 +16,13 @@ interface ProductInquiryCartProps {
   
   // inquiry form state & events
   readonly submittingInquiry: boolean;
-  readonly handleSubmitInquiry: (data: InquiryFormData) => void;
+  readonly handleSubmitInquiry: (data: InquiryFormData) => void | Promise<void>;
   readonly handleAdjustCartItemQty: (idx: number, change: number) => void;
   readonly handleRemoveCartItem: (idx: number) => void;
+  readonly onOrderCreated?: (result: {
+    readonly orderNumber: string;
+    readonly supplierOrders: SupplierDirectOrderSummary[];
+  }) => void;
   
   // rates
   readonly displayCurrency: string;
@@ -28,6 +32,10 @@ interface ProductInquiryCartProps {
   readonly showSuccessOverlay: boolean;
   readonly setShowSuccessOverlay: (v: boolean) => void;
   readonly whatsappUrl: string;
+  readonly orderNumber?: string;
+  readonly supplierOrders?: readonly SupplierDirectOrderSummary[];
+  readonly isFormalOrder?: boolean;
+  readonly onViewOrders?: () => void;
   readonly onWhatsappClick?: () => void;
 }
 
@@ -44,11 +52,16 @@ export default function ProductInquiryCart({
   handleSubmitInquiry,
   handleAdjustCartItemQty,
   handleRemoveCartItem,
+  onOrderCreated,
   displayCurrency,
   exchangeRates,
   showSuccessOverlay,
   setShowSuccessOverlay,
   whatsappUrl,
+  orderNumber,
+  supplierOrders,
+  isFormalOrder,
+  onViewOrders,
   onWhatsappClick,
 }: ProductInquiryCartProps) {
   return (
@@ -67,6 +80,7 @@ export default function ProductInquiryCart({
           totalPrice={totalPriceCart}
           submittingInquiry={submittingInquiry}
           onSubmitInquiry={handleSubmitInquiry}
+          onOrderCreated={onOrderCreated}
           displayCurrency={displayCurrency}
           exchangeRates={exchangeRates}
         />
@@ -77,6 +91,10 @@ export default function ProductInquiryCart({
         <SuccessModal
           lang={lang}
           whatsappUrl={whatsappUrl}
+          orderNumber={orderNumber}
+          supplierOrders={supplierOrders}
+          isFormalOrder={isFormalOrder}
+          onViewOrders={onViewOrders}
           onWhatsappClick={onWhatsappClick}
           onClose={() => setShowSuccessOverlay(false)}
         />

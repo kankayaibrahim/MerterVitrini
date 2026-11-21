@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
-import { Product, Brand, Category, CartItem } from "@/types/store";
+import { Product, Brand, Category, CartItem, SupplierDirectOrderSummary } from "@/types/store";
 import { t, getProductTitle, getCategoryPrefix } from "@/app/i18n";
 import {
   getUnitsFromSeriesRatio,
@@ -16,19 +16,17 @@ import {
 } from "@/app/storeAuth";
 import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
 import { isProductWhatsappOnly } from "@/utils/whatsappOrdering";
-import { validateStructuredLocationMeta } from "@/components/store/StructuredLocationFields";
-import {
-  validateHumanAddressClient,
-  validateHumanPersonNameClient,
-} from "@/utils/addressValidation";
-import { validateAndNormalizeRealisticPhone } from "@/utils/phoneValidation";
-import { executeRecaptchaAction } from "@/utils/recaptcha";
+import { extractBrandFieldsFromProduct } from "@/utils/cartSupplierGroups";
+import { submitStoreCartInquiry } from "@/utils/cartInquiry";
 
 // Import modular, premium Tailwind E-Commerce subcomponents
 import Header from "@/components/store/Header";
 import FilterSidebar, { B2BSourcingFilters } from "@/components/store/FilterSidebar";
 import ProductDetailsModal from "@/components/store/ProductDetailsModal";
-import CartDrawer, { InquiryFormData } from "@/components/store/CartDrawer";
+import CartDrawer, {
+  DrawerOrderCreatedResult,
+  InquiryFormData,
+} from "@/components/store/CartDrawer";
 import SuccessModal from "@/components/store/SuccessModal";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
@@ -171,6 +169,7 @@ function buildCatalogQueryParams(params: CatalogQueryParams): string {
 interface StoreSettings {
   show_single_price?: boolean;
   show_prices_to_guests?: boolean;
+  whatsapp?: string;
   [key: string]: unknown;
 }
 
@@ -316,6 +315,11 @@ export default function StorefrontLayout({
   const [submittingInquiry, setSubmittingInquiry] = useState<boolean>(false);
   const [whatsappUrl, setWhatsappUrl] = useState<string>("");
   const [whatsappMeta, setWhatsappMeta] = useState<{ brandId?: string; targetPhone?: string }>({});
+  const [lastOrderResult, setLastOrderResult] = useState<{
+    readonly orderNumber: string;
+    readonly supplierOrders: SupplierDirectOrderSummary[];
+    readonly isFormalOrder: boolean;
+  }>({ orderNumber: "", supplierOrders: [], isFormalOrder: false });
   const [showSuccessOverlay, setShowSuccessOverlay] = useState<boolean>(false);
   const [storeSettings, setStoreSettings] = useState<StoreSettings | null>(null);
 
@@ -440,6 +444,7 @@ export default function StorefrontLayout({
               fr: product.translations?.fr?.title || product.title || "",
             },
             slug: product.slug || product.id,
+            ...extractBrandFieldsFromProduct(product),
           });
         }
 
@@ -739,6 +744,7 @@ export default function StorefrontLayout({
           image_url: coverImg,
           currency: activeProduct.currency || "TRY",
           slug: activeProduct.slug || activeProduct.id,
+          ...extractBrandFieldsFromProduct(activeProduct),
         });
       }
     }
@@ -793,122 +799,69 @@ export default function StorefrontLayout({
   const totalWeight = cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package * item.weight_per_unit), 0);
   const totalPrice = cart.reduce((sum, item) => sum + (item.packages_qty * item.units_per_package * item.price_per_unit), 0);
 
-const validateDrawerInquiryData = (
-  formData: InquiryFormData,
-  lang: string
-): { readonly ok: true; readonly normalizedPhone: string } | { readonly ok: false; readonly error: string } => {
-  const nameErr = validateHumanPersonNameClient(formData.fullName, lang);
-  if (nameErr) return { ok: false, error: nameErr };
-
-  const rawPhone = formData.phoneNumber.trim();
-  const dialPrefix = `+${formData.locationMeta.countryPhoneCode || 90}`;
-  const candidatePhone = rawPhone.startsWith("+") ? rawPhone : `${dialPrefix}${rawPhone.replace(/^0+/, "")}`;
-  const phoneCheck = validateAndNormalizeRealisticPhone(candidatePhone);
-  if (!phoneCheck.valid) {
-    return {
-      ok: false,
-      error: lang === "tr"
-        ? "Lütfen ülke kodunu içeren geçerli bir telefon numarası girin."
-        : "Please enter a valid contact phone number.",
-    };
-  }
-
-  const locErr = validateStructuredLocationMeta(
-    {
-      countryId: formData.countryId,
-      stateId: formData.stateId,
-      cityId: formData.cityId,
-      addressLine: formData.addressLine,
-      postalCode: formData.postalCode,
-    },
-    formData.locationMeta,
-    lang
-  );
-  if (locErr) return { ok: false, error: locErr };
-
-  const addrErr = validateHumanAddressClient(formData.addressLine, lang);
-  if (addrErr) return { ok: false, error: addrErr };
-
-  return { ok: true, normalizedPhone: phoneCheck.normalized };
-};
-
   // --- Quote Inquiry Form Submission ---
   const handleSubmitInquiry = async (formData: InquiryFormData) => {
     if (cart.length === 0) return;
-
-    const validated = validateDrawerInquiryData(formData, lang);
-    if (!validated.ok) {
-      showToast(validated.error);
-      return;
-    }
-
     setSubmittingInquiry(true);
 
-    const inquiryItems = cart.map(item => {
-      const totalUnits = item.packages_qty * item.units_per_package;
-      return {
-        product_id: item.product_id,
-        title: `${item.title} (${item.color}) - ${item.packages_qty} ${t("package", lang)} (${totalUnits} ${t("piece", lang)})`,
-        custom_sku: item.custom_sku || item.product_id,
-        quantity: totalUnits,
-        price: item.price_per_unit,
-      };
-    });
-
     try {
-      const recaptchaToken = await executeRecaptchaAction("submit_inquiry", lang);
-      const payload = {
-        full_name: formData.fullName.trim(),
-        company: formData.companyName.trim() || null,
-        phone: validated.normalizedPhone,
-        email: formData.emailAddress.trim(),
-        message: formData.customerMessage.trim() || null,
-        country_id: formData.countryId,
-        state_id: formData.stateId || null,
-        city_id: formData.cityId || null,
-        postal_code: formData.postalCode.trim(),
-        address_line: formData.addressLine.trim(),
-        delivery_address: formData.addressLine.trim(),
-        customer_currency: displayCurrency,
-        recaptcha_token: recaptchaToken,
-        items: inquiryItems,
-      };
-
-      const response = await fetch("/api/v1/store/inquiries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const result = await submitStoreCartInquiry({
+        cart,
+        fullName: formData.fullName,
+        companyName: formData.companyName,
+        phoneNumber: formData.phoneNumber,
+        emailAddress: formData.emailAddress,
+        customerMessage: formData.customerMessage,
+        displayCurrency,
+        lang,
+        location: {
+          countryId: formData.countryId,
+          stateId: formData.stateId,
+          cityId: formData.cityId,
+          postalCode: formData.postalCode,
+          addressLine: formData.addressLine,
+        },
+        locationMeta: formData.locationMeta,
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        showToast(errData.error || "Failed to submit inquiry");
-        return;
-      }
-
-      const result = await response.json();
-
-      // Clean states
       saveCart([]);
       setIsCartOpen(false);
-
       setWhatsappUrl(result.whatsapp_url || "#");
-      const firstSupplierOrder = Array.isArray(result.supplier_orders)
-        ? result.supplier_orders[0]
-        : undefined;
+      const firstSupplierOrder = result.supplier_orders[0];
       setWhatsappMeta({
         brandId: firstSupplierOrder?.brand_id || "",
         targetPhone: firstSupplierOrder?.whatsapp_phone || storeSettings?.whatsapp || "",
       });
+      setLastOrderResult({
+        orderNumber: result.order_number || "",
+        supplierOrders: result.supplier_orders || [],
+        isFormalOrder: false,
+      });
       setShowSuccessOverlay(true);
-
     } catch (err) {
-      console.error("Failed to submit B2B inquiry", err);
       const errMsg = err instanceof Error ? err.message : "";
       showToast(errMsg || "Connection error! Failed to register your quote request.");
+      throw err;
     } finally {
       setSubmittingInquiry(false);
     }
+  };
+
+  const handleOrderCreatedFromDrawer = (created: DrawerOrderCreatedResult) => {
+    saveCart([]);
+    setIsCartOpen(false);
+    const firstSupplierOrder = created.supplierOrders[0];
+    setWhatsappUrl(firstSupplierOrder?.whatsapp_url || "#");
+    setWhatsappMeta({
+      brandId: firstSupplierOrder?.brand_id || "",
+      targetPhone: firstSupplierOrder?.whatsapp_phone || storeSettings?.whatsapp || "",
+    });
+    setLastOrderResult({
+      orderNumber: created.orderNumber || "",
+      supplierOrders: created.supplierOrders || [],
+      isFormalOrder: true,
+    });
+    setShowSuccessOverlay(true);
   };
 
   const hasActiveFiltersCount =
@@ -1051,6 +1004,7 @@ const validateDrawerInquiryData = (
           totalWeight={totalWeight}
           totalPrice={totalPrice}
           onSubmitInquiry={handleSubmitInquiry}
+          onOrderCreated={handleOrderCreatedFromDrawer}
           submittingInquiry={submittingInquiry}
           displayCurrency={displayCurrency}
           exchangeRates={exchangeRates}
@@ -1063,6 +1017,12 @@ const validateDrawerInquiryData = (
           onClose={() => setShowSuccessOverlay(false)}
           lang={lang}
           whatsappUrl={whatsappUrl}
+          orderNumber={lastOrderResult.orderNumber}
+          supplierOrders={lastOrderResult.supplierOrders}
+          isFormalOrder={lastOrderResult.isFormalOrder}
+          onViewOrders={() => {
+            window.location.href = `/profile?tab=orders&lang=${encodeURIComponent(lang)}`;
+          }}
           onWhatsappClick={() =>
             trackWhatsappClick({
               brandId: whatsappMeta.brandId,

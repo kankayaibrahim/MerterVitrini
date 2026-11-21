@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ShoppingBag, ArrowLeft, Trash2, Home } from "lucide-react";
-import { CartItem, Category } from "@/types/store";
+import { CartItem, Category, SupplierDirectOrderSummary } from "@/types/store";
 import { t, getCategoryPrefix } from "@/app/i18n";
 import { convertPrice, showToast, apiFetch, ExchangeRate } from "@/app/utils";
 import Header from "@/components/store/Header";
@@ -13,24 +13,29 @@ import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import ConfirmModal from "@/components/store/ConfirmModal";
 import { UserAddress } from "@/app/profile/components/types";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
-import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
+import {
+  applyHydratedMetaMapToCart,
+  CartHydrationMeta,
+  fetchCartHydrationMetaMap,
+  persistStoreCart,
+  syncLocalCartStateIfChanged,
+} from "@/utils/cartSync";
+import { useIsStoreAuthenticated } from "@/app/storeAuth";
+import { groupCartBySupplier } from "@/utils/cartSupplierGroups";
+import { submitStoreCartInquiry } from "@/utils/cartInquiry";
+import { trackMemberEvent } from "@/components/analytics/AnalyticsTracker";
+import CartMultiSupplierExplainer from "@/components/store/cart/CartMultiSupplierExplainer";
+import CartSupplierGroupCard from "@/components/store/cart/CartSupplierGroupCard";
+import { getCartMultiSupplierCopy } from "@/components/store/cart/cartMultiSupplierCopy";
 import {
   StructuredLocationMeta,
   StructuredLocationValue,
-  validateStructuredLocationMeta,
 } from "@/components/store/StructuredLocationFields";
 import {
   formatCheckoutAddressDisplay,
   isAddressRecordComplete,
 } from "@/components/store/StructuredCheckoutAddressPicker";
-import {
-  validateHumanAddressClient,
-  validateHumanPersonNameClient,
-} from "@/utils/addressValidation";
-import { validateAndNormalizeRealisticPhone } from "@/utils/phoneValidation";
 import { executeRecaptchaAction } from "@/utils/recaptcha";
-import CartDesktopTable from "./components/CartDesktopTable";
-import CartMobileList from "./components/CartMobileList";
 import CartSummaryBreakdown from "./components/CartSummaryBreakdown";
 import CartCheckoutSection from "./components/CartCheckoutSection";
 import CartInquirySection from "./components/CartInquirySection";
@@ -64,7 +69,7 @@ const CART_PAGE_COPY: Record<SupportedSeoLang, CartPageCopy> = {
     addressRequired: "Lütfen fatura ve teslimat adreslerini doldurunuz.",
     orderReceivedPrefix: "Siparişiniz başarıyla alındı! Sipariş No:",
     orderReceivedSuffix:
-      "Resmi proforma ve banka bilgileri sipariş detay sayfasında görüntülenmektedir.",
+      "Her tedarikçi kendi ürünlerini hazırlayıp sizinle doğrudan iletişime geçecektir.",
     networkError: "Bir ağ hatası oluştu.",
     inquiryError: "Bağlantı hatası! Teklif talebiniz gönderilemedi.",
     exportExcel: "Excel Olarak İndir",
@@ -82,7 +87,7 @@ const CART_PAGE_COPY: Record<SupportedSeoLang, CartPageCopy> = {
     addressRequired: "Please select or enter billing and delivery addresses.",
     orderReceivedPrefix: "Your B2B order has been received! Order No:",
     orderReceivedSuffix:
-      "Official proforma invoice and bank wire instructions are available in your order details.",
+      "Each named Supplier prepares its own items and contacts you directly with proforma/shipping details.",
     networkError: "A network error occurred.",
     inquiryError: "Connection error! Failed to register your quote request.",
     exportExcel: "Export to Excel",
@@ -100,7 +105,7 @@ const CART_PAGE_COPY: Record<SupportedSeoLang, CartPageCopy> = {
     addressRequired: "Пожалуйста, укажите адрес доставки и адрес для счета.",
     orderReceivedPrefix: "Ваш оптовый заказ принят! № заказа:",
     orderReceivedSuffix:
-      "Официальный счет-проформа и банковские реквизиты доступны в деталях заказа.",
+      "Каждый продавец-поставщик подготовит свои позиции и свяжется с вами напрямую.",
     networkError: "Произошла сетевая ошибка.",
     inquiryError: "Ошибка соединения! Не удалось отправить запрос цены.",
     exportExcel: "Скачать в Excel",
@@ -118,7 +123,7 @@ const CART_PAGE_COPY: Record<SupportedSeoLang, CartPageCopy> = {
     addressRequired: "يرجى تحديد أو إدخال عنوان الشحن وعنوان الفوترة.",
     orderReceivedPrefix: "تم استلام طلب الجملة بنجاح! رقم الطلب:",
     orderReceivedSuffix:
-      "تتوفر الفاتورة الأولية الرسمية وتفاصيل التحويل البنكي في صفحة طلباتك.",
+      "سيقوم كل مورد بتجهيز منتجاته والتواصل معك مباشرة بتفاصيل الشحن والفاتورة المبدئية.",
     networkError: "حدث خطأ في الشبكة.",
     inquiryError: "خطأ في الاتصال! تعذر إرسال طلب عرض السعر.",
     exportExcel: "تصدير إلى Excel",
@@ -136,7 +141,7 @@ const CART_PAGE_COPY: Record<SupportedSeoLang, CartPageCopy> = {
     addressRequired: "Bitte wählen oder geben Sie Liefer- und Rechnungsadresse ein.",
     orderReceivedPrefix: "Ihre B2B-Bestellung ist eingegangen! Bestell-Nr.:",
     orderReceivedSuffix:
-      "Offizielle Proforma-Rechnung und Bankverbindung finden Sie in Ihren Bestelldetails.",
+      "Jeder Lieferant bereitet seine eigenen Positionen vor und meldet sich direkt bei Ihnen.",
     networkError: "Ein Netzwerkfehler ist aufgetreten.",
     inquiryError: "Verbindungsfehler! Ihre Angebotsanfrage konnte nicht gesendet werden.",
     exportExcel: "Als Excel exportieren",
@@ -154,7 +159,7 @@ const CART_PAGE_COPY: Record<SupportedSeoLang, CartPageCopy> = {
     addressRequired: "Veuillez renseigner les adresses de livraison et de facturation.",
     orderReceivedPrefix: "Votre commande B2B a bien été reçue ! N° :",
     orderReceivedSuffix:
-      "La facture proforma officielle et les coordonnées bancaires figurent dans vos commandes.",
+      "Chaque fournisseur prépare ses propres articles et vous contacte directement.",
     networkError: "Une erreur réseau est survenue.",
     inquiryError: "Erreur de connexion ! Impossible d’envoyer la demande de devis.",
     exportExcel: "Exporter en Excel",
@@ -172,7 +177,7 @@ const CART_PAGE_COPY: Record<SupportedSeoLang, CartPageCopy> = {
     addressRequired: "Wybierz lub wpisz adres dostawy oraz adres rozliczeniowy.",
     orderReceivedPrefix: "Zamówienie hurtowe zostało przyjęte! Nr:",
     orderReceivedSuffix:
-      "Oficjalna faktura proforma oraz dane do przelewu są dostępne w szczegółach zamówienia.",
+      "Każdy dostawca przygotuje własne produkty i skontaktuje się z Tobą bezpośrednio.",
     networkError: "Wystąpił błąd sieci.",
     inquiryError: "Błąd połączenia! Nie udało się wysłać zapytania ofertowego.",
     exportExcel: "Pobierz Excel",
@@ -190,7 +195,7 @@ const CART_PAGE_COPY: Record<SupportedSeoLang, CartPageCopy> = {
     addressRequired: "Моля, въведете адрес за доставка и адрес за фактуриране.",
     orderReceivedPrefix: "Вашата поръчка на едро е приета! №:",
     orderReceivedSuffix:
-      "Официалната проформа фактура и банковите детайли са налични в профила ви.",
+      "Всеки доставчик ще подготви своите артикули и ще се свърже директно с вас.",
     networkError: "Възникна мрежова грешка.",
     inquiryError: "Грешка във връзката! Запитването за оферта не бе изпратено.",
     exportExcel: "Изтегли в Excel",
@@ -252,38 +257,6 @@ async function fetchCartUserAddresses(token: string): Promise<UserAddress[]> {
   }
   const data = (await res.json().catch(() => [])) as unknown;
   return Array.isArray(data) ? (data as UserAddress[]) : [];
-}
-
-function validateCartInquiryInputs(
-  fullName: string,
-  phoneNumber: string,
-  location: StructuredLocationValue,
-  locMeta: StructuredLocationMeta,
-  lang: SupportedSeoLang
-): { readonly ok: true; readonly normalizedPhone: string } | { readonly ok: false; readonly error: string } {
-  const nameErr = validateHumanPersonNameClient(fullName, lang);
-  if (nameErr) return { ok: false, error: nameErr };
-
-  const rawPhone = phoneNumber.trim();
-  const dialPrefix = `+${locMeta.countryPhoneCode || 90}`;
-  const candidatePhone = rawPhone.startsWith("+") ? rawPhone : `${dialPrefix}${rawPhone.replace(/^0+/, "")}`;
-  const phoneCheck = validateAndNormalizeRealisticPhone(candidatePhone);
-  if (!phoneCheck.valid) {
-    return {
-      ok: false,
-      error: lang === "tr"
-        ? "Lütfen ülke kodunu içeren geçerli bir telefon numarası girin."
-        : "Please enter a valid contact phone number.",
-    };
-  }
-
-  const locErr = validateStructuredLocationMeta(location, locMeta, lang);
-  if (locErr) return { ok: false, error: locErr };
-
-  const addrErr = validateHumanAddressClient(location.addressLine, lang);
-  if (addrErr) return { ok: false, error: addrErr };
-
-  return { ok: true, normalizedPhone: phoneCheck.normalized };
 }
 
 function parseDefaultAddresses(data: readonly UserAddress[]) {
@@ -394,7 +367,12 @@ async function syncAndCreateOrder({
     }),
   });
 
-  const data = (await res.json()) as { success?: boolean; error?: string; order_number?: string };
+  const data = (await res.json()) as {
+    success?: boolean;
+    error?: string;
+    order_number?: string;
+    supplier_orders?: SupplierDirectOrderSummary[];
+  };
   if (!res.ok || !data.success) {
     throw new Error(data.error || copy.orderFailed);
   }
@@ -515,9 +493,74 @@ export default function CartClient({
     loadingCities: false,
   });
   const [submittingInquiry, setSubmittingInquiry] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [inquiryError, setInquiryError] = useState<string | null>(null);
 
   const [whatsappUrl, setWhatsappUrl] = useState("");
+  const [orderNumber, setOrderNumber] = useState("");
+  const [supplierOrders, setSupplierOrders] = useState<SupplierDirectOrderSummary[]>([]);
+  const [isFormalOrder, setIsFormalOrder] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+
+  const isAuthenticated = useIsStoreAuthenticated();
+  const [hydratedMetaMap, setHydratedMetaMap] = useState<Record<string, CartHydrationMeta>>({});
+  const cartIdsKey = cart.map((item) => item.product_id).join(",");
+
+  useEffect(() => {
+    if (!cartIdsKey) return;
+    let active = true;
+    void fetchCartHydrationMetaMap(cart).then((resolved) => {
+      if (active && Object.keys(resolved).length > 0) {
+        setHydratedMetaMap((prev) => ({ ...prev, ...resolved }));
+      }
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartIdsKey]);
+
+  const displayCart = useMemo(
+    () => applyHydratedMetaMapToCart(cart, hydratedMetaMap),
+    [cart, hydratedMetaMap]
+  );
+
+  const multiCopy = getCartMultiSupplierCopy(safeLang);
+  const supplierGroups = useMemo(
+    () =>
+      groupCartBySupplier(
+        displayCart,
+        displayCurrency,
+        exchangeRates,
+        multiCopy.fallbackSupplierName
+      ),
+    [displayCart, displayCurrency, exchangeRates, multiCopy.fallbackSupplierName]
+  );
+
+  const totalPkgs = displayCart.reduce((sum, item) => sum + item.packages_qty, 0);
+  const totalItemsCount = displayCart.reduce(
+    (sum, item) => sum + item.packages_qty * item.units_per_package,
+    0
+  );
+
+  const cartOpenTrackedRef = useRef(false);
+  useEffect(() => {
+    if (!cartOpenTrackedRef.current && displayCart.length > 0) {
+      cartOpenTrackedRef.current = true;
+      trackMemberEvent({
+        event_type: "cart_open",
+        event_category: "commerce",
+        title: `${displayCart.length} ürün / ${supplierGroups.length} tedarikçi`,
+        subtitle: `${totalPkgs} pkt · ${totalItemsCount} adet`,
+        metadata: {
+          items_count: displayCart.length,
+          suppliers_count: supplierGroups.length,
+          packages: totalPkgs,
+          pieces: totalItemsCount,
+        },
+      });
+    }
+  }, [displayCart.length, supplierGroups.length, totalPkgs, totalItemsCount]);
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("store_user_token") : null;
@@ -631,17 +674,12 @@ export default function CartClient({
     }
   };
 
-  const totalPkgs = cart.reduce((sum, item) => sum + item.packages_qty, 0);
-  const totalItemsCount = cart.reduce(
-    (sum, item) => sum + item.packages_qty * item.units_per_package,
-    0
-  );
-  const totalWeight = cart.reduce(
+  const totalWeight = displayCart.reduce(
     (sum, item) => sum + item.packages_qty * item.units_per_package * item.weight_per_unit,
     0
   );
 
-  const grandTotalInTRY = cart.reduce((sum, item) => {
+  const grandTotalInTRY = displayCart.reduce((sum, item) => {
     const itemTotalUnits = item.packages_qty * item.units_per_package;
     const itemPriceInOrig = itemTotalUnits * item.price_per_unit;
     const itemPriceInTRY = convertPrice(
@@ -662,12 +700,14 @@ export default function CartClient({
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
+    setCheckoutError(null);
 
     const effectiveBillingId = sameAsDelivery ? deliveryAddr : billingAddr;
     const delObj = addresses.find((a) => a.id === deliveryAddr);
     const billObj = addresses.find((a) => a.id === effectiveBillingId);
 
     if (!delObj || !billObj || !isAddressRecordComplete(delObj) || !isAddressRecordComplete(billObj)) {
+      setCheckoutError(copy.addressRequired);
       showToast(copy.addressRequired);
       return;
     }
@@ -680,7 +720,7 @@ export default function CartClient({
       const recaptchaToken = await executeRecaptchaAction("create_order", safeLang);
       const data = await syncAndCreateOrder({
         token,
-        cart,
+        cart: displayCart,
         deliveryAddressId: deliveryAddr,
         billingAddressId: effectiveBillingId,
         billing: finalBilling,
@@ -689,13 +729,19 @@ export default function CartClient({
         lang: safeLang,
         displayCurrency,
       });
-      showToast(`${copy.orderReceivedPrefix} ${data.order_number ?? ""}\n${copy.orderReceivedSuffix}`);
+      const createdOrders = Array.isArray(data.supplier_orders) ? data.supplier_orders : [];
       saveCart([]);
       setIsCheckout(false);
-      router.push(`/profile?lang=${safeLang}&tab=orders`);
+      setOrderNumber(data.order_number ?? "");
+      setSupplierOrders(createdOrders);
+      setWhatsappUrl(createdOrders[0]?.whatsapp_url || "#");
+      setIsFormalOrder(true);
+      setShowSuccessOverlay(true);
+      showToast(`${copy.orderReceivedPrefix} ${data.order_number ?? ""}`);
     } catch (err: unknown) {
       console.error(err);
       const errMsg = err instanceof Error ? err.message : String(err);
+      setCheckoutError(errMsg || copy.networkError);
       showToast(errMsg || copy.networkError);
     } finally {
       setSubmittingOrder(false);
@@ -703,6 +749,8 @@ export default function CartClient({
   };
 
   const handleRequestQuoteOnly = () => {
+    setCheckoutError(null);
+    setInquiryError(null);
     if (typeof window !== "undefined") {
       try {
         const userInfo = JSON.parse(localStorage.getItem("store_user_info") || "{}") as {
@@ -725,65 +773,24 @@ export default function CartClient({
 
   const handleInquirySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (cart.length === 0) return;
-
-    const validated = validateCartInquiryInputs(
-      fullName,
-      phoneNumber,
-      inquiryLocation,
-      inquiryLocMeta,
-      safeLang
-    );
-    if (!validated.ok) {
-      showToast(validated.error);
-      return;
-    }
-
+    if (displayCart.length === 0) return;
+    setInquiryError(null);
     setSubmittingInquiry(true);
 
-    const inquiryItems = cart.map((item) => {
-      const totalUnits = item.packages_qty * item.units_per_package;
-      return {
-        product_id: item.product_id,
-        title: `${item.title} (${item.color}) - ${item.packages_qty} ${t("package", safeLang)} (${totalUnits} ${t("piece", safeLang)})`,
-        custom_sku: item.custom_sku || item.product_id,
-        quantity: totalUnits,
-        price: item.price_per_unit,
-      };
-    });
-
     try {
-      const recaptchaToken = await executeRecaptchaAction("submit_inquiry", safeLang);
-      const payload = {
-        full_name: fullName.trim(),
-        company: companyName.trim() || null,
-        phone: validated.normalizedPhone,
-        email: emailAddress.trim(),
-        message: customerMessage.trim() || null,
-        country_id: inquiryLocation.countryId,
-        state_id: inquiryLocation.stateId || null,
-        city_id: inquiryLocation.cityId || null,
-        postal_code: inquiryLocation.postalCode.trim(),
-        address_line: inquiryLocation.addressLine.trim(),
-        delivery_address: inquiryLocation.addressLine.trim(),
-        customer_currency: displayCurrency,
-        recaptcha_token: recaptchaToken,
-        items: inquiryItems,
-      };
-
-      const response = await fetch("/api/v1/store/inquiries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const result = await submitStoreCartInquiry({
+        cart: displayCart,
+        fullName,
+        companyName,
+        phoneNumber,
+        emailAddress,
+        customerMessage,
+        displayCurrency,
+        lang: safeLang,
+        location: inquiryLocation,
+        locationMeta: inquiryLocMeta,
       });
 
-      if (!response.ok) {
-        const errData = (await response.json().catch(() => ({}))) as { error?: string };
-        showToast(errData.error || copy.inquiryError);
-        return;
-      }
-
-      const result = (await response.json()) as { whatsapp_url?: string };
       saveCart([]);
       setFullName("");
       setCompanyName("");
@@ -791,11 +798,15 @@ export default function CartClient({
       setEmailAddress("");
       setCustomerMessage("");
       setInquiryLocation((prev) => ({ ...prev, addressLine: "", postalCode: "" }));
+      setOrderNumber(result.order_number || "");
+      setSupplierOrders(result.supplier_orders || []);
       setWhatsappUrl(result.whatsapp_url || "#");
+      setIsFormalOrder(false);
       setShowSuccessOverlay(true);
     } catch (err) {
       console.error("Failed to submit B2B inquiry", err);
       const errMsg = err instanceof Error ? err.message : "";
+      setInquiryError(errMsg || copy.inquiryError);
       showToast(errMsg || copy.inquiryError);
     } finally {
       setSubmittingInquiry(false);
@@ -875,30 +886,30 @@ export default function CartClient({
           )}
         </div>
 
-        {cart.length === 0 ? (
+        {displayCart.length === 0 ? (
           <EmptyCartView
             lang={safeLang}
             onExplore={() => router.push(`/${getCategoryPrefix(safeLang)}/tum-urunler`)}
           />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              <CartDesktopTable
-                cart={cart}
+            <div className="lg:col-span-2 flex flex-col gap-5">
+              <CartMultiSupplierExplainer
+                groups={supplierGroups}
                 lang={safeLang}
-                displayCurrency={displayCurrency}
-                exchangeRates={exchangeRates}
-                onAdjustQty={handleAdjustQty}
-                onRemoveItem={handleRemoveItem}
+                variant="page"
               />
-              <CartMobileList
-                cart={cart}
-                lang={safeLang}
-                displayCurrency={displayCurrency}
-                exchangeRates={exchangeRates}
-                onAdjustQty={handleAdjustQty}
-                onRemoveItem={handleRemoveItem}
-              />
+              {supplierGroups.map((group) => (
+                <CartSupplierGroupCard
+                  key={group.key}
+                  group={group}
+                  lang={safeLang}
+                  variant="page"
+                  isAuthenticated={isAuthenticated}
+                  onAdjustQty={handleAdjustQty}
+                  onRemoveItem={handleRemoveItem}
+                />
+              ))}
             </div>
 
             <div className="flex flex-col gap-6">
@@ -906,6 +917,7 @@ export default function CartClient({
                 totalPkgs={totalPkgs}
                 totalItemsCount={totalItemsCount}
                 totalWeight={totalWeight}
+                supplierCount={supplierGroups.length}
                 finalTotalPrice={finalTotalPrice}
                 displayCurrency={displayCurrency}
                 lang={safeLang}
@@ -921,6 +933,17 @@ export default function CartClient({
                   <CartCheckoutSection
                     isCheckout={isCheckout}
                     setIsCheckout={setIsCheckout}
+                    onStartCheckoutClick={() =>
+                      trackMemberEvent({
+                        event_type: "checkout_start",
+                        event_category: "commerce",
+                        title: `${supplierGroups.length} tedarikçi için sipariş adımı`,
+                        metadata: {
+                          items_count: displayCart.length,
+                          suppliers_count: supplierGroups.length,
+                        },
+                      })
+                    }
                     onRequestQuoteOnly={handleRequestQuoteOnly}
                     token={token}
                     addresses={addresses}
@@ -937,9 +960,12 @@ export default function CartClient({
                     submittingOrder={submittingOrder}
                     onSubmitCheckout={handleCheckoutSubmit}
                     onCancelCheckout={() => {
+                      setCheckoutError(null);
                       setIsCheckout(false);
                       setForceShowInquiry(false);
                     }}
+                    supplierCount={supplierGroups.length}
+                    errorMessage={checkoutError}
                     lang={safeLang}
                   />
                 )}
@@ -948,6 +974,7 @@ export default function CartClient({
                   token={token}
                   forceShowInquiry={forceShowInquiry}
                   onBackToCheckout={() => {
+                    setInquiryError(null);
                     setForceShowInquiry(false);
                     setIsCheckout(false);
                   }}
@@ -966,6 +993,8 @@ export default function CartClient({
                   setCustomerMessage={setCustomerMessage}
                   submittingInquiry={submittingInquiry}
                   onSubmitInquiry={handleInquirySubmit}
+                  supplierCount={supplierGroups.length}
+                  errorMessage={inquiryError}
                   lang={safeLang}
                 />
               </div>
@@ -987,6 +1016,10 @@ export default function CartClient({
           onClose={() => setShowSuccessOverlay(false)}
           lang={safeLang}
           whatsappUrl={whatsappUrl}
+          orderNumber={orderNumber}
+          supplierOrders={supplierOrders}
+          isFormalOrder={isFormalOrder}
+          onViewOrders={() => router.push(`/profile?lang=${safeLang}&tab=orders`)}
         />
       )}
 

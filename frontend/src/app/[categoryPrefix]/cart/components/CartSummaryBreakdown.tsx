@@ -9,6 +9,8 @@ import {
   normalizeSeoLang,
 } from "@/utils/seoHelpers";
 
+import { getCartMultiSupplierCopy } from "@/components/store/cart/cartMultiSupplierCopy";
+
 interface SummaryBreakdownCopy {
   readonly heading: string;
   readonly packUnit: string;
@@ -29,6 +31,7 @@ interface CartSummaryBreakdownProps {
   readonly totalPkgs: number;
   readonly totalItemsCount: number;
   readonly totalWeight: number;
+  readonly supplierCount?: number;
   readonly finalTotalPrice: number;
   readonly displayCurrency: string;
   readonly lang: string;
@@ -71,6 +74,7 @@ export default function CartSummaryBreakdown({
   totalPkgs,
   totalItemsCount,
   totalWeight,
+  supplierCount = 0,
   finalTotalPrice,
   displayCurrency,
   lang,
@@ -82,6 +86,7 @@ export default function CartSummaryBreakdown({
 }: Readonly<CartSummaryBreakdownProps>) {
   const safeLang = normalizeSeoLang(lang, "en");
   const copy = SUMMARY_COPY[safeLang];
+  const multiCopy = getCartMultiSupplierCopy(safeLang);
 
   const ratesBanner =
     exchangeRates && exchangeRates.length > 0
@@ -103,6 +108,12 @@ export default function CartSummaryBreakdown({
       </h3>
 
       <div className="flex flex-col gap-3.5 text-xs font-bold text-davys-gray">
+        {supplierCount > 0 && (
+          <div className="flex justify-between items-center">
+            <span>{multiCopy.preparingSuppliersSummaryLabel}:</span>
+            <span className="text-[#8C6D3F] font-extrabold">{supplierCount}</span>
+          </div>
+        )}
         <div className="flex justify-between items-center">
           <span>{t("total_packages", safeLang)}:</span>
           <span className="text-eerie-black font-extrabold">
@@ -120,10 +131,15 @@ export default function CartSummaryBreakdown({
           <span className="text-eerie-black font-extrabold">{totalWeight.toFixed(2)} kg</span>
         </div>
 
-        <div className="flex justify-between items-center text-sm font-extrabold text-salmon-pink border-t border-cultured pt-4 mt-2">
-          <span>{t("grand_total", safeLang)}:</span>
-          <span className="text-[16px]">
-            {finalTotalPrice.toFixed(2)} {displayCurrency}
+        <div className="flex flex-col gap-1 border-t border-cultured pt-4 mt-2">
+          <div className="flex justify-between items-center text-sm font-extrabold text-salmon-pink">
+            <span>{t("grand_total", safeLang)}:</span>
+            <span className="text-[16px]">
+              {finalTotalPrice.toFixed(2)} {displayCurrency}
+            </span>
+          </div>
+          <span className="text-[10.5px] font-bold text-[#15803D] text-right">
+            ✓ {multiCopy.noPayNowNote}
           </span>
         </div>
       </div>

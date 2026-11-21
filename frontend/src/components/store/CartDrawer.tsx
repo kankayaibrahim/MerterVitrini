@@ -3,12 +3,22 @@
 import React from "react";
 import Link from "next/link";
 import { X, ShoppingBag, Lock } from "lucide-react";
-import { CartItem } from "@/types/store";
+import { CartItem, SupplierDirectOrderSummary } from "@/types/store";
 import { t, getCategoryPrefix, pickLangText, SupportedLangCode } from "@/app/i18n";
-import { convertPrice, getResizedImageUrl, showToast, ExchangeRate } from "@/app/utils";
+import { convertPrice, showToast, ExchangeRate } from "@/app/utils";
 import { getDirectSellerNoticeCopy } from "@/utils/legalNotices";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
-import { persistStoreCart } from "@/utils/cartSync";
+import {
+  applyHydratedMetaMapToCart,
+  CartHydrationMeta,
+  fetchCartHydrationMetaMap,
+  persistStoreCart,
+} from "@/utils/cartSync";
+import { groupCartBySupplier } from "@/utils/cartSupplierGroups";
+import { trackMemberEvent } from "@/components/analytics/AnalyticsTracker";
+import CartMultiSupplierExplainer from "@/components/store/cart/CartMultiSupplierExplainer";
+import CartSupplierGroupCard from "@/components/store/cart/CartSupplierGroupCard";
+import { getCartMultiSupplierCopy } from "@/components/store/cart/cartMultiSupplierCopy";
 import { UserAddress } from "@/app/profile/components/types";
 import StructuredCheckoutAddressPicker, {
   formatCheckoutAddressDisplay,
@@ -34,6 +44,11 @@ export interface InquiryFormData {
   locationMeta: StructuredLocationMeta;
 }
 
+export interface DrawerOrderCreatedResult {
+  readonly orderNumber: string;
+  readonly supplierOrders: SupplierDirectOrderSummary[];
+}
+
 interface CartDrawerProps {
   readonly lang: string;
   readonly cart: readonly CartItem[];
@@ -45,7 +60,8 @@ interface CartDrawerProps {
   readonly totalWeight: number;
   readonly totalPrice?: number;
   readonly submittingInquiry: boolean;
-  readonly onSubmitInquiry: (data: InquiryFormData) => void;
+  readonly onSubmitInquiry: (data: InquiryFormData) => void | Promise<void>;
+  readonly onOrderCreated?: (result: DrawerOrderCreatedResult) => void;
   readonly displayCurrency?: string;
   readonly exchangeRates?: readonly ExchangeRate[];
 }
@@ -81,6 +97,7 @@ interface CartDrawerLabels {
   registeredDealerPrompt: string;
   signInBtn: string;
   removeItemAria: string;
+  optionalLocationToggle: string;
 }
 
 const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
@@ -93,9 +110,9 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Bir ağ hatası oluştu.",
     missingAddressesToast: "Lütfen fatura ve teslimat adreslerini doldurunuz.",
     orderSuccessToast:
-      "Sipariş talebiniz ({orderNo}) doğrudan ilgili tedarikçiye iletildi!\nFiyat teyidi, fatura ve kurumsal IBAN / SWIFT ödeme bilgileri satıcı tedarikçi tarafından paylaşılır.",
-    confirmB2bOrder: "Siparişi Onayla",
-    addressPaymentHeader: "Adres ve Ödeme Bilgileri",
+      "Sipariş talebiniz ({orderNo}) doğrudan ilgili tedarikçilere iletildi!",
+    confirmB2bOrder: "Tedarikçilere Sipariş Talebini İlet",
+    addressPaymentHeader: "Adres ve Doğrudan Tedarikçi Bilgileri",
     backToCart: "Sepete Dön",
     deliveryAddress: "Teslimat Adresi",
     deliveryAddressPlaceholder: "Teslimat adresini yazınız...",
@@ -105,19 +122,20 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Fatura adresini yazınız...",
     customBillingOption: "+ Yeni Fatura Adresi Girişi",
     noBillingAddresses: "Profilinizde kayıtlı fatura adresi bulunamadı.",
-    bankTransferHeader: "Doğrudan Tedarikçi Ödeme ve Proforma Bilgisi",
+    bankTransferHeader: "Doğrudan Tedarikçi Hazırlık & Ödeme (%0 Komisyon)",
     beneficiaryPrefix: "Muhatap",
     proformaIbanNotice:
-      "Merter Vitrini ödeme tahsil etmez. Talebiniz onaylandığında seçtiğiniz ürünlerin doğrudan satıcısı olan ilgili tedarikçi firma, kurumsal banka/IBAN bilgilerini ve proforma faturanızı doğrudan sizinle paylaşır.",
+      "Merter Vitrini ödeme tahsil etmez. Talebiniz onaylandığında her ürünün doğrudan satıcısı olan tedarikçi firma, proforma faturasını ve kendi IBAN/SWIFT bilgilerini sizinle paylaşır.",
     paymentReferenceNote:
-      "* Ödeme, fatura, kargo ve tüm satış sonrası süreçler doğrudan satışı yapan tedarikçi firma ile yürütülür.",
-    requestQuoteFormTitle: "Fiyat Teklifi Talep Formu",
+      "* Ödeme, fatura, kargo ve tüm satış sonrası süreçler doğrudan ilgili tedarikçi firma ile yürütülür.",
+    requestQuoteFormTitle: "Hızlı Teklif / Sipariş Talebi",
     goToCheckout: "Sipariş Adımına Dön",
-    orderViaBankTransfer: "Banka Havalesi ile Sipariş Ver",
-    requestProformaOnly: "Sadece Fiyat Teklifi İste (Proforma)",
+    orderViaBankTransfer: "Tedarikçilere Sipariş Talebi Gönder",
+    requestProformaOnly: "Hızlı Fiyat Teklifi İste (Adres Girmeden)",
     registeredDealerPrompt: "Kayıtlı müşterimiz misiniz?",
     signInBtn: "Giriş Yapın",
     removeItemAria: "Ürünü sepetten kaldır",
+    optionalLocationToggle: "Opsiyonel: Ülke / Şehir / Teslimat Notu Ekle",
   },
   en: {
     packUnit: "Pack",
@@ -128,9 +146,9 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "A network error occurred.",
     missingAddressesToast: "Please select or enter both billing and delivery addresses.",
     orderSuccessToast:
-      "Your B2B inquiry ({orderNo}) has been sent directly to the Supplier!\nProforma invoice & bank IBAN/SWIFT details will be provided directly by the selling Supplier.",
-    confirmB2bOrder: "Confirm B2B Order",
-    addressPaymentHeader: "Shipping & Payment Details",
+      "Your B2B request ({orderNo}) has been sent directly to the Suppliers!",
+    confirmB2bOrder: "Send Request to Suppliers",
+    addressPaymentHeader: "Delivery & Supplier Dispatch Details",
     backToCart: "Back to Cart",
     deliveryAddress: "Delivery Address",
     deliveryAddressPlaceholder: "Enter delivery address...",
@@ -140,19 +158,20 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Enter billing address...",
     customBillingOption: "+ Enter New Billing Address",
     noBillingAddresses: "No saved billing addresses found in your profile.",
-    bankTransferHeader: "Direct Supplier Payment & Proforma Notice",
+    bankTransferHeader: "Direct Supplier Fulfillment & Payment (0% Commission)",
     beneficiaryPrefix: "Counterparty",
     proformaIbanNotice:
-      "Merter Vitrini does not collect payments. Once submitted, the independent selling Supplier sends its own corporate IBAN / SWIFT details and proforma invoice directly to you.",
+      "Merter Vitrini collects no payment. Once submitted, each named selling Supplier directly sends its own proforma invoice and corporate IBAN / SWIFT details to you.",
     paymentReferenceNote:
       "* Payments, commercial invoices, shipping, returns, and any commercial disputes are settled directly with the selling Supplier.",
-    requestQuoteFormTitle: "Request Wholesale Quote Form",
+    requestQuoteFormTitle: "Quick Quote / Order Request",
     goToCheckout: "Go to Checkout",
-    orderViaBankTransfer: "Order via Bank Transfer",
-    requestProformaOnly: "Request Price Quote Only (Proforma)",
+    orderViaBankTransfer: "Submit Order Request to Suppliers",
+    requestProformaOnly: "Quick Price Quote (No Address Needed)",
     registeredDealerPrompt: "Already a registered B2B buyer?",
     signInBtn: "Sign In",
     removeItemAria: "Remove item from cart",
+    optionalLocationToggle: "Optional: Add Country / City / Delivery Note",
   },
   ru: {
     packUnit: "Упак.",
@@ -163,9 +182,9 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Произошла сетевая ошибка.",
     missingAddressesToast: "Пожалуйста, укажите адрес доставки и платежный адрес.",
     orderSuccessToast:
-      "Ваш запрос № {orderNo} передан напрямую Поставщику!\nРеквизиты IBAN / SWIFT и проформа-инвойс предоставляются непосредственно продавцом-поставщиком.",
-    confirmB2bOrder: "Подтвердить B2B заказ",
-    addressPaymentHeader: "Адрес доставки и реквизиты оплаты",
+      "Ваш запрос № {orderNo} передан напрямую Поставщикам!",
+    confirmB2bOrder: "Отправить заявку поставщикам",
+    addressPaymentHeader: "Адрес доставки и прямая сборка",
     backToCart: "Назад в корзину",
     deliveryAddress: "Адрес доставки",
     deliveryAddressPlaceholder: "Введите адрес доставки...",
@@ -175,19 +194,20 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Введите платежный адрес...",
     customBillingOption: "+ Ввести новый платежный адрес",
     noBillingAddresses: "В вашем профиле нет сохраненных платежных адресов.",
-    bankTransferHeader: "Прямой расчет с Поставщиком / Проформа",
+    bankTransferHeader: "Прямой расчет с Поставщиком (0% комиссии)",
     beneficiaryPrefix: "Сторона сделки",
     proformaIbanNotice:
-      "Merter Vitrini не принимает оплату за товары. После отправки заявки прямой продавец (Поставщик) направит вам свои реквизиты IBAN / SWIFT и проформа-инвойс.",
+      "Merter Vitrini не принимает оплату за товары. Каждый продавец-поставщик напрямую направит вам свои реквизиты IBAN / SWIFT и проформа-инвойс.",
     paymentReferenceNote:
       "* Все расчеты, документы, отгрузка, возвраты и претензии решаются напрямую с продающим Поставщиком.",
-    requestQuoteFormTitle: "Форма запроса коммерческого предложения",
+    requestQuoteFormTitle: "Быстрый запрос цены / Заказ",
     goToCheckout: "Перейти к оформлению",
-    orderViaBankTransfer: "Оформить заказ банковским переводом",
-    requestProformaOnly: "Запросить только расчет (Проформа)",
+    orderViaBankTransfer: "Отправить заявку поставщикам",
+    requestProformaOnly: "Быстрый расчет цены (без адреса)",
     registeredDealerPrompt: "Уже зарегистрированы как оптовый партнер?",
     signInBtn: "Войти",
     removeItemAria: "Удалить товар из корзины",
+    optionalLocationToggle: "Необязательно: Добавить страну / город / карго",
   },
   ar: {
     packUnit: "حزمة",
@@ -198,9 +218,9 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "حدث خطأ في الشبكة.",
     missingAddressesToast: "يرجى تحديد أو إدخال عنوان الشحن وعنوان الفوترة.",
     orderSuccessToast:
-      "تم إرسال طلبك رقم {orderNo} مباشرة إلى المورد!\nسيقوم المورد البائع بإرسال تفاصيل الحساب البنكي والفاتورة المبدئية مباشرة إليك.",
-    confirmB2bOrder: "تأكيد طلب الجملة B2B",
-    addressPaymentHeader: "معلومات العنوان والدفع",
+      "تم إرسال طلبك رقم {orderNo} مباشرة إلى الموردين!",
+    confirmB2bOrder: "إرسال الطلب إلى الموردين",
+    addressPaymentHeader: "بيانات الشحن وتوزيع الموردين",
     backToCart: "العودة إلى السلة",
     deliveryAddress: "عنوان التسليم والشحن",
     deliveryAddressPlaceholder: "اكتب عنوان التسليم...",
@@ -210,19 +230,20 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "اكتب عنوان الفوترة...",
     customBillingOption: "+ إدخال عنوان فوترة جديد",
     noBillingAddresses: "لا توجد عناوين فوترة محفوظة في ملفك الشخصي.",
-    bankTransferHeader: "إشعار الدفع والفاتورة المباشرة مع المورد",
+    bankTransferHeader: "التجهيز والدفع المباشر مع المورد (عمولة 0%)",
     beneficiaryPrefix: "الطرف المتعاقد",
     proformaIbanNotice:
-      "لا تحصل منصة Merter Vitrini مبالغ المنتجات. بعد إرسال الطلب، يتولى المورد البائع مباشرة تزويدكم بتفاصيل الحساب البنكي (IBAN / SWIFT) والفاتورة المبدئية.",
+      "لا تحصل منصة Merter Vitrini مبالغ المنتجات. يتولى كل مورد بائع مباشرة تزويدكم بتفاصيل الحساب البنكي (IBAN / SWIFT) والفاتورة المبدئية.",
     paymentReferenceNote:
       "* تتم جميع المدفوعات والفواتير والشحن والمرتجعات والنزاعات التجارية مباشرة مع المورد البائع.",
-    requestQuoteFormTitle: "نموذج طلب عرض سعر بالجملة",
+    requestQuoteFormTitle: "طلب عرض سعر / طلب سريع",
     goToCheckout: "الانتقال لإتمام الطلب",
-    orderViaBankTransfer: "الطلب عبر التحويل البنكي",
-    requestProformaOnly: "طلب عرض سعر فقط (فاتورة مبدئية)",
+    orderViaBankTransfer: "إرسال طلب الشراء إلى الموردين",
+    requestProformaOnly: "عرض سعر سريع (بدون عنوان)",
     registeredDealerPrompt: "هل أنت عميل جملة مسجل لدينا؟",
     signInBtn: "تسجيل الدخول",
     removeItemAria: "إزالة المنتج من السلة",
+    optionalLocationToggle: "اختياري: إضافة الدولة / المدينة / ملاحظة الشحن",
   },
   de: {
     packUnit: "Paket",
@@ -233,9 +254,9 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Ein Netzwerkfehler ist aufgetreten.",
     missingAddressesToast: "Bitte wählen oder geben Sie Rechnungs- und Lieferadresse ein.",
     orderSuccessToast:
-      "Ihre B2B-Anfrage ({orderNo}) wurde direkt an den Lieferanten gesendet!\nIBAN/SWIFT-Daten und Proforma-Rechnung erhalten Sie direkt vom verkaufenden Lieferanten.",
-    confirmB2bOrder: "B2B-Bestellung bestätigen",
-    addressPaymentHeader: "Adress- & Zahlungsinformationen",
+      "Ihre B2B-Anfrage ({orderNo}) wurde direkt an die Lieferanten gesendet!",
+    confirmB2bOrder: "Anfrage an Lieferanten senden",
+    addressPaymentHeader: "Liefer- & Lieferanteninformationen",
     backToCart: "Zurück zum Warenkorb",
     deliveryAddress: "Lieferadresse",
     deliveryAddressPlaceholder: "Lieferadresse eingeben...",
@@ -245,19 +266,20 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Rechnungsadresse eingeben...",
     customBillingOption: "+ Neue Rechnungsadresse eingeben",
     noBillingAddresses: "Keine gespeicherten Rechnungsadressen im Profil gefunden.",
-    bankTransferHeader: "Direktzahlung an den Lieferanten / Proforma",
+    bankTransferHeader: "Direktabwicklung mit dem Lieferanten (0% Provision)",
     beneficiaryPrefix: "Vertragspartner",
     proformaIbanNotice:
-      "Merter Vitrini zieht keine Zahlungen ein. Der jeweils verkaufende Lieferant stellt Ihnen nach Prüfung seine eigene Firmen-IBAN/SWIFT-Verbindung und Proforma-Rechnung direkt bereit.",
+      "Merter Vitrini zieht keine Zahlungen ein. Der jeweils verkaufende Lieferant stellt Ihnen seine eigene Firmen-IBAN/SWIFT und Proforma-Rechnung direkt bereit.",
     paymentReferenceNote:
       "* Zahlung, Rechnungsstellung, Versand, Rückgaben und Reklamationen erfolgen ausschließlich direkt mit dem Lieferanten.",
-    requestQuoteFormTitle: "Angebotsanfrage-Formular",
+    requestQuoteFormTitle: "Schnellanfrage / Angebot",
     goToCheckout: "Zur Bestellabwicklung",
-    orderViaBankTransfer: "Per Banküberweisung bestellen",
-    requestProformaOnly: "Nur Preisangebot anfordern (Proforma)",
+    orderViaBankTransfer: "Bestellanfrage an Lieferanten senden",
+    requestProformaOnly: "Schnelles Angebot (ohne Adresse)",
     registeredDealerPrompt: "Sind Sie bereits registrierter B2B-Kunde?",
     signInBtn: "Anmelden",
     removeItemAria: "Artikel aus dem Warenkorb entfernen",
+    optionalLocationToggle: "Optional: Land / Stadt / Lieferhinweis hinzufügen",
   },
   fr: {
     packUnit: "Paquet",
@@ -268,9 +290,9 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Une erreur réseau s'est produite.",
     missingAddressesToast: "Veuillez sélectionner ou saisir les adresses de facturation et de livraison.",
     orderSuccessToast:
-      "Votre demande B2B ({orderNo}) a été transmise directement au fournisseur !\nLa facture proforma et l'IBAN/SWIFT vous seront fournis directement par le fournisseur vendeur.",
-    confirmB2bOrder: "Confirmer la commande B2B",
-    addressPaymentHeader: "Adresses & Modalités de Paiement",
+      "Votre demande B2B ({orderNo}) a été transmise directement aux fournisseurs !",
+    confirmB2bOrder: "Transmettre aux fournisseurs",
+    addressPaymentHeader: "Livraison & Routage Fournisseurs",
     backToCart: "Retour au panier",
     deliveryAddress: "Adresse de livraison",
     deliveryAddressPlaceholder: "Saisissez l'adresse de livraison...",
@@ -280,19 +302,20 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Saisissez l'adresse de facturation...",
     customBillingOption: "+ Saisir une nouvelle adresse de facturation",
     noBillingAddresses: "Aucune adresse de facturation enregistrée dans votre profil.",
-    bankTransferHeader: "Paiement Direct au Fournisseur & Proforma",
+    bankTransferHeader: "Paiement Direct Fournisseur (0% Commission)",
     beneficiaryPrefix: "Cocontractant",
     proformaIbanNotice:
-      "Merter Vitrini n'encaisse aucun règlement. Le fournisseur vendeur direct vous communique personnellement ses coordonnées IBAN/SWIFT et sa facture proforma.",
+      "Merter Vitrini n'encaisse aucun règlement. Chaque fournisseur vendeur direct vous communique personnellement ses coordonnées IBAN/SWIFT et sa facture proforma.",
     paymentReferenceNote:
       "* Les paiements, factures, expéditions, retours et litiges relèvent exclusivement du fournisseur vendeur.",
-    requestQuoteFormTitle: "Formulaire de Demande de Devis",
+    requestQuoteFormTitle: "Demande Rapide de Devis",
     goToCheckout: "Aller au paiement",
-    orderViaBankTransfer: "Commander par virement bancaire",
-    requestProformaOnly: "Demander uniquement un devis (Proforma)",
+    orderViaBankTransfer: "Envoyer la demande aux fournisseurs",
+    requestProformaOnly: "Devis rapide (sans adresse)",
     registeredDealerPrompt: "Déjà client professionnel inscrit ?",
     signInBtn: "Se connecter",
     removeItemAria: "Retirer l'article du panier",
+    optionalLocationToggle: "Optionnel : Ajouter pays / ville / livraison",
   },
   pl: {
     packUnit: "Pakiet",
@@ -303,9 +326,9 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Wystąpił błąd sieci.",
     missingAddressesToast: "Proszę wybrać lub wpisać adres rozliczeniowy oraz adres dostawy.",
     orderSuccessToast:
-      "Twoje zapytanie B2B ({orderNo}) zostało przekazane bezpośrednio Dostawcy!\nFaktura proforma i dane IBAN / SWIFT zostaną przekazane bezpośrednio przez sprzedającego Dostawcę.",
-    confirmB2bOrder: "Potwierdź zamówienie B2B",
-    addressPaymentHeader: "Adresy i Dane Płatności",
+      "Twoje zapytanie B2B ({orderNo}) zostało przekazane bezpośrednio Dostawcom!",
+    confirmB2bOrder: "Wyślij do Dostawców",
+    addressPaymentHeader: "Dostawa i Realizacja u Dostawców",
     backToCart: "Powrót do koszyka",
     deliveryAddress: "Adres dostawy",
     deliveryAddressPlaceholder: "Wpisz adres dostawy...",
@@ -315,19 +338,20 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Wpisz adres do faktury...",
     customBillingOption: "+ Wprowadź nowy adres do faktury",
     noBillingAddresses: "Brak zapisanych adresów do faktury w profilu.",
-    bankTransferHeader: "Płatność Bezpośrednia do Dostawcy / Proforma",
+    bankTransferHeader: "Bezpośrednia Płatność Dostawcy (0% Prowizji)",
     beneficiaryPrefix: "Strona umowy",
     proformaIbanNotice:
-      "Merter Vitrini nie pobiera płatności za towary. Po złożeniu zamówienia bezpośredni Dostawca przekaże swoje firmowe dane IBAN / SWIFT oraz fakturę proforma.",
+      "Merter Vitrini nie pobiera płatności za towary. Każdy sprzedający Dostawca bezpośrednio przekaże swoje firmowe dane IBAN / SWIFT oraz fakturę proforma.",
     paymentReferenceNote:
       "* Wszelkie płatności, faktury, dostawy, zwroty i reklamacje są załatwiane bezpośrednio ze sprzedającym Dostawcą.",
-    requestQuoteFormTitle: "Formularz Zapytania Ofertowego",
+    requestQuoteFormTitle: "Szybkie Zapytanie Ofertowe",
     goToCheckout: "Przejdź do zamówienia",
-    orderViaBankTransfer: "Zamów przelewem bankowym",
-    requestProformaOnly: "Poproś tylko o wycenę (Proforma)",
+    orderViaBankTransfer: "Wyślij zamówienie do dostawców",
+    requestProformaOnly: "Szybka wycena (bez adresu)",
     registeredDealerPrompt: "Jesteś zarejestrowanym kontrahentem?",
     signInBtn: "Zaloguj się",
     removeItemAria: "Usuń produkt z koszyka",
+    optionalLocationToggle: "Opcjonalnie: Dodaj kraj / miasto / adres",
   },
   bg: {
     packUnit: "Пакет",
@@ -338,9 +362,9 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     networkError: "Възникна мрежова грешка.",
     missingAddressesToast: "Моля, изберете или въведете адрес за доставка и фактуриране.",
     orderSuccessToast:
-      "Вашата B2B заявка ({orderNo}) беше изпратена директно към Доставчика!\nПроформа фактура и IBAN / SWIFT данни се предоставят директно от продаващия Доставчик.",
-    confirmB2bOrder: "Потвърди B2B поръчката",
-    addressPaymentHeader: "Адрес и Данни за Плащане",
+      "Вашата B2B заявка ({orderNo}) беше изпратена директно към Доставчиците!",
+    confirmB2bOrder: "Изпрати към Доставчиците",
+    addressPaymentHeader: "Доставка и Данни за Доставчиците",
     backToCart: "Обратно към количката",
     deliveryAddress: "Адрес за доставка",
     deliveryAddressPlaceholder: "Въведете адрес за доставка...",
@@ -350,19 +374,20 @@ const CART_DRAWER_LABELS: Record<SupportedLangCode, CartDrawerLabels> = {
     billingAddressPlaceholder: "Въведете адрес за фактуриране...",
     customBillingOption: "+ Въвеждане на нов адрес за фактуриране",
     noBillingAddresses: "Няма запазени адреси за фактуриране във вашия профил.",
-    bankTransferHeader: "Директно плащане към Доставчика / Проформа",
+    bankTransferHeader: "Директно плащане към Доставчика (0% Комисионна)",
     beneficiaryPrefix: "Контрагент",
     proformaIbanNotice:
-      "Merter Vitrini не събира плащания за стоки. Продаващият Доставчик директно ви изпраща своите IBAN / SWIFT данни и проформа фактура.",
+      "Merter Vitrini не събира плащания за стоки. Всеки продаващ Доставчик директно ви изпраща своите IBAN / SWIFT данни и проформа фактура.",
     paymentReferenceNote:
       "* Всички плащания, фактури, доставки, връщания и спорове се уреждат директно с продаващия Доставчик.",
-    requestQuoteFormTitle: "Формуляр за Оферта на Едро",
+    requestQuoteFormTitle: "Бърза Заявка за Оферта",
     goToCheckout: "Към завършване на поръчката",
-    orderViaBankTransfer: "Поръчай с банков превод",
-    requestProformaOnly: "Поискай само оферта (Проформа)",
+    orderViaBankTransfer: "Изпрати поръчката към доставчиците",
+    requestProformaOnly: "Бърза оферта (без адрес)",
     registeredDealerPrompt: "Регистриран B2B партньор ли сте?",
     signInBtn: "Вход",
     removeItemAria: "Премахни продукта от количката",
+    optionalLocationToggle: "По избор: Добави държава / град / адрес",
   },
 };
 
@@ -471,7 +496,7 @@ async function submitB2BOrder({
   recaptchaToken,
   lang,
   displayCurrency,
-}: SubmitB2BOrderParams): Promise<string> {
+}: SubmitB2BOrderParams): Promise<DrawerOrderCreatedResult> {
   const labels = pickLangText(lang, CART_DRAWER_LABELS);
   const syncRes = await fetch("/api/v1/store/cart/sync", {
     method: "POST",
@@ -482,7 +507,7 @@ async function submitB2BOrder({
     body: JSON.stringify({
       items: cart.map((item) => ({
         product_id: item.product_id,
-        quantity: item.packages_qty * item.units_per_package,
+        quantity: Math.max(1, item.packages_qty * Math.max(1, item.units_per_package || 1)),
       })),
     }),
   });
@@ -509,12 +534,20 @@ async function submitB2BOrder({
     }),
   });
 
-  const data = await res.json();
+  const data = (await res.json()) as {
+    success?: boolean;
+    error?: string;
+    order_number?: string;
+    supplier_orders?: SupplierDirectOrderSummary[];
+  };
   if (!res.ok || !data.success) {
     throw new Error(data.error || labels.orderSubmitError);
   }
 
-  return data.order_number;
+  return {
+    orderNumber: data.order_number || "",
+    supplierOrders: Array.isArray(data.supplier_orders) ? data.supplier_orders : [],
+  };
 }
 
 function getFormattedTcmbDate(rawDate: string | undefined, lang: string): string {
@@ -553,116 +586,6 @@ function getTcmbDateNotice(formattedDate: string, lang: string): string {
     fr: `* Les taux de change sont basés sur la publication officielle de la TCMB du ${formattedDate} (fuseau horaire TR/Istanbul appliqué)`,
   };
   return notices[lang] || `* Rates based on official TCMB publication of ${formattedDate} (TR/Istanbul time-boundary applied)`;
-}
-
-interface CartItemCardProps {
-  readonly item: CartItem;
-  readonly idx: number;
-  readonly lang: string;
-  readonly displayCurrency: string;
-  readonly exchangeRates: readonly ExchangeRate[];
-  readonly onAdjustQty: (index: number, change: number) => void;
-  readonly onRemove: (index: number) => void;
-}
-
-function CartItemCard({
-  item,
-  idx,
-  lang,
-  displayCurrency,
-  exchangeRates,
-  onAdjustQty,
-  onRemove,
-}: Readonly<CartItemCardProps>) {
-  const isAuthenticated = useIsStoreAuthenticated();
-  const itemTotalUnits = item.packages_qty * item.units_per_package;
-  const rawItemPricePerUnit = item.price_per_unit;
-  const rawItemTotalPrice = itemTotalUnits * rawItemPricePerUnit;
-
-  let pricePerUnit = rawItemPricePerUnit;
-  let itemTotalPrice = rawItemTotalPrice;
-  let currency = displayCurrency || "TRY";
-
-  if (displayCurrency && exchangeRates.length > 0) {
-    pricePerUnit = convertPrice(rawItemPricePerUnit, item.currency || "TRY", displayCurrency, [...exchangeRates]);
-    itemTotalPrice = convertPrice(rawItemTotalPrice, item.currency || "TRY", displayCurrency, [...exchangeRates]);
-  } else {
-    currency = item.currency || "TRY";
-  }
-
-  const title = item.title_translations?.[lang] || item.title;
-  const labels = pickLangText(lang, CART_DRAWER_LABELS);
-  const pieceUnit = t("piece", lang);
-  const unitPriceSuffix = isAuthenticated ? ` x ${pricePerUnit.toFixed(2)} ${currency}` : "";
-
-  return (
-    <div className="border border-cultured bg-[#fafafa] rounded-[5px] p-3 flex gap-3 relative shadow-inner">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={getResizedImageUrl(item.image_url, 80, 106)}
-        alt={item.title}
-        className="w-14 h-18 object-cover rounded-[5px] bg-white border border-cultured"
-      />
-
-      <div className="flex-grow flex flex-col gap-1 pr-6">
-        <h4 className="text-sm font-bold text-eerie-black line-clamp-2 leading-relaxed">
-          {title}
-        </h4>
-
-        <span className="text-xs font-bold text-salmon-pink block">
-          {t("color", lang)}: {item.color} | SKU: {item.custom_sku}
-        </span>
-
-        <div className="flex items-center gap-2 mt-1.5">
-          <button
-            type="button"
-            onClick={() => onAdjustQty(idx, -1)}
-            className="w-6 h-6 rounded-[5px] border border-cultured bg-white flex items-center justify-center font-bold text-xs cursor-pointer select-none active:scale-90"
-          >
-            −
-          </button>
-          <span className="text-sm font-bold text-onyx">
-            {item.packages_qty} {labels.packUnit}
-          </span>
-          <button
-            type="button"
-            onClick={() => onAdjustQty(idx, 1)}
-            className="w-6 h-6 rounded-[5px] border border-cultured bg-white flex items-center justify-center font-bold text-xs cursor-pointer select-none active:scale-90"
-          >
-            +
-          </button>
-        </div>
-
-        <span className="text-xs font-semibold text-sonic-silver mt-1.5 block">
-          {itemTotalUnits} {pieceUnit} ({item.units_per_package} {labels.pcsPerPack}){unitPriceSuffix}
-        </span>
-      </div>
-
-      <div className="shrink-0 self-center font-extrabold text-sm text-eerie-black text-right pl-1">
-        {isAuthenticated ? (
-          `${itemTotalPrice.toFixed(2)} ${currency}`
-        ) : (
-          <button
-            type="button"
-            onClick={() => openStoreAuthModal("login")}
-            className="inline-flex items-center gap-1 text-[10px] font-extrabold text-salmon-pink hover:underline bg-transparent border-none p-0 cursor-pointer"
-          >
-            <Lock className="w-2.5 h-2.5 shrink-0" />
-            <span>{getShortMemberPriceLabel(lang)}</span>
-          </button>
-        )}
-      </div>
-
-      <button
-        type="button"
-        aria-label={labels.removeItemAria}
-        onClick={() => onRemove(idx)}
-        className="absolute top-2 right-2 border-none bg-transparent text-sonic-silver hover:text-salmon-pink cursor-pointer text-sm font-extrabold"
-      >
-        &times;
-      </button>
-    </div>
-  );
 }
 
 interface CartCurrencyEquivalentsProps {
@@ -737,6 +660,7 @@ function CartCurrencyEquivalents({
 
 interface CartTotalsSectionProps {
   readonly lang: string;
+  readonly supplierCount: number;
   readonly totalPkgs: number;
   readonly totalItemsCount: number;
   readonly totalWeight: number;
@@ -748,6 +672,7 @@ interface CartTotalsSectionProps {
 
 function CartTotalsSection({
   lang,
+  supplierCount,
   totalPkgs,
   totalItemsCount,
   totalWeight,
@@ -758,9 +683,16 @@ function CartTotalsSection({
 }: Readonly<CartTotalsSectionProps>) {
   const isAuthenticated = useIsStoreAuthenticated();
   const labels = pickLangText(lang, CART_DRAWER_LABELS);
+  const multiCopy = getCartMultiSupplierCopy(lang);
   const pieceUnit = t("piece", lang);
   return (
     <div className="border border-cultured bg-[#fafafa] p-4 rounded-[10px] flex flex-col gap-2.5 shadow-sm shrink-0">
+      {supplierCount > 0 && (
+        <div className="flex justify-between text-sm font-bold text-onyx">
+          <span>{multiCopy.preparingSuppliersSummaryLabel}:</span>
+          <span className="text-[#8C6D3F] font-extrabold">{supplierCount}</span>
+        </div>
+      )}
       <div className="flex justify-between text-sm font-bold text-onyx">
         <span>{t("total_packages", lang)}:</span>
         <span className="text-eerie-black font-extrabold">{totalPkgs} {labels.packUnit}</span>
@@ -789,6 +721,10 @@ function CartTotalsSection({
         )}
       </div>
 
+      <span className="text-[10.5px] font-bold text-[#15803D] text-right">
+        ✓ {multiCopy.noPayNowNote}
+      </span>
+
       {isAuthenticated && (
         <CartCurrencyEquivalents
           grandTotalInTRY={grandTotalInTRY}
@@ -815,6 +751,8 @@ interface CartCheckoutFormProps {
   readonly defaultLastName: string;
   readonly defaultPhone: string;
   readonly submittingOrder: boolean;
+  readonly supplierCount: number;
+  readonly errorMessage: string | null;
   readonly onBackToCart: () => void;
   readonly onSubmit: (e: React.FormEvent) => void;
 }
@@ -859,10 +797,13 @@ function CartCheckoutForm({
   defaultLastName,
   defaultPhone,
   submittingOrder,
+  supplierCount,
+  errorMessage,
   onBackToCart,
   onSubmit,
 }: Readonly<CartCheckoutFormProps>) {
   const labels = pickLangText(lang, CART_DRAWER_LABELS);
+  const multiCopy = getCartMultiSupplierCopy(lang);
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 pt-4 border-t border-cultured mt-2">
@@ -878,6 +819,21 @@ function CartCheckoutForm({
           &larr; {labels.backToCart}
         </button>
       </div>
+
+      {supplierCount > 1 && (
+        <p className="text-[11px] font-bold text-[#8C6D3F] bg-[#F8F6F2] border border-[#E5E0D8] rounded-md px-3 py-2 m-0">
+          {multiCopy.multiDispatchHint.replace("{count}", String(supplierCount))}
+        </p>
+      )}
+
+      {errorMessage && (
+        <div
+          role="alert"
+          className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2"
+        >
+          {errorMessage}
+        </div>
+      )}
 
       <StructuredCheckoutAddressPicker
         label={labels.deliveryAddress}
@@ -923,10 +879,6 @@ function CartCheckoutForm({
 
       <BankTransferInfo lang={lang} />
 
-      <p className="text-[10px] font-semibold text-[#525252] bg-[#FAF8F5] border border-[#E5E0D8] rounded px-2.5 py-2 leading-snug m-0">
-        {getDirectSellerNoticeCopy(lang).buyerNotice}
-      </p>
-
       <p className="text-[10px] font-medium text-neutral-500 text-center leading-snug m-0">
         {getRecaptchaLegalNotice(lang)}
       </p>
@@ -934,7 +886,7 @@ function CartCheckoutForm({
       <button
         type="submit"
         disabled={submittingOrder}
-        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed mt-1 active:scale-[0.99] transition-colors duration-300"
+        className="w-full py-3.5 bg-[#1C1C1C] hover:bg-salmon-pink text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed mt-1 active:scale-[0.99] transition-colors duration-300"
       >
         {submittingOrder ? (
           <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
@@ -963,6 +915,8 @@ interface CartInquiryFormProps {
   readonly customerMessage: string;
   readonly setCustomerMessage: (val: string) => void;
   readonly submittingInquiry: boolean;
+  readonly supplierCount: number;
+  readonly errorMessage: string | null;
   readonly onGoToCheckout: () => void;
   readonly onSubmit: (e: React.FormEvent) => void;
 }
@@ -984,10 +938,14 @@ function CartInquiryForm({
   customerMessage,
   setCustomerMessage,
   submittingInquiry,
+  supplierCount,
+  errorMessage,
   onGoToCheckout,
   onSubmit,
 }: Readonly<CartInquiryFormProps>) {
+  const [showLocationFields, setShowLocationFields] = React.useState(false);
   const labels = pickLangText(lang, CART_DRAWER_LABELS);
+  const multiCopy = getCartMultiSupplierCopy(lang);
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3.5 pt-4 border-t border-cultured mt-2">
       <div className="flex items-center justify-between">
@@ -1004,6 +962,22 @@ function CartInquiryForm({
           </button>
         )}
       </div>
+
+      {supplierCount > 1 && (
+        <p className="text-[11px] font-bold text-[#8C6D3F] bg-[#F8F6F2] border border-[#E5E0D8] rounded-md px-3 py-2 m-0">
+          {multiCopy.multiDispatchHint.replace("{count}", String(supplierCount))}
+        </p>
+      )}
+
+      {errorMessage && (
+        <div
+          role="alert"
+          className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2"
+        >
+          {errorMessage}
+        </div>
+      )}
+
       <div className="flex flex-col gap-1">
         <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("full_name", lang)}</label>
         <input
@@ -1048,15 +1022,29 @@ function CartInquiryForm({
         />
       </div>
 
-      <StructuredLocationFields
-        lang={lang}
-        value={inquiryLocation}
-        onChange={setInquiryLocation}
-        onMetaChange={setInquiryLocMeta}
-        showPostalCode={false}
-        compact
-        disabled={submittingInquiry}
-      />
+      <div className="border border-[#E5E0D8] rounded-md bg-[#FAF8F5] px-3 py-2">
+        <button
+          type="button"
+          onClick={() => setShowLocationFields((prev) => !prev)}
+          className="w-full text-left text-[11px] font-bold text-[#8C6D3F] bg-transparent border-none p-0 cursor-pointer flex items-center justify-between"
+        >
+          <span>📍 {labels.optionalLocationToggle}</span>
+          <span>{showLocationFields ? "−" : "+"}</span>
+        </button>
+        {showLocationFields && (
+          <div className="pt-2.5">
+            <StructuredLocationFields
+              lang={lang}
+              value={inquiryLocation}
+              onChange={setInquiryLocation}
+              onMetaChange={setInquiryLocMeta}
+              showPostalCode={false}
+              compact
+              disabled={submittingInquiry}
+            />
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-xs uppercase font-extrabold text-eerie-black tracking-[0.5px]">{t("message", lang)}</label>
@@ -1102,9 +1090,58 @@ export default function CartDrawer({
   totalWeight,
   submittingInquiry,
   onSubmitInquiry,
+  onOrderCreated,
   displayCurrency = "TRY",
   exchangeRates = [],
 }: Readonly<CartDrawerProps>) {
+  const isAuthenticated = useIsStoreAuthenticated();
+  const [hydratedMetaMap, setHydratedMetaMap] = React.useState<Record<string, CartHydrationMeta>>({});
+  const cartIdsKey = cart.map((item) => item.product_id).join(",");
+
+  React.useEffect(() => {
+    if (!cartIdsKey) return;
+    let active = true;
+    void fetchCartHydrationMetaMap(cart).then((resolved) => {
+      if (active && Object.keys(resolved).length > 0) {
+        setHydratedMetaMap((prev) => ({ ...prev, ...resolved }));
+      }
+    });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartIdsKey]);
+
+  const displayCart = React.useMemo(
+    () => applyHydratedMetaMapToCart(cart, hydratedMetaMap),
+    [cart, hydratedMetaMap]
+  );
+
+  const multiCopy = getCartMultiSupplierCopy(lang);
+  const supplierGroups = React.useMemo(
+    () => groupCartBySupplier(displayCart, displayCurrency, exchangeRates, multiCopy.fallbackSupplierName),
+    [displayCart, displayCurrency, exchangeRates, multiCopy.fallbackSupplierName]
+  );
+
+  const drawerOpenTrackedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!drawerOpenTrackedRef.current && cart.length > 0) {
+      drawerOpenTrackedRef.current = true;
+      trackMemberEvent({
+        event_type: "cart_open",
+        event_category: "commerce",
+        title: `${cart.length} ürün / ${supplierGroups.length} tedarikçi`,
+        subtitle: `${totalPkgs} pkt · ${totalItemsCount} adet`,
+        metadata: {
+          items_count: cart.length,
+          suppliers_count: supplierGroups.length,
+          packages: totalPkgs,
+          pieces: totalItemsCount,
+        },
+      });
+    }
+  }, [cart.length, supplierGroups.length, totalPkgs, totalItemsCount]);
+
   const [fullName, setFullName] = React.useState<string>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -1158,22 +1195,30 @@ export default function CartDrawer({
     loadingStates: false,
     loadingCities: false,
   });
+  const [inquiryError, setInquiryError] = React.useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = React.useState<string | null>(null);
 
-  const handleInquirySubmit = (e: React.FormEvent) => {
+  const handleInquirySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmitInquiry({
-      fullName,
-      companyName,
-      phoneNumber,
-      emailAddress,
-      customerMessage,
-      countryId: inquiryLocation.countryId,
-      stateId: inquiryLocation.stateId,
-      cityId: inquiryLocation.cityId,
-      postalCode: inquiryLocation.postalCode,
-      addressLine: inquiryLocation.addressLine,
-      locationMeta: inquiryLocMeta,
-    });
+    setInquiryError(null);
+    try {
+      await onSubmitInquiry({
+        fullName,
+        companyName,
+        phoneNumber,
+        emailAddress,
+        customerMessage,
+        countryId: inquiryLocation.countryId,
+        stateId: inquiryLocation.stateId,
+        cityId: inquiryLocation.cityId,
+        postalCode: inquiryLocation.postalCode,
+        addressLine: inquiryLocation.addressLine,
+        locationMeta: inquiryLocMeta,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : labels.networkError;
+      setInquiryError(msg);
+    }
   };
   const [isCheckout, setIsCheckout] = React.useState(false);
   const [forceShowInquiry, setForceShowInquiry] = React.useState(false);
@@ -1216,13 +1261,16 @@ export default function CartDrawer({
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
+    setCheckoutError(null);
 
     const effectiveBillingId = sameAsDelivery ? deliveryAddr : billingAddr;
     const delObj = addresses.find((a) => a.id === deliveryAddr);
     const billObj = addresses.find((a) => a.id === effectiveBillingId);
 
     if (!delObj || !billObj || !isAddressRecordComplete(delObj) || !isAddressRecordComplete(billObj)) {
-      showToast(getLocalizedDrawerNote(INCOMPLETE_ADDRESS_LABELS, lang));
+      const msg = getLocalizedDrawerNote(INCOMPLETE_ADDRESS_LABELS, lang);
+      setCheckoutError(msg);
+      showToast(msg);
       return;
     }
 
@@ -1232,9 +1280,9 @@ export default function CartDrawer({
     setSubmittingOrder(true);
     try {
       const recaptchaToken = await executeRecaptchaAction("create_order", lang);
-      const orderNumber = await submitB2BOrder({
+      const created = await submitB2BOrder({
         token,
-        cart,
+        cart: displayCart,
         deliveryAddressId: deliveryAddr,
         billingAddressId: effectiveBillingId,
         billingAddress: finalBilling,
@@ -1244,16 +1292,19 @@ export default function CartDrawer({
         displayCurrency,
       });
 
-      const successNotice = labels.orderSuccessToast.replace("{orderNo}", orderNumber);
-
-      showToast(successNotice);
       persistStoreCart([], { immediate: true });
       onClose();
-      const profileQuery = lang && lang !== "tr" ? `?tab=orders&lang=${encodeURIComponent(lang)}` : "?tab=orders";
-      window.location.href = `/profile${profileQuery}`;
+      if (onOrderCreated) {
+        onOrderCreated(created);
+      } else {
+        showToast(labels.orderSuccessToast.replace("{orderNo}", created.orderNumber));
+        const profileQuery = lang && lang !== "tr" ? `?tab=orders&lang=${encodeURIComponent(lang)}` : "?tab=orders";
+        window.location.href = `/profile${profileQuery}`;
+      }
     } catch (err: unknown) {
       console.error(err);
       const errMsg = err instanceof Error ? err.message : labels.networkError;
+      setCheckoutError(errMsg);
       showToast(errMsg);
     } finally {
       setSubmittingOrder(false);
@@ -1261,6 +1312,8 @@ export default function CartDrawer({
   };
 
   const handleOpenInquiryFromLoggedIn = () => {
+    setCheckoutError(null);
+    setInquiryError(null);
     if (typeof window !== "undefined") {
       try {
         const stored = JSON.parse(localStorage.getItem("store_user_info") || "{}");
@@ -1276,7 +1329,7 @@ export default function CartDrawer({
     setForceShowInquiry(true);
   };
 
-  const grandTotalInTRY = cart.reduce((sum, item) => {
+  const grandTotalInTRY = displayCart.reduce((sum, item) => {
     const itemTotalUnits = item.packages_qty * item.units_per_package;
     const itemPriceInOrig = itemTotalUnits * item.price_per_unit;
     const itemPriceInTRY = convertPrice(itemPriceInOrig, item.currency || "TRY", "TRY", [...exchangeRates]);
@@ -1312,7 +1365,7 @@ export default function CartDrawer({
         </div>
 
         <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4">
-          {cart.length === 0 ? (
+          {displayCart.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center text-sonic-silver">
               <div className="w-14 h-14 rounded-full bg-[#F8F6F2] border border-[#E5E0D8] flex items-center justify-center mb-4">
                 <ShoppingBag className="w-6 h-6 text-[#1C1C1C]" />
@@ -1331,24 +1384,25 @@ export default function CartDrawer({
             </div>
           ) : (
             <>
+              <CartMultiSupplierExplainer groups={supplierGroups} lang={lang} variant="drawer" />
+
               <div className="flex flex-col gap-3">
-                {cart.map((item, idx) => (
-                  <CartItemCard
-                    key={`${item.product_id}-${item.custom_sku || idx}`}
-                    item={item}
-                    idx={idx}
+                {supplierGroups.map((group) => (
+                  <CartSupplierGroupCard
+                    key={group.key}
+                    group={group}
                     lang={lang}
-                    displayCurrency={displayCurrency}
-                    exchangeRates={exchangeRates}
+                    variant="drawer"
+                    isAuthenticated={isAuthenticated}
                     onAdjustQty={onAdjustQty}
-                    onRemove={onRemove}
+                    onRemoveItem={onRemove}
                   />
                 ))}
               </div>
 
               <div className="flex justify-between items-center py-2 px-1 border-b border-cultured shrink-0 mt-1 select-none">
                 <span className="text-xs font-bold text-sonic-silver">
-                  {cart.length} {labels.itemsVariety}
+                  {displayCart.length} {labels.itemsVariety} · {supplierGroups.length}
                 </span>
                 <button
                   type="button"
@@ -1366,6 +1420,7 @@ export default function CartDrawer({
               <div className="flex flex-col gap-2.5">
                 <CartTotalsSection
                   lang={lang}
+                  supplierCount={supplierGroups.length}
                   totalPkgs={totalPkgs}
                   totalItemsCount={totalItemsCount}
                   totalWeight={totalWeight}
@@ -1379,15 +1434,26 @@ export default function CartDrawer({
                   <div className="flex flex-col gap-3 pt-4 border-t border-cultured mt-2">
                     <button
                       type="button"
-                      onClick={() => setIsCheckout(true)}
-                      className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-sm tracking-[0.5px] uppercase shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.99] transition-colors duration-300"
+                      onClick={() => {
+                        trackMemberEvent({
+                          event_type: "checkout_start",
+                          event_category: "commerce",
+                          title: `${supplierGroups.length} tedarikçi için sipariş adımı`,
+                          metadata: { items_count: displayCart.length, suppliers_count: supplierGroups.length },
+                        });
+                        setIsCheckout(true);
+                      }}
+                      className="w-full py-3 bg-[#1C1C1C] hover:bg-salmon-pink text-white rounded-[6px] font-extrabold text-xs tracking-[0.5px] uppercase shadow-sm border-none flex flex-col items-center justify-center gap-0.5 cursor-pointer select-none active:scale-[0.99] transition-colors duration-300"
                     >
-                      💳 {labels.orderViaBankTransfer}
+                      <span>{labels.orderViaBankTransfer}</span>
+                      <span className="text-[10px] font-semibold text-white/80 normal-case">
+                        {multiCopy.zeroCommissionPill}
+                      </span>
                     </button>
                     <button
                       type="button"
                       onClick={handleOpenInquiryFromLoggedIn}
-                      className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-[5px] font-bold text-xs uppercase border-none flex items-center justify-center gap-2 cursor-pointer select-none transition-colors"
+                      className="w-full py-2.5 bg-[#FAF8F5] hover:bg-[#F1ECE3] text-[#1C1C1C] border border-[#E5E0D8] rounded-[6px] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer select-none transition-colors"
                     >
                       📄 {labels.requestProformaOnly}
                     </button>
@@ -1410,7 +1476,10 @@ export default function CartDrawer({
                     defaultLastName={userDefaults.lastName}
                     defaultPhone={userDefaults.phone}
                     submittingOrder={submittingOrder}
+                    supplierCount={supplierGroups.length}
+                    errorMessage={checkoutError}
                     onBackToCart={() => {
+                      setCheckoutError(null);
                       setIsCheckout(false);
                       setForceShowInquiry(false);
                     }}
@@ -1436,7 +1505,10 @@ export default function CartDrawer({
                     customerMessage={customerMessage}
                     setCustomerMessage={setCustomerMessage}
                     submittingInquiry={submittingInquiry}
+                    supplierCount={supplierGroups.length}
+                    errorMessage={inquiryError}
                     onGoToCheckout={() => {
+                      setInquiryError(null);
                       setForceShowInquiry(false);
                       setIsCheckout(false);
                     }}

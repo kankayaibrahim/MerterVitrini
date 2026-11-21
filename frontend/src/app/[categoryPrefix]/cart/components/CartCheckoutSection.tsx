@@ -5,6 +5,7 @@ import { UserAddress } from "@/app/profile/components/types";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
 import StructuredCheckoutAddressPicker from "@/components/store/StructuredCheckoutAddressPicker";
 import { getRecaptchaLegalNotice } from "@/utils/recaptcha";
+import { getCartMultiSupplierCopy } from "@/components/store/cart/cartMultiSupplierCopy";
 
 interface CheckoutSectionCopy {
   readonly orderBankTransfer: string;
@@ -22,130 +23,131 @@ interface CheckoutSectionCopy {
 
 const CHECKOUT_COPY: Record<SupportedSeoLang, CheckoutSectionCopy> = {
   tr: {
-    orderBankTransfer: "KURUMSAL HAVALE / PROFORMA İLE SİPARİŞ VER",
-    requestProforma: "FİYAT TEKLİFİ İSTE (PROFORMA)",
+    orderBankTransfer: "TEDARİKÇİLERE SİPARİŞ TALEBİ GÖNDER",
+    requestProforma: "HIZLI FİYAT TEKLİFİ İSTE (ADRES GİRMEDEN)",
     addressPaymentTitle: "TESLİMAT VE FATURA BİLGİLERİ",
     backToCart: "Sepete Dön",
     deliveryLabel: "TESLİMAT ADRESİ",
     billingLabel: "FATURA ADRESİ",
     sameAsDeliveryLabel: "Fatura adresi teslimat adresiyle aynı olsun",
-    confirmOrder: "KURUMSAL SİPARİŞİ ONAYLA",
-    proformaNoticeTitle: "RESMİ PROFORMA FATURA & BANKA TRANSFER SÜRECİ",
+    confirmOrder: "TEDARİKÇİLERE SİPARİŞ TALEBİNİ İLET",
+    proformaNoticeTitle: "DOĞRUDAN TEDARİKÇİ HAZIRLIK & ÖDEME (%0 KOMİSYON)",
     proformaNoticeBody:
-      "Sipariş onayınızın ardından TRY, USD veya EUR para birimindeki resmi kurumsal IBAN/SWIFT hesap bilgilerimiz sipariş numaranıza özel üretilen Proforma Fatura üzerinde tarafınıza iletilir.",
+      "Merter Vitrini ödeme almaz ve komisyon eklemez. Talebiniz onaylandığında her ürünün satıcısı olan ilgili tedarikçi firma, proforma faturasını ve kendi kurumsal IBAN / SWIFT ödeme bilgilerini doğrudan size iletir.",
     proformaNoticeHint:
-      "* Ödeme transferi sonrasında Profil > Siparişlerim ekranından dekont/ödeme bildirimi yapabilirsiniz.",
+      "* Her tedarikçi kendi alt siparişini ayrı hazırlar; Profil > Siparişlerim ekranından takip edebilir veya doğrudan WhatsApp üzerinden görüşebilirsiniz.",
   },
   en: {
-    orderBankTransfer: "PLACE ORDER VIA CORPORATE WIRE / PROFORMA",
-    requestProforma: "REQUEST PRICE QUOTE (PROFORMA)",
+    orderBankTransfer: "SUBMIT ORDER REQUEST TO SUPPLIERS",
+    requestProforma: "QUICK QUOTE REQUEST (NO ADDRESS NEEDED)",
     addressPaymentTitle: "DELIVERY & BILLING DETAILS",
     backToCart: "Back to Cart",
     deliveryLabel: "DELIVERY / CARGO ADDRESS",
     billingLabel: "COMPANY BILLING ADDRESS",
     sameAsDeliveryLabel: "Use same address for billing",
-    confirmOrder: "CONFIRM WHOLESALE ORDER",
-    proformaNoticeTitle: "OFFICIAL PROFORMA INVOICE & WIRE TRANSFER",
+    confirmOrder: "SEND REQUEST TO SUPPLIERS",
+    proformaNoticeTitle: "DIRECT SUPPLIER FULFILLMENT & PAYMENT (0% COMMISSION)",
     proformaNoticeBody:
-      "Upon order confirmation, official corporate IBAN & SWIFT bank coordinates (TRY, USD, EUR) are issued on your order-specific Proforma Invoice.",
+      "Merter Vitrini collects zero payment and charges 0% commission. Upon confirmation, each named selling Supplier directly sends its own Proforma Invoice and corporate IBAN / SWIFT payment details.",
     proformaNoticeHint:
-      "* Reference your Order Number on the wire transfer and submit payment notification under Profile > My Orders.",
+      "* Each supplier prepares and dispatches its own sub-order; track everything under Profile > My Orders or message each supplier on WhatsApp.",
   },
   ru: {
-    orderBankTransfer: "ОФОРМИТЬ ЗАКАЗ ПО СЧЕТУ / ПЕРЕВОДУ",
-    requestProforma: "ЗАПРОСИТЬ СЧЕТ-ПРОФОРМУ",
+    orderBankTransfer: "ОТПРАВИТЬ ЗАЯВКУ ПОСТАВЩИКАМ",
+    requestProforma: "БЫСТРЫЙ ЗАПРОС ЦЕНЫ (БЕЗ АДРЕСА)",
     addressPaymentTitle: "АДРЕС ДОСТАВКИ И РЕКВИЗИТЫ",
     backToCart: "Назад в корзину",
     deliveryLabel: "АДРЕС ДОСТАВКИ / КАРГО",
     billingLabel: "ПЛАТЕЖНЫЙ АДРЕС КОМПАНИИ",
     sameAsDeliveryLabel: "Платёжный адрес совпадает с адресом доставки",
-    confirmOrder: "ПОДТВЕРДИТЬ ОПТОВЫЙ ЗАКАЗ",
-    proformaNoticeTitle: "ОФИЦИАЛЬНЫЙ СЧЕТ-ПРОФОРМА И БАНКОВСКИЙ ПЕРЕВОД",
+    confirmOrder: "ОТПРАВИТЬ ЗАКАЗ ПОСТАВЩИКАМ",
+    proformaNoticeTitle: "ПРЯМАЯ СБОРКА И ОПЛАТА ПОСТАВЩИКУ (0% КОМИССИИ)",
     proformaNoticeBody:
-      "После подтверждения заказа официальные корпоративные реквизиты IBAN / SWIFT (TRY, USD, EUR) формируются в вашем индивидуальном счете-проформе.",
+      "Merter Vitrini не принимает оплату и не берет комиссию. После отправки заявки каждый поставщик-продавец напрямую направляет свой счет-проформу и реквизиты IBAN / SWIFT.",
     proformaNoticeHint:
-      "* Укажите номер заказа в назначении платежа и отправьте уведомление об оплате в разделе Профиль > Мои заказы.",
+      "* Каждый поставщик собирает свою часть заказа; отслеживайте в Профиль > Мои заказы или свяжитесь напрямую по WhatsApp.",
   },
   ar: {
-    orderBankTransfer: "تأكيد الطلب عبر تحويل بنكي / فاتورة أولية",
-    requestProforma: "طلب عرض سعر رسمي (Proforma)",
+    orderBankTransfer: "إرسال طلب الشراء إلى الموردين",
+    requestProforma: "طلب عرض سعر سريع (بدون عنوان)",
     addressPaymentTitle: "بيانات الشحن والفوترة",
     backToCart: "العودة إلى السلة",
     deliveryLabel: "عنوان التسليم / شركة الشحن",
     billingLabel: "عنوان الفوترة للشركة",
     sameAsDeliveryLabel: "عنوان الفوترة مطابق لعنوان التسليم",
-    confirmOrder: "تأكيد طلب الجملة",
-    proformaNoticeTitle: "الفاتورة الأولية الرسمية والتحويل البنكي",
+    confirmOrder: "إرسال الطلب إلى الموردين",
+    proformaNoticeTitle: "تجهيز ودفع مباشر مع المورد (عمولة 0%)",
     proformaNoticeBody:
-      "بعد تأكيد الطلب يتم إصدار الفاتورة الأولية (Proforma Invoice) متضمنةً الحسابات البنكية الرسمية للشركة (IBAN / SWIFT) بعملات TRY وUSD وEUR.",
+      "منصة Merter Vitrini لا تحصل أي أموال ولا تضيف عمولة. يتولى كل مورد بائع إرسال فاتورته الأولية وحسابه البنكي (IBAN / SWIFT) مباشرة إليك.",
     proformaNoticeHint:
-      "* يرجى ذكر رقم الطلب في الحوالة البنكية وإشعارنا بالدفع من خلال الملف الشخصي > طلباتي.",
+      "* كل مورد يجهز منتجاته بشكل مستقل؛ يمكنك المتابعة من الملف الشخصي > طلباتي أو التواصل عبر واتساب.",
   },
   de: {
-    orderBankTransfer: "PER BANKÜBERWEISUNG / PROFORMA BESTELLEN",
-    requestProforma: "PREISANGEBOT ANFORDERN (PROFORMA)",
+    orderBankTransfer: "BESTELLANFRAGE AN LIEFERANTEN SENDEN",
+    requestProforma: "SCHNELLES ANGEBOT ANFORDERN (OHNE ADRESSE)",
     addressPaymentTitle: "LIEFER- & RECHNUNGSANGABEN",
     backToCart: "Zurück zum Warenkorb",
     deliveryLabel: "LIEFERADRESSE",
     billingLabel: "FIRMEN-RECHNUNGSADRESSE",
     sameAsDeliveryLabel: "Rechnungsadresse entspricht der Lieferadresse",
-    confirmOrder: "B2B-BESTELLUNG BESTÄTIGEN",
-    proformaNoticeTitle: "OFFIZIELLE PROFORMA-RECHNUNG & BANKÜBERWEISUNG",
+    confirmOrder: "ANFRAGE AN LIEFERANTEN SENDEN",
+    proformaNoticeTitle: "DIREKTABWICKLUNG & ZAHLUNG AN LIEFERANTEN (0% PROVISION)",
     proformaNoticeBody:
-      "Nach Bestellbestätigung erhalten Sie Ihre auftragsbezogene Proforma-Rechnung inklusive unserer offiziellen Firmen-IBAN/SWIFT-Kontodaten (EUR, USD, TRY).",
+      "Merter Vitrini zieht keine Zahlungen ein. Jeder verkaufende Lieferant sendet Ihnen seine eigene Proforma-Rechnung und Firmen-IBAN/SWIFT direkt zu.",
     proformaNoticeHint:
-      "* Bitte geben Sie Ihre Bestellnummer als Verwendungszweck an und melden Sie die Zahlung unter Profil > Meine Bestellungen.",
+      "* Jeder Lieferant bearbeitet seine eigene Teilbestellung; einsehbar unter Profil > Meine Bestellungen oder direkt per WhatsApp.",
   },
   fr: {
-    orderBankTransfer: "COMMANDER PAR VIREMENT / PROFORMA",
-    requestProforma: "DEMANDER UN DEVIS (PROFORMA)",
+    orderBankTransfer: "ENVOYER LA DEMANDE AUX FOURNISSEURS",
+    requestProforma: "DEVIS RAPIDE (SANS ADRESSE)",
     addressPaymentTitle: "ADRESSES DE LIVRAISON & FACTURATION",
     backToCart: "Retour au panier",
     deliveryLabel: "ADRESSE DE LIVRAISON / TRANSITAIRE",
     billingLabel: "ADRESSE DE FACTURATION SOCIÉTÉ",
     sameAsDeliveryLabel: "Utiliser la même adresse pour la facturation",
-    confirmOrder: "CONFIRMER LA COMMANDE B2B",
-    proformaNoticeTitle: "FACTURE PROFORMA OFFICIELLE & VIREMENT BANCAIRE",
+    confirmOrder: "TRANSMETTRE AUX FOURNISSEURS",
+    proformaNoticeTitle: "PRÉPARATION ET PAIEMENT DIRECT FOURNISSEUR (0% COMMISSION)",
     proformaNoticeBody:
-      "Dès validation de votre commande, nos coordonnées bancaires officielles IBAN / SWIFT (EUR, USD, TRY) vous sont communiquées sur votre Facture Proforma dédiée.",
+      "Merter Vitrini n’encaisse aucun paiement. Chaque fournisseur vendeur vous transmet directement sa facture proforma et ses coordonnées IBAN / SWIFT.",
     proformaNoticeHint:
-      "* Indiquez le numéro de commande en référence de virement puis déclarez le paiement dans Profil > Mes commandes.",
+      "* Chaque fournisseur prépare sa propre sous-commande ; suivez le tout dans Profil > Mes commandes ou via WhatsApp.",
   },
   pl: {
-    orderBankTransfer: "ZAMÓW PRZELEWEM FIRMOWYM / PROFORMA",
-    requestProforma: "POPROŚ O WYCENĘ (PROFORMA)",
+    orderBankTransfer: "WYŚLIJ ZAMÓWIENIE DO DOSTAWCÓW",
+    requestProforma: "SZYBKIE ZAPYTANIE O WYCENĘ (BEZ ADRESU)",
     addressPaymentTitle: "ADRES DOSTAWY I DANE DO FAKTURY",
     backToCart: "Wróć do koszyka",
     deliveryLabel: "ADRES DOSTAWY / SPEDYCJI",
     billingLabel: "DANE ROZLICZENIOWE FIRMY",
     sameAsDeliveryLabel: "Adres rozliczeniowy taki sam jak adres dostawy",
-    confirmOrder: "POTWIERDŹ ZAMÓWIENIE B2B",
-    proformaNoticeTitle: "OFICJALNA FAKTURA PROFORMA I PRZELEW BANKOWY",
+    confirmOrder: "PRZEKAŻ ZAMÓWIENIE DOSTAWCOM",
+    proformaNoticeTitle: "BEZPOŚREDNIA REALIZACJA I PŁATNOŚĆ DOSTAWCY (0% PROWIZJI)",
     proformaNoticeBody:
-      "Po potwierdzeniu zamówienia oficjalne firmowe rachunki IBAN / SWIFT (EUR, USD, TRY) zostaną udostępnione na dedykowanej Fakturze Proforma.",
+      "Merter Vitrini nie pobiera wpłat ani prowizji. Każdy sprzedający dostawca bezpośrednio prześle Ci własną fakturę proforma i dane IBAN / SWIFT.",
     proformaNoticeHint:
-      "* Podaj numer zamówienia w tytule przelewu i zgłoś płatność w zakładce Profil > Moje zamówienia.",
+      "* Każdy dostawca realizuje swoją część zamówienia; szczegóły sprawdzisz w Profil > Moje zamówienia lub przez WhatsApp.",
   },
   bg: {
-    orderBankTransfer: "ПОРЪЧАЙ С БАНКОВ ПРЕВОД / ПРОФОРМА",
-    requestProforma: "ПОИСКАЙ ЦЕНОВА ОФЕРТА (ПРОФОРМА)",
+    orderBankTransfer: "ИЗПРАТИ ЗАЯВКА КЪМ ДОСТАВЧИЦИТЕ",
+    requestProforma: "БЪРЗА ОФЕРТА (БЕЗ АДРЕС)",
     addressPaymentTitle: "АДРЕС ЗА ДОСТАВКА И ФАКТУРИРАНЕ",
     backToCart: "Обратно към количката",
     deliveryLabel: "АДРЕС ЗА ДОСТАВКА / КАРГО",
     billingLabel: "ФИРМЕН АДРЕС ЗА ФАКТУРА",
     sameAsDeliveryLabel: "Адресът за фактуриране е същият като за доставка",
-    confirmOrder: "ПОТВЪРДИ B2B ПОРЪЧКАТА",
-    proformaNoticeTitle: "ОФИЦИАЛНА ПРОФОРМА ФАКТУРА И БАНКОВ ПРЕВОД",
+    confirmOrder: "ИЗПРАТИ КЪМ ДОСТАВЧИЦИТЕ",
+    proformaNoticeTitle: "ДИРЕКТНА ПОДГОТОВКА И ПЛАЩАНЕ КЪМ ДОСТАВЧИКА (0% КОМИСИОННА)",
     proformaNoticeBody:
-      "След потвърждение на поръчката официалните фирмени банкови сметки IBAN / SWIFT (EUR, USD, TRY) се предоставят във вашата индивидуална Проформа фактура.",
+      "Merter Vitrini не събира плащания. Всеки продаващ доставчик директно ще ви изпрати своя проформа фактура и IBAN / SWIFT данни.",
     proformaNoticeHint:
-      "* Посочете номера на поръчката като основание за превод и потвърдете плащането в Профил > Моите поръчки.",
+      "* Всеки доставчик подготвя своите артикули; следете в Профил > Моите поръчки или директно в WhatsApp.",
   },
 };
 
 interface CartCheckoutSectionProps {
   readonly isCheckout: boolean;
   readonly setIsCheckout: (v: boolean) => void;
+  readonly onStartCheckoutClick?: () => void;
   readonly onRequestQuoteOnly: () => void;
   readonly token: string | null;
   readonly addresses: readonly UserAddress[];
@@ -162,6 +164,8 @@ interface CartCheckoutSectionProps {
   readonly submittingOrder: boolean;
   readonly onSubmitCheckout: (e: React.FormEvent) => void;
   readonly onCancelCheckout: () => void;
+  readonly supplierCount?: number;
+  readonly errorMessage?: string | null;
   readonly lang: string;
 }
 
@@ -169,26 +173,39 @@ interface CartInitialActionsProps {
   readonly onStartCheckout: () => void;
   readonly onRequestQuoteOnly: () => void;
   readonly copy: CheckoutSectionCopy;
+  readonly supplierCount: number;
+  readonly lang: string;
 }
 
 function CartInitialActions({
   onStartCheckout,
   onRequestQuoteOnly,
   copy,
+  supplierCount,
+  lang,
 }: Readonly<CartInitialActionsProps>) {
+  const multiCopy = getCartMultiSupplierCopy(lang);
   return (
     <div className="flex flex-col gap-3 pt-2 mt-1">
+      {supplierCount > 1 && (
+        <p className="text-[11px] font-bold text-[#8C6D3F] bg-[#F8F6F2] border border-[#E5E0D8] rounded-md px-3 py-2 m-0 text-center">
+          {multiCopy.multiDispatchHint.replace("{count}", String(supplierCount))}
+        </p>
+      )}
       <button
         type="button"
         onClick={onStartCheckout}
-        className="w-full py-3.5 bg-salmon-pink hover:bg-eerie-black text-white rounded-[5px] font-extrabold text-xs tracking-[0.5px] shadow-sm border-none flex items-center justify-center gap-2 cursor-pointer transition-colors"
+        className="w-full py-3.5 bg-[#1C1C1C] hover:bg-salmon-pink text-white rounded-[6px] font-extrabold text-xs tracking-[0.5px] shadow-sm border-none flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors"
       >
-        💳 {copy.orderBankTransfer}
+        <span>{copy.orderBankTransfer}</span>
+        <span className="text-[10px] font-semibold text-white/80">
+          {multiCopy.zeroCommissionPill}
+        </span>
       </button>
       <button
         type="button"
         onClick={onRequestQuoteOnly}
-        className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-[5px] font-bold text-xs border-none flex items-center justify-center gap-2 cursor-pointer transition-colors"
+        className="w-full py-2.5 bg-[#FAF8F5] hover:bg-[#F1ECE3] text-[#1C1C1C] border border-[#E5E0D8] rounded-[6px] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors"
       >
         📄 {copy.requestProforma}
       </button>
@@ -198,14 +215,14 @@ function CartInitialActions({
 
 function CorporateProformaNotice({ copy }: { readonly copy: CheckoutSectionCopy }) {
   return (
-    <div className="bg-[#eff6ff] border border-blue-100 rounded-lg p-3.5 flex flex-col gap-2 text-xs text-blue-900 shadow-sm leading-relaxed">
-      <div className="font-extrabold tracking-wide border-b border-blue-200/50 pb-1.5 text-[10px] text-blue-800">
-        🏦 {copy.proformaNoticeTitle}
+    <div className="bg-[#F8F6F2] border border-[#E5E0D8] rounded-lg p-3.5 flex flex-col gap-2 text-xs text-[#1C1C1C] shadow-sm leading-relaxed">
+      <div className="font-extrabold tracking-wide border-b border-[#E5E0D8] pb-1.5 text-[10.5px] text-[#1C1C1C]">
+        🤝 {copy.proformaNoticeTitle}
       </div>
-      <p className="text-[11px] font-semibold text-blue-950 m-0 leading-relaxed">
+      <p className="text-[11px] font-semibold text-[#525252] m-0 leading-relaxed">
         {copy.proformaNoticeBody}
       </p>
-      <div className="text-[9.5px] font-bold text-blue-800 italic border-t border-blue-200/40 pt-1.5 leading-snug">
+      <div className="text-[10px] font-bold text-[#8C6D3F] border-t border-[#E5E0D8] pt-1.5 leading-snug">
         {copy.proformaNoticeHint}
       </div>
     </div>
@@ -215,6 +232,7 @@ function CorporateProformaNotice({ copy }: { readonly copy: CheckoutSectionCopy 
 export default function CartCheckoutSection({
   isCheckout,
   setIsCheckout,
+  onStartCheckoutClick,
   onRequestQuoteOnly,
   token,
   addresses,
@@ -231,17 +249,25 @@ export default function CartCheckoutSection({
   submittingOrder,
   onSubmitCheckout,
   onCancelCheckout,
+  supplierCount = 0,
+  errorMessage = null,
   lang,
 }: Readonly<CartCheckoutSectionProps>) {
   const safeLang = normalizeSeoLang(lang, "en");
   const copy = CHECKOUT_COPY[safeLang];
+  const multiCopy = getCartMultiSupplierCopy(safeLang);
 
   if (!isCheckout) {
     return (
       <CartInitialActions
-        onStartCheckout={() => setIsCheckout(true)}
+        onStartCheckout={() => {
+          onStartCheckoutClick?.();
+          setIsCheckout(true);
+        }}
         onRequestQuoteOnly={onRequestQuoteOnly}
         copy={copy}
+        supplierCount={supplierCount}
+        lang={safeLang}
       />
     );
   }
@@ -260,6 +286,21 @@ export default function CartCheckoutSection({
           &larr; {copy.backToCart}
         </button>
       </div>
+
+      {supplierCount > 1 && (
+        <p className="text-[11px] font-bold text-[#8C6D3F] bg-[#F8F6F2] border border-[#E5E0D8] rounded-md px-3 py-2 m-0">
+          {multiCopy.multiDispatchHint.replace("{count}", String(supplierCount))}
+        </p>
+      )}
+
+      {errorMessage && (
+        <div
+          role="alert"
+          className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2"
+        >
+          {errorMessage}
+        </div>
+      )}
 
       <StructuredCheckoutAddressPicker
         label={copy.deliveryLabel}

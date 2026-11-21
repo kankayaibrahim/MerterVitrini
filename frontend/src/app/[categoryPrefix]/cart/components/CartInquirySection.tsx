@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { t } from "@/app/i18n";
 import {
   INTL_LOCALE_BY_LANG,
@@ -12,62 +12,72 @@ import StructuredLocationFields, {
   StructuredLocationValue,
 } from "@/components/store/StructuredLocationFields";
 import { getRecaptchaLegalNotice } from "@/utils/recaptcha";
+import { getCartMultiSupplierCopy } from "@/components/store/cart/cartMultiSupplierCopy";
 
 interface InquirySectionCopy {
   readonly formTitle: string;
   readonly goToCheckout: string;
   readonly registeredPrompt: string;
   readonly signInBtn: string;
+  readonly optionalLocationToggle: string;
 }
 
 const INQUIRY_SECTION_COPY: Record<SupportedSeoLang, InquirySectionCopy> = {
   tr: {
-    formTitle: "TEKLİF TALEP FORMU",
+    formTitle: "HIZLI TEKLİF / SİPARİŞ TALEBİ FORMU",
     goToCheckout: "Sipariş Ekranına Dön",
     registeredPrompt: "Kayıtlı kurumsal müşterimiz misiniz?",
     signInBtn: "Giriş Yapın",
+    optionalLocationToggle: "Opsiyonel: Şehir / Teslimat Adresi Notu Ekle",
   },
   en: {
-    formTitle: "REQUEST QUOTE FORM",
+    formTitle: "QUICK QUOTE / ORDER REQUEST FORM",
     goToCheckout: "Back to Checkout",
     registeredPrompt: "Already a registered B2B buyer?",
     signInBtn: "Sign In",
+    optionalLocationToggle: "Optional: Add Country / City / Delivery Note",
   },
   ru: {
-    formTitle: "ФОРМА ЗАПРОСА ЦЕНЫ",
+    formTitle: "БЫСТРЫЙ ЗАПРОС ЦЕНЫ / ЗАКАЗ",
     goToCheckout: "К оформлению заказа",
     registeredPrompt: "Уже зарегистрированы как оптовый партнер?",
     signInBtn: "Войти",
+    optionalLocationToggle: "Необязательно: Добавить город / адрес карго",
   },
   ar: {
-    formTitle: "نموذج طلب عرض سعر",
+    formTitle: "نموذج طلب عرض سعر / طلب سريع",
     goToCheckout: "العودة لإتمام الطلب",
     registeredPrompt: "هل لديك حساب تاجر مسجل؟",
     signInBtn: "تسجيل الدخول",
+    optionalLocationToggle: "اختياري: إضافة البلد / المدينة / ملاحظة الشحن",
   },
   de: {
-    formTitle: "ANGEBOTSANFRAGE-FORMULAR",
+    formTitle: "SCHNELLES ANGEBOTS- / BESTELLFORMULAR",
     goToCheckout: "Zurück zum Checkout",
     registeredPrompt: "Bereits registrierter B2B-Kunde?",
     signInBtn: "Anmelden",
+    optionalLocationToggle: "Optional: Land / Stadt / Lieferhinweis hinzufügen",
   },
   fr: {
-    formTitle: "FORMULAIRE DE DEMANDE DE DEVIS",
+    formTitle: "DEMANDE RAPIDE DE DEVIS / COMMANDE",
     goToCheckout: "Retour à la commande",
     registeredPrompt: "Déjà client B2B inscrit ?",
     signInBtn: "Se connecter",
+    optionalLocationToggle: "Optionnel : Ajouter pays / ville / livraison",
   },
   pl: {
-    formTitle: "FORMULARZ ZAPYTANIA OFERTOWEGO",
+    formTitle: "SZYBKI FORMULARZ ZAPYTANIA OFERTOWEGO",
     goToCheckout: "Wróć do zamówienia",
     registeredPrompt: "Jesteś zarejestrowanym kontrahentem B2B?",
     signInBtn: "Zaloguj się",
+    optionalLocationToggle: "Opcjonalnie: Dodaj kraj / miasto / adres",
   },
   bg: {
-    formTitle: "ФОРМУЛЯР ЗА ОФЕРТА",
+    formTitle: "БЪРЗ ФОРМУЛЯР ЗА ОФЕРТА / ПОРЪЧКА",
     goToCheckout: "Към поръчката",
     registeredPrompt: "Вече сте регистриран B2B партньор?",
     signInBtn: "Вход",
+    optionalLocationToggle: "По избор: Добави държава / град / адрес",
   },
 };
 
@@ -90,6 +100,8 @@ interface CartInquirySectionProps {
   readonly setCustomerMessage: (v: string) => void;
   readonly submittingInquiry: boolean;
   readonly onSubmitInquiry: (e: React.FormEvent) => void;
+  readonly supplierCount?: number;
+  readonly errorMessage?: string | null;
   readonly lang: string;
 }
 
@@ -119,14 +131,19 @@ export default function CartInquirySection({
   setCustomerMessage,
   submittingInquiry,
   onSubmitInquiry,
+  supplierCount = 0,
+  errorMessage = null,
   lang,
 }: Readonly<CartInquirySectionProps>) {
+  const [showLocationFields, setShowLocationFields] = useState(false);
+
   if (token && !forceShowInquiry) {
     return null;
   }
 
   const safeLang = normalizeSeoLang(lang, "en");
   const copy = INQUIRY_SECTION_COPY[safeLang];
+  const multiCopy = getCartMultiSupplierCopy(safeLang);
   const submitLabel = `🚀 ${getUpperLabel("submit_inquiry", safeLang)}`;
 
   return (
@@ -149,6 +166,21 @@ export default function CartInquirySection({
             </button>
           )}
         </div>
+
+        {supplierCount > 1 && (
+          <p className="text-[11px] font-bold text-[#8C6D3F] bg-[#F8F6F2] border border-[#E5E0D8] rounded-md px-3 py-2 m-0">
+            {multiCopy.multiDispatchHint.replace("{count}", String(supplierCount))}
+          </p>
+        )}
+
+        {errorMessage && (
+          <div
+            role="alert"
+            className="text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2"
+          >
+            {errorMessage}
+          </div>
+        )}
 
         <div className="flex flex-col gap-1">
           <label
@@ -221,15 +253,29 @@ export default function CartInquirySection({
           />
         </div>
 
-        <StructuredLocationFields
-          lang={safeLang}
-          value={inquiryLocation}
-          onChange={setInquiryLocation}
-          onMetaChange={setInquiryLocMeta}
-          showPostalCode={false}
-          compact
-          disabled={submittingInquiry}
-        />
+        <div className="border border-[#E5E0D8] rounded-md bg-[#FAF8F5] px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setShowLocationFields((prev) => !prev)}
+            className="w-full text-left text-[11px] font-bold text-[#8C6D3F] bg-transparent border-none p-0 cursor-pointer flex items-center justify-between"
+          >
+            <span>📍 {copy.optionalLocationToggle}</span>
+            <span>{showLocationFields ? "−" : "+"}</span>
+          </button>
+          {showLocationFields && (
+            <div className="pt-2.5">
+              <StructuredLocationFields
+                lang={safeLang}
+                value={inquiryLocation}
+                onChange={setInquiryLocation}
+                onMetaChange={setInquiryLocMeta}
+                showPostalCode={false}
+                compact
+                disabled={submittingInquiry}
+              />
+            </div>
+          )}
+        </div>
 
         <div className="flex flex-col gap-1">
           <label

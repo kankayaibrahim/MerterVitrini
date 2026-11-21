@@ -686,21 +686,41 @@ type SupplierSubOrder struct {
 	Items            []SupplierSubOrderItem `json:"items,omitempty"`
 }
 
+type SupplierDirectOrderItem struct {
+	ProductID       string  `json:"product_id"`
+	Title           string  `json:"title"`
+	CustomSku       string  `json:"custom_sku"`
+	PackagesQty     int     `json:"packages_qty"`
+	PiecesQty       int     `json:"pieces_qty"`
+	UnitsPerPackage int     `json:"units_per_package"`
+	UnitPrice       float64 `json:"unit_price"`
+	TotalPrice      float64 `json:"total_price"`
+	Currency        string  `json:"currency"`
+}
+
 type SupplierDirectOrderSummary struct {
-	SubOrderID        string  `json:"sub_order_id"`
-	SubOrderNumber    string  `json:"sub_order_number"`
-	BrandID           string  `json:"brand_id"`
-	BrandName         string  `json:"brand_name"`
-	GrossAmount       float64 `json:"gross_amount"`
-	Currency          string  `json:"currency"`
-	WhatsappPhone     string  `json:"whatsapp_phone"`
-	Phone             string  `json:"phone"`
-	PublicEmail       string  `json:"public_email"`
-	LocationAddress   string  `json:"location_address"`
-	BankName          string  `json:"bank_name"`
-	BankAccountHolder string  `json:"bank_account_holder"`
-	IBAN              string  `json:"iban"`
-	WhatsappURL       string  `json:"whatsapp_url"`
+	SubOrderID        string                    `json:"sub_order_id"`
+	SubOrderNumber    string                    `json:"sub_order_number"`
+	BrandID           string                    `json:"brand_id"`
+	BrandName         string                    `json:"brand_name"`
+	BrandSlug         string                    `json:"brand_slug,omitempty"`
+	BrandCity         string                    `json:"brand_city,omitempty"`
+	BrandDistrict     string                    `json:"brand_district,omitempty"`
+	BrandVerified     bool                      `json:"brand_verified"`
+	GrossAmount       float64                   `json:"gross_amount"`
+	Currency          string                    `json:"currency"`
+	WhatsappPhone     string                    `json:"whatsapp_phone"`
+	Phone             string                    `json:"phone"`
+	PublicEmail       string                    `json:"public_email"`
+	LocationAddress   string                    `json:"location_address"`
+	BankName          string                    `json:"bank_name"`
+	BankAccountHolder string                    `json:"bank_account_holder"`
+	IBAN              string                    `json:"iban"`
+	WhatsappURL       string                    `json:"whatsapp_url"`
+	ItemCount         int                       `json:"item_count"`
+	TotalPackages     int                       `json:"total_packages"`
+	TotalPieces       int                       `json:"total_pieces"`
+	Items             []SupplierDirectOrderItem `json:"items,omitempty"`
 }
 
 type UpdateSubOrderStatusRequest struct {

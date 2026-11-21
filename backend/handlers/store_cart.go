@@ -46,19 +46,28 @@ type UpdateCartItemRequest struct {
 }
 
 type CartResponseItem struct {
-	ID               string            `json:"id"`
-	ProductID        string            `json:"product_id"`
-	Title            string            `json:"title"`
-	CustomSku        string            `json:"custom_sku"`
-	Color            string            `json:"color"`
-	PackagesQty      int               `json:"packages_qty"`
-	UnitsPerPackage  int               `json:"units_per_package"`
-	PricePerUnit     float64           `json:"price_per_unit"`
-	WeightPerUnit    float64           `json:"weight_per_unit"`
-	ImageUrl         string            `json:"image_url"`
-	Currency         string            `json:"currency"`
-	TitleTranslations map[string]string `json:"title_translations"`
-	Slug             string            `json:"slug"`
+	ID                   string            `json:"id"`
+	ProductID            string            `json:"product_id"`
+	Title                string            `json:"title"`
+	CustomSku            string            `json:"custom_sku"`
+	Color                string            `json:"color"`
+	PackagesQty          int               `json:"packages_qty"`
+	UnitsPerPackage      int               `json:"units_per_package"`
+	PricePerUnit         float64           `json:"price_per_unit"`
+	WeightPerUnit        float64           `json:"weight_per_unit"`
+	ImageUrl             string            `json:"image_url"`
+	Currency             string            `json:"currency"`
+	TitleTranslations    map[string]string `json:"title_translations"`
+	Slug                 string            `json:"slug"`
+	BrandID              string            `json:"brand_id,omitempty"`
+	BrandName            string            `json:"brand_name,omitempty"`
+	BrandSlug            string            `json:"brand_slug,omitempty"`
+	BrandWhatsapp        string            `json:"brand_whatsapp,omitempty"`
+	BrandPhone           string            `json:"brand_phone,omitempty"`
+	BrandCity            string            `json:"brand_city,omitempty"`
+	BrandDistrict        string            `json:"brand_district,omitempty"`
+	BrandLocationAddress string            `json:"brand_location_address,omitempty"`
+	BrandVerified        bool              `json:"brand_verified"`
 }
 
 func mapCartRowToItem(rows pgx.Rows) (CartResponseItem, error) {
@@ -74,6 +83,9 @@ func mapCartRowToItem(rows pgx.Rows) (CartResponseItem, error) {
 		&item.ID, &item.ProductID, &item.Title, &item.CustomSku, &item.Color,
 		&seriesRatio, &price, &discountedPrice, &item.Currency, &shippingWeight,
 		&quantity, &item.ImageUrl, &transBytes, &item.Slug,
+		&item.BrandID, &item.BrandName, &item.BrandSlug, &item.BrandWhatsapp,
+		&item.BrandPhone, &item.BrandCity, &item.BrandDistrict, &item.BrandLocationAddress,
+		&item.BrandVerified,
 	)
 	if err != nil {
 		return item, err
@@ -126,11 +138,26 @@ func FetchCartItemsByUserID(ctx context.Context, userID string) ([]CartResponseI
 		            FROM catalog.product_translations t
 		            WHERE t.product_id = p.id), '{}'::json
 		       ) as translations_json,
-		       p.slug
+		       p.slug,
+		       COALESCE(p.brand_id::text, ''),
+		       COALESCE(b.brand_name, ''),
+		       COALESCE(b.slug, ''),
+		       COALESCE(
+		           NULLIF(b.whatsapp_phone, ''),
+		           NULLIF(b.phone, ''),
+		           (SELECT COALESCE(NULLIF(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+		           ''
+		       ),
+		       COALESCE(b.phone, ''),
+		       COALESCE(b.city, ''),
+		       COALESCE(b.district, ''),
+		       COALESCE(b.location_address, ''),
+		       COALESCE(b.is_verified, true)
 		FROM catalog.cart_items ci
 		INNER JOIN catalog.carts c ON ci.cart_id = c.id
 		INNER JOIN catalog.products p ON ci.product_id = p.id
 		LEFT JOIN catalog.colors col ON p.color_id = col.id
+		LEFT JOIN catalog.brands b ON p.brand_id = b.id
 		WHERE c.user_id = $1 AND p.deleted_at IS NULL
 		ORDER BY ci.created_at ASC
 	`
@@ -1011,4 +1038,115 @@ func (h *CartHandler) ExportExcel(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[STORE CART ERROR] Failed to write XLSX: %v", err)
 	}
 }
+
+type HydrateCartRequest struct {
+	ProductIDs []string `json:"product_ids"`
+}
+
+type HydratedCartItemMeta struct {
+	BrandID              string `json:"brand_id,omitempty"`
+	BrandName            string `json:"brand_name,omitempty"`
+	BrandSlug            string `json:"brand_slug,omitempty"`
+	BrandWhatsapp        string `json:"brand_whatsapp,omitempty"`
+	BrandPhone           string `json:"brand_phone,omitempty"`
+	BrandCity            string `json:"brand_city,omitempty"`
+	BrandDistrict        string `json:"brand_district,omitempty"`
+	BrandLocationAddress string `json:"brand_location_address,omitempty"`
+	BrandVerified        bool   `json:"brand_verified"`
+	UnitsPerPackage      int    `json:"units_per_package"`
+	IsActive             bool   `json:"is_active"`
+}
+
+func normalizeCartHydrateIDs(raw []string) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(raw))
+	out := make([]string, 0, len(raw))
+	for _, entry := range raw {
+		trimmed := strings.TrimSpace(entry)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+		if len(out) >= 100 {
+			break
+		}
+	}
+	return out
+}
+
+// HydrateCartItems resolves live supplier identity and contact coordinates for guest or legacy local carts.
+func (h *CartHandler) HydrateCartItems(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req HydrateCartRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"Invalid payload"}`, http.StatusBadRequest)
+		return
+	}
+
+	ids := normalizeCartHydrateIDs(req.ProductIDs)
+	result := make(map[string]HydratedCartItemMeta, len(ids))
+	if len(ids) == 0 || db.Pool == nil {
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": result})
+		return
+	}
+
+	rows, err := db.Pool.Query(r.Context(), `
+		SELECT p.id::text,
+		       COALESCE(p.series_ratio, ''),
+		       COALESCE(p.is_active, true),
+		       COALESCE(p.brand_id::text, ''),
+		       COALESCE(b.brand_name, ''),
+		       COALESCE(b.slug, ''),
+		       COALESCE(
+		           NULLIF(b.whatsapp_phone, ''),
+		           NULLIF(b.phone, ''),
+		           (SELECT COALESCE(NULLIF(su.phone, ''), '') FROM catalog.supplier_users su WHERE su.brand_id = b.id AND su.phone IS NOT NULL AND su.phone <> '' ORDER BY su.is_owner DESC, su.created_at ASC LIMIT 1),
+		           ''
+		       ),
+		       COALESCE(b.phone, ''),
+		       COALESCE(b.city, ''),
+		       COALESCE(b.district, ''),
+		       COALESCE(b.location_address, ''),
+		       COALESCE(b.is_verified, true)
+		FROM catalog.products p
+		LEFT JOIN catalog.brands b ON p.brand_id = b.id
+		WHERE p.id::text = ANY($1) AND p.deleted_at IS NULL
+	`, ids)
+	if err != nil {
+		log.Printf("[STORE CART ERROR] Failed to hydrate cart items: %v", err)
+		http.Error(w, `{"error":"Sepet bilgileri doğrulanamadı"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var prodID, seriesRatio string
+		var meta HydratedCartItemMeta
+		if errScan := rows.Scan(
+			&prodID, &seriesRatio, &meta.IsActive,
+			&meta.BrandID, &meta.BrandName, &meta.BrandSlug,
+			&meta.BrandWhatsapp, &meta.BrandPhone, &meta.BrandCity,
+			&meta.BrandDistrict, &meta.BrandLocationAddress, &meta.BrandVerified,
+		); errScan != nil {
+			continue
+		}
+		meta.UnitsPerPackage = getUnitsFromSeriesRatio(seriesRatio)
+		result[prodID] = meta
+	}
+
+	w.Header().Set(headerContentType, mimeApplicationJSON)
+	_ = json.NewEncoder(w).Encode(map[string]any{"items": result})
+}
+
 

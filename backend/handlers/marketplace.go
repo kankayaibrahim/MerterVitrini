@@ -151,6 +151,43 @@ func insertSupplierSubOrderItems(ctx context.Context, tx pgx.Tx, subOrderID stri
 	return nil
 }
 
+func formatSupplierSubOrderLineText(bi orderCartItem, subOrderCurrency string) (string, models.SupplierDirectOrderItem) {
+	unitsPerPkg := getUnitsFromSeriesRatio(bi.SeriesRatio)
+	pkgs := bi.Quantity / unitsPerPkg
+	if pkgs <= 0 {
+		pkgs = 1
+	}
+	unitPrice := getEffectiveItemPrice(bi)
+	lineTotal := math.Round(unitPrice*float64(bi.Quantity)*100) / 100
+
+	var line string
+	if unitsPerPkg > 1 && bi.Quantity >= unitsPerPkg {
+		if unitPrice <= 0 {
+			line = fmt.Sprintf("• %s (%s) x %d Seri (%d Adet)\n", bi.Title, bi.CustomSku, pkgs, bi.Quantity)
+		} else {
+			line = fmt.Sprintf("• %s (%s) x %d Seri (%d Adet) = %s\n", bi.Title, bi.CustomSku, pkgs, bi.Quantity, formatOrderMoney(lineTotal, subOrderCurrency))
+		}
+	} else {
+		if unitPrice <= 0 {
+			line = fmt.Sprintf("• %s (%s) x %d Adet\n", bi.Title, bi.CustomSku, bi.Quantity)
+		} else {
+			line = fmt.Sprintf("• %s (%s) x %d Adet = %s\n", bi.Title, bi.CustomSku, bi.Quantity, formatOrderMoney(lineTotal, subOrderCurrency))
+		}
+	}
+
+	return line, models.SupplierDirectOrderItem{
+		ProductID:       bi.ProductID,
+		Title:           bi.Title,
+		CustomSku:       bi.CustomSku,
+		PackagesQty:     pkgs,
+		PiecesQty:       bi.Quantity,
+		UnitsPerPackage: unitsPerPkg,
+		UnitPrice:       unitPrice,
+		TotalPrice:      lineTotal,
+		Currency:        subOrderCurrency,
+	}
+}
+
 func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumber, brandID, subOrderCurrency string, subOrderIdx int, brandItems []orderCartItem, rates map[string]float64) (*models.SupplierDirectOrderSummary, error) {
 	subOrderCurrency = normalizeOrderCurrencyCode(subOrderCurrency)
 	grossAmount := calculateBrandGrossAmount(brandItems)
@@ -219,10 +256,15 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 		) VALUES ($1, $2, 'PENDING_ORDER_INCOME', $3, $4, $5, $6)
 	`, brandID, subOrderID, grossAmount, updatedPending, subOrderCurrency, desc)
 
-	var brandName, whatsappPhone, phone, publicEmail, locationAddr, bankName, bankHolder, iban string
+	var brandName, brandSlug, brandCity, brandDistrict, whatsappPhone, phone, publicEmail, locationAddr, bankName, bankHolder, iban string
+	brandVerified := true
 	_ = tx.QueryRow(ctx, `
 		SELECT 
 			b.brand_name,
+			COALESCE(b.slug, ''),
+			COALESCE(b.city, ''),
+			COALESCE(b.district, ''),
+			COALESCE(b.is_verified, true),
 			COALESCE(
 				NULLIF(b.whatsapp_phone, ''),
 				NULLIF(b.phone, ''),
@@ -238,7 +280,7 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 		FROM catalog.brands b
 		LEFT JOIN catalog.supplier_wallets w ON w.brand_id = b.id
 		WHERE b.id = $1
-	`, brandID).Scan(&brandName, &whatsappPhone, &phone, &publicEmail, &locationAddr, &bankName, &bankHolder, &iban)
+	`, brandID).Scan(&brandName, &brandSlug, &brandCity, &brandDistrict, &brandVerified, &whatsappPhone, &phone, &publicEmail, &locationAddr, &bankName, &bankHolder, &iban)
 
 	var msgBuilder strings.Builder
 	fmt.Fprintf(&msgBuilder, "Merhaba *%s*,\n*Merter Vitrini* üzerinden doğrudan firmanıza toptan sipariş oluşturdum.\n\n", brandName)
@@ -252,9 +294,16 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 		fmt.Fprintf(&msgBuilder, "*Telefon:* %s\n", custPhone)
 	}
 	msgBuilder.WriteString("\n*Sipariş Kalemleri:*\n")
+
+	summaryItems := make([]models.SupplierDirectOrderItem, 0, len(brandItems))
+	totalPackages := 0
+	totalPieces := 0
 	for _, bi := range brandItems {
-		unitPrice := getEffectiveItemPrice(bi)
-		fmt.Fprintf(&msgBuilder, "• %s (%s) x %d Seri = %s\n", bi.Title, bi.CustomSku, bi.Quantity, formatOrderMoney(unitPrice*float64(bi.Quantity), subOrderCurrency))
+		lineText, itemSummary := formatSupplierSubOrderLineText(bi, subOrderCurrency)
+		msgBuilder.WriteString(lineText)
+		summaryItems = append(summaryItems, itemSummary)
+		totalPackages += itemSummary.PackagesQty
+		totalPieces += itemSummary.PiecesQty
 	}
 	fmt.Fprintf(&msgBuilder, "\n*Toplam Tutar:* %s", formatOrderMoney(grossAmount, subOrderCurrency))
 
@@ -285,6 +334,10 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 		SubOrderNumber:    subOrderNumber,
 		BrandID:           brandID,
 		BrandName:         brandName,
+		BrandSlug:         brandSlug,
+		BrandCity:         brandCity,
+		BrandDistrict:     brandDistrict,
+		BrandVerified:     brandVerified,
 		GrossAmount:       grossAmount,
 		Currency:          subOrderCurrency,
 		WhatsappPhone:     whatsappPhone,
@@ -295,6 +348,10 @@ func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumbe
 		BankAccountHolder: bankHolder,
 		IBAN:              iban,
 		WhatsappURL:       waURL,
+		ItemCount:         len(summaryItems),
+		TotalPackages:     totalPackages,
+		TotalPieces:       totalPieces,
+		Items:             summaryItems,
 	}, nil
 }
 

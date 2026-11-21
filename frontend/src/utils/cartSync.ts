@@ -15,6 +15,22 @@ let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncAbortController: AbortController | null = null;
 let pullInFlight: Promise<CartItem[] | null> | null = null;
 
+export interface CartHydrationMeta {
+  brand_id?: string;
+  brand_name?: string;
+  brand_slug?: string;
+  brand_whatsapp?: string;
+  brand_phone?: string;
+  brand_city?: string;
+  brand_district?: string;
+  brand_location_address?: string;
+  brand_verified?: boolean;
+  units_per_package?: number;
+  is_active?: boolean;
+}
+
+const cartHydrationCache = new Map<string, CartHydrationMeta>();
+
 export interface PersistCartOptions {
   skipRemoteSync?: boolean;
   immediate?: boolean;
@@ -99,7 +115,10 @@ export async function pushCartItemsToServer(
           .filter((item) => Boolean(item.product_id) && item.packages_qty > 0)
           .map((item) => ({
             product_id: item.product_id,
-            quantity: item.packages_qty,
+            quantity: Math.max(
+              1,
+              item.packages_qty * Math.max(1, item.units_per_package || 1)
+            ),
           })),
       }),
       signal: controller.signal,
@@ -161,7 +180,18 @@ function mergeGuestAndServerCart(
     const existing = byProductId.get(item.product_id);
     if (existing) {
       byProductId.set(item.product_id, {
+        ...item,
         ...existing,
+        brand_id: existing.brand_id || item.brand_id,
+        brand_name: existing.brand_name || item.brand_name,
+        brand_slug: existing.brand_slug || item.brand_slug,
+        brand_whatsapp: existing.brand_whatsapp || item.brand_whatsapp,
+        brand_phone: existing.brand_phone || item.brand_phone,
+        brand_city: existing.brand_city || item.brand_city,
+        brand_district: existing.brand_district || item.brand_district,
+        brand_location_address:
+          existing.brand_location_address || item.brand_location_address,
+        brand_verified: existing.brand_verified ?? item.brand_verified,
         packages_qty: existing.packages_qty + item.packages_qty,
       });
     } else {
@@ -230,4 +260,125 @@ export function clearStoreCartOnLogout(): void {
   localStorage.removeItem(CART_STORAGE_KEY);
   localStorage.removeItem(CART_OWNER_KEY);
   window.dispatchEvent(new Event("merter-cart-update"));
+}
+
+function itemNeedsBrandHydration(item: CartItem): boolean {
+  if (!item.product_id) return false;
+  return !item.brand_name || (!item.brand_whatsapp && !item.brand_phone);
+}
+
+function applyCartHydrationMeta(
+  item: CartItem,
+  meta: CartHydrationMeta | undefined
+): { item: CartItem; changed: boolean } {
+  if (!meta) return { item, changed: false };
+  const nextBrandId = meta.brand_id || item.brand_id || "";
+  const nextBrandName = meta.brand_name || item.brand_name || "";
+  const nextBrandSlug = meta.brand_slug || item.brand_slug || "";
+  const nextWhatsapp = meta.brand_whatsapp || item.brand_whatsapp || "";
+  const nextPhone = meta.brand_phone || item.brand_phone || "";
+  const nextCity = meta.brand_city || item.brand_city || "";
+  const nextDistrict = meta.brand_district || item.brand_district || "";
+  const nextLoc = meta.brand_location_address || item.brand_location_address || "";
+  const nextVerified = meta.brand_verified ?? item.brand_verified;
+
+  const changed =
+    nextBrandId !== (item.brand_id || "") ||
+    nextBrandName !== (item.brand_name || "") ||
+    nextBrandSlug !== (item.brand_slug || "") ||
+    nextWhatsapp !== (item.brand_whatsapp || "") ||
+    nextPhone !== (item.brand_phone || "") ||
+    nextCity !== (item.brand_city || "") ||
+    nextDistrict !== (item.brand_district || "") ||
+    nextLoc !== (item.brand_location_address || "") ||
+    nextVerified !== item.brand_verified;
+
+  if (!changed) return { item, changed: false };
+  return {
+    changed: true,
+    item: {
+      ...item,
+      brand_id: nextBrandId || undefined,
+      brand_name: nextBrandName || undefined,
+      brand_slug: nextBrandSlug || undefined,
+      brand_whatsapp: nextWhatsapp || undefined,
+      brand_phone: nextPhone || undefined,
+      brand_city: nextCity || undefined,
+      brand_district: nextDistrict || undefined,
+      brand_location_address: nextLoc || undefined,
+      brand_verified: nextVerified,
+    },
+  };
+}
+
+export async function fetchCartHydrationMetaMap(
+  items: readonly CartItem[]
+): Promise<Record<string, CartHydrationMeta>> {
+  if (typeof window === "undefined" || items.length === 0) {
+    return {};
+  }
+
+  const missingIds = Array.from(
+    new Set(
+      items
+        .filter((item) => itemNeedsBrandHydration(item) && !cartHydrationCache.has(item.product_id))
+        .map((item) => item.product_id)
+    )
+  );
+
+  if (missingIds.length > 0) {
+    try {
+      const res = await fetch("/api/v1/store/cart/hydrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_ids: missingIds }),
+      });
+      if (res.ok) {
+        const payload = (await res.json()) as { items?: Record<string, CartHydrationMeta> };
+        const fetched = payload.items ?? {};
+        for (const id of missingIds) {
+          if (fetched[id]) {
+            cartHydrationCache.set(id, fetched[id]);
+          }
+        }
+      }
+    } catch {
+      // Fail gracefully on transient network error and keep existing cart items
+    }
+  }
+
+  const resolved: Record<string, CartHydrationMeta> = {};
+  for (const item of items) {
+    const cached = cartHydrationCache.get(item.product_id);
+    if (cached) {
+      resolved[item.product_id] = cached;
+    }
+  }
+  return resolved;
+}
+
+export function applyHydratedMetaMapToCart(
+  items: readonly CartItem[],
+  metaMap: Readonly<Record<string, CartHydrationMeta>>
+): CartItem[] {
+  let anyChanged = false;
+  const enriched = items.map((item) => {
+    const res = applyCartHydrationMeta(
+      item,
+      metaMap[item.product_id] ?? cartHydrationCache.get(item.product_id)
+    );
+    if (res.changed) anyChanged = true;
+    return res.item;
+  });
+  return anyChanged ? enriched : (items as CartItem[]);
+}
+
+export async function hydrateCartItemsSupplierMeta(
+  items: readonly CartItem[]
+): Promise<CartItem[]> {
+  if (typeof window === "undefined" || items.length === 0) {
+    return items as CartItem[];
+  }
+  const metaMap = await fetchCartHydrationMetaMap(items);
+  return applyHydratedMetaMapToCart(items, metaMap);
 }

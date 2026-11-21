@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Home, ChevronRight } from "lucide-react";
-import { Product, Category, CartItem } from "@/types/store";
+import { Product, Category, CartItem, SupplierDirectOrderSummary } from "@/types/store";
 import {
   t,
   getProductTitle,
@@ -31,6 +31,8 @@ import {
 } from "@/app/storeAuth";
 import { trackMemberEvent } from "@/components/analytics/AnalyticsTracker";
 import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
+import { extractBrandFieldsFromProduct } from "@/utils/cartSupplierGroups";
+import { submitStoreCartInquiry } from "@/utils/cartInquiry";
 import {
   isProductWhatsappOnly,
   buildProductWhatsappOrderLink,
@@ -53,7 +55,7 @@ import OrderCalculator from "./components/OrderCalculator";
 import SupplierDirectCard from "./components/SupplierDirectCard";
 import SocialShare from "./components/SocialShare";
 import ProductInquiryCart from "./components/ProductInquiryCart";
-import { InquiryFormData } from "@/components/store/CartDrawer";
+import { DrawerOrderCreatedResult, InquiryFormData } from "@/components/store/CartDrawer";
 import StoreChatDrawer from "@/components/store/StoreChatDrawer";
 import { ChatOfferMetadata } from "@/types/chat";
 
@@ -290,6 +292,11 @@ export default function ProductDetailClient({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [submittingInquiry, setSubmittingInquiry] = useState<boolean>(false);
   const [whatsappUrl, setWhatsappUrl] = useState<string>("");
+  const [lastOrderResult, setLastOrderResult] = useState<{
+    readonly orderNumber: string;
+    readonly supplierOrders: SupplierDirectOrderSummary[];
+    readonly isFormalOrder: boolean;
+  }>({ orderNumber: "", supplierOrders: [], isFormalOrder: false });
   const [showSuccessOverlay, setShowSuccessOverlay] = useState<boolean>(false);
   const [pendingRemove, setPendingRemove] = useState<{
     index: number;
@@ -545,6 +552,7 @@ export default function ProductDetailClient({
       image_url: coverImg,
       currency,
       slug: activeProduct.slug,
+      ...extractBrandFieldsFromProduct(activeProduct),
     };
 
     setCart((prev) => {
@@ -602,6 +610,7 @@ export default function ProductDetailClient({
         offer.image_url || activeProduct.images?.[0]?.image_url || "/placeholder.png",
       currency: displayCurrency,
       slug: offer.slug || activeProduct.slug,
+      ...extractBrandFieldsFromProduct(activeProduct),
     };
 
     setCart((prev) => {
@@ -703,78 +712,54 @@ export default function ProductDetailClient({
 
     setSubmittingInquiry(true);
     try {
-      const payload = {
-        full_name: formData.fullName,
-        company_name: formData.companyName,
-        phone_number: formData.phoneNumber,
-        email_address: formData.emailAddress,
-        customer_message: formData.customerMessage,
-        display_currency: displayCurrency,
-        cart_items: cart,
-        items: cart.map((cItem) => ({
-          product_id: cItem.product_id,
-          title: cItem.title,
-          custom_sku: cItem.custom_sku || "-",
-          quantity: cItem.packages_qty,
-          price: Number((cItem.price_per_unit * cItem.units_per_package).toFixed(2)),
-        })),
-        total_price: totalPriceCart,
-        total_pieces: totalItemsCount,
-        total_weight: totalWeightCart,
+      const result = await submitStoreCartInquiry({
+        cart,
+        fullName: formData.fullName,
+        companyName: formData.companyName,
+        phoneNumber: formData.phoneNumber,
+        emailAddress: formData.emailAddress,
+        customerMessage: formData.customerMessage,
+        displayCurrency,
         lang: safeLang,
-      };
-
-      const res = await fetch("/api/v1/store/inquiries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        location: {
+          countryId: formData.countryId,
+          stateId: formData.stateId,
+          cityId: formData.cityId,
+          postalCode: formData.postalCode,
+          addressLine: formData.addressLine,
+        },
+        locationMeta: formData.locationMeta,
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || copy.inquiryErrorToast);
-      }
-
-      if (data.whatsapp_url) {
-        setWhatsappUrl(data.whatsapp_url);
-      } else {
-        let waMsg = `${copy.waOrderHeader}\n`;
-        waMsg += `${copy.waOrderNo}: #${data.order_number || data.id || "NEW"}\n`;
-        waMsg += `${copy.waContact}: ${formData.fullName}\n`;
-        waMsg += `${copy.waCompany}: ${formData.companyName || "-"}\n`;
-        waMsg += `${copy.waPhone}: ${formData.phoneNumber}\n`;
-        waMsg += `${copy.waLines}: ${cart.length}\n`;
-        waMsg += `${copy.waPieces}: ${totalItemsCount}\n`;
-        waMsg += `${copy.waTotal}: ${totalPriceCart.toFixed(2)} ${displayCurrency}\n`;
-        waMsg += `----------------------------\n`;
-        cart.forEach((cItem, i) => {
-          const itemPieces = cItem.packages_qty * cItem.units_per_package;
-          const itemTotal = itemPieces * cItem.price_per_unit;
-          waMsg += `${i + 1}. ${cItem.title} (${cItem.color}) - ${cItem.packages_qty} ${t("package", safeLang)} (${itemPieces} ${t("piece", safeLang)}) -> ${itemTotal.toFixed(2)} ${displayCurrency}\n`;
-        });
-        if (formData.customerMessage) {
-          waMsg += `----------------------------\n${copy.waNote}: ${formData.customerMessage}`;
-        }
-        const supplierWaDigits = normalizeWhatsappDigits(
-          activeProduct.brand_profile?.whatsapp_phone ||
-          activeProduct.brand_profile?.phone ||
-          ""
-        );
-        const encodedWa = supplierWaDigits
-          ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(waMsg)}`
-          : "";
-        setWhatsappUrl(encodedWa);
-      }
-
+      setWhatsappUrl(result.whatsapp_url || "#");
+      setLastOrderResult({
+        orderNumber: result.order_number || "",
+        supplierOrders: result.supplier_orders || [],
+        isFormalOrder: false,
+      });
       setCart([]);
       persistStoreCart([], { immediate: true });
       setIsCartOpen(false);
       setShowSuccessOverlay(true);
     } catch (err: unknown) {
       triggerToast((err as Error).message || copy.inquiryErrorToast);
+      throw err;
     } finally {
       setSubmittingInquiry(false);
     }
+  };
+
+  const handleOrderCreatedFromDrawer = (created: DrawerOrderCreatedResult) => {
+    setCart([]);
+    persistStoreCart([], { immediate: true });
+    setIsCartOpen(false);
+    setWhatsappUrl(created.supplierOrders[0]?.whatsapp_url || "#");
+    setLastOrderResult({
+      orderNumber: created.orderNumber || "",
+      supplierOrders: created.supplierOrders || [],
+      isFormalOrder: true,
+    });
+    setShowSuccessOverlay(true);
   };
 
   const supplierSlug = activeProduct.brand_profile?.slug || activeProduct.brand_id;
@@ -1004,11 +989,18 @@ export default function ProductDetailClient({
         handleSubmitInquiry={handleSubmitInquiry}
         handleAdjustCartItemQty={handleAdjustCartItemQty}
         handleRemoveCartItem={handleRemoveCartItem}
+        onOrderCreated={handleOrderCreatedFromDrawer}
         displayCurrency={displayCurrency}
         exchangeRates={exchangeRates}
         showSuccessOverlay={showSuccessOverlay}
         setShowSuccessOverlay={setShowSuccessOverlay}
         whatsappUrl={whatsappUrl}
+        orderNumber={lastOrderResult.orderNumber}
+        supplierOrders={lastOrderResult.supplierOrders}
+        isFormalOrder={lastOrderResult.isFormalOrder}
+        onViewOrders={() => {
+          window.location.href = `/profile?tab=orders&lang=${encodeURIComponent(safeLang)}`;
+        }}
         onWhatsappClick={() =>
           trackWhatsappClick({
             brandId: activeProduct.brand_id,

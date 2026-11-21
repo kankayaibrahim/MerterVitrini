@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
@@ -84,12 +85,60 @@ func validateInquiryRequest(req *models.B2bInquiry) error {
 	if len(req.Items) == 0 {
 		return errors.New("Sipariş / iletişim kalemi boş olamaz")
 	}
-	for _, item := range req.Items {
-		if item.ProductID == "" || item.Title == "" || item.CustomSku == "" || item.Quantity <= 0 {
+	for i := range req.Items {
+		if strings.TrimSpace(req.Items[i].CustomSku) == "" {
+			req.Items[i].CustomSku = "-"
+		}
+		if req.Items[i].ProductID == "" || req.Items[i].Title == "" || req.Items[i].Quantity <= 0 {
 			return errors.New("Geçersiz ürün kalemi bulunuyor")
 		}
 	}
 	return nil
+}
+
+func resolveOptionalInquiryAddress(
+	ctx context.Context,
+	raw *inquiryPayload,
+	fullName string,
+	company string,
+	phone string,
+) (string, error) {
+	addrLine := strings.TrimSpace(raw.AddressLine)
+	if addrLine == "" {
+		addrLine = strings.TrimSpace(raw.DeliveryAddress)
+	}
+	if utf8.RuneCountInString(addrLine) > 500 {
+		return "", errors.New("Adres notu en fazla 500 karakter olabilir")
+	}
+
+	var countryName, stateName, cityName string
+	countryID := strings.TrimSpace(raw.CountryID)
+	if countryID != "" && db.Pool != nil {
+		if _, name, err := resolveCountryLocation(ctx, countryID); err == nil {
+			countryName = name
+		}
+		if stateID := derefTrimmed(raw.StateID); stateID != "" {
+			if name, err := validateAndResolveState(ctx, countryID, stateID); err == nil {
+				stateName = name
+			}
+			if cityID := derefTrimmed(raw.CityID); cityID != "" {
+				if name, err := validateAndResolveCity(ctx, stateID, cityID); err == nil {
+					cityName = name
+				}
+			}
+		}
+	}
+
+	return FormatCanonicalOrderAddress(CanonicalAddressParts{
+		RecipientName: fullName,
+		CompanyName:   company,
+		AddressLine:   addrLine,
+		PostalCode:    strings.TrimSpace(raw.PostalCode),
+		CityName:      cityName,
+		StateName:     stateName,
+		CountryName:   countryName,
+		Phone:         phone,
+	}), nil
 }
 
 type inquiryCreationResult struct {
@@ -322,35 +371,15 @@ func (h *InquiryHandler) SubmitInquiry(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Phone = normalizedPhone
 
-	addrLine := strings.TrimSpace(raw.AddressLine)
-	if addrLine == "" {
-		addrLine = strings.TrimSpace(raw.DeliveryAddress)
-	}
-	if err := ValidateHumanAddressText(addrLine); err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadRequest)
-		return
-	}
-
-	loc, locErr := ValidateStructuredLocationDB(ctx, raw.CountryID, raw.StateID, raw.CityID)
-	if locErr != nil {
-		http.Error(w, fmt.Sprintf(`{"error":%q}`, locErr.Error()), http.StatusBadRequest)
-		return
-	}
-
 	inquiryCompany := ""
 	if req.Company != nil {
 		inquiryCompany = strings.TrimSpace(*req.Company)
 	}
-	canonicalDeliveryAddr := FormatCanonicalOrderAddress(CanonicalAddressParts{
-		RecipientName: req.FullName,
-		CompanyName:   inquiryCompany,
-		AddressLine:   addrLine,
-		PostalCode:    strings.TrimSpace(raw.PostalCode),
-		CityName:      loc.CityName,
-		StateName:     loc.StateName,
-		CountryName:   loc.CountryName,
-		Phone:         req.Phone,
-	})
+	canonicalDeliveryAddr, addrErr := resolveOptionalInquiryAddress(ctx, &raw, req.FullName, inquiryCompany, req.Phone)
+	if addrErr != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, addrErr.Error()), http.StatusBadRequest)
+		return
+	}
 
 	res, err := saveInquiryAndDirectSupplierOrders(ctx, &req, canonicalDeliveryAddr, raw.CustomerCurrency)
 	if err != nil {

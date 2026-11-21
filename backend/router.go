@@ -153,6 +153,7 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 	mux.HandleFunc("PUT /api/v1/store/cart/items/{item_id}", h.StoreCart.UpdateCartItem)
 	mux.HandleFunc("DELETE /api/v1/store/cart/items/{item_id}", h.StoreCart.DeleteCartItem)
 	mux.HandleFunc("DELETE /api/v1/store/cart", h.StoreCart.ClearCart)
+	mux.HandleFunc("POST /api/v1/store/cart/hydrate", h.StoreCart.HydrateCartItems)
 	mux.HandleFunc("POST /api/v1/store/cart/export-excel", h.StoreCart.ExportExcel)
 
 	// B2B Store Orders
