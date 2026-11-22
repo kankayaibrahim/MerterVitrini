@@ -309,6 +309,31 @@ func buildGroupedSamples(events []capturedExceptionEntry, loc *time.Location) []
 	return out
 }
 
+const exceptionAlertTimeLayout = "02.01.2006 15:04:05"
+
+func (m *ExceptionAlertMonitor) evaluateTriggerLocked(now time.Time, severity string, cfg ExceptionAlertConfigDTO) (shouldSend bool, triggerReason string, suppressed bool) {
+	if len(m.sentTimes) >= cfg.MaxEmailsPerHour {
+		return false, "", true
+	}
+	if severity == "panic" {
+		// Wait at least 60s between panic storms so back-to-back panic retries coalesce cleanly
+		if m.lastAlertSentAt.IsZero() || now.Sub(m.lastAlertSentAt) >= 60*time.Second {
+			return true, "Sunucu panic çökmesi tespit edildi (anında alarm)", false
+		}
+		return false, "", true
+	}
+	windowLen := len(m.windowEvents)
+	if windowLen < cfg.BurstThreshold {
+		return false, "", false
+	}
+	if m.lastAlertSentAt.IsZero() || now.Sub(m.lastAlertSentAt) >= time.Duration(cfg.CooldownMinutes)*time.Minute {
+		reason := fmt.Sprintf("Son %d dakikada %d adet hata/5xx (eşik: %d) tespit edildi",
+			cfg.WindowMinutes, windowLen, cfg.BurstThreshold)
+		return true, reason, false
+	}
+	return false, "", true
+}
+
 // Observe inspects a logged error, HTTP 5xx, or panic and fires an email payload if thresholds trigger.
 func (m *ExceptionAlertMonitor) Observe(severity, source, message, stack string) {
 	now := m.nowFn()
@@ -332,7 +357,7 @@ func (m *ExceptionAlertMonitor) Observe(severity, source, message, stack string)
 	m.windowEvents = append(m.windowEvents, entry)
 
 	dto := ExceptionAlertEventDTO{
-		Timestamp: now.In(loc).Format("02.01.2006 15:04:05"),
+		Timestamp: now.In(loc).Format(exceptionAlertTimeLayout),
 		Severity:  entry.severity,
 		Source:    entry.source,
 		Message:   entry.message,
@@ -342,33 +367,9 @@ func (m *ExceptionAlertMonitor) Observe(severity, source, message, stack string)
 		m.recentRing = m.recentRing[len(m.recentRing)-25:]
 	}
 
-	if len(m.sentTimes) >= cfg.MaxEmailsPerHour {
-		m.totalSuppressed++
-		m.mu.Unlock()
-		return
-	}
-
-	isPanic := severity == "panic"
-	windowLen := len(m.windowEvents)
-	shouldSend := false
-	triggerReason := ""
-
-	if isPanic {
-		// Wait at least 60s between panic storms so back-to-back panic retries coalesce cleanly
-		if m.lastAlertSentAt.IsZero() || now.Sub(m.lastAlertSentAt) >= 60*time.Second {
-			shouldSend = true
-			triggerReason = "Sunucu panic çökmesi tespit edildi (anında alarm)"
-		}
-	} else if windowLen >= cfg.BurstThreshold {
-		if m.lastAlertSentAt.IsZero() || now.Sub(m.lastAlertSentAt) >= time.Duration(cfg.CooldownMinutes)*time.Minute {
-			shouldSend = true
-			triggerReason = fmt.Sprintf("Son %d dakikada %d adet hata/5xx (eşik: %d) tespit edildi",
-				cfg.WindowMinutes, windowLen, cfg.BurstThreshold)
-		}
-	}
-
+	shouldSend, triggerReason, suppressed := m.evaluateTriggerLocked(now, severity, cfg)
 	if !shouldSend {
-		if (!isPanic && windowLen >= cfg.BurstThreshold) || isPanic {
+		if suppressed {
 			m.totalSuppressed++
 		}
 		m.mu.Unlock()
@@ -389,7 +390,7 @@ func (m *ExceptionAlertMonitor) Observe(severity, source, message, stack string)
 			BurstThreshold:  cfg.BurstThreshold,
 			WindowCount:     len(snapshotEvents),
 			CooldownMinutes: cfg.CooldownMinutes,
-			GeneratedAt:     now.In(loc).Format("02.01.2006 15:04:05"),
+			GeneratedAt:     now.In(loc).Format(exceptionAlertTimeLayout),
 			PrimarySource:   entry.source,
 			PrimaryMessage:  entry.message,
 			StackTrace:      entry.stack,
@@ -409,7 +410,7 @@ func (m *ExceptionAlertMonitor) SnapshotStatus() ExceptionAlertStatusDTO {
 
 	lastSent := ""
 	if !m.lastAlertSentAt.IsZero() {
-		lastSent = m.lastAlertSentAt.In(istanbulLocation()).Format("02.01.2006 15:04:05")
+		lastSent = m.lastAlertSentAt.In(istanbulLocation()).Format(exceptionAlertTimeLayout)
 	}
 	recentCopy := make([]ExceptionAlertEventDTO, len(m.recentRing))
 	for i := range m.recentRing {
@@ -444,10 +445,25 @@ func dispatchExceptionAlertAsync(cfg *config.Config, data mailer.ExceptionAlertE
 		}
 		if err := mailer.SendMailEnvelope(cfg, route.ToEmails, route.CCEmails, subject, htmlBody, textBody); err != nil {
 			log.Printf("[EXCEPTION ALERTER] Failed to deliver exception alert email: %v", err)
-			recordNotificationLogToDB(ctx, mailer.EventSystemExceptionAlert, subject, route.ToEmails, route.CCEmails, "failed", err.Error(), meta)
+			recordNotificationLogToDB(ctx, mailer.NotificationLogEntry{
+				EventKey:     mailer.EventSystemExceptionAlert,
+				Subject:      subject,
+				ToEmails:     route.ToEmails,
+				CCEmails:     route.CCEmails,
+				Status:       "failed",
+				ErrorMessage: err.Error(),
+				Metadata:     meta,
+			})
 			return
 		}
-		recordNotificationLogToDB(ctx, mailer.EventSystemExceptionAlert, subject, route.ToEmails, route.CCEmails, "sent", "", meta)
+		recordNotificationLogToDB(ctx, mailer.NotificationLogEntry{
+			EventKey: mailer.EventSystemExceptionAlert,
+			Subject:  subject,
+			ToEmails: route.ToEmails,
+			CCEmails: route.CCEmails,
+			Status:   "sent",
+			Metadata: meta,
+		})
 	})
 }
 

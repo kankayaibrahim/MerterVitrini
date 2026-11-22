@@ -36,6 +36,7 @@ import { submitStoreCartInquiry } from "@/utils/cartInquiry";
 import {
   isProductWhatsappOnly,
   buildProductWhatsappOrderLink,
+  formatDualProductSku,
 } from "@/utils/whatsappOrdering";
 import {
   normalizeSeoLang,
@@ -47,6 +48,7 @@ import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import ConfirmModal from "@/components/store/ConfirmModal";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+import { SafeHtml, PRODUCT_DESCRIPTION_HTML_CLASS } from "@/components/common/SafeHtml";
 
 import ProductImageGallery from "./components/ProductImageGallery";
 import ProductSpecs from "./components/ProductSpecs";
@@ -255,6 +257,64 @@ const CLIENT_LOCALE_COPY: Record<SupportedSeoLang, ProductClientLocaleCopy> = {
   },
 };
 
+function resolveActiveProduct(
+  isAuthenticated: boolean,
+  hydratedAuthProduct: Product | null,
+  product: Product | null
+): Product | null {
+  const hydratedId = hydratedAuthProduct?.id;
+  const productId = product?.id;
+  if (isAuthenticated && hydratedId && hydratedId === productId) {
+    return hydratedAuthProduct;
+  }
+  return product;
+}
+
+function needsAuthenticatedPriceFetch({
+  isAuthenticated,
+  product,
+  isWhatsappOnly,
+  hydratedAuthProductId,
+  authFetchAttemptedForId,
+}: Readonly<{
+  isAuthenticated: boolean;
+  product: Product | null;
+  isWhatsappOnly: boolean;
+  hydratedAuthProductId?: string;
+  authFetchAttemptedForId: string | null;
+}>): boolean {
+  if (!isAuthenticated || !product || isWhatsappOnly) {
+    return false;
+  }
+  return (
+    Number(product.price || 0) <= 0 &&
+    hydratedAuthProductId !== product.id &&
+    authFetchAttemptedForId !== product.id
+  );
+}
+
+function resolveDirectWhatsAppUrl(
+  waOrderLinkUrl: string | undefined,
+  supplierWaDigits: string,
+  message: string
+): string {
+  if (waOrderLinkUrl) {
+    return waOrderLinkUrl;
+  }
+  if (!supplierWaDigits) {
+    return "";
+  }
+  return `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(message)}`;
+}
+
+function stripTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.codePointAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return url.slice(0, end);
+}
+
 export default function ProductDetailClient({
   product,
   initialLang = "tr",
@@ -305,24 +365,16 @@ export default function ProductDetailClient({
   const [hydratedAuthProduct, setHydratedAuthProduct] = useState<Product | null>(null);
   const [authFetchAttemptedForId, setAuthFetchAttemptedForId] = useState<string | null>(null);
 
-  const activeProduct =
-    isAuthenticated &&
-      hydratedAuthProduct &&
-      product &&
-      hydratedAuthProduct.id === product.id
-      ? hydratedAuthProduct
-      : product;
+  const activeProduct = resolveActiveProduct(isAuthenticated, hydratedAuthProduct, product);
 
   const isWhatsappOnly = isProductWhatsappOnly(activeProduct);
-  const needsAuthPriceHydration = Boolean(
-    isAuthenticated &&
-    product &&
-    !isWhatsappOnly &&
-    !(Number(product.price) > 0) &&
-    hydratedAuthProduct?.id !== product.id &&
-    authFetchAttemptedForId !== product.id
-  );
-  const isPriceLoading = needsAuthPriceHydration;
+  const isPriceLoading = needsAuthenticatedPriceFetch({
+    isAuthenticated,
+    product,
+    isWhatsappOnly,
+    hydratedAuthProductId: hydratedAuthProduct?.id,
+    authFetchAttemptedForId,
+  });
 
   useEffect(() => {
     if (!isAuthenticated || !product || isProductWhatsappOnly(product) || Number(product.price) > 0) {
@@ -341,7 +393,7 @@ export default function ProductDetailClient({
         { cache: "no-store" }
       );
       if (cancelled) return;
-      if (fresh && fresh.id) {
+      if (fresh?.id) {
         setHydratedAuthProduct(fresh);
       }
       setAuthFetchAttemptedForId(targetId);
@@ -775,7 +827,8 @@ export default function ProductDetailClient({
   const supplierWaDigits = normalizeWhatsappDigits(supplierWaRaw);
   const calcWaSupplierName =
     activeProduct.brand_profile?.name || activeProduct.brand_name || copy.defaultBrand;
-  const calcWaMessage = `${calcWaSupplierName} — *${title}* (SKU: ${activeProduct.custom_sku || "-"}) • ${pkgQty} ${t("package", safeLang)} (${totalPieces} ${t("piece", safeLang)})`;
+  const calcWaDisplaySku = formatDualProductSku(activeProduct.custom_sku, activeProduct.sku);
+  const calcWaMessage = `${calcWaSupplierName} — *${title}* (SKU: ${calcWaDisplaySku}) • ${pkgQty} ${t("package", safeLang)} (${totalPieces} ${t("piece", safeLang)})`;
   const waOrderLink = isWhatsappOnly
     ? buildProductWhatsappOrderLink({
       product: activeProduct,
@@ -787,11 +840,11 @@ export default function ProductDetailClient({
       fallbackPhone: supplierWaRaw,
     })
     : null;
-  const calcWaUrl = waOrderLink
-    ? waOrderLink.url
-    : supplierWaDigits
-      ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(calcWaMessage)}`
-      : "";
+  const calcWaUrl = resolveDirectWhatsAppUrl(
+    waOrderLink?.url,
+    supplierWaDigits,
+    calcWaMessage
+  );
 
   return (
     <div
@@ -831,7 +884,7 @@ export default function ProductDetailClient({
               <React.Fragment key={cat.id}>
                 <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
                 <Link
-                  href={getCategoryUrl(categories, cat, safeLang).replace(/\/+$/, "")}
+                  href={stripTrailingSlashes(getCategoryUrl(categories, cat, safeLang))}
                   className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver font-bold"
                 >
                   {getCategoryTitle(cat, safeLang)}
@@ -956,14 +1009,17 @@ export default function ProductDetailClient({
             </div>
           </div>
 
-          <div className="border-t border-cultured pt-6 mt-8">
-            <h2 className="font-sans font-extrabold text-sm tracking-[0.5px] mb-3 uppercase text-eerie-black select-none">
-              {t("description_label", safeLang)}
-            </h2>
-            <p className="text-xs text-sonic-silver leading-relaxed font-semibold whitespace-pre-line">
-              {desc}
-            </p>
-          </div>
+          {desc.trim().length > 0 && (
+            <div className="border-t border-cultured pt-6 mt-8">
+              <h2 className="font-sans font-extrabold text-sm tracking-[0.5px] mb-3 uppercase text-eerie-black select-none">
+                {t("description_label", safeLang)}
+              </h2>
+              <SafeHtml
+                html={desc}
+                className={`text-[13px] md:text-sm ${PRODUCT_DESCRIPTION_HTML_CLASS}`}
+              />
+            </div>
+          )}
         </div>
       </main>
 
