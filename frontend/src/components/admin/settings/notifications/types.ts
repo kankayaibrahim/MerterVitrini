@@ -2,7 +2,44 @@ export type KnownNotificationEventKey =
   | "new_customer"
   | "new_order"
   | "daily_digest"
-  | "supplier_onboarding";
+  | "supplier_onboarding"
+  | "system_exception_alert";
+
+export interface ExceptionAlertConfigDTO {
+  alert_on_panic: boolean;
+  alert_on_http_5xx: boolean;
+  alert_on_error_logs: boolean;
+  burst_threshold: number;
+  window_minutes: number;
+  cooldown_minutes: number;
+  max_emails_per_hour: number;
+  ignored_patterns: string[];
+  updated_by?: string;
+  updated_at?: string;
+}
+
+export interface ExceptionAlertEventDTO {
+  readonly timestamp: string;
+  readonly severity: string;
+  readonly source: string;
+  readonly message: string;
+}
+
+export interface ExceptionAlertStatusDTO {
+  readonly window_error_count: number;
+  readonly emails_sent_last_hour: number;
+  readonly total_captured: number;
+  readonly total_suppressed: number;
+  readonly last_alert_sent_at: string;
+  readonly recent_events: readonly ExceptionAlertEventDTO[];
+}
+
+export interface ExceptionAlertConfigResponse {
+  readonly success?: boolean;
+  readonly message?: string;
+  readonly config: ExceptionAlertConfigDTO;
+  readonly status: ExceptionAlertStatusDTO;
+}
 
 export interface NotificationRuleDTO {
   readonly event_key: string;
@@ -90,6 +127,8 @@ export function getNotificationEventLabel(eventKey: string): string {
       return "Günlük Özet Raporu";
     case "supplier_onboarding":
       return "Tedarikçi & Başvuru";
+    case "system_exception_alert":
+      return "Kritik Sistem Hatası & 5xx";
     default:
       return eventKey;
   }

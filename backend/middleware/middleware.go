@@ -175,6 +175,20 @@ func LoggingMiddleware(logFormat string) func(http.Handler) http.Handler {
 			duration := time.Since(start)
 			ip := getClientIP(r)
 
+			if rw.statusCode >= 500 {
+				userText := "anonymous"
+				if container.UserEmail != "" {
+					userText = fmt.Sprintf("%s (%s)", container.UserEmail, container.UserRole)
+				}
+				logger.NotifyError(
+					"http_5xx",
+					fmt.Sprintf("%s %s", r.Method, r.URL.Path),
+					fmt.Sprintf("HTTP %d | IP: %s | User: %s | Duration: %.2fms | UA: %s",
+						rw.statusCode, ip, userText, float64(duration.Microseconds())/1000.0, r.Header.Get("User-Agent")),
+					"",
+				)
+			}
+
 			if logFormat == "json" {
 				logJSON(r, ip, container, rw.statusCode, duration)
 			} else {

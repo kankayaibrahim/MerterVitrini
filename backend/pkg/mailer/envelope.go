@@ -23,10 +23,11 @@ import (
 
 // Notification event keys persisted in identity.notification_settings.
 const (
-	EventNewCustomer        = "new_customer"
-	EventNewOrder           = "new_order"
-	EventDailyDigest        = "daily_digest"
-	EventSupplierOnboarding = "supplier_onboarding"
+	EventNewCustomer         = "new_customer"
+	EventNewOrder            = "new_order"
+	EventDailyDigest         = "daily_digest"
+	EventSupplierOnboarding  = "supplier_onboarding"
+	EventSystemExceptionAlert = "system_exception_alert"
 )
 
 // DefaultAdminRecipients is the fallback admin recipient list when DB settings are unavailable.

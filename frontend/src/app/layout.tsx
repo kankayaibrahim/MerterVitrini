@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { headers } from "next/headers";
 import { Playfair_Display, Outfit, Noto_Sans_Arabic } from "next/font/google";
-import Script from "next/script";
 import { AnalyticsTracker } from "@/components/analytics/AnalyticsTracker";
+import StoreConsentRoot from "@/components/consent/StoreConsentRoot";
 import {
   GLOBAL_B2B_SEO_MATRIX,
   normalizeSeoLang,
@@ -137,27 +137,14 @@ export default async function RootLayout({
         {yandexVerification && (
           <meta name="yandex-verification" content={yandexVerification} />
         )}
-        {/* Google tag (gtag.js) — storefront only, skips /admin & /supplier */}
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-CNMNCL62Q2"
-          strategy="afterInteractive"
-        />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            if (!window.location.pathname.startsWith('/admin') && !window.location.pathname.startsWith('/supplier')) {
-              gtag('js', new Date());
-              gtag('config', 'G-CNMNCL62Q2');
-            }
-          `}
-        </Script>
       </head>
       <body className="min-h-full flex flex-col bg-white font-sans antialiased text-onyx">
-        <Suspense fallback={null}>
-          <AnalyticsTracker />
-        </Suspense>
-        {children}
+        <StoreConsentRoot initialLang={htmlLang}>
+          <Suspense fallback={null}>
+            <AnalyticsTracker />
+          </Suspense>
+          {children}
+        </StoreConsentRoot>
       </body>
     </html>
   );

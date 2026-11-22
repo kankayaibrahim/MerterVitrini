@@ -15,6 +15,8 @@ import {
   sanitizePublicStoreEmail,
 } from "@/utils/formatters";
 import { getFooterLegalNoticeCopy } from "@/utils/legalNotices";
+import { CONSENT_UI_COPY, normalizeConsentLang } from "@/components/consent/consentCopy";
+import { CONSENT_OPEN_PREFERENCES_EVENT } from "@/components/consent/consentRuntime";
 
 interface Settings {
   id: string;
@@ -521,6 +523,9 @@ function FooterHostingNoticeBanner({ lang }: { readonly lang: string }) {
         <Link href={`/${prefix}/pages/gizlilik-politikasi`} className="hover:underline">
           {copy.privacyLink}
         </Link>
+        <Link href={`/${prefix}/pages/cerez-politikasi`} className="hover:underline">
+          {CONSENT_UI_COPY[normalizeConsentLang(lang)].footerPolicyLink}
+        </Link>
       </div>
     </div>
   );
@@ -533,6 +538,7 @@ interface FooterBottomBarProps {
 
 function FooterBottomBar({ lang, onOpenPolicy }: FooterBottomBarProps) {
   const prefix = getCategoryPrefix(lang);
+  const consentLabels = CONSENT_UI_COPY[normalizeConsentLang(lang)];
 
   return (
     <div className="max-w-[1720px] mx-auto border-t border-cultured mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-sonic-silver">
@@ -553,6 +559,20 @@ function FooterBottomBar({ lang, onOpenPolicy }: FooterBottomBarProps) {
           className="bg-transparent border-none p-0 cursor-pointer text-xs text-sonic-silver hover:text-[#1C1C1C] transition-colors"
         >
           {t("terms", lang)}
+        </button>
+        <Link
+          href={`/${prefix}/pages/cerez-politikasi`}
+          className="text-sonic-silver hover:text-[#1C1C1C] transition-colors no-underline"
+        >
+          {consentLabels.footerPolicyLink}
+        </Link>
+        <button
+          type="button"
+          data-testid="footer-cookie-preferences"
+          onClick={() => window.dispatchEvent(new CustomEvent(CONSENT_OPEN_PREFERENCES_EVENT))}
+          className="bg-transparent border-none p-0 cursor-pointer text-xs font-medium text-sonic-silver hover:text-[#1C1C1C] underline decoration-accent-gold/60 underline-offset-4 transition-colors"
+        >
+          {consentLabels.footerSettingsButton}
         </button>
         <Link 
           href={`/${prefix}/site-haritasi`} 

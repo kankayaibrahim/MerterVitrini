@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useTransition, useCallback } from "react";
-import { 
-  FileText, 
-  History, 
-  Check, 
-  RefreshCw, 
-  AlertTriangle, 
-  Plus, 
+import {
+  FileText,
+  History,
+  Check,
+  RefreshCw,
+  AlertTriangle,
+  Plus,
   Edit3,
   Calendar
 } from "lucide-react";
@@ -21,24 +21,25 @@ const LABELS = {
   TAB_SUPPLIER: "Tedarikçi Sözleşmesi",
   TAB_COPYRIGHT: "Telif & Uyar-Kaldır",
   TAB_PRIVACY: "Gizlilik Politikası",
-  
+  TAB_COOKIE: "Çerez Politikası (KVKK / CMP)",
+
   ACTIVE_VERSION: "Aktif Sürüm",
   VERSION_TIMELINE: "Versiyon ve Değişiklik Geçmişi",
   NO_HISTORY: "Bu politikaya ait henüz bir geçmiş kayıt bulunamadı.",
   CREATE_NEW: "Yeni Versiyon / Değişiklik Yayınla",
   PREVIEW_ACTIVE: "Aktif Versiyon Önizlemesi",
-  
+
   FIELD_TITLE: "Sürüm Başlığı veya Değişiklik Özeti (Örn: v2.0 - İade Adresi Güncellemesi)",
   FIELD_CONTENT: "Sözleşme Metni (Markdown Formatı Desteklenir)",
-  
+
   BTN_SAVE: "Yeni Sürüm Olarak Kaydet",
   BTN_ACTIVATE: "Bu Sürümü Yayına Al",
   BTN_PREVIEW: "Önizle",
   BTN_EDIT: "Düzenle & Yeni Sürüm Yaz",
-  
+
   WARNING_ACTIVATE: "Kritik Eylem: Versiyon Değişikliği",
   WARNING_ACTIVATE_DESC: "Bu sürümü yayına aldığınızda, müşterilerinize gösterilen sözleşme anında değişecektir. Gelecekte üyeler bu yeni sürümü kabul etmek zorunda kalacaktır.",
-  
+
   SUCCESS_CREATED: "Yeni sürüm başarıyla kaydedildi.",
   SUCCESS_ACTIVATED: "Sözleşme sürümü başarıyla yayına alındı! Storefront anında güncellendi.",
   REQUIRED_FIELDS: "Lütfen tüm gerekli alanları doldurun.",
@@ -60,7 +61,8 @@ type PolicyType =
   | "terms_of_service"
   | "supplier_agreement"
   | "copyright_and_takedown"
-  | "privacy_policy";
+  | "privacy_policy"
+  | "cookie_policy";
 
 const POLICY_TABS: ReadonlyArray<{ type: PolicyType; label: string }> = [
   { type: "cancellation_and_return", label: LABELS.TAB_RETURN },
@@ -68,6 +70,7 @@ const POLICY_TABS: ReadonlyArray<{ type: PolicyType; label: string }> = [
   { type: "supplier_agreement", label: LABELS.TAB_SUPPLIER },
   { type: "copyright_and_takedown", label: LABELS.TAB_COPYRIGHT },
   { type: "privacy_policy", label: LABELS.TAB_PRIVACY },
+  { type: "cookie_policy", label: LABELS.TAB_COOKIE },
 ];
 
 export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesManagerProps>) {
@@ -75,13 +78,13 @@ export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesMana
   const [activeTab, setActiveTab] = useState<PolicyType>("cancellation_and_return");
   const [history, setHistory] = useState<LegalPolicy[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<LegalPolicy | null>(null);
-  
+
   // Edit Workspace Form States
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [previewTab, setPreviewTab] = useState<"edit" | "preview">("edit");
-  
+
   // Feedback states
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -121,7 +124,7 @@ export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesMana
     try {
       const data = await apiRequest(`/api/v1/policies/${type}/history`, "GET");
       setHistory(data || []);
-      
+
       // Auto-select active version on load
       if (data && data.length > 0) {
         const active = data.find((p: LegalPolicy) => p.is_active);
@@ -180,7 +183,7 @@ export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesMana
     setIsEditing(true);
     setPreviewTab("edit");
     setFormError(null);
-    
+
     // Autofill with selected or active content as boilerplate
     if (selectedVersion) {
       setEditTitle(`Sürüm v${selectedVersion.version + 1} - Güncellemesi`);
@@ -294,11 +297,10 @@ export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesMana
             key={tab.type}
             type="button"
             onClick={() => handleTabChange(tab.type)}
-            className={`pb-2 text-sm font-bold transition-all relative cursor-pointer ${
-              activeTab === tab.type
+            className={`pb-2 text-sm font-bold transition-all relative cursor-pointer ${activeTab === tab.type
                 ? "text-violet-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-violet-600"
                 : "text-zinc-500 hover:text-zinc-900"
-            }`}
+              }`}
           >
             {tab.label}
           </button>
@@ -329,23 +331,21 @@ export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesMana
               <Edit3 size={16} className="text-violet-600" />
               {LABELS.CREATE_NEW}
             </h3>
-            
+
             <div className="flex border border-zinc-200 rounded-xl overflow-hidden text-xs font-bold">
               <button
                 type="button"
                 onClick={() => setPreviewTab("edit")}
-                className={`px-3 py-1.5 cursor-pointer transition-colors ${
-                  previewTab === "edit" ? "bg-violet-600 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"
-                }`}
+                className={`px-3 py-1.5 cursor-pointer transition-colors ${previewTab === "edit" ? "bg-violet-600 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"
+                  }`}
               >
                 {LABELS.BTN_EDIT}
               </button>
               <button
                 type="button"
                 onClick={() => setPreviewTab("preview")}
-                className={`px-3 py-1.5 cursor-pointer transition-colors ${
-                  previewTab === "preview" ? "bg-violet-600 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"
-                }`}
+                className={`px-3 py-1.5 cursor-pointer transition-colors ${previewTab === "preview" ? "bg-violet-600 text-white" : "bg-white text-zinc-600 hover:bg-zinc-50"
+                  }`}
               >
                 {LABELS.BTN_PREVIEW}
               </button>
@@ -421,28 +421,26 @@ export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesMana
               <div className="flex flex-col gap-4 relative pl-4 border-l border-zinc-200/60 max-h-[600px] overflow-y-auto pr-1">
                 {history.length > 0 ? (
                   history.map((p) => (
-                    <button 
-                      key={p.id} 
+                    <button
+                      key={p.id}
                       type="button"
                       onClick={() => setSelectedVersion(p)}
-                      className={`text-left w-full group relative flex flex-col gap-1 p-3 rounded-2xl border transition-all cursor-pointer select-none ${
-                        selectedVersion?.id === p.id 
-                          ? "bg-violet-50/50 border-violet-200/60 shadow-sm" 
+                      className={`text-left w-full group relative flex flex-col gap-1 p-3 rounded-2xl border transition-all cursor-pointer select-none ${selectedVersion?.id === p.id
+                          ? "bg-violet-50/50 border-violet-200/60 shadow-sm"
                           : "bg-white border-zinc-200/40 hover:bg-zinc-50/50"
-                      }`}
+                        }`}
                     >
                       {/* Timeline dot */}
-                      <span className={`absolute -left-[21px] top-4 w-2.5 h-2.5 rounded-full border-2 transition-all ${
-                        p.is_active 
-                          ? "bg-emerald-500 border-emerald-100 ring-4 ring-emerald-500/20" 
+                      <span className={`absolute -left-[21px] top-4 w-2.5 h-2.5 rounded-full border-2 transition-all ${p.is_active
+                          ? "bg-emerald-500 border-emerald-100 ring-4 ring-emerald-500/20"
                           : "bg-zinc-200 border-zinc-100"
-                      }`} />
+                        }`} />
 
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-xs font-mono text-zinc-400 group-hover:text-zinc-500">
                           {LABELS.VERSION} {p.version}
                         </span>
-                        
+
                         {p.is_active ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-700">
                             {LABELS.LIVE}
@@ -454,9 +452,8 @@ export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesMana
                         )}
                       </div>
 
-                      <span className={`text-xs font-bold truncate ${
-                        selectedVersion?.id === p.id ? "text-violet-900" : "text-zinc-800 group-hover:text-zinc-950"
-                      }`}>
+                      <span className={`text-xs font-bold truncate ${selectedVersion?.id === p.id ? "text-violet-900" : "text-zinc-800 group-hover:text-zinc-950"
+                        }`}>
                         {p.title}
                       </span>
 
@@ -486,7 +483,7 @@ export default function PoliciesManager({ apiUrl, token }: Readonly<PoliciesMana
                       </span>
                       <h3 className="font-extrabold text-zinc-800 text-sm sm:text-base">{selectedVersion.title}</h3>
                     </div>
-                    
+
                     <div className="flex items-center gap-4 text-xs font-semibold text-zinc-400 mt-1">
                       <span className="flex items-center gap-1.5">
                         <Calendar size={13} />

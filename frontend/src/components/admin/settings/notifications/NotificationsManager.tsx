@@ -10,10 +10,14 @@ import {
   Save,
 } from "lucide-react";
 import DailyDigestLiveCard from "./DailyDigestLiveCard";
+import ExceptionAlertConfigCard from "./ExceptionAlertConfigCard";
 import NotificationLogsTable from "./NotificationLogsTable";
 import NotificationRuleCard from "./NotificationRuleCard";
 import {
   DailyDigestPreviewDTO,
+  ExceptionAlertConfigDTO,
+  ExceptionAlertConfigResponse,
+  ExceptionAlertStatusDTO,
   NotificationFeedback,
   NotificationLogDTO,
   NotificationRuleDTO,
@@ -92,6 +96,41 @@ async function requestDailyDigestPreview(
   }
 }
 
+async function requestExceptionAlertConfig(
+  apiUrl: string,
+  token: string,
+): Promise<ExceptionAlertConfigResponse | null> {
+  try {
+    const res = await fetch(`${apiUrl}/api/v1/admin/notifications/exception-config`, {
+      headers: buildAuthHeaders(token, false),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as ExceptionAlertConfigResponse;
+  } catch {
+    return null;
+  }
+}
+
+const DEFAULT_EXCEPTION_CONFIG: ExceptionAlertConfigDTO = {
+  alert_on_panic: true,
+  alert_on_http_5xx: true,
+  alert_on_error_logs: true,
+  burst_threshold: 5,
+  window_minutes: 5,
+  cooldown_minutes: 15,
+  max_emails_per_hour: 6,
+  ignored_patterns: ["Failed to find Server Action", "context canceled"],
+};
+
+const EMPTY_EXCEPTION_STATUS: ExceptionAlertStatusDTO = {
+  window_error_count: 0,
+  emails_sent_last_hour: 0,
+  total_captured: 0,
+  total_suppressed: 0,
+  last_alert_sent_at: "",
+  recent_events: [],
+};
+
 function validateRulesBeforeSave(rules: NotificationRuleDTO[]): string | null {
   for (const rule of rules) {
     if (rule.enabled && rule.to_emails.length === 0) {
@@ -110,6 +149,10 @@ export default function NotificationsManager({ apiUrl, token }: NotificationsMan
 
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [loadingDigest, setLoadingDigest] = useState(true);
+  const [loadingExceptionCfg, setLoadingExceptionCfg] = useState(true);
+  const [savingExceptionCfg, setSavingExceptionCfg] = useState(false);
+  const [exceptionConfig, setExceptionConfig] = useState<ExceptionAlertConfigDTO>(DEFAULT_EXCEPTION_CONFIG);
+  const [exceptionStatus, setExceptionStatus] = useState<ExceptionAlertStatusDTO>(EMPTY_EXCEPTION_STATUS);
   const [saving, setSaving] = useState(false);
   const [sendingDigest, setSendingDigest] = useState(false);
   const [testingKey, setTestingKey] = useState<string | null>(null);
@@ -166,6 +209,23 @@ export default function NotificationsManager({ apiUrl, token }: NotificationsMan
       .catch(() => {
         if (!cancelled) {
           setLoadingDigest(false);
+        }
+      });
+
+    void requestExceptionAlertConfig(apiUrl, token)
+      .then((res) => {
+        if (cancelled) return;
+        if (res?.config) {
+          setExceptionConfig(res.config);
+        }
+        if (res?.status) {
+          setExceptionStatus(res.status);
+        }
+        setLoadingExceptionCfg(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadingExceptionCfg(false);
         }
       });
 
@@ -311,6 +371,38 @@ export default function NotificationsManager({ apiUrl, token }: NotificationsMan
     }
   };
 
+  const handleSaveExceptionConfig = async () => {
+    if (!apiUrl || !token) return;
+    setSavingExceptionCfg(true);
+    setFeedback(null);
+    try {
+      const cleanedPatterns = exceptionConfig.ignored_patterns
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
+      const res = await fetch(`${apiUrl}/api/v1/admin/notifications/exception-config`, {
+        method: "PUT",
+        headers: buildAuthHeaders(token, true),
+        body: JSON.stringify({
+          ...exceptionConfig,
+          ignored_patterns: cleanedPatterns,
+        }),
+      });
+      if (!res.ok) {
+        const msg = await parseErrorMessage(res, "Exception alarm parametreleri kaydedilemedi.");
+        setFeedback({ type: "error", text: msg });
+        return;
+      }
+      const data = (await res.json()) as ExceptionAlertConfigResponse;
+      if (data.config) setExceptionConfig(data.config);
+      if (data.status) setExceptionStatus(data.status);
+      setFeedback({ type: "success", text: data.message || "Hata alarm parametreleri kaydedildi." });
+    } catch {
+      setFeedback({ type: "error", text: "Exception ayarları kaydedilirken bağlantı hatası oluştu." });
+    } finally {
+      setSavingExceptionCfg(false);
+    }
+  };
+
   const topSaveLabel = isDirty ? "Değişiklikleri Kaydet *" : "Tüm Ayarları Kaydet";
 
   return (
@@ -399,6 +491,18 @@ export default function NotificationsManager({ apiUrl, token }: NotificationsMan
         }}
         onSendNow={() => {
           void handleSendDigestNow();
+        }}
+      />
+
+      {/* Parametric Exception Alert Thresholds */}
+      <ExceptionAlertConfigCard
+        config={exceptionConfig}
+        status={exceptionStatus}
+        loading={loadingExceptionCfg}
+        saving={savingExceptionCfg}
+        onChange={setExceptionConfig}
+        onSave={() => {
+          void handleSaveExceptionConfig();
         }}
       />
 

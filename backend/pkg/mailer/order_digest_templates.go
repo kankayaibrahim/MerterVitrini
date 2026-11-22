@@ -426,10 +426,177 @@ Yönetim Paneli: https://mertervitrini.com.tr/admin/dashboard`,
 	return subject, htmlBody, textBody
 }
 
+// ExceptionAlertSample summarizes a captured error/panic/5xx event inside an exception alert email.
+type ExceptionAlertSample struct {
+	Timestamp string
+	Severity  string
+	Source    string
+	Message   string
+	Count     int
+}
+
+// ExceptionAlertEmailData holds aggregated error-burst or panic telemetry for Admin notification delivery.
+type ExceptionAlertEmailData struct {
+	Hostname         string
+	Severity         string
+	TriggerReason    string
+	WindowMinutes    int
+	BurstThreshold   int
+	WindowCount      int
+	CooldownMinutes  int
+	GeneratedAt      string
+	PrimarySource    string
+	PrimaryMessage   string
+	StackTrace       string
+	GroupedSamples   []ExceptionAlertSample
+	RecentTimeline   []ExceptionAlertSample
+	IsTest           bool
+}
+
+// BuildExceptionAlertEmailBodies renders high-priority HTML and plain-text technical exception reports.
+func BuildExceptionAlertEmailBodies(data ExceptionAlertEmailData) (subject, htmlBody, textBody string) {
+	prefix := "🚨 [KRİTİK HATA ALARMI]"
+	if data.Severity == "panic" {
+		prefix = "🔥 [PANİK ÇÖKME ALARMI]"
+	}
+	if data.IsTest {
+		prefix = "[TEST] " + prefix
+	}
+	subject = fmt.Sprintf("%s %s (%d olay / %d dk) — Merter Vitrini",
+		prefix, data.PrimarySource, data.WindowCount, data.WindowMinutes)
+
+	var textSb strings.Builder
+	textSb.WriteString("MERTER VİTRİNİ SİSTEM HATA / EXCEPTION BİLDİRİMİ\n")
+	textSb.WriteString("====================================================\n")
+	textSb.WriteString(fmt.Sprintf("Sunucu: %s\n", data.Hostname))
+	textSb.WriteString(fmt.Sprintf("Şiddet / Tetikleme: %s — %s\n", strings.ToUpper(data.Severity), data.TriggerReason))
+	textSb.WriteString(fmt.Sprintf("Pencere Özeti: Son %d dk içinde %d olay (Eşik: %d • Bekleme: %d dk)\n",
+		data.WindowMinutes, data.WindowCount, data.BurstThreshold, data.CooldownMinutes))
+	textSb.WriteString(fmt.Sprintf("Zaman (TR): %s\n", data.GeneratedAt))
+	textSb.WriteString(fmt.Sprintf("Birincil Kaynak: %s\n", data.PrimarySource))
+	textSb.WriteString(fmt.Sprintf("Mesaj: %s\n\n", data.PrimaryMessage))
+
+	if len(data.GroupedSamples) > 0 {
+		textSb.WriteString("En Sık Görülen Hata İmzaları:\n")
+		for _, s := range data.GroupedSamples {
+			textSb.WriteString(fmt.Sprintf("- [%dx | %s] %s -> %s\n", s.Count, s.Severity, s.Source, s.Message))
+		}
+		textSb.WriteByte('\n')
+	}
+	if strings.TrimSpace(data.StackTrace) != "" {
+		textSb.WriteString("Stack Trace:\n")
+		textSb.WriteString(data.StackTrace)
+		textSb.WriteString("\n\n")
+	}
+	textSb.WriteString("Parametreleri yönetmek için: https://mertervitrini.com.tr/admin/settings/notifications\n")
+	textBody = textSb.String()
+
+	var rowsHTML strings.Builder
+	if len(data.GroupedSamples) == 0 {
+		rowsHTML.WriteString(`<tr><td colspan="3" style="padding:10px;color:#64748b;text-align:center;">Tekil olay detayı.</td></tr>`)
+	} else {
+		for _, s := range data.GroupedSamples {
+			rowsHTML.WriteString(fmt.Sprintf(`
+        <tr style="border-bottom:1px solid #e2e8f0;">
+          <td style="padding:8px 10px;font-weight:800;color:#be123c;white-space:nowrap;">%dx (%s)</td>
+          <td style="padding:8px 10px;font-family:monospace;font-size:11px;color:#0f172a;">%s</td>
+          <td style="padding:8px 10px;font-size:12px;color:#334155;word-break:break-word;">%s</td>
+        </tr>`, s.Count, html.EscapeString(s.Severity), html.EscapeString(s.Source), html.EscapeString(s.Message)))
+		}
+	}
+
+	stackSection := ""
+	if strings.TrimSpace(data.StackTrace) != "" {
+		trimmedStack := data.StackTrace
+		if len(trimmedStack) > 4000 {
+			trimmedStack = trimmedStack[:4000] + "\n... (kesildi)"
+		}
+		stackSection = fmt.Sprintf(`
+      <div style="margin-top:16px;background:#0f172a;color:#fda4af;border-radius:10px;padding:14px;font-family:monospace;font-size:11px;line-height:1.45;overflow-x:auto;white-space:pre-wrap;">%s</div>`,
+			html.EscapeString(trimmedStack))
+	}
+
+	badgeColor := "#be123c"
+	if data.Severity == "http_5xx" {
+		badgeColor = "#c2410c"
+	}
+
+	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
+<html lang="tr">
+<head><meta charset="utf-8"></head>
+<body style="font-family:'Segoe UI',Arial,sans-serif;background:#f8fafc;margin:0;padding:20px;color:#0f172a;">
+  <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #fecdd3;border-radius:16px;overflow:hidden;">
+    <div style="background:%s;color:#ffffff;padding:18px 24px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;opacity:0.9;">Merter Vitrini • Otomatik Exception İzleyici</div>
+      <h2 style="margin:6px 0 0 0;font-size:18px;">%s</h2>
+    </div>
+    <div style="padding:20px 24px;">
+      <p style="margin:0 0 14px 0;font-size:13px;color:#334155;"><strong>Tetikleme:</strong> %s</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;padding:12px 14px;font-size:12px;margin-bottom:16px;">
+        <div><strong>Sunucu:</strong> %s</div>
+        <div><strong>Zaman:</strong> %s</div>
+        <div><strong>Yoğunluk:</strong> %d olay / %d dakika</div>
+        <div><strong>Eşik / Bekleme:</strong> %d olay • %d dk</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;">
+        <div style="font-weight:700;margin-bottom:4px;">Birincil Hata Kaynağı: <code>%s</code></div>
+        <div style="color:#475569;word-break:break-word;">%s</div>
+      </div>
+      <table style="width:100%%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <thead>
+          <tr style="background:#f1f5f9;text-align:left;color:#475569;font-size:11px;">
+            <th style="padding:8px 10px;">Adet</th>
+            <th style="padding:8px 10px;">Kaynak</th>
+            <th style="padding:8px 10px;">Özet Mesaj</th>
+          </tr>
+        </thead>
+        <tbody>%s</tbody>
+      </table>
+      %s
+      <div style="margin-top:20px;text-align:center;">
+        <a href="https://mertervitrini.com.tr/admin/settings/notifications" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:700;">Hata Eşik &amp; Bildirim Ayarlarını Düzenle →</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`,
+		badgeColor,
+		html.EscapeString(subject),
+		html.EscapeString(data.TriggerReason),
+		html.EscapeString(data.Hostname),
+		html.EscapeString(data.GeneratedAt),
+		data.WindowCount, data.WindowMinutes,
+		data.BurstThreshold, data.CooldownMinutes,
+		html.EscapeString(data.PrimarySource),
+		html.EscapeString(data.PrimaryMessage),
+		rowsHTML.String(),
+		stackSection,
+	)
+
+	return subject, htmlBody, textBody
+}
+
 // BuildTestEventEmailBodies builds a realistic sample email for admin notification settings testing.
 func BuildTestEventEmailBodies(eventKey string) (subject, htmlBody, textBody string) {
 	nowTR := time.Now().Format(dateTimeFormatTR)
 	switch eventKey {
+	case EventSystemExceptionAlert:
+		return BuildExceptionAlertEmailBodies(ExceptionAlertEmailData{
+			Hostname:        "mertervitrini-prod",
+			Severity:        "http_5xx",
+			TriggerReason:   "Test gönderimi: son 5 dakikada 5 eşik HTTP 500 patlaması simülasyonu",
+			WindowMinutes:   5,
+			BurstThreshold:  5,
+			WindowCount:     5,
+			CooldownMinutes: 15,
+			GeneratedAt:     nowTR,
+			PrimarySource:   "GET /api/v1/store/products",
+			PrimaryMessage:  "HTTP 500 | Örnek timeout simülasyonu (bu mesaj Admin panelinden test amaçlı tetiklendi)",
+			GroupedSamples: []ExceptionAlertSample{
+				{Timestamp: nowTR, Severity: "http_5xx", Source: "GET /api/v1/store/products", Message: "Örnek HTTP 500 patlaması simülasyonu", Count: 5},
+			},
+			IsTest: true,
+		})
 	case EventNewOrder:
 		return BuildOrderCreatedAdminEmailBodies(OrderAdminNotificationData{
 			OrderNumber:      "TEST-20261115-001",

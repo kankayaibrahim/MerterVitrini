@@ -123,9 +123,8 @@ export default function SuccessModal({
         onClick={onClose}
       />
       <div
-        className={`bg-white border border-[#E5E0D8] rounded-[16px] w-full ${
-          hasSupplierCards ? "max-w-xl max-h-[90vh] overflow-y-auto p-6 sm:p-7" : "max-w-md p-8"
-        } text-center flex flex-col items-center gap-5 shadow-premium relative z-10 animate-in fade-in zoom-in-95 duration-200`}
+        className={`bg-white border border-[#E5E0D8] rounded-[16px] w-full ${hasSupplierCards ? "max-w-xl max-h-[90vh] overflow-y-auto p-6 sm:p-7" : "max-w-md p-8"
+          } text-center flex flex-col items-center gap-5 shadow-premium relative z-10 animate-in fade-in zoom-in-95 duration-200`}
       >
         <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#15803D] shrink-0">
           <Check className="w-7 h-7" />

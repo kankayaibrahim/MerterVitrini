@@ -12,11 +12,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
-	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/pkg/httpclient"
 	"mertervitrini/backend/pkg/safe"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type TranslationStatus string
@@ -145,11 +147,16 @@ func translateText(ctx context.Context, text, source, target string) (string, er
 
 	apiURL, apiUser, apiPass := getTranslateAPIConfig()
 
+	format := "text"
+	if strings.Contains(text, "<") && strings.Contains(text, ">") {
+		format = "html"
+	}
+
 	reqPayload := TranslateAPIRequest{
 		Q:      text,
 		Source: source,
 		Target: target,
-		Format: "text",
+		Format: format,
 	}
 
 	payloadBytes, err := json.Marshal(reqPayload)
@@ -486,9 +493,9 @@ func (h *TranslateHandler) PauseJob(w http.ResponseWriter, r *http.Request) {
 // =========================================================================
 
 type TranslationItem struct {
-	ID        string
-	Value1    string // products: title, categories: title, attributes: name
-	Value2    string // products: description, attributes: value
+	ID     string
+	Value1 string // products: title, categories: title, attributes: name
+	Value2 string // products: description, attributes: value
 }
 
 func fetchMissingTranslationItems(ctx context.Context, table, language string) ([]TranslationItem, error) {
@@ -1001,22 +1008,139 @@ func loadExistingProductTranslationsByLang(ctx context.Context, productID string
 	return byLang, rows.Err()
 }
 
-func translateFieldIfMissing(ctx context.Context, sourceText, existingTarget, targetLang string) string {
+const (
+	autoTranslateMaxChunkRunes  = 900
+	autoTranslateCallTimeout    = 35 * time.Second
+	autoTranslateBreakerLimit   = 3
+	autoTranslateBreakerCoolOff = 10 * time.Minute
+)
+
+var (
+	autoTranslateRunMu         sync.Mutex
+	autoTranslateBreakerMu     sync.Mutex
+	autoTranslateCooldownUntil time.Time
+)
+
+func splitTextIntoTranslateChunks(raw string, maxRunes int) []string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || maxRunes <= 0 || utf8.RuneCountInString(trimmed) <= maxRunes {
+		if trimmed == "" {
+			return nil
+		}
+		return []string{trimmed}
+	}
+
+	// Prefer natural paragraph, list, newline, or sentence boundaries
+	normalized := strings.ReplaceAll(trimmed, "</p>", "</p>\n")
+	normalized = strings.ReplaceAll(normalized, "</li>", "</li>\n")
+	lines := strings.Split(normalized, "\n")
+
+	var chunks []string
+	var cur strings.Builder
+	curRunes := 0
+
+	flushCur := func() {
+		if part := strings.TrimSpace(cur.String()); part != "" {
+			chunks = append(chunks, part)
+		}
+		cur.Reset()
+		curRunes = 0
+	}
+
+	appendRunesSafe := func(piece string) {
+		pRunes := utf8.RuneCountInString(piece)
+		if pRunes > maxRunes {
+			flushCur()
+			runes := []rune(piece)
+			for i := 0; i < len(runes); i += maxRunes {
+				end := min(i+maxRunes, len(runes))
+				if seg := strings.TrimSpace(string(runes[i:end])); seg != "" {
+					chunks = append(chunks, seg)
+				}
+			}
+			return
+		}
+		if curRunes > 0 && curRunes+1+pRunes > maxRunes {
+			flushCur()
+		}
+		if curRunes > 0 {
+			cur.WriteByte(' ')
+			curRunes++
+		}
+		cur.WriteString(piece)
+		curRunes += pRunes
+	}
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if utf8.RuneCountInString(line) <= maxRunes {
+			appendRunesSafe(line)
+			continue
+		}
+		for _, sent := range strings.SplitAfter(line, ". ") {
+			sent = strings.TrimSpace(sent)
+			if sent != "" {
+				appendRunesSafe(sent)
+			}
+		}
+	}
+	flushCur()
+	return chunks
+}
+
+func translateTextChunked(ctx context.Context, text, source, target string) (string, error) {
+	chunks := splitTextIntoTranslateChunks(text, autoTranslateMaxChunkRunes)
+	if len(chunks) == 0 {
+		return "", nil
+	}
+	if len(chunks) == 1 {
+		callCtx, cancel := context.WithTimeout(ctx, autoTranslateCallTimeout)
+		defer cancel()
+		return translateText(callCtx, chunks[0], source, target)
+	}
+
+	var out []string
+	for idx, chunk := range chunks {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		if idx > 0 {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(150 * time.Millisecond):
+			}
+		}
+		callCtx, cancel := context.WithTimeout(ctx, autoTranslateCallTimeout)
+		part, err := translateText(callCtx, chunk, source, target)
+		cancel()
+		if err != nil {
+			return "", err
+		}
+		if cleanPart := strings.TrimSpace(part); cleanPart != "" {
+			out = append(out, cleanPart)
+		}
+	}
+	return strings.Join(out, " "), nil
+}
+
+func translateFieldIfMissing(ctx context.Context, sourceText, existingTarget, targetLang string) (string, bool) {
 	if strings.TrimSpace(existingTarget) != "" {
-		return existingTarget
+		return existingTarget, false
 	}
 	trimmedSrc := strings.TrimSpace(sourceText)
 	if trimmedSrc == "" {
-		return ""
+		return "", false
 	}
-	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	translated, err := translateText(callCtx, trimmedSrc, "tr", targetLang)
+	translated, err := translateTextChunked(ctx, trimmedSrc, "tr", targetLang)
 	if err != nil {
 		log.Printf("[AUTO-TRANSLATE] Translate '%s'->'%s' warning: %v", "tr", targetLang, err)
-		return ""
+		return "", true
 	}
-	return strings.TrimSpace(translated)
+	return strings.TrimSpace(translated), false
 }
 
 func upsertSingleProductTranslation(ctx context.Context, productID, lang2, title, shortDesc, desc string) error {
@@ -1038,23 +1162,26 @@ func translateSingleProductLang(
 	prod autoTranslateProductRow,
 	lang2 string,
 	existingMap map[string]existingProductTranslationRow,
-) int {
+) (int, bool) {
 	existing := existingMap[lang2]
-	nextTitle := translateFieldIfMissing(ctx, prod.Title, existing.Title, lang2)
-	nextDesc := translateFieldIfMissing(ctx, prod.Description, existing.Description, lang2)
-	nextShort := translateFieldIfMissing(ctx, prod.ShortDescription, existing.ShortDescription, lang2)
+	nextTitle, errTitle := translateFieldIfMissing(ctx, prod.Title, existing.Title, lang2)
+	if errTitle {
+		return 0, true
+	}
+	nextDesc, errDesc := translateFieldIfMissing(ctx, prod.Description, existing.Description, lang2)
+	nextShort, errShort := translateFieldIfMissing(ctx, prod.ShortDescription, existing.ShortDescription, lang2)
 
 	if nextTitle == "" {
-		return 0
+		return 0, errDesc || errShort
 	}
 	if nextTitle == existing.Title && nextDesc == existing.Description && nextShort == existing.ShortDescription {
-		return 0
+		return 0, false
 	}
 	if err := upsertSingleProductTranslation(ctx, prod.ID, lang2, nextTitle, nextShort, nextDesc); err != nil {
 		log.Printf("[AUTO-TRANSLATE ERROR] Failed to write %s/%s: %v", prod.ID, lang2, err)
-		return 0
+		return 0, false
 	}
-	return 1
+	return 1, errDesc || errShort
 }
 
 // AutoTranslateProductsByIDs translates missing title/short_description/description fields into all active target languages.
@@ -1066,6 +1193,18 @@ func AutoTranslateProductsByIDs(ctx context.Context, productIDs []string) (int, 
 	if len(cleanIDs) == 0 {
 		return 0, nil
 	}
+
+	autoTranslateBreakerMu.Lock()
+	cooldownUntil := autoTranslateCooldownUntil
+	autoTranslateBreakerMu.Unlock()
+	if time.Now().Before(cooldownUntil) {
+		return 0, nil
+	}
+
+	if !autoTranslateRunMu.TryLock() {
+		return 0, nil
+	}
+	defer autoTranslateRunMu.Unlock()
 
 	targetLangs, err := loadActiveTargetLanguages2(ctx)
 	if err != nil {
@@ -1081,6 +1220,7 @@ func AutoTranslateProductsByIDs(ctx context.Context, productIDs []string) (int, 
 	}
 
 	translatedCount := 0
+	consecutiveFailures := 0
 	for _, prod := range products {
 		if ctx.Err() != nil {
 			return translatedCount, ctx.Err()
@@ -1094,9 +1234,21 @@ func AutoTranslateProductsByIDs(ctx context.Context, productIDs []string) (int, 
 			if ctx.Err() != nil {
 				return translatedCount, ctx.Err()
 			}
-			translatedCount += translateSingleProductLang(ctx, prod, lang2, existingMap)
+			written, hadFailure := translateSingleProductLang(ctx, prod, lang2, existingMap)
+			translatedCount += written
+			if hadFailure {
+				consecutiveFailures++
+				if consecutiveFailures >= autoTranslateBreakerLimit {
+					autoTranslateBreakerMu.Lock()
+					autoTranslateCooldownUntil = time.Now().Add(autoTranslateBreakerCoolOff)
+					autoTranslateBreakerMu.Unlock()
+					log.Printf("[AUTO-TRANSLATE] Circuit breaker opened for %v after %d consecutive translate timeouts.", autoTranslateBreakerCoolOff, consecutiveFailures)
+					return translatedCount, nil
+				}
+			} else if written > 0 {
+				consecutiveFailures = 0
+			}
 		}
 	}
 	return translatedCount, nil
 }
-

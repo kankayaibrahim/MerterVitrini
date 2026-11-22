@@ -454,7 +454,7 @@ func (h *StoreAuthHandler) completeCustomerRegistration(w http.ResponseWriter, r
 		)
 		VALUES (
 			$1, $2, $3, $4, $5, 'customer', true, false, $6, false, $7, $8,
-			$9, CASE WHEN $9 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $9 THEN $10 ELSE NULL END
+			$9, CASE WHEN $9 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $9 THEN $10::integer ELSE NULL::integer END
 		)
 		ON CONFLICT (email) DO UPDATE SET
 			id = EXCLUDED.id,

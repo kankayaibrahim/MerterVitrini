@@ -142,8 +142,24 @@ func EnsureNotificationSettingsSchema(ctx context.Context) error {
 			('new_customer', 'Yeni Müşteri Kaydı Bildirimi', 'Vitrin veya mobil uygulama üzerinden yeni B2B müşteri kaydı oluştuğunda To/CC listelerine anında e-posta gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0),
 			('new_order', 'Yeni Sipariş & Doğrudan Talep Bildirimi', 'Müşteri sepetinden sipariş onaylandığında veya doğrudan toptan teklif/sipariş talebi oluşturulduğunda bildirim gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0),
 			('daily_digest', 'Günlük B2B Operasyon Özet Raporu', 'Belirlenen saatte (İstanbul saati) o gün kaydolan üyeler, siparişler, eklenen/kapatılan/arşivlenen/silinen ürünler hakkında özet rapor gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0),
-			('supplier_onboarding', 'Tedarikçi & Hizmet Sağlayıcı Başvuru Bildirimi', 'Yeni tedarikçi hesabı açıldığında, tedarikçi başvurusu veya hizmet sağlayıcı başvurusu doğrulandığında yönetici ekibe mail gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0)
+			('supplier_onboarding', 'Tedarikçi & Hizmet Sağlayıcı Başvuru Bildirimi', 'Yeni tedarikçi hesabı açıldığında, tedarikçi başvurusu veya hizmet sağlayıcı başvurusu doğrulandığında yönetici ekibe mail gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0),
+			('system_exception_alert', 'Kritik Sistem Hatası & Yoğun 5xx Alarmı', 'Sunucu panic çökmelerinde anında, yoğun HTTP 500 veya kritik hata patlamalarında parametrik eşik ve bekleme süresiyle yönetici ekibe teknik exception maili gönderir.', true, ARRAY['kankayaibrahim@gmail.com', 'carnavaltedarik@gmail.com'], ARRAY[]::TEXT[], 21, 0)
 		ON CONFLICT (event_key) DO NOTHING;
+
+		CREATE TABLE IF NOT EXISTS identity.exception_alert_config (
+			id                  INTEGER PRIMARY KEY CHECK (id = 1),
+			alert_on_panic      BOOLEAN NOT NULL DEFAULT true,
+			alert_on_http_5xx   BOOLEAN NOT NULL DEFAULT true,
+			alert_on_error_logs BOOLEAN NOT NULL DEFAULT true,
+			burst_threshold     INTEGER NOT NULL DEFAULT 5,
+			window_minutes      INTEGER NOT NULL DEFAULT 5,
+			cooldown_minutes    INTEGER NOT NULL DEFAULT 15,
+			max_emails_per_hour INTEGER NOT NULL DEFAULT 6,
+			ignored_patterns    JSONB NOT NULL DEFAULT '["Failed to find Server Action", "context canceled", "broken pipe", "connection reset by peer"]'::jsonb,
+			updated_by          VARCHAR(150) NULL,
+			updated_at          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		INSERT INTO identity.exception_alert_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 		UPDATE identity.notification_settings
 		SET title = 'Yeni Müşteri Kaydı Bildirimi'
@@ -201,6 +217,7 @@ func fetchNotificationRulesList(ctx context.Context) ([]NotificationRuleDTO, err
 			WHEN 'new_order' THEN 2
 			WHEN 'daily_digest' THEN 3
 			WHEN 'supplier_onboarding' THEN 4
+			WHEN 'system_exception_alert' THEN 5
 			ELSE 99
 		END, event_key ASC
 	`)
@@ -309,7 +326,7 @@ type updateNotificationRuleInput struct {
 
 func isAllowedNotificationEventKey(eventKey string) bool {
 	switch eventKey {
-	case mailer.EventNewCustomer, mailer.EventNewOrder, mailer.EventDailyDigest, mailer.EventSupplierOnboarding:
+	case mailer.EventNewCustomer, mailer.EventNewOrder, mailer.EventDailyDigest, mailer.EventSupplierOnboarding, mailer.EventSystemExceptionAlert:
 		return true
 	default:
 		return false

@@ -591,7 +591,7 @@ func insertSingleImportedRow(
 			$6, $7, $8, $9, $10,
 			0, $11, $12, $13, $14,
 			$15, $16, true,
-			$17, CASE WHEN $17 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $17 THEN $18 ELSE NULL END
+			$17, CASE WHEN $17 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $17 THEN $18::integer ELSE NULL::integer END
 		) RETURNING id::text, coalesce(slug, '')
 	`,
 		brandID, sourceProductID, title, shortDesc, desc,

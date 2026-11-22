@@ -133,6 +133,12 @@ func initBackgroundWorkers(appCtx context.Context, cfg *config.Config) {
 		log.Printf("[WARNING] Failed to provision notification settings schema: %v\n", err)
 	} else {
 		handlers.StartDailyDigestScheduler(appCtx, cfg)
+		handlers.StartExceptionAlertMonitor(cfg)
+	}
+	if err := handlers.EnsureConsentComplianceSchema(cronInitCtx); err != nil {
+		log.Printf("[WARNING] Failed to provision consent compliance schema: %v\n", err)
+	} else {
+		handlers.StartConsentAnchorWorker(appCtx, cfg)
 	}
 
 	db.StartRatesWorker(appCtx)

@@ -40,7 +40,7 @@ type legalConsentLogEntry struct {
 
 func isValidPolicyType(policyType string) bool {
 	switch strings.TrimSpace(policyType) {
-	case "cancellation_and_return", "terms_of_service", "privacy_policy", "supplier_agreement", "copyright_and_takedown":
+	case "cancellation_and_return", "terms_of_service", "privacy_policy", "supplier_agreement", "copyright_and_takedown", "cookie_policy":
 		return true
 	default:
 		return false

@@ -292,7 +292,13 @@ export interface Language {
 
 export interface LegalPolicy {
   id: string;
-  type: 'cancellation_and_return' | 'terms_of_service' | 'privacy_policy';
+  type:
+  | 'cancellation_and_return'
+  | 'terms_of_service'
+  | 'privacy_policy'
+  | 'supplier_agreement'
+  | 'copyright_and_takedown'
+  | 'cookie_policy';
   version: number;
   title: string;
   content: string;

@@ -15,6 +15,7 @@ import {
   Globe2,
   Languages,
   ShieldAlert,
+  ShieldCheck,
   FileCode2,
   BarChart3,
   FileText,
@@ -280,6 +281,13 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
         href: "/admin/settings/cms",
         icon: FileCode2,
         description: "Hakkımızda, B2B rehberi ve özel içerik sayfaları"
+      },
+      {
+        id: "consent",
+        title: "Çerez & Rıza Kayıtları (KVKK)",
+        href: "/admin/settings/consent",
+        icon: ShieldCheck,
+        description: "c15t CMP ayarları, çerez tarayıcı, WORM rıza zinciri ve RFC 3161 TSA mühürleme"
       }
     ]
   }

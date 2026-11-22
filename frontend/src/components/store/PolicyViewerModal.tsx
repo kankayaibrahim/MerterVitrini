@@ -25,6 +25,7 @@ interface PolicyViewerModalProps {
     | "privacy_policy"
     | "supplier_agreement"
     | "copyright_and_takedown"
+    | "cookie_policy"
     | "";
   readonly lang: string;
 }

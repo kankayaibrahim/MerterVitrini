@@ -43,6 +43,7 @@ type AppHandlers struct {
 	Chat                 *handlers.ChatHandler
 	Marketplace          *handlers.MarketplaceHandler
 	Mobile               *handlers.MobileHandler
+	ConsentCompliance    *handlers.ConsentComplianceHandler
 }
 
 // NewAppHandlers wires shared SOLID domain services into all HTTP handlers via constructor injection.
@@ -91,6 +92,7 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 			SupplierApps: supplierApps,
 			Marketplace:  marketplace,
 		}),
+		ConsentCompliance: handlers.NewConsentComplianceHandler(cfg),
 	}
 }
 
@@ -226,6 +228,11 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 
 	// Dynamic WebP Image Resizing (public read-only on-the-fly resize; bulk admin ops live in registerAdminRoutes)
 	mux.HandleFunc("GET /api/v1/store/images/resize", h.Image.ResizeImage)
+
+	// Tamper-Evident Cookie & Consent Management (c15t Runtime + KVKK/GDPR Proof Ledger)
+	mux.HandleFunc("GET /api/v1/store/consent/init", h.ConsentCompliance.GetStorefrontConsentInit)
+	mux.HandleFunc("POST /api/v1/store/consent/record", h.ConsentCompliance.RecordStorefrontConsent)
+	mux.HandleFunc("GET /api/v1/store/consent/receipt/{ref_id}", h.ConsentCompliance.GetStorefrontConsentReceipt)
 }
 
 func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Handler) http.Handler) {
@@ -383,6 +390,8 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("GET /api/v1/admin/notifications/digest-preview", protect(h.AdminNotifications.GetDigestPreview))
 	mux.Handle("POST /api/v1/admin/notifications/send-digest-now", protect(h.AdminNotifications.SendDigestNow))
 	mux.Handle("POST /api/v1/admin/notifications/test", protect(h.AdminNotifications.SendTestNotification))
+	mux.Handle("GET /api/v1/admin/notifications/exception-config", protect(h.AdminNotifications.GetExceptionAlertConfig))
+	mux.Handle("PUT /api/v1/admin/notifications/exception-config", protect(h.AdminNotifications.UpdateExceptionAlertConfig))
 
 	mux.Handle("GET /api/v1/admin/marketplace/sub-orders", protect(h.Marketplace.ListAdminSubOrders))
 	mux.Handle("GET /api/v1/admin/marketplace/payouts", protect(h.Marketplace.ListAdminPayoutRequests))
@@ -410,6 +419,24 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("DELETE /api/v1/admin/service-providers/{id}", protect(h.Marketplace.DeleteAdminServiceProvider))
 	mux.HandleFunc("GET /api/v1/feeds/b2b.xml", h.Marketplace.ExportB2BXmlFeed)
 	mux.HandleFunc("GET /api/v1/feeds/b2b.json", h.Marketplace.ExportB2BJsonFeed)
+
+	// Tamper-Evident Consent Compliance & RFC 3161 TSA Forensics Center
+	mux.Handle("GET /api/v1/admin/consent/overview", protect(h.ConsentCompliance.GetAdminOverview))
+	mux.Handle("GET /api/v1/admin/consent/records", protect(h.ConsentCompliance.ListAdminRecords))
+	mux.Handle("GET /api/v1/admin/consent/records/{id}/evidence", protect(h.ConsentCompliance.GetEvidencePack))
+	mux.Handle("GET /api/v1/admin/consent/export", protect(h.ConsentCompliance.ExportRecords))
+	mux.Handle("POST /api/v1/admin/consent/anchor", protect(h.ConsentCompliance.HandleAdminAnchorNow))
+	mux.Handle("POST /api/v1/admin/consent/verify", protect(h.ConsentCompliance.HandleAdminVerifyIntegrity))
+	mux.Handle("GET /api/v1/admin/consent/anchors", protect(h.ConsentCompliance.ListAdminAnchors))
+	mux.Handle("GET /api/v1/admin/consent/anchors/{id}/tsr", protect(h.ConsentCompliance.DownloadAnchorTSR))
+	mux.Handle("GET /api/v1/admin/consent/cookies", protect(h.ConsentCompliance.ListAdminCookies))
+	mux.Handle("POST /api/v1/admin/consent/cookies", protect(h.ConsentCompliance.UpsertAdminCookie))
+	mux.Handle("PUT /api/v1/admin/consent/cookies/{id}", protect(h.ConsentCompliance.UpsertAdminCookie))
+	mux.Handle("DELETE /api/v1/admin/consent/cookies/{id}", protect(h.ConsentCompliance.DeleteAdminCookie))
+	mux.Handle("GET /api/v1/admin/consent/settings", protect(h.ConsentCompliance.GetAdminSettings))
+	mux.Handle("PUT /api/v1/admin/consent/settings", protect(h.ConsentCompliance.UpdateAdminSettings))
+	mux.Handle("POST /api/v1/admin/consent/scan", protect(h.ConsentCompliance.RunAdminCookieScan))
+	mux.Handle("GET /api/v1/admin/consent/scans", protect(h.ConsentCompliance.ListAdminScanRuns))
 }
 
 func registerSupplierPortalRoutes(mux *http.ServeMux, h *AppHandlers, supplierMW func(http.Handler) http.Handler) {

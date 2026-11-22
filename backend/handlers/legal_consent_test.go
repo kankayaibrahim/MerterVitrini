@@ -15,6 +15,7 @@ func TestIsValidPolicyType(t *testing.T) {
 		"privacy_policy",
 		"supplier_agreement",
 		"copyright_and_takedown",
+		"cookie_policy",
 	}
 	for _, pt := range valid {
 		if !isValidPolicyType(pt) {

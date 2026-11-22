@@ -9,6 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@c15t/core": "^3.2.2",
+    "@c15t/integrations": "^3.2.2",
+    "@c15t/react": "^3.2.2",
+    "@c15t/translations": "^3.2.2",
     "@electric-sql/pglite": "^0.5.8",
     "@sentry/nextjs": "^10.55.0",
     "centrifuge": "^5.7.4",

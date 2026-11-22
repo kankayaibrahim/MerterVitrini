@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -63,12 +64,34 @@ func (w *DailyFileWriter) Close() error {
 	return nil
 }
 
+// ErrorHookFunc receives severe log, HTTP 5xx, and panic notifications without blocking callers.
+type ErrorHookFunc func(severity, source, message, stack string)
+
 var (
 	globalMainWriter  *DailyFileWriter
 	globalErrorWriter *DailyFileWriter
 	initOnce          sync.Once
 	activeLogDir      string
+	errorHookMu       sync.RWMutex
+	globalErrorHook   ErrorHookFunc
 )
+
+// RegisterErrorHook registers a centralized error monitor hook for panic & error-burst alerting.
+func RegisterErrorHook(fn ErrorHookFunc) {
+	errorHookMu.Lock()
+	defer errorHookMu.Unlock()
+	globalErrorHook = fn
+}
+
+// NotifyError dispatches an error or HTTP 5xx signal to the registered monitor hook asynchronously/non-blocking.
+func NotifyError(severity, source, message, stack string) {
+	errorHookMu.RLock()
+	hook := globalErrorHook
+	errorHookMu.RUnlock()
+	if hook != nil {
+		hook(severity, source, message, stack)
+	}
+}
 
 // ResolveLogDirectory selects the best writable logs directory across environments
 func ResolveLogDirectory(preferredDir string) string {
@@ -178,18 +201,25 @@ func Error(v ...any) {
 	msg := fmt.Sprint(v...)
 	logMessage("ERROR", "", msg)
 	logToErrorFile(msg, nil)
+	if !strings.HasPrefix(msg, "[API]") {
+		NotifyError("error", "logger", msg, "")
+	}
 }
 
 func Errorf(format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
 	logMessage("ERROR", "", msg)
 	logToErrorFile(msg, nil)
+	if !strings.HasPrefix(msg, "[API]") {
+		NotifyError("error", "logger", msg, "")
+	}
 }
 
 func Fatal(v ...any) {
 	msg := fmt.Sprint(v...)
 	logMessage("FATAL", "", msg)
 	logToErrorFile(msg, nil)
+	NotifyError("panic", "fatal", msg, "")
 	os.Exit(1)
 }
 
@@ -197,6 +227,7 @@ func Fatalf(format string, v ...any) {
 	msg := fmt.Sprintf(format, v...)
 	logMessage("FATAL", "", msg)
 	logToErrorFile(msg, nil)
+	NotifyError("panic", "fatal", msg, "")
 	os.Exit(1)
 }
 
@@ -205,6 +236,7 @@ func LogPanic(contextMsg string, r any, stack []byte) {
 	errText := fmt.Sprintf("CRITICAL PANIC: %s: %v\nStack Trace:\n%s", contextMsg, r, string(stack))
 	logMessage("PANIC", "[RECOVERED] ", errText)
 	logToErrorFile(errText, stack)
+	NotifyError("panic", contextMsg, fmt.Sprintf("%v", r), string(stack))
 }
 
 func logToErrorFile(msg string, stack []byte) {

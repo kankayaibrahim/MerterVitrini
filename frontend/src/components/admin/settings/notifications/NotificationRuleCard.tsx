@@ -2,6 +2,7 @@
 
 import React from "react";
 import {
+  AlertOctagon,
   Building2,
   Clock,
   FileBarChart2,
@@ -29,6 +30,8 @@ function renderRuleIcon(eventKey: string): React.ReactNode {
       return <ShoppingBag size={18} />;
     case "daily_digest":
       return <FileBarChart2 size={18} />;
+    case "system_exception_alert":
+      return <AlertOctagon size={18} />;
     default:
       return <Building2 size={18} />;
   }
@@ -42,6 +45,8 @@ function getRuleAccentClass(eventKey: string): string {
       return "bg-emerald-500/10 text-emerald-600";
     case "daily_digest":
       return "bg-violet-500/10 text-violet-600";
+    case "system_exception_alert":
+      return "bg-rose-500/10 text-rose-600";
     default:
       return "bg-amber-500/10 text-amber-600";
   }

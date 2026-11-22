@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { isStoreSessionImpersonated } from "@/app/storeAuth";
+import { getMeasurementConsentAllowed } from "@/components/consent/consentRuntime";
 
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30-minute sliding session window
 const ATTR_STORAGE_KEY = "mv_session_attribution";
@@ -13,10 +14,6 @@ type GtagFunction = (
   eventName: string,
   eventParams?: Record<string, unknown>
 ) => void;
-
-interface WindowWithGtag extends Window {
-  gtag?: GtagFunction;
-}
 
 interface SessionAttribution {
   session_id: string;
@@ -274,7 +271,7 @@ function sendAnalyticsPayload(
     headers,
     body: bodyStr,
     keepalive: true,
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 export function bridgeB2BEventToGtag(
@@ -282,9 +279,10 @@ export function bridgeB2BEventToGtag(
   params: Record<string, unknown>
 ): void {
   if (typeof window === "undefined") return;
+  if (!getMeasurementConsentAllowed()) return;
   if (isStoreSessionImpersonated()) return;
   if (isNonStorefrontPath(window.location.pathname)) return;
-  const win = window as WindowWithGtag;
+  const win = window as unknown as { gtag?: GtagFunction };
   if (typeof win.gtag !== "function") return;
   try {
     win.gtag("event", gaEventName, params);

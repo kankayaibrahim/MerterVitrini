@@ -11,8 +11,10 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"mertervitrini/backend/config"
@@ -627,6 +629,44 @@ func fetchAttributeFacets(ctx context.Context, sqlBase string, baseArgs []any) m
 	return attributeStats
 }
 
+type catalogFacetCacheEntry struct {
+	facets    map[string]any
+	expiresAt time.Time
+}
+
+var (
+	catalogFacetsMu    sync.RWMutex
+	catalogFacetsCache = make(map[string]catalogFacetCacheEntry)
+)
+
+const (
+	catalogFacetCacheTTL        = 30 * time.Second
+	catalogFacetCacheMaxEntries = 256
+)
+
+func buildCatalogFacetCacheKey(query url.Values, displayCurrency string) string {
+	keys := make([]string, 0, len(query))
+	for k := range query {
+		if k == "limit" || k == "offset" || k == "sort_by" || k == "lang" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString("cur=")
+	b.WriteString(displayCurrency)
+	for _, k := range keys {
+		vals := append([]string(nil), query[k]...)
+		sort.Strings(vals)
+		b.WriteByte('|')
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(strings.Join(vals, ","))
+	}
+	return b.String()
+}
+
 func fetchCatalogFacets(ctx context.Context, sqlBase string, baseArgs []any) map[string]any {
 	return map[string]any{
 		"brands":     fetchBrandFacets(ctx, sqlBase, baseArgs),
@@ -634,6 +674,37 @@ func fetchCatalogFacets(ctx context.Context, sqlBase string, baseArgs []any) map
 		"seasons":    fetchStringFacets(ctx, "SELECT p.season, COUNT(*)"+sqlBase+" GROUP BY p.season", baseArgs),
 		"attributes": fetchAttributeFacets(ctx, sqlBase, baseArgs),
 	}
+}
+
+func fetchCatalogFacetsCached(ctx context.Context, cacheKey, sqlBase string, baseArgs []any) map[string]any {
+	now := time.Now()
+	catalogFacetsMu.RLock()
+	entry, ok := catalogFacetsCache[cacheKey]
+	catalogFacetsMu.RUnlock()
+	if ok && now.Before(entry.expiresAt) {
+		return entry.facets
+	}
+
+	facetCtx, facetCancel := context.WithTimeout(ctx, 4*time.Second)
+	defer facetCancel()
+
+	facets := fetchCatalogFacets(facetCtx, sqlBase, baseArgs)
+	if facetCtx.Err() == nil {
+		catalogFacetsMu.Lock()
+		if len(catalogFacetsCache) >= catalogFacetCacheMaxEntries {
+			for k, v := range catalogFacetsCache {
+				if now.After(v.expiresAt) || len(catalogFacetsCache) >= catalogFacetCacheMaxEntries {
+					delete(catalogFacetsCache, k)
+				}
+			}
+		}
+		catalogFacetsCache[cacheKey] = catalogFacetCacheEntry{
+			facets:    facets,
+			expiresAt: time.Now().Add(catalogFacetCacheTTL),
+		}
+		catalogFacetsMu.Unlock()
+	}
+	return facets
 }
 
 // ListProducts queries the active storefront products with dynamic search, filters, pagination, and sorting
@@ -647,6 +718,9 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	offset := 0
 	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 {
 		limit = l
+	}
+	if limit > 100 {
+		limit = 100
 	}
 	if o, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && o >= 0 {
 		offset = o
@@ -667,7 +741,7 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 		)
 	END`
 
-	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
 	defer cancel()
 
 	sqlBase, args, argIndex := buildCatalogFilterSQL(r.URL.Query(), displayRate, sqlPriceInTRY)
@@ -709,7 +783,7 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 
 	fetchCatalogSiblingVariants(ctx, products)
 	fetchCatalogBrandProfiles(ctx, products)
-	facets := fetchCatalogFacets(ctx, sqlBase, args[:argIndex-1])
+	facets := fetchCatalogFacetsCached(ctx, buildCatalogFacetCacheKey(r.URL.Query(), displayCurrency), sqlBase, args[:argIndex-1])
 
 	queryParams := r.URL.Query()
 	if searchText := strings.TrimSpace(queryParams.Get("q")); searchText != "" && offset == 0 && shouldRecordStoreBrandEvent(r) {
