@@ -18,6 +18,8 @@ import (
 	"mertervitrini/backend/pkg/mailer"
 	"mertervitrini/backend/pkg/phoneutil"
 	"mertervitrini/backend/pkg/safe"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type InquiryHandler struct {
@@ -96,6 +98,29 @@ func validateInquiryRequest(req *models.B2bInquiry) error {
 	return nil
 }
 
+func resolveInquiryLocationNames(ctx context.Context, raw *inquiryPayload) (countryName, stateName, cityName string) {
+	countryID := strings.TrimSpace(raw.CountryID)
+	if countryID == "" || db.Pool == nil {
+		return "", "", ""
+	}
+	if _, name, err := resolveCountryLocation(ctx, countryID); err == nil {
+		countryName = name
+	}
+	stateID := derefTrimmed(raw.StateID)
+	if stateID == "" {
+		return countryName, "", ""
+	}
+	if name, err := validateAndResolveState(ctx, countryID, stateID); err == nil {
+		stateName = name
+	}
+	if cityID := derefTrimmed(raw.CityID); cityID != "" {
+		if name, err := validateAndResolveCity(ctx, stateID, cityID); err == nil {
+			cityName = name
+		}
+	}
+	return countryName, stateName, cityName
+}
+
 func resolveOptionalInquiryAddress(
 	ctx context.Context,
 	raw *inquiryPayload,
@@ -111,23 +136,7 @@ func resolveOptionalInquiryAddress(
 		return "", errors.New("Adres notu en fazla 500 karakter olabilir")
 	}
 
-	var countryName, stateName, cityName string
-	countryID := strings.TrimSpace(raw.CountryID)
-	if countryID != "" && db.Pool != nil {
-		if _, name, err := resolveCountryLocation(ctx, countryID); err == nil {
-			countryName = name
-		}
-		if stateID := derefTrimmed(raw.StateID); stateID != "" {
-			if name, err := validateAndResolveState(ctx, countryID, stateID); err == nil {
-				stateName = name
-			}
-			if cityID := derefTrimmed(raw.CityID); cityID != "" {
-				if name, err := validateAndResolveCity(ctx, stateID, cityID); err == nil {
-					cityName = name
-				}
-			}
-		}
-	}
+	countryName, stateName, cityName := resolveInquiryLocationNames(ctx, raw)
 
 	return FormatCanonicalOrderAddress(CanonicalAddressParts{
 		RecipientName: fullName,
@@ -152,43 +161,34 @@ type inquiryCreationResult struct {
 	SupplierOrders []models.SupplierDirectOrderSummary
 }
 
-func saveInquiryAndDirectSupplierOrders(ctx context.Context, req *models.B2bInquiry, deliveryAddr, requestedCustomerCurrency string) (inquiryCreationResult, error) {
-	var empty inquiryCreationResult
-	tx, err := db.Pool.Begin(ctx)
-	if err != nil {
-		return empty, fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
+type directInquiryOrderInput struct {
+	Req          *models.B2bInquiry
+	OrderNumber  string
+	DeliveryAddr string
+	Summary      orderCurrencySummary
+	OrderItems   []orderCartItem
+}
 
-	inquiryQuery := `
-		INSERT INTO catalog.store_inquiries (full_name, company, phone, email, message)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id`
-
-	var inquiryID string
-	err = tx.QueryRow(ctx, inquiryQuery, req.FullName, req.Company, req.Phone, req.Email, req.Message).Scan(&inquiryID)
-	if err != nil {
-		return empty, fmt.Errorf("insert inquiry: %w", err)
-	}
-
-	itemQuery := `
+func insertInquiryOrderItems(ctx context.Context, tx pgx.Tx, inquiryID string, items []models.InquiryItem) ([]orderCartItem, error) {
+	const itemQuery = `
 		INSERT INTO catalog.store_inquiry_items (inquiry_id, product_id, title, custom_sku, quantity, price)
 		VALUES ($1, $2, $3, $4, $5, $6)`
 
-	var orderItems []orderCartItem
-	for _, item := range req.Items {
-		var brandID, seriesRatio, prodCurrency, imgURL string
+	orderItems := make([]orderCartItem, 0, len(items))
+	for _, item := range items {
+		var brandID, seriesRatio, prodCurrency, prodSKU, imgURL string
 		var dbPrice float64
 		_ = tx.QueryRow(ctx, `
 			SELECT 
 				COALESCE(p.brand_id::text, ''),
 				COALESCE(p.series_ratio, ''),
 				COALESCE(NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY'),
+				COALESCE(p.sku, ''),
 				p.price,
 				COALESCE((SELECT image_url FROM catalog.product_images WHERE product_id = p.id ORDER BY sort_order ASC, is_cover DESC LIMIT 1), '/placeholder.png')
 			FROM catalog.products p
 			WHERE p.id = $1
-		`, item.ProductID).Scan(&brandID, &seriesRatio, &prodCurrency, &dbPrice, &imgURL)
+		`, item.ProductID).Scan(&brandID, &seriesRatio, &prodCurrency, &prodSKU, &dbPrice, &imgURL)
 
 		effectivePrice := item.Price
 		if effectivePrice <= 0 {
@@ -196,9 +196,8 @@ func saveInquiryAndDirectSupplierOrders(ctx context.Context, req *models.B2bInqu
 		}
 		itemCurrency := normalizeOrderCurrencyCode(prodCurrency)
 
-		_, err = tx.Exec(ctx, itemQuery, inquiryID, item.ProductID, item.Title, item.CustomSku, item.Quantity, effectivePrice)
-		if err != nil {
-			return empty, fmt.Errorf("insert inquiry item: %w", err)
+		if _, err := tx.Exec(ctx, itemQuery, inquiryID, item.ProductID, item.Title, item.CustomSku, item.Quantity, effectivePrice); err != nil {
+			return nil, fmt.Errorf("insert inquiry item: %w", err)
 		}
 
 		orderItems = append(orderItems, orderCartItem{
@@ -207,58 +206,88 @@ func saveInquiryAndDirectSupplierOrders(ctx context.Context, req *models.B2bInqu
 			Quantity:    item.Quantity,
 			Title:       item.Title,
 			CustomSku:   item.CustomSku,
+			SupplierSku: prodSKU,
 			Price:       effectivePrice,
 			Currency:    itemCurrency,
 			SeriesRatio: seriesRatio,
 			ImageUrl:    imgURL,
 		})
 	}
+	return orderItems, nil
+}
 
-	rates := loadLatestExchangeRatesMap(ctx)
-	summary := computeOrderCurrencySummary(orderItems, requestedCustomerCurrency, rates)
-	currencyTotalsJSON, _ := json.Marshal(summary.CurrencyTotals)
-
-	// Create a direct B2B order record and route directly to the supplier(s)
-	orderNumber, err := generateNextOrderNumber(ctx, tx)
-	if err != nil {
-		orderNumber = fmt.Sprintf("INQ-%s", time.Now().Format("20060102-150405"))
-	}
-
-	companyStr := ""
-	if req.Company != nil {
-		companyStr = strings.TrimSpace(*req.Company)
-	}
-	notesStr := ""
-	if req.Message != nil {
-		notesStr = strings.TrimSpace(*req.Message)
-	}
-	addrStr := strings.TrimSpace(deliveryAddr)
-	if addrStr == "" && notesStr != "" {
+func createDirectSupplierOrderFromInquiry(ctx context.Context, tx pgx.Tx, in directInquiryOrderInput) []models.SupplierDirectOrderSummary {
+	currencyTotalsJSON, _ := json.Marshal(in.Summary.CurrencyTotals)
+	companyStr := derefTrimmed(in.Req.Company)
+	notesStr := derefTrimmed(in.Req.Message)
+	addrStr := strings.TrimSpace(in.DeliveryAddr)
+	if addrStr == "" {
 		addrStr = notesStr
 	}
 
 	var orderID string
-	err = tx.QueryRow(ctx, `
+	err := tx.QueryRow(ctx, `
 		INSERT INTO catalog.orders (
 			order_number, user_id, total_amount, currency, customer_currency, customer_total_amount, total_amount_try, currency_totals,
 			payment_method, order_status, billing_address, delivery_address, customer_name, customer_company, customer_phone, customer_email, notes
 		)
 		VALUES ($1, NULL, $2, $3, $4, $5, $6, $7::jsonb, 'DIRECT_SUPPLIER', 'PENDING_PAYMENT', $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id
-	`, orderNumber, summary.OrderTotalAmount, summary.OrderCurrency, summary.CustomerCurrency, summary.CustomerTotalAmount, summary.TotalAmountTRY, string(currencyTotalsJSON), addrStr, addrStr, req.FullName, companyStr, req.Phone, req.Email, notesStr).Scan(&orderID)
-
-	var supplierOrders []models.SupplierDirectOrderSummary
-	if err == nil && orderID != "" {
-		for _, oi := range orderItems {
-			_, _ = tx.Exec(ctx, `
-				INSERT INTO catalog.order_items (order_id, product_id, product_name, product_sku, quantity, price_at_purchase, currency, image_url_at_purchase)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			`, orderID, oi.ProductID, oi.Title, oi.CustomSku, oi.Quantity, oi.Price, normalizeOrderCurrencyCode(oi.Currency), oi.ImageUrl)
+	`, in.OrderNumber, in.Summary.OrderTotalAmount, in.Summary.OrderCurrency, in.Summary.CustomerCurrency, in.Summary.CustomerTotalAmount, in.Summary.TotalAmountTRY, string(currencyTotalsJSON), addrStr, addrStr, in.Req.FullName, companyStr, in.Req.Phone, in.Req.Email, notesStr).Scan(&orderID)
+	if err != nil || orderID == "" {
+		if err != nil {
+			log.Printf("[STORE INQUIRY] Direct order creation warning: %v", err)
 		}
-		supplierOrders, _ = splitOrderIntoSupplierSubOrdersWithSummary(ctx, tx, orderID, orderNumber, orderItems)
-	} else if err != nil {
-		log.Printf("[STORE INQUIRY] Direct order creation warning: %v", err)
+		return nil
 	}
+
+	for _, oi := range in.OrderItems {
+		_, _ = tx.Exec(ctx, `
+			INSERT INTO catalog.order_items (order_id, product_id, product_name, product_sku, quantity, price_at_purchase, currency, image_url_at_purchase)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, orderID, oi.ProductID, oi.Title, oi.CustomSku, oi.Quantity, oi.Price, normalizeOrderCurrencyCode(oi.Currency), oi.ImageUrl)
+	}
+	supplierOrders, _ := splitOrderIntoSupplierSubOrdersWithSummary(ctx, tx, orderID, in.OrderNumber, in.OrderItems)
+	return supplierOrders
+}
+
+func saveInquiryAndDirectSupplierOrders(ctx context.Context, req *models.B2bInquiry, deliveryAddr, requestedCustomerCurrency string) (inquiryCreationResult, error) {
+	var empty inquiryCreationResult
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return empty, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var inquiryID string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO catalog.store_inquiries (full_name, company, phone, email, message)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id`, req.FullName, req.Company, req.Phone, req.Email, req.Message).Scan(&inquiryID)
+	if err != nil {
+		return empty, fmt.Errorf("insert inquiry: %w", err)
+	}
+
+	orderItems, err := insertInquiryOrderItems(ctx, tx, inquiryID, req.Items)
+	if err != nil {
+		return empty, err
+	}
+
+	rates := loadLatestExchangeRatesMap(ctx)
+	summary := computeOrderCurrencySummary(orderItems, requestedCustomerCurrency, rates)
+
+	orderNumber, err := generateNextOrderNumber(ctx, tx)
+	if err != nil {
+		orderNumber = fmt.Sprintf("INQ-%s", time.Now().Format("20060102-150405"))
+	}
+
+	supplierOrders := createDirectSupplierOrderFromInquiry(ctx, tx, directInquiryOrderInput{
+		Req:          req,
+		OrderNumber:  orderNumber,
+		DeliveryAddr: deliveryAddr,
+		Summary:      summary,
+		OrderItems:   orderItems,
+	})
 
 	if err = tx.Commit(ctx); err != nil {
 		return empty, fmt.Errorf("commit transaction: %w", err)
@@ -297,7 +326,7 @@ func buildInquiryWhatsAppURL(inquiryID string, req *models.B2bInquiry, res inqui
 	messageLines = append(messageLines, "", "*🛍️ Sipariş Listesi:*")
 
 	for idx, item := range res.OrderItems {
-		messageLines = append(messageLines, fmt.Sprintf("%d. *%s* (SKU: %s)", idx+1, item.Title, item.CustomSku))
+		messageLines = append(messageLines, fmt.Sprintf("%d. *%s* (SKU: %s)", idx+1, item.Title, formatDualOrderSKU(item.CustomSku, item.SupplierSku)))
 		if item.Price <= 0 {
 			messageLines = append(messageLines, fmt.Sprintf("    adet/seri: %d (Fiyat: WhatsApp üzerinden bildirilecek)", item.Quantity))
 		} else {

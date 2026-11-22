@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/xuri/excelize/v2"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/middleware"
@@ -275,6 +277,7 @@ func (h *SupplierPortalHandler) DownloadExcelTemplate(w http.ResponseWriter, r *
 		"Görsel URL'leri (Virgülle Ayırın)",
 		"Kısa Açıklama",
 		"Detaylı Açıklama",
+		"Tedarikçi Ürün / Model Kodu (Opsiyonel - Aynı Kod Varsa Güncellenir)",
 	}
 
 	headerStyle, _ := f.NewStyle(&excelize.Style{
@@ -306,6 +309,7 @@ func (h *SupplierPortalHandler) DownloadExcelTemplate(w http.ResponseWriter, r *
 		"https://mertervitrini.com.tr/placeholder.png",
 		"Astarlı, birinci sınıf Merter üretimi toptan kaşe kaban.",
 		"İhracata uygun kalıp, kruvaze yaka, kemerli kadın kaşe kaban serisi.",
+		"KBN-2026-01",
 	}
 	for idx, val := range sampleRow1 {
 		colName, _ := excelize.ColumnNumberToName(idx + 1)
@@ -438,6 +442,24 @@ func resolveOrInsertFabricID(ctx context.Context, rawFabric string) *string {
 	return nil
 }
 
+func parseSingleVariantToken(token string) (models.SupplierProductVariantInput, bool) {
+	if token == "" {
+		return models.SupplierProductVariantInput{}, false
+	}
+	kv := strings.SplitN(token, ":", 2)
+	size := strings.TrimSpace(kv[0])
+	if size == "" {
+		return models.SupplierProductVariantInput{}, false
+	}
+	stock := 10
+	if len(kv) == 2 {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(kv[1])); err == nil && parsed >= 0 {
+			stock = parsed
+		}
+	}
+	return models.SupplierProductVariantInput{Size: size, Stock: stock}, true
+}
+
 func parseVariantsCell(raw string) ([]models.SupplierProductVariantInput, int) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -458,24 +480,9 @@ func parseVariantsCell(raw string) ([]models.SupplierProductVariantInput, int) {
 	variants := make([]models.SupplierProductVariantInput, 0, len(parts))
 	totalStock := 0
 	for _, p := range parts {
-		token := strings.TrimSpace(p)
-		if token == "" {
-			continue
-		}
-		kv := strings.SplitN(token, ":", 2)
-		size := strings.TrimSpace(kv[0])
-		stock := 10
-		if len(kv) == 2 {
-			if parsed, err := strconv.Atoi(strings.TrimSpace(kv[1])); err == nil && parsed >= 0 {
-				stock = parsed
-			}
-		}
-		if size != "" {
-			variants = append(variants, models.SupplierProductVariantInput{
-				Size:  size,
-				Stock: stock,
-			})
-			totalStock += stock
+		if variant, ok := parseSingleVariantToken(strings.TrimSpace(p)); ok {
+			variants = append(variants, variant)
+			totalStock += variant.Stock
 		}
 	}
 	if len(variants) == 0 {
@@ -522,95 +529,238 @@ func parsePriceValue(raw string) float64 {
 	return val
 }
 
-func insertSingleImportedRow(
-	ctx context.Context,
-	brandID string,
-	rowIdx int,
-	row []string,
-	cats categoryLookupMap,
-	contentAccepted bool,
-	contentVersion int,
-) (string, error) {
+type excelImportSession struct {
+	BrandID         string
+	SKUColIdx       int
+	Cats            categoryLookupMap
+	ContentAccepted bool
+	ContentVersion  int
+}
+
+type importedSpreadsheetItem struct {
+	BrandID         string
+	RowIdx          int
+	Title           string
+	SupplierSKU     string
+	CatID           string
+	Price           float64
+	Currency        string
+	PackingRatio    string
+	SeriesRatio     string
+	MOQ             int
+	Variants        []models.SupplierProductVariantInput
+	TotalStock      int
+	ColorID         *string
+	FabricID        *string
+	Season          string
+	Gender          string
+	Images          []string
+	ShortDesc       string
+	Desc            string
+	ContentAccepted bool
+	ContentVersion  int
+}
+
+func detectSupplierSKUColumn(headerRow []string) int {
+	for idx, raw := range headerRow {
+		h := strings.ToLower(strings.TrimSpace(raw))
+		if strings.Contains(h, "model kodu") || strings.Contains(h, "ürün kodu") || strings.Contains(h, "urun kodu") || strings.Contains(h, "sku") {
+			return idx
+		}
+	}
+	return 15
+}
+
+func parseImportedSpreadsheetRow(ctx context.Context, sess excelImportSession, rowIdx int, row []string) (*importedSpreadsheetItem, error) {
 	title := cellAt(row, 0)
-	catRaw := cellAt(row, 1)
 	price := parsePriceValue(cellAt(row, 2))
 	if title == "" || price <= 0 {
-		return "", fmt.Errorf("Satır %d: Ürün başlığı ve geçerli satış fiyatı zorunludur", rowIdx)
+		return nil, fmt.Errorf("Satır %d: Ürün başlığı ve geçerli satış fiyatı zorunludur", rowIdx)
 	}
 
-	catID := cats.resolve(catRaw)
+	catID := sess.Cats.resolve(cellAt(row, 1))
 	if catID == "" {
-		return "", fmt.Errorf("Satır %d: Geçerli bir kategori bulunamadı", rowIdx)
+		return nil, fmt.Errorf("Satır %d: Geçerli bir kategori bulunamadı", rowIdx)
 	}
 
 	currency := strings.ToUpper(cellAt(row, 3))
 	if currency != "USD" && currency != "EUR" && currency != "TRY" {
 		currency = "TRY"
 	}
-	packingRatio := cellAt(row, 4)
-	seriesRatio := cellAt(row, 5)
+
 	moq, _ := strconv.Atoi(cellAt(row, 6))
 	if moq <= 0 {
 		moq = 1
 	}
 
 	variants, totalStock := parseVariantsCell(cellAt(row, 7))
-	colorID := resolveOrInsertColorID(ctx, cellAt(row, 8))
-	fabricID := resolveOrInsertFabricID(ctx, cellAt(row, 9))
-	season := cellAt(row, 10)
-	gender := cellAt(row, 11)
-	imagesRaw := cellAt(row, 12)
-	shortDesc := cellAt(row, 13)
-	desc := cellAt(row, 14)
-
 	images := make([]string, 0)
-	for _, part := range strings.Split(imagesRaw, ",") {
+	for _, part := range strings.Split(cellAt(row, 12), ",") {
 		u := strings.TrimSpace(part)
 		if u != "" && !strings.HasSuffix(u, "/placeholder.png") {
 			images = append(images, u)
 		}
 	}
 
-	tx, err := db.Pool.Begin(ctx)
-	if err != nil {
-		return "", fmt.Errorf("Satır %d: Veritabanı işlemi başlatılamadı", rowIdx)
-	}
-	defer tx.Rollback(ctx)
+	return &importedSpreadsheetItem{
+		BrandID:         sess.BrandID,
+		RowIdx:          rowIdx,
+		Title:           title,
+		SupplierSKU:     normalizeSupplierSKU(cellAt(row, sess.SKUColIdx)),
+		CatID:           catID,
+		Price:           price,
+		Currency:        currency,
+		PackingRatio:    cellAt(row, 4),
+		SeriesRatio:     cellAt(row, 5),
+		MOQ:             moq,
+		Variants:        variants,
+		TotalStock:      totalStock,
+		ColorID:         resolveOrInsertColorID(ctx, cellAt(row, 8)),
+		FabricID:        resolveOrInsertFabricID(ctx, cellAt(row, 9)),
+		Season:          cellAt(row, 10),
+		Gender:          cellAt(row, 11),
+		Images:          images,
+		ShortDesc:       cellAt(row, 13),
+		Desc:            cellAt(row, 14),
+		ContentAccepted: sess.ContentAccepted,
+		ContentVersion:  sess.ContentVersion,
+	}, nil
+}
 
-	sourceProductID := fmt.Sprintf("XLS-%d-%d", time.Now().UnixNano(), rowIdx)
+func updateExistingImportedProductTx(ctx context.Context, tx pgx.Tx, existingID string, item *importedSpreadsheetItem) (string, error) {
+	var updatedSlug string
+	err := tx.QueryRow(ctx, `
+		UPDATE catalog.products SET
+			title = $1, short_description = $2, description = $3,
+			category_id = $4, color_id = COALESCE($5, color_id), fabric_id = COALESCE($6, fabric_id),
+			gender = NULLIF($7, ''), season = NULLIF($8, ''),
+			price = $9, currency = $10, packing_ratio = NULLIF($11, ''), series_ratio = NULLIF($12, ''),
+			minimum_order_quantity = $13, stock = $14,
+			is_active = true, is_archived = false, archived_at = NULL, deactivated_at = NULL,
+			sku = COALESCE(NULLIF(BTRIM($15), ''), sku),
+			content_responsibility_accepted = CASE WHEN $16 THEN true ELSE content_responsibility_accepted END,
+			content_responsibility_accepted_at = CASE WHEN $16 THEN CURRENT_TIMESTAMP ELSE content_responsibility_accepted_at END,
+			content_responsibility_version = CASE WHEN $16 THEN $17::integer ELSE content_responsibility_version END,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = $18 AND brand_id = $19
+		RETURNING coalesce(slug, '')
+	`,
+		item.Title, item.ShortDesc, item.Desc,
+		item.CatID, item.ColorID, item.FabricID,
+		item.Gender, item.Season,
+		item.Price, item.Currency, item.PackingRatio, item.SeriesRatio,
+		item.MOQ, item.TotalStock, item.SupplierSKU,
+		item.ContentAccepted, item.ContentVersion,
+		existingID, item.BrandID,
+	).Scan(&updatedSlug)
+	if err != nil {
+		return "", fmt.Errorf("Satır %d (%s): Güncelleme hatası", item.RowIdx, item.Title)
+	}
+
+	upsertSupplierProductTranslations(ctx, tx, existingID, item.Title, item.ShortDesc, item.Desc, nil)
+	updateProductVariants(ctx, tx, existingID, item.Variants)
+	if len(item.Images) > 0 {
+		updateProductImages(ctx, tx, existingID, item.Images)
+	}
+	return updatedSlug, nil
+}
+
+func insertNewImportedProductTx(ctx context.Context, tx pgx.Tx, item *importedSpreadsheetItem) (string, error) {
+	sourceProductID := fmt.Sprintf("XLS-%d-%d", time.Now().UnixNano(), item.RowIdx)
 	var newProductID, newSlug string
-	err = tx.QueryRow(ctx, `
+	err := tx.QueryRow(ctx, `
 		INSERT INTO catalog.products (
-			brand_id, feed_id, source_product_id, title, short_description, description,
+			brand_id, feed_id, source_product_id, sku, title, short_description, description,
 			category_id, color_id, fabric_id, gender, season,
 			buying_price, price, currency, packing_ratio, series_ratio,
 			minimum_order_quantity, stock, is_active,
 			content_responsibility_accepted, content_responsibility_accepted_at, content_responsibility_version
 		) VALUES (
-			$1, NULL, $2, $3, $4, $5,
-			$6, $7, $8, $9, $10,
-			0, $11, $12, $13, $14,
-			$15, $16, true,
-			$17, CASE WHEN $17 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $17 THEN $18::integer ELSE NULL::integer END
+			$1, NULL, $2, NULLIF(BTRIM($3), ''), $4, $5, $6,
+			$7, $8, $9, $10, $11,
+			0, $12, $13, $14, $15,
+			$16, $17, true,
+			$18, CASE WHEN $18 THEN CURRENT_TIMESTAMP ELSE NULL END, CASE WHEN $18 THEN $19::integer ELSE NULL::integer END
 		) RETURNING id::text, coalesce(slug, '')
 	`,
-		brandID, sourceProductID, title, shortDesc, desc,
-		catID, colorID, fabricID, gender, season,
-		price, currency, packingRatio, seriesRatio,
-		moq, totalStock, contentAccepted, contentVersion,
+		item.BrandID, sourceProductID, item.SupplierSKU, item.Title, item.ShortDesc, item.Desc,
+		item.CatID, item.ColorID, item.FabricID, item.Gender, item.Season,
+		item.Price, item.Currency, item.PackingRatio, item.SeriesRatio,
+		item.MOQ, item.TotalStock, item.ContentAccepted, item.ContentVersion,
 	).Scan(&newProductID, &newSlug)
 	if err != nil {
-		return "", fmt.Errorf("Satır %d (%s): Kayıt hatası", rowIdx, title)
+		return "", fmt.Errorf("Satır %d (%s): Kayıt hatası", item.RowIdx, item.Title)
 	}
 
-	upsertSupplierProductTranslations(ctx, tx, newProductID, title, shortDesc, desc, nil)
-	insertProductVariants(ctx, tx, newProductID, sourceProductID, variants, totalStock)
-	insertProductImages(ctx, tx, newProductID, images)
-
-	if commitErr := tx.Commit(ctx); commitErr != nil {
-		return "", fmt.Errorf("Satır %d: Onay hatası", rowIdx)
-	}
+	upsertSupplierProductTranslations(ctx, tx, newProductID, item.Title, item.ShortDesc, item.Desc, nil)
+	insertProductVariants(ctx, tx, newProductID, sourceProductID, item.Variants, item.TotalStock)
+	insertProductImages(ctx, tx, newProductID, item.Images)
 	return newSlug, nil
+}
+
+func upsertSingleImportedRow(
+	ctx context.Context,
+	sess excelImportSession,
+	rowIdx int,
+	row []string,
+) (slug string, updated bool, err error) {
+	item, parseErr := parseImportedSpreadsheetRow(ctx, sess, rowIdx, row)
+	if parseErr != nil {
+		return "", false, parseErr
+	}
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return "", false, fmt.Errorf("Satır %d: Veritabanı işlemi başlatılamadı", rowIdx)
+	}
+	defer tx.Rollback(ctx)
+
+	var existingID, existingSlug string
+	if item.SupplierSKU != "" {
+		lookupErr := tx.QueryRow(ctx, `
+			SELECT id::text, COALESCE(slug, '')
+			FROM catalog.products
+			WHERE brand_id = $1
+			  AND UPPER(BTRIM(sku)) = UPPER($2)
+			  AND COALESCE(is_archived, false) = false
+			ORDER BY (feed_id IS NULL) DESC, created_at ASC
+			LIMIT 1
+		`, sess.BrandID, item.SupplierSKU).Scan(&existingID, &existingSlug)
+		if lookupErr != nil && !errors.Is(lookupErr, pgx.ErrNoRows) {
+			return "", false, fmt.Errorf("Satır %d (%s): Ürün kodu kontrol hatası", rowIdx, item.Title)
+		}
+	}
+
+	if existingID != "" {
+		updatedSlug, updErr := updateExistingImportedProductTx(ctx, tx, existingID, item)
+		if updErr != nil {
+			return "", false, updErr
+		}
+		if commitErr := tx.Commit(ctx); commitErr != nil {
+			return "", false, fmt.Errorf("Satır %d: Onay hatası", rowIdx)
+		}
+		return updatedSlug, true, nil
+	}
+
+	newSlug, insErr := insertNewImportedProductTx(ctx, tx, item)
+	if insErr != nil {
+		return "", false, insErr
+	}
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return "", false, fmt.Errorf("Satır %d: Onay hatası", rowIdx)
+	}
+	return newSlug, false, nil
+}
+
+func buildExcelImportSummaryMessage(importedCount, updatedCount int) string {
+	switch {
+	case importedCount > 0 && updatedCount > 0:
+		return fmt.Sprintf("%d yeni ürün eklendi, %d mevcut ürün model kodu eşleşmesiyle güncellendi.", importedCount, updatedCount)
+	case updatedCount > 0:
+		return fmt.Sprintf("%d mevcut ürün model kodu eşleşmesiyle güncellendi.", updatedCount)
+	default:
+		return fmt.Sprintf("%d ürün başarıyla kataloğunuza eklendi.", importedCount)
+	}
 }
 
 // ImportProductsFromExcel handles POST /api/v1/supplier/products/import-excel
@@ -652,20 +802,41 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
 	defer cancel()
 	ensureProductArchiveSchema(ctx)
-	cats := loadCategoryLookupMap(ctx)
-	contentVer := resolveActivePolicyVersion(ctx, "supplier_agreement")
+	ensureSupplierSkuUniqueIndex(ctx)
+
+	sess := excelImportSession{
+		BrandID:         claims.BrandID,
+		SKUColIdx:       detectSupplierSKUColumn(rows[0]),
+		Cats:            loadCategoryLookupMap(ctx),
+		ContentAccepted: declAccepted,
+		ContentVersion:  resolveActivePolicyVersion(ctx, "supplier_agreement"),
+	}
 
 	importedCount := 0
+	updatedCount := 0
 	skippedCount := 0
 	rowErrors := make([]string, 0)
-	importedSlugs := make([]string, 0)
+	affectedSlugs := make([]string, 0)
+	seenSKUs := make(map[string]int)
 
 	for i := 1; i < len(rows); i++ {
 		row := rows[i]
 		if len(row) == 0 || cellAt(row, 0) == "" {
 			continue
 		}
-		slug, err := insertSingleImportedRow(ctx, claims.BrandID, i+1, row, cats, declAccepted, contentVer)
+		normSKU := strings.ToUpper(normalizeSupplierSKU(cellAt(row, sess.SKUColIdx)))
+		if normSKU != "" {
+			if firstRow, dup := seenSKUs[normSKU]; dup {
+				skippedCount++
+				if len(rowErrors) < 15 {
+					rowErrors = append(rowErrors, fmt.Sprintf("Satır %d: Aynı dosya içinde mükerrer ürün kodu (%s) — ilk olarak satır %d işlendi", i+1, normSKU, firstRow))
+				}
+				continue
+			}
+			seenSKUs[normSKU] = i + 1
+		}
+
+		slug, wasUpdated, err := upsertSingleImportedRow(ctx, sess, i+1, row)
 		if err != nil {
 			skippedCount++
 			if len(rowErrors) < 15 {
@@ -673,23 +844,28 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 			}
 			continue
 		}
-		importedCount++
+		if wasUpdated {
+			updatedCount++
+		} else {
+			importedCount++
+		}
 		if strings.TrimSpace(slug) != "" {
-			importedSlugs = append(importedSlugs, slug)
+			affectedSlugs = append(affectedSlugs, slug)
 		}
 	}
 
-	if len(importedSlugs) > 0 {
-		triggerProductMVRefreshAndIndexNow(importedSlugs, IndexNowSubmissionMeta{
+	totalChanged := importedCount + updatedCount
+	if len(affectedSlugs) > 0 {
+		triggerProductMVRefreshAndIndexNow(affectedSlugs, IndexNowSubmissionMeta{
 			TriggerSource: "supplier_excel",
-			SourceLabel:   fmt.Sprintf("Tedarikçi Excel Aktarımı (%d yeni ürün)", len(importedSlugs)),
-			ProductCount:  len(importedSlugs),
+			SourceLabel:   fmt.Sprintf("Tedarikçi Excel Aktarımı (%d yeni, %d güncellenen)", importedCount, updatedCount),
+			ProductCount:  len(affectedSlugs),
 		})
-	} else if importedCount > 0 {
+	} else if totalChanged > 0 {
 		triggerProductMVRefresh()
 	}
 
-	if importedCount > 0 && strings.TrimSpace(r.FormValue("content_responsibility_accepted")) != "" {
+	if totalChanged > 0 && strings.TrimSpace(r.FormValue("content_responsibility_accepted")) != "" {
 		recordLegalConsentAsync(legalConsentLogEntry{
 			ConsentType:  "supplier_excel_import",
 			PolicyType:   "supplier_agreement",
@@ -702,16 +878,17 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 			IPAddress:    getClientIP(r),
 			UserAgent:    r.UserAgent(),
 			AcceptedText: supplierContentDeclarationMsg,
-			Metadata:     map[string]any{"imported_count": importedCount},
+			Metadata:     map[string]any{"imported_count": importedCount, "updated_count": updatedCount},
 		})
 	}
 
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
 		"success":        true,
 		"imported_count": importedCount,
+		"updated_count":  updatedCount,
 		"skipped_count":  skippedCount,
 		"errors":         rowErrors,
-		"message":        fmt.Sprintf("%d ürün başarıyla kataloğunuza eklendi.", importedCount),
+		"message":        buildExcelImportSummaryMessage(importedCount, updatedCount),
 	})
 }
 

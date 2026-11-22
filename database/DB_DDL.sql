@@ -357,14 +357,24 @@ RETURNS TRIGGER AS $$
 DECLARE
     v_alias VARCHAR(50);
 BEGIN
-    SELECT alias_code INTO v_alias FROM integration.xml_feeds WHERE id = NEW.feed_id;
+    IF NEW.slug_id IS NULL OR NEW.slug_id = '' THEN
+        NEW.slug_id := catalog.to_base36(nextval('catalog.products_slug_id_seq'));
+    END IF;
+
+    IF NEW.brand_id IS NOT NULL THEN
+        SELECT NULLIF(BTRIM(alias_code), '') INTO v_alias FROM catalog.brands WHERE id = NEW.brand_id;
+    END IF;
+    IF (v_alias IS NULL OR v_alias = '') AND NEW.feed_id IS NOT NULL THEN
+        SELECT NULLIF(BTRIM(alias_code), '') INTO v_alias FROM integration.xml_feeds WHERE id = NEW.feed_id;
+    END IF;
+
     NEW.custom_sku := upper(coalesce(v_alias, 'PROD') || '-' || NEW.slug_id);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trig_product_custom_sku_before
-    BEFORE INSERT OR UPDATE OF feed_id, source_product_id, custom_sku
+    BEFORE INSERT OR UPDATE OF brand_id, feed_id, source_product_id, custom_sku
     ON catalog.products
     FOR EACH ROW
     EXECUTE FUNCTION catalog.trig_product_custom_sku();

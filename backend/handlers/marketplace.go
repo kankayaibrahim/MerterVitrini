@@ -51,7 +51,15 @@ func splitOrderIntoSupplierSubOrdersWithSummary(ctx context.Context, tx pgx.Tx, 
 
 	var summaries []models.SupplierDirectOrderSummary
 	for idx, grp := range groups {
-		summary, err := processSupplierSubOrder(ctx, tx, orderID, orderNumber, grp.BrandID, grp.Currency, idx+1, grp.Items, rates)
+		summary, err := processSupplierSubOrder(ctx, tx, supplierSubOrderInput{
+			OrderID:     orderID,
+			OrderNumber: orderNumber,
+			BrandID:     grp.BrandID,
+			Currency:    grp.Currency,
+			SubOrderIdx: idx + 1,
+			Items:       grp.Items,
+			Rates:       rates,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -151,6 +159,18 @@ func insertSupplierSubOrderItems(ctx context.Context, tx pgx.Tx, subOrderID stri
 	return nil
 }
 
+func formatDualOrderSKU(customSKU, supplierSKU string) string {
+	c := strings.TrimSpace(customSKU)
+	s := strings.TrimSpace(supplierSKU)
+	if s == "" || strings.EqualFold(c, s) {
+		return c
+	}
+	if c == "" {
+		return s
+	}
+	return fmt.Sprintf("%s | Model: %s", c, s)
+}
+
 func formatSupplierSubOrderLineText(bi orderCartItem, subOrderCurrency string) (string, models.SupplierDirectOrderItem) {
 	unitsPerPkg := getUnitsFromSeriesRatio(bi.SeriesRatio)
 	pkgs := bi.Quantity / unitsPerPkg
@@ -159,19 +179,20 @@ func formatSupplierSubOrderLineText(bi orderCartItem, subOrderCurrency string) (
 	}
 	unitPrice := getEffectiveItemPrice(bi)
 	lineTotal := math.Round(unitPrice*float64(bi.Quantity)*100) / 100
+	displaySKU := formatDualOrderSKU(bi.CustomSku, bi.SupplierSku)
 
 	var line string
 	if unitsPerPkg > 1 && bi.Quantity >= unitsPerPkg {
 		if unitPrice <= 0 {
-			line = fmt.Sprintf("• %s (%s) x %d Seri (%d Adet)\n", bi.Title, bi.CustomSku, pkgs, bi.Quantity)
+			line = fmt.Sprintf("• %s (%s) x %d Seri (%d Adet)\n", bi.Title, displaySKU, pkgs, bi.Quantity)
 		} else {
-			line = fmt.Sprintf("• %s (%s) x %d Seri (%d Adet) = %s\n", bi.Title, bi.CustomSku, pkgs, bi.Quantity, formatOrderMoney(lineTotal, subOrderCurrency))
+			line = fmt.Sprintf("• %s (%s) x %d Seri (%d Adet) = %s\n", bi.Title, displaySKU, pkgs, bi.Quantity, formatOrderMoney(lineTotal, subOrderCurrency))
 		}
 	} else {
 		if unitPrice <= 0 {
-			line = fmt.Sprintf("• %s (%s) x %d Adet\n", bi.Title, bi.CustomSku, bi.Quantity)
+			line = fmt.Sprintf("• %s (%s) x %d Adet\n", bi.Title, displaySKU, bi.Quantity)
 		} else {
-			line = fmt.Sprintf("• %s (%s) x %d Adet = %s\n", bi.Title, bi.CustomSku, bi.Quantity, formatOrderMoney(lineTotal, subOrderCurrency))
+			line = fmt.Sprintf("• %s (%s) x %d Adet = %s\n", bi.Title, displaySKU, bi.Quantity, formatOrderMoney(lineTotal, subOrderCurrency))
 		}
 	}
 
@@ -179,6 +200,7 @@ func formatSupplierSubOrderLineText(bi orderCartItem, subOrderCurrency string) (
 		ProductID:       bi.ProductID,
 		Title:           bi.Title,
 		CustomSku:       bi.CustomSku,
+		SupplierSku:     strings.TrimSpace(bi.SupplierSku),
 		PackagesQty:     pkgs,
 		PiecesQty:       bi.Quantity,
 		UnitsPerPackage: unitsPerPkg,
@@ -188,13 +210,27 @@ func formatSupplierSubOrderLineText(bi orderCartItem, subOrderCurrency string) (
 	}
 }
 
-func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, orderID, orderNumber, brandID, subOrderCurrency string, subOrderIdx int, brandItems []orderCartItem, rates map[string]float64) (*models.SupplierDirectOrderSummary, error) {
-	subOrderCurrency = normalizeOrderCurrencyCode(subOrderCurrency)
+type supplierSubOrderInput struct {
+	OrderID     string
+	OrderNumber string
+	BrandID     string
+	Currency    string
+	SubOrderIdx int
+	Items       []orderCartItem
+	Rates       map[string]float64
+}
+
+func processSupplierSubOrder(ctx context.Context, tx pgx.Tx, in supplierSubOrderInput) (*models.SupplierDirectOrderSummary, error) {
+	orderID := in.OrderID
+	brandID := in.BrandID
+	brandItems := in.Items
+	rates := in.Rates
+	subOrderCurrency := normalizeOrderCurrencyCode(in.Currency)
 	grossAmount := calculateBrandGrossAmount(brandItems)
 	commissionRate, walletCurrency := getSupplierWalletCommissionAndCurrency(ctx, tx, brandID)
 	commissionAmount := math.Round((grossAmount*commissionRate/100.0)*100) / 100
 	netPayoutAmount := math.Round((grossAmount-commissionAmount)*100) / 100
-	subOrderNumber := fmt.Sprintf("%s-S%d", orderNumber, subOrderIdx)
+	subOrderNumber := fmt.Sprintf("%s-S%d", in.OrderNumber, in.SubOrderIdx)
 
 	var custName, custCompany, custPhone, custEmail, delivAddr, billAddr, orderNotes string
 	_ = tx.QueryRow(ctx, `
@@ -424,7 +460,7 @@ func preloadSupplierSubOrderItems(ctx context.Context, orders []models.SupplierS
 	}
 
 	itemRows, err := db.Pool.Query(ctx, `
-		SELECT soi.id, soi.sub_order_id, soi.product_id, soi.product_name, soi.product_sku, soi.quantity,
+		SELECT soi.id, soi.sub_order_id, soi.product_id, soi.product_name, soi.product_sku, COALESCE(p.sku, ''), soi.quantity,
 		       soi.price_at_purchase, soi.total_price,
 		       COALESCE(NULLIF(UPPER(TRIM(soi.currency)), ''), NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY') as currency,
 		       soi.image_url, soi.series_ratio
@@ -440,7 +476,7 @@ func preloadSupplierSubOrderItems(ctx context.Context, orders []models.SupplierS
 
 	for itemRows.Next() {
 		var it models.SupplierSubOrderItem
-		if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.Currency, &it.ImageURL, &it.SeriesRatio); err == nil {
+		if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.SupplierSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.Currency, &it.ImageURL, &it.SeriesRatio); err == nil {
 			it.Currency = normalizeOrderCurrencyCode(it.Currency)
 			if pos, exists := indexByID[it.SubOrderID]; exists {
 				orders[pos].Items = append(orders[pos].Items, it)
@@ -530,7 +566,7 @@ func (h *MarketplaceHandler) GetSupplierOrder(w http.ResponseWriter, r *http.Req
 
 	// Fetch items
 	itemRows, err := db.Pool.Query(ctx, `
-		SELECT soi.id, soi.sub_order_id, soi.product_id, soi.product_name, soi.product_sku, soi.quantity,
+		SELECT soi.id, soi.sub_order_id, soi.product_id, soi.product_name, soi.product_sku, COALESCE(p.sku, ''), soi.quantity,
 		       soi.price_at_purchase, soi.total_price,
 		       COALESCE(NULLIF(UPPER(TRIM(soi.currency)), ''), NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY') as currency,
 		       soi.image_url, soi.series_ratio
@@ -543,7 +579,7 @@ func (h *MarketplaceHandler) GetSupplierOrder(w http.ResponseWriter, r *http.Req
 		defer itemRows.Close()
 		for itemRows.Next() {
 			var it models.SupplierSubOrderItem
-			if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.Currency, &it.ImageURL, &it.SeriesRatio); err == nil {
+			if err := itemRows.Scan(&it.ID, &it.SubOrderID, &it.ProductID, &it.ProductName, &it.ProductSKU, &it.SupplierSKU, &it.Quantity, &it.PriceAtPurchase, &it.TotalPrice, &it.Currency, &it.ImageURL, &it.SeriesRatio); err == nil {
 				it.Currency = normalizeOrderCurrencyCode(it.Currency)
 				o.Items = append(o.Items, it)
 			}
@@ -665,18 +701,16 @@ func (h *MarketplaceHandler) UpdateSupplierOrderStatus(w http.ResponseWriter, r 
 	})
 }
 
-// cancelSupplierSubOrdersForOrder cancels all non-cancelled supplier sub-orders belonging to a master order
-// and reverses pending supplier wallet balances for sub-orders not yet delivered.
-func cancelSupplierSubOrdersForOrder(ctx context.Context, tx pgx.Tx, orderID, reason string) error {
-	type subOrderRow struct {
-		id             string
-		brandID        string
-		subOrderNumber string
-		status         string
-		currency       string
-		grossAmount    float64
-	}
+type cancelableSubOrder struct {
+	id             string
+	brandID        string
+	subOrderNumber string
+	status         string
+	currency       string
+	grossAmount    float64
+}
 
+func loadSubOrdersForCancel(ctx context.Context, tx pgx.Tx, orderID string) ([]cancelableSubOrder, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT id, brand_id, sub_order_number, status,
 		       COALESCE(NULLIF(UPPER(TRIM(currency)), ''), 'TRY'),
@@ -686,82 +720,96 @@ func cancelSupplierSubOrdersForOrder(ctx context.Context, tx pgx.Tx, orderID, re
 		FOR UPDATE
 	`, orderID)
 	if err != nil {
-		return fmt.Errorf("query supplier sub-orders for cancel: %w", err)
+		return nil, fmt.Errorf("query supplier sub-orders for cancel: %w", err)
 	}
 
-	var subs []subOrderRow
+	var subs []cancelableSubOrder
 	for rows.Next() {
-		var sub subOrderRow
+		var sub cancelableSubOrder
 		if scanErr := rows.Scan(&sub.id, &sub.brandID, &sub.subOrderNumber, &sub.status, &sub.currency, &sub.grossAmount); scanErr != nil {
 			rows.Close()
-			return fmt.Errorf("scan supplier sub-order for cancel: %w", scanErr)
+			return nil, fmt.Errorf("scan supplier sub-order for cancel: %w", scanErr)
 		}
 		subs = append(subs, sub)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate supplier sub-orders for cancel: %w", err)
+		return nil, fmt.Errorf("iterate supplier sub-orders for cancel: %w", err)
+	}
+	return subs, nil
+}
+
+func cancelSingleSupplierSubOrder(ctx context.Context, tx pgx.Tx, sub cancelableSubOrder, reasonNote string, rates map[string]float64) error {
+	prevStatus := strings.ToUpper(strings.TrimSpace(sub.status))
+	if prevStatus == "CANCELLED" {
+		return nil
 	}
 
+	_, err := tx.Exec(ctx, `
+		UPDATE catalog.supplier_sub_orders
+		SET status = 'CANCELLED',
+		    notes = CASE
+		        WHEN $2 = '' THEN notes
+		        WHEN COALESCE(notes, '') = '' THEN $2
+		        ELSE notes || ' | ' || $2
+		    END,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $1
+	`, sub.id, reasonNote)
+	if err != nil {
+		return fmt.Errorf("cancel supplier sub-order %s: %w", sub.id, err)
+	}
+
+	if prevStatus == "DELIVERED" {
+		return nil
+	}
+
+	subCurrency := normalizeOrderCurrencyCode(sub.currency)
+	_, walletCurrency := getSupplierWalletCommissionAndCurrency(ctx, tx, sub.brandID)
+	grossWallet := convertOrderAmount(sub.grossAmount, subCurrency, walletCurrency, rates)
+
+	var newPending float64
+	err = tx.QueryRow(ctx, `
+		UPDATE catalog.supplier_wallets
+		SET pending_balance = GREATEST(0.00, pending_balance - $1),
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE brand_id = $2
+		RETURNING pending_balance
+	`, grossWallet, sub.brandID).Scan(&newPending)
+	if err != nil {
+		return fmt.Errorf("deduct supplier pending balance for brand %s: %w", sub.brandID, err)
+	}
+
+	desc := fmt.Sprintf("İptal Edilen Sipariş (%s - %s)", sub.subOrderNumber, formatOrderMoney(sub.grossAmount, subCurrency))
+	if reasonNote != "" {
+		desc = desc + " — " + reasonNote
+	}
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO catalog.supplier_ledger (
+			brand_id, sub_order_id, transaction_type, amount, balance_after, currency, description
+		) VALUES ($1, $2, 'ORDER_CANCELLED_REVERSAL', $3, $4, $5, $6)
+	`, sub.brandID, sub.id, grossWallet, newPending, walletCurrency, desc)
+	return nil
+}
+
+// cancelSupplierSubOrdersForOrder cancels all non-cancelled supplier sub-orders belonging to a master order
+// and reverses pending supplier wallet balances for sub-orders not yet delivered.
+func cancelSupplierSubOrdersForOrder(ctx context.Context, tx pgx.Tx, orderID, reason string) error {
+	subs, err := loadSubOrdersForCancel(ctx, tx, orderID)
+	if err != nil {
+		return err
+	}
 	if len(subs) == 0 {
 		return nil
 	}
 
 	rates := loadLatestExchangeRatesMap(ctx)
 	reasonNote := strings.TrimSpace(reason)
-
 	for _, sub := range subs {
-		prevStatus := strings.ToUpper(strings.TrimSpace(sub.status))
-		if prevStatus == "CANCELLED" {
-			continue
+		if err := cancelSingleSupplierSubOrder(ctx, tx, sub, reasonNote, rates); err != nil {
+			return err
 		}
-
-		_, err := tx.Exec(ctx, `
-			UPDATE catalog.supplier_sub_orders
-			SET status = 'CANCELLED',
-			    notes = CASE
-			        WHEN $2 = '' THEN notes
-			        WHEN COALESCE(notes, '') = '' THEN $2
-			        ELSE notes || ' | ' || $2
-			    END,
-			    updated_at = CURRENT_TIMESTAMP
-			WHERE id = $1
-		`, sub.id, reasonNote)
-		if err != nil {
-			return fmt.Errorf("cancel supplier sub-order %s: %w", sub.id, err)
-		}
-
-		if prevStatus == "DELIVERED" {
-			continue
-		}
-
-		subCurrency := normalizeOrderCurrencyCode(sub.currency)
-		_, walletCurrency := getSupplierWalletCommissionAndCurrency(ctx, tx, sub.brandID)
-		grossWallet := convertOrderAmount(sub.grossAmount, subCurrency, walletCurrency, rates)
-
-		var newPending float64
-		err = tx.QueryRow(ctx, `
-			UPDATE catalog.supplier_wallets
-			SET pending_balance = GREATEST(0.00, pending_balance - $1),
-			    updated_at = CURRENT_TIMESTAMP
-			WHERE brand_id = $2
-			RETURNING pending_balance
-		`, grossWallet, sub.brandID).Scan(&newPending)
-		if err != nil {
-			return fmt.Errorf("deduct supplier pending balance for brand %s: %w", sub.brandID, err)
-		}
-
-		desc := fmt.Sprintf("İptal Edilen Sipariş (%s - %s)", sub.subOrderNumber, formatOrderMoney(sub.grossAmount, subCurrency))
-		if reasonNote != "" {
-			desc = desc + " — " + reasonNote
-		}
-		_, _ = tx.Exec(ctx, `
-			INSERT INTO catalog.supplier_ledger (
-				brand_id, sub_order_id, transaction_type, amount, balance_after, currency, description
-			) VALUES ($1, $2, 'ORDER_CANCELLED_REVERSAL', $3, $4, $5, $6)
-		`, sub.brandID, sub.id, grossWallet, newPending, walletCurrency, desc)
 	}
-
 	return nil
 }
 

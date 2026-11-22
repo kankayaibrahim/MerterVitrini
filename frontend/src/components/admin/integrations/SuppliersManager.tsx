@@ -252,8 +252,8 @@ function getDeleteHistoryConfirmMsg(options: { filenames?: string[]; feedId?: st
 
 function getParserScriptForAlias(rawAlias: string): string {
   const alias = rawAlias.toUpperCase();
-  if (alias === "FLORM" || alias === "FLORA") return "parsers/etika.py";
-  if (alias === "EDUSA") return "parsers/janes.py";
+  if (alias === "ETIKA" || alias === "FLORM" || alias === "FLORA") return "parsers/etika.py";
+  if (alias === "JANES" || alias === "EDUSA") return "parsers/janes.py";
   if (alias === "BLACK_FASHION") return "parsers/black_fashion.py";
   return "parsers/custom.py";
 }
@@ -825,7 +825,7 @@ function SupplierFormFields({
             value={brandForm.aliasCode}
             onChange={(e) => onFieldChange("aliasCode", e.target.value)}
             className="w-full px-4 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 focus:outline-none focus:border-violet-500 focus:bg-white focus:ring-1 focus:ring-violet-500/20 text-sm font-semibold transition-all"
-            placeholder="Örn: EDUSA, MIMOZA, FLORA"
+            placeholder="Örn: JANES, ETIKA, LUSTRIN, BLACK_FASHION"
             disabled={isPending}
           />
         </div>

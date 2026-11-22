@@ -162,6 +162,7 @@ export interface SupplierDirectOrderItem {
   product_id: string;
   title: string;
   custom_sku: string;
+  supplier_sku?: string;
   packages_qty: number;
   pieces_qty: number;
   units_per_package: number;

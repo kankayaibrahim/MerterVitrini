@@ -3,15 +3,19 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
@@ -22,9 +26,83 @@ import (
 	"mertervitrini/backend/services"
 )
 
-const (
-	refreshMaterializedViewSQL = "REFRESH MATERIALIZED VIEW CONCURRENTLY catalog.mv_products"
-)
+var supplierSkuIndexOnce sync.Once
+
+func ensureSupplierSkuUniqueIndex(ctx context.Context) {
+	if db.Pool == nil {
+		return
+	}
+	supplierSkuIndexOnce.Do(func() {
+		_, _ = db.Pool.Exec(ctx, `
+			CREATE UNIQUE INDEX IF NOT EXISTS uq_products_brand_manual_supplier_sku
+			ON catalog.products (brand_id, UPPER(BTRIM(sku)))
+			WHERE feed_id IS NULL
+			  AND brand_id IS NOT NULL
+			  AND sku IS NOT NULL
+			  AND BTRIM(sku) <> ''
+			  AND COALESCE(is_archived, false) = false;
+
+			CREATE INDEX IF NOT EXISTS idx_products_brand_supplier_sku_lookup
+			ON catalog.products (brand_id, UPPER(BTRIM(sku)))
+			WHERE brand_id IS NOT NULL AND sku IS NOT NULL AND BTRIM(sku) <> '';
+		`)
+	})
+}
+
+func normalizeSupplierSKU(raw string) string {
+	cleaned := strings.TrimSpace(raw)
+	if cleaned == "" {
+		return ""
+	}
+	if utf8.RuneCountInString(cleaned) > 100 {
+		cleaned = string([]rune(cleaned)[:100])
+	}
+	return cleaned
+}
+
+func resolveSupplierInputSKU(req *models.SupplierProductInput) (string, bool) {
+	if req == nil {
+		return "", false
+	}
+	if req.SupplierSKU != nil {
+		return normalizeSupplierSKU(*req.SupplierSKU), true
+	}
+	if req.SKU != nil {
+		return normalizeSupplierSKU(*req.SKU), true
+	}
+	return "", false
+}
+
+func isUniqueViolationErr(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func ensureUniqueSupplierProductSKUOrWriteErr(w http.ResponseWriter, ctx context.Context, tx pgx.Tx, brandID, supplierSKU, excludeID string) bool {
+	if supplierSKU == "" {
+		return true
+	}
+	var conflictCustomSKU string
+	err := tx.QueryRow(ctx, `
+		SELECT custom_sku
+		FROM catalog.products
+		WHERE brand_id = $1
+		  AND UPPER(BTRIM(sku)) = UPPER($2)
+		  AND COALESCE(is_archived, false) = false
+		  AND ($3 = '' OR id::text <> $3)
+		LIMIT 1
+	`, brandID, supplierSKU, excludeID).Scan(&conflictCustomSKU)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return true
+	}
+	if err != nil {
+		log.Printf("[SUPPLIER SKU CHECK] Query error: %v", err)
+		httpx.Error(w, http.StatusInternalServerError, "Ürün kodu benzersizliği kontrol edilemedi")
+		return false
+	}
+	httpx.Error(w, http.StatusConflict, fmt.Sprintf("Bu ürün/model kodu (%s) mağazanızda zaten başka bir üründe (%s) kayıtlı.", supplierSKU, conflictCustomSKU))
+	return false
+}
 
 func writeSupplierJSON(w http.ResponseWriter, status int, data any) {
 	httpx.JSON(w, status, data)
@@ -66,6 +144,55 @@ func resolveActiveProductIDsBySlugs(ctx context.Context, slugs []string) []strin
 	return ids
 }
 
+func submitTranslationReadyProductsToIndexNow(ctx context.Context, productIDs []string, meta IndexNowSubmissionMeta) {
+	readyRefs, readyErr := filterTranslationCompleteProductRefs(ctx, productIDs)
+	if readyErr != nil {
+		log.Printf("[SUPPLIER PORTAL] Ready check error: %v", readyErr)
+		return
+	}
+	if len(readyRefs) == 0 {
+		log.Printf("[SUPPLIER PORTAL] IndexNow deferred until all target translations finish (products=%d)", len(productIDs))
+		return
+	}
+
+	readyIDs, readySlugs := extractProductRefIDsAndSlugs(readyRefs)
+	urls, productCount := BuildProductIndexNowURLs(readySlugs)
+	if len(urls) == 0 {
+		return
+	}
+	if meta.ProductCount <= 0 {
+		meta.ProductCount = productCount
+	}
+
+	entry, submitErr := SubmitIndexNowSync(ctx, meta, urls)
+	if submitErr != nil {
+		log.Printf("[SUPPLIER PORTAL] IndexNow submission error: %v", submitErr)
+		return
+	}
+	if entry != nil && entry.Status == "success" {
+		if markErr := markProductsIndexNowNotified(ctx, readyIDs); markErr != nil {
+			log.Printf("[SUPPLIER PORTAL] Failed to mark notified products: %v", markErr)
+		}
+	}
+}
+
+func runProductMVRefreshAndIndexNow(ctx context.Context, slugs []string, meta IndexNowSubmissionMeta) {
+	productIDs := resolveActiveProductIDsBySlugs(ctx, slugs)
+	if len(productIDs) > 0 {
+		if _, trErr := AutoTranslateProductsByIDs(ctx, productIDs); trErr != nil {
+			log.Printf("[SUPPLIER PORTAL] Pre-IndexNow auto-translation warning: %v", trErr)
+		}
+	}
+
+	if err := refreshCatalogMV(ctx); err != nil {
+		log.Printf("[SUPPLIER PORTAL] Async MV refresh error: %v", err)
+	}
+
+	if len(productIDs) > 0 {
+		submitTranslationReadyProductsToIndexNow(ctx, productIDs, meta)
+	}
+}
+
 // triggerProductMVRefreshAndIndexNow auto-translates missing languages first, refreshes catalog.mv_products,
 // and submits only translation-complete active slugs to IndexNow.
 func triggerProductMVRefreshAndIndexNow(slugs []string, meta IndexNowSubmissionMeta) {
@@ -73,50 +200,7 @@ func triggerProductMVRefreshAndIndexNow(slugs []string, meta IndexNowSubmissionM
 	safe.Go("Supplier Auto-Translate, MV Refresh & IndexNow", func() {
 		bgCtx, bgCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer bgCancel()
-
-		productIDs := resolveActiveProductIDsBySlugs(bgCtx, slugsCopy)
-		if len(productIDs) > 0 {
-			if _, trErr := AutoTranslateProductsByIDs(bgCtx, productIDs); trErr != nil {
-				log.Printf("[SUPPLIER PORTAL] Pre-IndexNow auto-translation warning: %v", trErr)
-			}
-		}
-
-		if err := refreshCatalogMV(bgCtx); err != nil {
-			log.Printf("[SUPPLIER PORTAL] Async MV refresh error: %v", err)
-		}
-
-		if len(productIDs) == 0 {
-			return
-		}
-
-		readyRefs, readyErr := filterTranslationCompleteProductRefs(bgCtx, productIDs)
-		if readyErr != nil {
-			log.Printf("[SUPPLIER PORTAL] Ready check error: %v", readyErr)
-			return
-		}
-		if len(readyRefs) == 0 {
-			log.Printf("[SUPPLIER PORTAL] IndexNow deferred until all target translations finish (products=%d)", len(productIDs))
-			return
-		}
-
-		readyIDs, readySlugs := extractProductRefIDsAndSlugs(readyRefs)
-		urls, productCount := BuildProductIndexNowURLs(readySlugs)
-		if len(urls) == 0 {
-			return
-		}
-		if meta.ProductCount <= 0 {
-			meta.ProductCount = productCount
-		}
-		entry, submitErr := SubmitIndexNowSync(bgCtx, meta, urls)
-		if submitErr != nil {
-			log.Printf("[SUPPLIER PORTAL] IndexNow submission error: %v", submitErr)
-			return
-		}
-		if entry != nil && entry.Status == "success" {
-			if markErr := markProductsIndexNowNotified(bgCtx, readyIDs); markErr != nil {
-				log.Printf("[SUPPLIER PORTAL] Failed to mark notified products: %v", markErr)
-			}
-		}
+		runProductMVRefreshAndIndexNow(bgCtx, slugsCopy, meta)
 	})
 }
 
@@ -760,6 +844,7 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 			p.id,
 			p.title,
 			p.custom_sku,
+			coalesce(p.sku, '') as sku,
 			coalesce(p.category_id::text, '') as category_id,
 			coalesce(c.title, '') as category_title,
 			p.color_id::text,
@@ -811,6 +896,7 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 		ID                   string    `json:"id"`
 		Title                string    `json:"title"`
 		CustomSKU            string    `json:"custom_sku"`
+		SKU                  string    `json:"sku,omitempty"`
 		CategoryID           string    `json:"category_id"`
 		CategoryTitle        string    `json:"category_title"`
 		ColorID              *string   `json:"color_id,omitempty"`
@@ -841,6 +927,7 @@ func (h *SupplierPortalHandler) ListProducts(w http.ResponseWriter, r *http.Requ
 			&pr.ID,
 			&pr.Title,
 			&pr.CustomSKU,
+			&pr.SKU,
 			&pr.CategoryID,
 			&pr.CategoryTitle,
 			&pr.ColorID,
@@ -940,7 +1027,7 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 	var p models.Product
 	query := `
 		SELECT 
-			id, title, slug, custom_sku, source_product_group_id, short_description, description, 
+			id, title, slug, custom_sku, sku, source_product_group_id, short_description, description, 
 			category_id, color_id, fabric_id, gender, season, 
 			buying_price, price, currency, packing_ratio, series_ratio, 
 			coalesce(series_stock, 100), minimum_order_quantity, is_active, created_at, updated_at
@@ -955,6 +1042,7 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 		&p.Title,
 		&p.Slug,
 		&p.CustomSku,
+		&p.Sku,
 		&p.SourceProductGroupID,
 		&p.ShortDescription,
 		&p.Description,
@@ -1000,10 +1088,12 @@ func (h *SupplierPortalHandler) GetProduct(w http.ResponseWriter, r *http.Reques
 }
 
 func buildSupplierInsertParams(brandID, sourceProductID string, groupID *string, req *models.SupplierProductInput, initialStock int) supplierProductInsertParams {
+	supplierSKU, _ := resolveSupplierInputSKU(req)
 	return supplierProductInsertParams{
 		BrandID:              brandID,
 		SourceProductID:      sourceProductID,
 		SourceProductGroupID: groupID,
+		SupplierSKU:          supplierSKU,
 		Title:                req.Title,
 		ShortDescription:     req.ShortDescription,
 		Description:          req.Description,
@@ -1048,11 +1138,13 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	ensureSupplierSiblingSchema(ctx)
+	ensureSupplierSkuUniqueIndex(ctx)
 
 	if err := normalizeSupplierDraftOrPublishInput(ctx, claims.BrandID, &req, false); err != nil {
 		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	supplierSKU, _ := resolveSupplierInputSKU(&req)
 	initialStock, normErr := resolveSupplierSeriesAndVariants(ctx, &req, "")
 	if normErr != nil {
 		httpx.Error(w, http.StatusBadRequest, normErr.Error())
@@ -1066,6 +1158,10 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 	}
 	defer tx.Rollback(ctx)
 
+	if !ensureUniqueSupplierProductSKUOrWriteErr(w, ctx, tx, claims.BrandID, supplierSKU, "") {
+		return
+	}
+
 	needGroup := hasNonEmptyColorVariantDrafts(req.AdditionalColorVariants)
 	groupID, grpErr := resolveOrLinkGroupIDTx(ctx, tx, claims.BrandID, req.SourceProductGroupID, req.LinkWithProductID, needGroup)
 	if grpErr != nil {
@@ -1076,6 +1172,10 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 	mainSourceID := fmt.Sprintf("SUP-%d-0", time.Now().UnixNano())
 	mainItem, mainSlug, err := insertSupplierProductRowTx(ctx, tx, buildSupplierInsertParams(claims.BrandID, mainSourceID, groupID, &req, initialStock))
 	if err != nil {
+		if isUniqueViolationErr(err) {
+			httpx.Error(w, http.StatusConflict, "Bu ürün/model kodu mağazanızda zaten başka bir üründe kayıtlı.")
+			return
+		}
 		log.Printf("[SUPPLIER PRODUCT] Create error: %v", err)
 		httpx.Error(w, http.StatusInternalServerError, fmt.Sprintf("Ürün kaydedilemedi: %v", err))
 		return
@@ -1192,12 +1292,14 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	ensureSupplierSiblingSchema(ctx)
+	ensureSupplierSkuUniqueIndex(ctx)
 
 	hasExisting := len(cleanNonEmptyStrings(req.Images)) == 0 && hasExistingProductImages(ctx, id)
 	if err := normalizeSupplierDraftOrPublishInput(ctx, claims.BrandID, &req, hasExisting); err != nil {
 		httpx.Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	supplierSKU, hasSKUField := resolveSupplierInputSKU(&req)
 	initialStock, normErr := resolveSupplierSeriesAndVariants(ctx, &req, id)
 	if normErr != nil {
 		httpx.Error(w, http.StatusBadRequest, normErr.Error())
@@ -1210,6 +1312,10 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		return
 	}
 	defer tx.Rollback(ctx)
+
+	if hasSKUField && !ensureUniqueSupplierProductSKUOrWriteErr(w, ctx, tx, claims.BrandID, supplierSKU, id) {
+		return
+	}
 
 	var existingGroupID *string
 	if err := tx.QueryRow(ctx, "SELECT source_product_group_id FROM catalog.products WHERE id = $1 AND brand_id = $2", id, claims.BrandID).Scan(&existingGroupID); err != nil {
@@ -1235,8 +1341,10 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 				WHEN $17 = true THEN NULL
 				ELSE deactivated_at
 			END,
-			source_product_group_id = $18, updated_at = CURRENT_TIMESTAMP
-		WHERE id = $19 AND brand_id = $20
+			source_product_group_id = $18,
+			sku = CASE WHEN $19 THEN NULLIF(BTRIM($20), '') ELSE sku END,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = $21 AND brand_id = $22
 		RETURNING coalesce(slug, '')`
 
 	var updatedSlug string
@@ -1247,9 +1355,13 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		req.Gender, req.Season, req.BuyingPrice, req.Price,
 		req.Currency, req.PackingRatio, req.SeriesRatio,
 		req.MinimumOrderQuantity, req.SeriesStock, initialStock, req.IsActive,
-		groupID, id, claims.BrandID,
+		groupID, hasSKUField, supplierSKU, id, claims.BrandID,
 	).Scan(&updatedSlug)
 	if err != nil {
+		if isUniqueViolationErr(err) {
+			httpx.Error(w, http.StatusConflict, fmt.Sprintf("Bu ürün/model kodu (%s) mağazanızda zaten başka bir üründe kayıtlı.", supplierSKU))
+			return
+		}
 		log.Printf("[SUPPLIER PRODUCT] Update error: %v", err)
 		httpx.Error(w, http.StatusInternalServerError, "Ürün güncellenemedi")
 		return

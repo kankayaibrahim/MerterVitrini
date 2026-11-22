@@ -178,6 +178,21 @@ export function getWhatsappOrderingCopy(lang: string): WhatsAppOrderingCopy {
   return WHATSAPP_ORDERING_COPY[normalizeSeoLang(lang, "tr")];
 }
 
+export function formatDualProductSku(
+  customSku?: string,
+  supplierSku?: string
+): string {
+  const c = (customSku || "").trim();
+  const s = (supplierSku || "").trim();
+  if (!s || c.toUpperCase() === s.toUpperCase()) {
+    return c || "-";
+  }
+  if (!c) {
+    return s;
+  }
+  return `${c} / Model: ${s}`;
+}
+
 export function buildProductWhatsappOrderLink(params: {
   readonly product: Product;
   readonly lang: string;
@@ -202,7 +217,10 @@ export function buildProductWhatsappOrderLink(params: {
     product.brand_profile?.name ||
     product.brand_name ||
     "Merter Vitrini";
-  const sku = product.custom_sku || product.source_product_id || product.id;
+  const sku = formatDualProductSku(
+    product.custom_sku || product.source_product_id || product.id,
+    product.sku
+  );
   const resolvedColor = (color || product.color || "").trim();
   const seriesInfo = [product.packing_ratio, product.series_ratio]
     .filter((v): v is string => Boolean(v && v.trim()))

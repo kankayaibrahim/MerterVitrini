@@ -489,6 +489,8 @@ function isSeriesTemplateSelected(
 interface ExpressCompactModeSectionProps {
   readonly formTitle: string;
   readonly setFormTitle: (v: string) => void;
+  readonly formSupplierSku: string;
+  readonly setFormSupplierSku: (v: string) => void;
   readonly formPrice: number;
   readonly setFormPrice: (v: number) => void;
   readonly formCurrency: string;
@@ -511,6 +513,8 @@ interface ExpressCompactModeSectionProps {
 function ExpressCompactModeSection({
   formTitle,
   setFormTitle,
+  formSupplierSku,
+  setFormSupplierSku,
   formPrice,
   setFormPrice,
   formCurrency,
@@ -627,6 +631,26 @@ function ExpressCompactModeSection({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="lg:col-span-12 flex flex-col sm:flex-row sm:items-center gap-2 pt-1 border-t border-slate-100">
+            <div className="sm:w-72 flex flex-col gap-1">
+              <label htmlFor="supp-express-model-sku" className="text-[11px] font-bold text-slate-700">
+                Tedarikçi Ürün / Model Kodu (Opsiyonel)
+              </label>
+              <input
+                id="supp-express-model-sku"
+                type="text"
+                maxLength={100}
+                value={formSupplierSku}
+                onChange={(e) => setFormSupplierSku(e.target.value)}
+                placeholder="Örn: KBN-2026-01"
+                className="h-9 w-full px-3 rounded-lg bg-white border border-slate-300 font-mono text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 sm:pt-4">
+              Kendi firmanıza ait stok/model kodudur. Mağazanız içinde her üründe tekildir; farklı tedarikçiler aynı kodu bağımsız olarak kullanabilir.
+            </p>
           </div>
         </div>
       </section>
@@ -756,6 +780,8 @@ function ExpressCompactModeSection({
 interface ExpressCoreAndPriceSectionProps {
   readonly formTitle: string;
   readonly setFormTitle: (v: string) => void;
+  readonly formSupplierSku: string;
+  readonly setFormSupplierSku: (v: string) => void;
   readonly formCategoryId: string;
   readonly setFormCategoryId: (v: string) => void;
   readonly hierarchicalCategories: readonly HierarchicalCategoryOption[];
@@ -768,6 +794,8 @@ interface ExpressCoreAndPriceSectionProps {
 function ExpressCoreAndPriceSection({
   formTitle,
   setFormTitle,
+  formSupplierSku,
+  setFormSupplierSku,
   formCategoryId,
   setFormCategoryId,
   hierarchicalCategories,
@@ -823,7 +851,25 @@ function ExpressCoreAndPriceSection({
           </select>
         </div>
 
-        <div className="sm:col-span-7 flex flex-col gap-1">
+        <div className="sm:col-span-4 flex flex-col gap-1">
+          <label htmlFor="supp-detailed-model-sku" className="text-xs font-bold text-slate-700">
+            Tedarikçi Model / Stok Kodu (Opsiyonel)
+          </label>
+          <input
+            id="supp-detailed-model-sku"
+            type="text"
+            maxLength={100}
+            value={formSupplierSku}
+            onChange={(e) => setFormSupplierSku(e.target.value)}
+            placeholder="Örn: KBN-2026-01"
+            className="w-full px-3.5 py-2.5 rounded-lg bg-white border border-slate-300 font-mono text-xs font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/15 focus:border-slate-900"
+          />
+          <span className="text-[10px] text-slate-500">
+            Mağazanız içinde benzersizdir; diğer firmalar aynı kodu kullanabilir.
+          </span>
+        </div>
+
+        <div className="sm:col-span-4 flex flex-col gap-1">
           <label htmlFor="supp-price" className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
             <Coins size={13} className="text-slate-700" />
             <span>
@@ -847,7 +893,7 @@ function ExpressCoreAndPriceSection({
           </div>
         </div>
 
-        <div className="sm:col-span-5 flex flex-col gap-1">
+        <div className="sm:col-span-4 flex flex-col gap-1">
           <span className="text-xs font-bold text-slate-700">Para Birimi</span>
           <div className="grid grid-cols-3 gap-1.5 h-[42px]">
             {(["TRY", "USD", "EUR"] as const).map((curr) => (
@@ -1519,6 +1565,8 @@ export interface SupplierProductModalProps {
   // Core
   formTitle: string;
   setFormTitle: (val: string) => void;
+  formSupplierSku: string;
+  setFormSupplierSku: (val: string) => void;
   formCategoryId: string;
   setFormCategoryId: (val: string) => void;
   categories: CategoryOption[];
@@ -1735,6 +1783,8 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
               <ExpressCompactModeSection
                 formTitle={props.formTitle}
                 setFormTitle={props.setFormTitle}
+                formSupplierSku={props.formSupplierSku}
+                setFormSupplierSku={props.setFormSupplierSku}
                 formPrice={props.formPrice}
                 setFormPrice={props.setFormPrice}
                 formCurrency={props.formCurrency}
@@ -1758,6 +1808,8 @@ export function SupplierProductModal(props: Readonly<SupplierProductModalProps>)
                 <ExpressCoreAndPriceSection
                   formTitle={props.formTitle}
                   setFormTitle={props.setFormTitle}
+                  formSupplierSku={props.formSupplierSku}
+                  setFormSupplierSku={props.setFormSupplierSku}
                   formCategoryId={props.formCategoryId}
                   setFormCategoryId={props.setFormCategoryId}
                   hierarchicalCategories={hierarchicalCategories}

@@ -1213,11 +1213,11 @@ def _resolve_brand_id(conn):
         row = cur.fetchone()
         if row and row[0]:
             return str(row[0])
-        cur.execute("SELECT id FROM catalog.brands WHERE alias_code = 'FLORA'")
+        cur.execute("SELECT id FROM catalog.brands WHERE alias_code IN ('ETIKA', 'FLORA') ORDER BY CASE WHEN alias_code = 'ETIKA' THEN 0 ELSE 1 END LIMIT 1")
         row = cur.fetchone()
         if row and row[0]:
             return str(row[0])
-    raise ValueError("Critical Error: 'FLORA' alias_code is not registered in catalog.brands. Please check DB seed!")
+    raise ValueError("Critical Error: 'ETIKA' alias_code is not registered in catalog.brands. Please check DB seed!")
 
 def _load_plus_size_mapping(conn):
     plus_size_mapping = {}
@@ -1442,7 +1442,7 @@ def _collect_product_images(elem, title_tr_cleaned, category_path_xml, detail_cl
         db_image_url = f"{DB_IMAGE_PREFIX}/{local_filename_webp}"
         
         product_images.append((img_url, local_file_path, db_image_url))
-        tags_str = "; ".join([t for t in ["FLORA", v_color, v_fabric] if t])
+        tags_str = "; ".join([t for t in ["ETIKA", v_color, v_fabric] if t])
         
         unique_downloads[local_file_path] = {
             "url": img_url,
@@ -1561,7 +1561,7 @@ def _process_product_element(elem, brand_id, diger_category_id, plus_size_mappin
     _add_product_variants(product_uuid, product_id, sku, ean, total_stock, sync_run_id, variants_cache, parsed_data["variants_to_upsert"])
     stats["variants_aligned"] += 3
     
-    sku_val = f"FL-{sku}" if sku else f"FL-{product_id}"
+    sku_val = sku.strip() if sku and sku.strip() else str(product_id)
     barcode_val = ean if ean else product_id
     meta_attr_val = json.dumps({"original_brand": "Etika Fashion"})
     mpn_val = mpn if mpn else product_id

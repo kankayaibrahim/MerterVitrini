@@ -300,6 +300,7 @@ type supplierProductInsertParams struct {
 	BrandID              string
 	SourceProductID      string
 	SourceProductGroupID *string
+	SupplierSKU          string
 	Title                string
 	ShortDescription     string
 	Description          string
@@ -332,15 +333,15 @@ type createdBatchDraftItem struct {
 func insertSupplierProductRowTx(ctx context.Context, tx pgx.Tx, p supplierProductInsertParams) (createdBatchDraftItem, string, error) {
 	const insertSQL = `
 		INSERT INTO catalog.products (
-			brand_id, feed_id, source_product_id, source_product_group_id, title, short_description, description,
+			brand_id, feed_id, source_product_id, source_product_group_id, sku, title, short_description, description,
 			category_id, color_id, fabric_id, gender, season,
 			buying_price, price, currency, packing_ratio, series_ratio,
 			minimum_order_quantity, series_stock, stock, is_active
 		) VALUES (
-			$1, NULL, $2, $3, $4, $5, $6,
-			$7, $8, $9, $10, $11,
-			$12, $13, $14, $15, $16,
-			$17, $18, $19, $20
+			$1, NULL, $2, $3, NULLIF(BTRIM($4), ''), $5, $6, $7,
+			$8, $9, $10, $11, $12,
+			$13, $14, $15, $16, $17,
+			$18, $19, $20, $21
 		) RETURNING id, custom_sku, slug`
 
 	var newID, customSKU, slug string
@@ -350,6 +351,7 @@ func insertSupplierProductRowTx(ctx context.Context, tx pgx.Tx, p supplierProduc
 		p.BrandID,
 		p.SourceProductID,
 		p.SourceProductGroupID,
+		p.SupplierSKU,
 		p.Title,
 		p.ShortDescription,
 		p.Description,

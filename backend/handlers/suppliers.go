@@ -266,6 +266,52 @@ func (h *SuppliersHandler) CreateSupplier(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(s)
 }
 
+func cascadeBrandAliasCodeChange(ctx context.Context, brandID, newAlias string) {
+	normAlias := strings.ToUpper(strings.TrimSpace(newAlias))
+	if db.Pool == nil || brandID == "" || normAlias == "" {
+		return
+	}
+
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE integration.xml_feeds
+		SET alias_code = $1,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE brand_id = $2
+		  AND COALESCE(alias_code, '') <> $1
+	`, normAlias, brandID)
+
+	_, err := db.Pool.Exec(ctx, `
+		UPDATE catalog.products p
+		SET custom_sku = UPPER($1 || '-' || p.slug_id),
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE p.brand_id = $2
+		  AND p.slug_id IS NOT NULL
+		  AND BTRIM(p.slug_id) <> ''
+		  AND p.custom_sku <> UPPER($1 || '-' || p.slug_id)
+	`, normAlias, brandID)
+	if err != nil {
+		log.Printf("[SUPPLIERS] Brand alias cascade products update warning (%s): %v", brandID, err)
+		return
+	}
+
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE catalog.product_variants v
+		SET custom_sku = p.custom_sku || SUBSTRING(
+			v.custom_sku
+			FROM POSITION('-' || UPPER(p.slug_id) IN UPPER(v.custom_sku)) + LENGTH('-' || UPPER(p.slug_id))
+		)
+		FROM catalog.products p
+		WHERE v.product_id = p.id
+		  AND p.brand_id = $1
+		  AND p.slug_id IS NOT NULL
+		  AND BTRIM(p.slug_id) <> ''
+		  AND POSITION('-' || UPPER(p.slug_id) IN UPPER(v.custom_sku)) > 0
+		  AND UPPER(SUBSTRING(v.custom_sku FROM 1 FOR POSITION('-' || UPPER(p.slug_id) IN UPPER(v.custom_sku)) + LENGTH(p.slug_id))) <> UPPER(p.custom_sku)
+	`, brandID)
+
+	triggerProductMVRefresh()
+}
+
 // UpdateSupplier updates existing brand/supplier fields
 func (h *SuppliersHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPut {
@@ -289,8 +335,11 @@ func (h *SuppliersHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
+
+	var prevAlias string
+	_ = db.Pool.QueryRow(ctx, "SELECT COALESCE(UPPER(BTRIM(alias_code)), '') FROM catalog.brands WHERE id = $1", id).Scan(&prevAlias)
 
 	var slug string
 	if err := db.Pool.QueryRow(ctx, "SELECT catalog.fn_slugify($1)", req.Name).Scan(&slug); err != nil {
@@ -374,6 +423,14 @@ func (h *SuppliersHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request
 		log.Printf("Failed to update supplier %s: %v", id, err)
 		http.Error(w, `{"error":"Supplier name or alias code already exists"}`, http.StatusBadRequest)
 		return
+	}
+
+	nextAlias := ""
+	if s.AliasCode != nil {
+		nextAlias = strings.ToUpper(strings.TrimSpace(*s.AliasCode))
+	}
+	if nextAlias != "" && nextAlias != prevAlias {
+		cascadeBrandAliasCodeChange(ctx, s.ID, nextAlias)
 	}
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)

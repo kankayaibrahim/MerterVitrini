@@ -88,9 +88,19 @@ export async function downloadSupplierExcelTemplateApi(token: string): Promise<v
 
 interface ExcelImportResult {
   imported_count: number;
+  updated_count: number;
   skipped_count: number;
   errors: string[];
   message: string;
+}
+
+interface ExcelImportApiResponse {
+  error?: string;
+  imported_count?: number;
+  updated_count?: number;
+  skipped_count?: number;
+  errors?: string[];
+  message?: string;
 }
 
 export function SupplierExcelImportModal({
@@ -143,23 +153,20 @@ export function SupplierExcelImportModal({
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      const data = (await res.json()) as {
-        error?: string;
-        imported_count?: number;
-        skipped_count?: number;
-        errors?: string[];
-        message?: string;
-      };
+      const data = (await res.json()) as ExcelImportApiResponse;
       if (!res.ok) {
         setErrorMsg(data.error || "Excel dosyası içe aktarılamadı.");
       } else {
+        const added = data.imported_count || 0;
+        const updated = data.updated_count || 0;
         setResult({
-          imported_count: data.imported_count || 0,
+          imported_count: added,
+          updated_count: updated,
           skipped_count: data.skipped_count || 0,
           errors: data.errors || [],
           message: data.message || "İçe aktarma tamamlandı.",
         });
-        if ((data.imported_count || 0) > 0) {
+        if (added + updated > 0) {
           onImported();
         }
       }
@@ -199,7 +206,10 @@ export function SupplierExcelImportModal({
         <div className="bg-slate-50 rounded-xl border border-slate-200 p-3.5 flex items-center justify-between gap-3">
           <div className="text-xs text-slate-600">
             <strong className="text-slate-900 block">1. Adım: Hazır Şablonu İndirin</strong>
-            <span>Kategori rehberli hazır Excel (.xlsx) şablonunu indirip ürünlerinizi doldurun.</span>
+            <span>
+              Kategori rehberli hazır Excel (.xlsx) şablonunu indirip ürünlerinizi doldurun.{" "}
+              <strong className="text-slate-800">Tedarikçi Model Kodu</strong> dolu satırlarda aynı kod tekrar yüklenirse mükerrer kayıt açılmaz, mevcut ürün güncellenir.
+            </span>
           </div>
           <button
             type="button"
@@ -238,7 +248,7 @@ export function SupplierExcelImportModal({
               <div className="flex items-center gap-2 font-extrabold text-emerald-900">
                 <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
                 <span>
-                  {result.imported_count} ürün başarıyla yüklendi ({result.skipped_count} satır atlandı).
+                  {result.imported_count} yeni eklendi, {result.updated_count} güncellendi ({result.skipped_count} satır atlandı).
                 </span>
               </div>
               {result.errors.length > 0 && (

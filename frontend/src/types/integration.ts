@@ -196,6 +196,7 @@ export interface SupplierProductRow {
   id: string;
   title: string;
   custom_sku: string;
+  sku?: string;
   category_id?: string;
   category_title: string;
   color_id?: string | null;

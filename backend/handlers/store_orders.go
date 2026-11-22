@@ -148,6 +148,7 @@ type orderCartItem struct {
 	Quantity             int
 	Title                string
 	CustomSku            string
+	SupplierSku          string
 	Price                float64
 	DiscountedPrice      *float64
 	Currency             string
@@ -164,7 +165,7 @@ type variantStockUpdate struct {
 func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, float64, error) {
 	rows, err := db.Pool.Query(ctx, `
 		SELECT ci.product_id, COALESCE(p.brand_id::text, ''), COALESCE(b.whatsapp_only_ordering, false),
-		       ci.quantity, p.title, p.custom_sku, p.price, COALESCE(ci.custom_unit_price, p.discounted_price),
+		       ci.quantity, p.title, p.custom_sku, COALESCE(p.sku, ''), p.price, COALESCE(ci.custom_unit_price, p.discounted_price),
 		       COALESCE(NULLIF(UPPER(TRIM(p.currency)), ''), 'TRY') as currency,
 		       p.series_ratio, p.stock,
 		       COALESCE(
@@ -188,7 +189,7 @@ func fetchUserCartItems(ctx context.Context, cartID string) ([]orderCartItem, fl
 		var item orderCartItem
 		err := rows.Scan(
 			&item.ProductID, &item.BrandID, &item.WhatsappOnlyOrdering,
-			&item.Quantity, &item.Title, &item.CustomSku, &item.Price, &item.DiscountedPrice,
+			&item.Quantity, &item.Title, &item.CustomSku, &item.SupplierSku, &item.Price, &item.DiscountedPrice,
 			&item.Currency, &item.SeriesRatio, &item.CurrentStock, &item.ImageUrl,
 		)
 		if err != nil {

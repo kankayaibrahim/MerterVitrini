@@ -30,8 +30,10 @@ import {
   isProductWhatsappOnly,
   getWhatsappOrderingCopy,
   buildProductWhatsappOrderLink,
+  formatDualProductSku,
 } from "@/utils/whatsappOrdering";
 import { getDirectSellerNoticeCopy } from "@/utils/legalNotices";
+import { SafeHtml, PRODUCT_DESCRIPTION_HTML_CLASS } from "@/components/common/SafeHtml";
 
 interface ModalLocalizedTexts {
   selectMinOneItem: string;
@@ -247,6 +249,214 @@ const EXCLUDED_ATTR_NAMES = new Set([
   "الجنس", "القماش", "نوع القماش", "اللون"
 ]);
 
+function resolveModalPricing(
+  product: Product,
+  displayCurrency: string | undefined,
+  exchangeRates: readonly ExchangeRate[] | undefined,
+  unitsPerPkg: number
+) {
+  const rawUnitPrice = product.price || 0.0;
+  const rawDiscountedPrice = product.discounted_price || 0.0;
+  const hasDiscount =
+    product.discounted_price < product.price && product.discounted_price > 0;
+
+  let unitPrice = rawUnitPrice;
+  let discountedPrice = rawDiscountedPrice;
+  let currency = displayCurrency || product.currency || "TRY";
+
+  if (displayCurrency && exchangeRates && exchangeRates.length > 0) {
+    unitPrice = convertPrice(
+      rawUnitPrice,
+      product.currency,
+      displayCurrency,
+      [...exchangeRates]
+    );
+    discountedPrice = convertPrice(
+      rawDiscountedPrice,
+      product.currency,
+      displayCurrency,
+      [...exchangeRates]
+    );
+  } else {
+    currency = product.currency || "TRY";
+  }
+
+  const finalPricePerUnit = hasDiscount ? discountedPrice : unitPrice;
+  const finalPkgPrice = unitsPerPkg * finalPricePerUnit;
+
+  return { unitPrice, discountedPrice, currency, hasDiscount, finalPkgPrice };
+}
+
+function resolveModalDirectWhatsAppUrl(
+  waOrderLinkUrl: string | undefined,
+  supplierWaDigits: string,
+  message: string
+): string {
+  if (waOrderLinkUrl) {
+    return waOrderLinkUrl;
+  }
+  if (!supplierWaDigits) {
+    return "";
+  }
+  return `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(message)}`;
+}
+
+function ModalTotalPriceValue({
+  isWhatsappOnly,
+  isAuthenticated,
+  waPriceBadge,
+  totalPrice,
+  currency,
+  lang,
+}: Readonly<{
+  isWhatsappOnly: boolean;
+  isAuthenticated: boolean;
+  waPriceBadge: string;
+  totalPrice: number;
+  currency: string;
+  lang: string;
+}>) {
+  if (isWhatsappOnly) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-2 py-0.5 rounded">
+        <MessageCircle className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
+        <span>{waPriceBadge}</span>
+      </span>
+    );
+  }
+
+  if (isAuthenticated) {
+    return (
+      <span>
+        {totalPrice.toFixed(2)} {currency}
+      </span>
+    );
+  }
+
+  return (
+    <span className="text-xs font-bold text-[#6E542E]">
+      {getShortMemberPriceLabel(lang)}
+    </span>
+  );
+}
+
+function ModalLightboxOverlay({
+  images,
+  title,
+  lang,
+  lightboxIndex,
+  setLightboxIndex,
+  onClose,
+}: Readonly<{
+  images: NonNullable<Product["images"]>;
+  title: string;
+  lang: string;
+  lightboxIndex: number;
+  setLightboxIndex: (idx: number | ((prev: number) => number)) => void;
+  onClose: () => void;
+}>) {
+  React.useEffect(() => {
+    const imageCount = images.length;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      } else if (e.key === "ArrowRight") {
+        setLightboxIndex((prev) => (prev + 1) % imageCount);
+      } else if (e.key === "ArrowLeft") {
+        setLightboxIndex((prev) => (prev - 1 + imageCount) % imageCount);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [images.length, onClose, setLightboxIndex]);
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col justify-between p-4 md:p-8 animate-in fade-in duration-200 select-none">
+      {/* Top Bar */}
+      <div className="flex justify-between items-center text-white w-full max-w-[1720px] mx-auto z-10">
+        <span className="text-xs font-extrabold tracking-wider bg-white/10 px-3.5 py-1.5 rounded-[5px]">
+          {lightboxIndex + 1} / {images.length}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("close_modal", lang)}
+          className="w-10 h-10 rounded-[5px] bg-white/10 hover:bg-white/20 hover:scale-105 border border-white/10 flex items-center justify-center text-white cursor-pointer transition-all active:scale-95"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Main Visualizer Area */}
+      <div className="flex-grow flex items-center justify-center relative w-full max-w-5xl mx-auto my-4">
+        {images.length > 1 && (
+          <button
+            type="button"
+            aria-label={t("prev", lang)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setLightboxIndex((prev) => (prev - 1 + images.length) % images.length);
+            }}
+            className="absolute left-2 md:left-4 z-20 w-11 h-11 rounded-[5px] bg-white/10 hover:bg-white/20 hover:scale-105 flex items-center justify-center text-white cursor-pointer transition-all border border-white/10 active:scale-95"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+        )}
+
+        <button
+          type="button"
+          aria-label={t("close_modal", lang)}
+          tabIndex={-1}
+          className="absolute inset-0 bg-transparent border-none cursor-default z-0"
+          onClick={onClose}
+        />
+
+        <div className="w-full h-full flex items-center justify-center p-2 relative z-10 pointer-events-none">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={images.at(lightboxIndex)?.image_url || ""}
+            alt={title}
+            className="max-w-full max-h-[70vh] md:max-h-[75vh] object-contain rounded-[8px] shadow-2xl transition-all duration-300 transform scale-100 ease-out pointer-events-auto"
+          />
+        </div>
+
+        {images.length > 1 && (
+          <button
+            type="button"
+            aria-label={t("next_image", lang)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setLightboxIndex((prev) => (prev + 1) % images.length);
+            }}
+            className="absolute right-2 md:right-4 z-20 w-11 h-11 rounded-[5px] bg-white/10 hover:bg-white/20 hover:scale-105 flex items-center justify-center text-white cursor-pointer transition-all border border-white/10 active:scale-95"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        )}
+      </div>
+
+      {images.length > 1 && (
+        <div className="w-full max-w-3xl mx-auto flex gap-2 justify-center overflow-x-auto py-3 scrollbar-none z-10">
+          {images.map((img, idx) => (
+            <button
+              key={img.id}
+              type="button"
+              onClick={() => setLightboxIndex(idx)}
+              className={`w-14 h-18 rounded-[4px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${lightboxIndex === idx
+                  ? "border-salmon-pink scale-105 shadow-md opacity-100"
+                  : "border-transparent opacity-40 hover:opacity-100"
+                }`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={img.image_url} alt="thumb" className="w-full h-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProductDetailsModal({
   product,
   lang,
@@ -272,23 +482,13 @@ export default function ProductDetailsModal({
   const weightPerUnit = product.shipping_weight_kg || 0.35;
   const totalPkgWeight = unitsPerPkg * weightPerUnit;
 
-  const rawUnitPrice = product.price || 0.0;
-  const rawDiscountedPrice = product.discounted_price || 0.0;
-  const hasDiscount = product.discounted_price < product.price && product.discounted_price > 0;
-
-  let unitPrice = rawUnitPrice;
-  let discountedPrice = rawDiscountedPrice;
-  let currency = displayCurrency || product.currency || "TRY";
-
-  if (displayCurrency && exchangeRates && exchangeRates.length > 0) {
-    unitPrice = convertPrice(rawUnitPrice, product.currency, displayCurrency, [...exchangeRates]);
-    discountedPrice = convertPrice(rawDiscountedPrice, product.currency, displayCurrency, [...exchangeRates]);
-  } else {
-    currency = product.currency || "TRY";
-  }
-
-  const finalPricePerUnit = hasDiscount ? discountedPrice : unitPrice;
-  const finalPkgPrice = unitsPerPkg * finalPricePerUnit;
+  const {
+    unitPrice,
+    discountedPrice,
+    currency,
+    hasDiscount,
+    finalPkgPrice,
+  } = resolveModalPricing(product, displayCurrency, exchangeRates, unitsPerPkg);
 
   // Lightbox Image visualizer state variables
   const [isLightboxOpen, setIsLightboxOpen] = React.useState<boolean>(false);
@@ -299,20 +499,6 @@ export default function ProductDetailsModal({
     setLightboxIndex(Math.max(idx, 0));
     setIsLightboxOpen(true);
   };
-
-  React.useEffect(() => {
-    if (!isLightboxOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsLightboxOpen(false);
-      else if (e.key === "ArrowRight") {
-        setLightboxIndex((prev) => (prev + 1) % (product.images?.length || 1));
-      } else if (e.key === "ArrowLeft") {
-        setLightboxIndex((prev) => (prev - 1 + (product.images?.length || 1)) % (product.images?.length || 1));
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isLightboxOpen, product.images]);
 
   const handleAdjustPkgQty = (change: number) => {
     const minPkgs = Math.ceil(product.minimum_order_quantity / unitsPerPkg);
@@ -356,17 +542,17 @@ export default function ProductDetailsModal({
     isAuthenticated: isAuthenticated && !isWhatsappOnly,
     supplierName,
     title,
-    sku: product.custom_sku || "-",
+    sku: formatDualProductSku(product.custom_sku, product.sku),
     pkgQty,
     totalPieces,
     totalPrice,
     currency,
   });
-  const directWaUrl = waOrderLink
-    ? waOrderLink.url
-    : supplierWaDigits
-      ? `https://wa.me/${supplierWaDigits}?text=${encodeURIComponent(directWaMessage)}`
-      : "";
+  const directWaUrl = resolveModalDirectWhatsAppUrl(
+    waOrderLink?.url,
+    supplierWaDigits,
+    directWaMessage
+  );
 
   const handleAddClick = () => {
     if (isWhatsappOnly) {
@@ -641,18 +827,14 @@ export default function ProductDetailsModal({
                   </div>
                   <div className="flex justify-between items-center text-sm text-[#1C1C1C] font-extrabold pt-2 border-t border-[#E5E0D8] mt-1.5">
                     <span>{t("total_price_calc", lang)} ({t("excluding_vat", lang)}):</span>
-                    {isWhatsappOnly ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-2 py-0.5 rounded">
-                        <MessageCircle className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
-                        <span>{waCopy.priceBadge}</span>
-                      </span>
-                    ) : isAuthenticated ? (
-                      <span>{totalPrice.toFixed(2)} {currency}</span>
-                    ) : (
-                      <span className="text-xs font-bold text-[#6E542E]">
-                        {getShortMemberPriceLabel(lang)}
-                      </span>
-                    )}
+                    <ModalTotalPriceValue
+                      isWhatsappOnly={isWhatsappOnly}
+                      isAuthenticated={isAuthenticated}
+                      waPriceBadge={waCopy.priceBadge}
+                      totalPrice={totalPrice}
+                      currency={currency}
+                      lang={lang}
+                    />
                   </div>
                 </div>
               </div>
@@ -760,14 +942,17 @@ export default function ProductDetailsModal({
           </div>
 
           {/* Bottom description overlay */}
-          <div className="border-t border-cultured pt-6 mt-2">
-            <h4 className="font-sans font-extrabold text-sm tracking-[0.5px] mb-2 uppercase text-eerie-black">
-              {t("description_label", lang)}
-            </h4>
-            <p className="text-xs text-sonic-silver leading-relaxed font-semibold whitespace-pre-line">
-              {desc}
-            </p>
-          </div>
+          {desc.trim().length > 0 && (
+            <div className="border-t border-cultured pt-6 mt-2">
+              <h4 className="font-sans font-extrabold text-sm tracking-[0.5px] mb-2 uppercase text-eerie-black">
+                {t("description_label", lang)}
+              </h4>
+              <SafeHtml
+                html={desc}
+                className={`text-xs ${PRODUCT_DESCRIPTION_HTML_CLASS}`}
+              />
+            </div>
+          )}
 
         </div>
 
@@ -775,94 +960,14 @@ export default function ProductDetailsModal({
 
       {/* C. LIGHTBOX PREMIUM IMAGE GALLERY POPUP */}
       {isLightboxOpen && product.images && product.images.length > 0 && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col justify-between p-4 md:p-8 animate-in fade-in duration-200 select-none">
-          {/* Top Bar */}
-          <div className="flex justify-between items-center text-white w-full max-w-[1720px] mx-auto z-10">
-            <span className="text-xs font-extrabold tracking-wider bg-white/10 px-3.5 py-1.5 rounded-[5px]">
-              {lightboxIndex + 1} / {product.images.length}
-            </span>
-            <button
-              type="button"
-              onClick={() => setIsLightboxOpen(false)}
-              aria-label={t("close_modal", lang)}
-              className="w-10 h-10 rounded-[5px] bg-white/10 hover:bg-white/20 hover:scale-105 border border-white/10 flex items-center justify-center text-white cursor-pointer transition-all active:scale-95"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Main Visualizer Area */}
-          <div className="flex-grow flex items-center justify-center relative w-full max-w-5xl mx-auto my-4">
-            {/* Left navigation arrow */}
-            {product.images.length > 1 && (
-              <button
-                type="button"
-                aria-label={t("prev", lang)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setLightboxIndex((prev) => (prev - 1 + product.images!.length) % product.images!.length);
-                }}
-                className="absolute left-2 md:left-4 z-20 w-11 h-11 rounded-[5px] bg-white/10 hover:bg-white/20 hover:scale-105 flex items-center justify-center text-white cursor-pointer transition-all border border-white/10 active:scale-95"
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
-            )}
-
-            {/* Backdrop click to close */}
-            <button
-              type="button"
-              aria-label={t("close_modal", lang)}
-              tabIndex={-1}
-              className="absolute inset-0 bg-transparent border-none cursor-default z-0"
-              onClick={() => setIsLightboxOpen(false)}
-            />
-
-            {/* Middle Image display */}
-            <div className="w-full h-full flex items-center justify-center p-2 relative z-10 pointer-events-none">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={product.images.at(lightboxIndex)?.image_url || ""}
-                alt={title}
-                className="max-w-full max-h-[70vh] md:max-h-[75vh] object-contain rounded-[8px] shadow-2xl transition-all duration-300 transform scale-100 ease-out pointer-events-auto"
-              />
-            </div>
-
-            {/* Right navigation arrow */}
-            {product.images.length > 1 && (
-              <button
-                type="button"
-                aria-label={t("next_image", lang)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setLightboxIndex((prev) => (prev + 1) % product.images!.length);
-                }}
-                className="absolute right-2 md:right-4 z-20 w-11 h-11 rounded-[5px] bg-white/10 hover:bg-white/20 hover:scale-105 flex items-center justify-center text-white cursor-pointer transition-all border border-white/10 active:scale-95"
-              >
-                <ChevronRight className="w-6 h-6" />
-              </button>
-            )}
-          </div>
-
-          {/* Bottom Thumbnails row */}
-          {product.images.length > 1 && (
-            <div className="w-full max-w-3xl mx-auto flex gap-2 justify-center overflow-x-auto py-3 scrollbar-none z-10">
-              {product.images.map((img, idx) => (
-                <button
-                  key={img.id}
-                  type="button"
-                  onClick={() => setLightboxIndex(idx)}
-                  className={`w-14 h-18 rounded-[4px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${lightboxIndex === idx
-                      ? "border-salmon-pink scale-105 shadow-md opacity-100"
-                      : "border-transparent opacity-40 hover:opacity-100"
-                    }`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.image_url} alt="thumb" className="w-full h-full object-cover" />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <ModalLightboxOverlay
+          images={product.images}
+          title={title}
+          lang={lang}
+          lightboxIndex={lightboxIndex}
+          setLightboxIndex={setLightboxIndex}
+          onClose={() => setIsLightboxOpen(false)}
+        />
       )}
     </div>
   );

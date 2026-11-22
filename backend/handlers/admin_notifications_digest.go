@@ -268,10 +268,25 @@ func executeScheduledDailyDigestTick(appCtx context.Context, cfg *config.Config)
 
 	if sendErr := mailer.SendMailEnvelope(cfg, cleanTo, cleanCC, subject, htmlBody, textBody); sendErr != nil {
 		log.Printf("[DAILY DIGEST ERROR] SMTP delivery failed: %v", sendErr)
-		recordNotificationLogToDB(tickCtx, mailer.EventDailyDigest, subject, cleanTo, cleanCC, "failed", sendErr.Error(), meta)
+		recordNotificationLogToDB(tickCtx, mailer.NotificationLogEntry{
+			EventKey:     mailer.EventDailyDigest,
+			Subject:      subject,
+			ToEmails:     cleanTo,
+			CCEmails:     cleanCC,
+			Status:       "failed",
+			ErrorMessage: sendErr.Error(),
+			Metadata:     meta,
+		})
 		return
 	}
-	recordNotificationLogToDB(tickCtx, mailer.EventDailyDigest, subject, cleanTo, cleanCC, "sent", "", meta)
+	recordNotificationLogToDB(tickCtx, mailer.NotificationLogEntry{
+		EventKey: mailer.EventDailyDigest,
+		Subject:  subject,
+		ToEmails: cleanTo,
+		CCEmails: cleanCC,
+		Status:   "sent",
+		Metadata: meta,
+	})
 	log.Printf("[DAILY DIGEST] Sent operational summary for %s to %d To / %d CC recipients.", todayStr, len(cleanTo), len(cleanCC))
 }
 

@@ -19,6 +19,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const errNotificationSchemaVerify = "Veritabanı şeması doğrulanamadı"
+
 var (
 	notificationSchemaOnce sync.Once
 	notificationSchemaErr  error
@@ -91,26 +93,28 @@ func resolveNotificationRouteFromDB(ctx context.Context, eventKey string) (maile
 	}, nil
 }
 
-func recordNotificationLogToDB(ctx context.Context, eventKey, subject string, toList, ccList []string, status, errMsg string, metadata map[string]any) {
+func recordNotificationLogToDB(ctx context.Context, entry mailer.NotificationLogEntry) {
 	if db.Pool == nil {
 		return
 	}
+	toList := entry.ToEmails
 	if toList == nil {
 		toList = []string{}
 	}
+	ccList := entry.CCEmails
 	if ccList == nil {
 		ccList = []string{}
 	}
 	metaBytes := []byte("{}")
-	if len(metadata) > 0 {
-		if encoded, err := json.Marshal(metadata); err == nil {
+	if len(entry.Metadata) > 0 {
+		if encoded, err := json.Marshal(entry.Metadata); err == nil {
 			metaBytes = encoded
 		}
 	}
 	_, _ = db.Pool.Exec(ctx, `
 		INSERT INTO identity.notification_logs (event_key, subject, to_emails, cc_emails, status, error_message, metadata)
 		VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
-	`, eventKey, subject, toList, ccList, status, errMsg, string(metaBytes))
+	`, entry.EventKey, entry.Subject, toList, ccList, entry.Status, entry.ErrorMessage, string(metaBytes))
 }
 
 // EnsureNotificationSettingsSchema provisions notification & product-deletion tracking tables idempotently.
@@ -495,7 +499,7 @@ func (h *AdminNotificationsHandler) GetDigestPreview(w http.ResponseWriter, r *h
 	defer cancel()
 
 	if err := EnsureNotificationSettingsSchema(ctx); err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "Veritabanı şeması doğrulanamadı")
+		httpx.Error(w, http.StatusInternalServerError, errNotificationSchemaVerify)
 		return
 	}
 
@@ -520,7 +524,7 @@ func (h *AdminNotificationsHandler) SendDigestNow(w http.ResponseWriter, r *http
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	if err := EnsureNotificationSettingsSchema(ctx); err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "Veritabanı şeması doğrulanamadı")
+		httpx.Error(w, http.StatusInternalServerError, errNotificationSchemaVerify)
 		return
 	}
 
@@ -540,12 +544,27 @@ func (h *AdminNotificationsHandler) SendDigestNow(w http.ResponseWriter, r *http
 	meta := map[string]any{"trigger": "manual", "report_date": data.ReportDate}
 
 	if sendErr := mailer.SendMailEnvelope(h.Cfg, toList, ccList, subject, htmlBody, textBody); sendErr != nil {
-		recordNotificationLogToDB(ctx, mailer.EventDailyDigest, subject, toList, ccList, "failed", sendErr.Error(), meta)
+		recordNotificationLogToDB(ctx, mailer.NotificationLogEntry{
+			EventKey:     mailer.EventDailyDigest,
+			Subject:      subject,
+			ToEmails:     toList,
+			CCEmails:     ccList,
+			Status:       "failed",
+			ErrorMessage: sendErr.Error(),
+			Metadata:     meta,
+		})
 		httpx.Error(w, http.StatusBadGateway, fmt.Sprintf("Özet e-postası gönderilemedi: %v", sendErr))
 		return
 	}
 
-	recordNotificationLogToDB(ctx, mailer.EventDailyDigest, subject, toList, ccList, "sent", "", meta)
+	recordNotificationLogToDB(ctx, mailer.NotificationLogEntry{
+		EventKey: mailer.EventDailyDigest,
+		Subject:  subject,
+		ToEmails: toList,
+		CCEmails: ccList,
+		Status:   "sent",
+		Metadata: meta,
+	})
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"success":   true,
 		"message":   fmt.Sprintf("Günlük özet raporu %d To ve %d CC alıcısına başarıyla gönderildi.", len(toList), len(ccList)),
@@ -577,7 +596,7 @@ func (h *AdminNotificationsHandler) SendTestNotification(w http.ResponseWriter, 
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	if err := EnsureNotificationSettingsSchema(ctx); err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "Veritabanı şeması doğrulanamadı")
+		httpx.Error(w, http.StatusInternalServerError, errNotificationSchemaVerify)
 		return
 	}
 
@@ -602,12 +621,27 @@ func (h *AdminNotificationsHandler) SendTestNotification(w http.ResponseWriter, 
 
 	meta := map[string]any{"trigger": "test"}
 	if sendErr := mailer.SendMailEnvelope(h.Cfg, toList, ccList, subject, htmlBody, textBody); sendErr != nil {
-		recordNotificationLogToDB(ctx, eventKey, subject, toList, ccList, "failed", sendErr.Error(), meta)
+		recordNotificationLogToDB(ctx, mailer.NotificationLogEntry{
+			EventKey:     eventKey,
+			Subject:      subject,
+			ToEmails:     toList,
+			CCEmails:     ccList,
+			Status:       "failed",
+			ErrorMessage: sendErr.Error(),
+			Metadata:     meta,
+		})
 		httpx.Error(w, http.StatusBadGateway, fmt.Sprintf("Test e-postası gönderilemedi: %v", sendErr))
 		return
 	}
 
-	recordNotificationLogToDB(ctx, eventKey, subject, toList, ccList, "sent", "", meta)
+	recordNotificationLogToDB(ctx, mailer.NotificationLogEntry{
+		EventKey: eventKey,
+		Subject:  subject,
+		ToEmails: toList,
+		CCEmails: ccList,
+		Status:   "sent",
+		Metadata: meta,
+	})
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"success":   true,
 		"message":   fmt.Sprintf("Test maili (%s) %d To ve %d CC alıcısına gönderildi.", eventKey, len(toList), len(ccList)),

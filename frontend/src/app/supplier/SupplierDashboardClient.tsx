@@ -154,6 +154,7 @@ interface SupplierLastDefaults {
 interface SupplierUnsavedDraft {
   savedAt: string;
   title: string;
+  supplierSku: string;
   shortDesc: string;
   description: string;
   categoryId: string;
@@ -205,6 +206,7 @@ function readSupplierUnsavedDraft(): SupplierUnsavedDraft | null {
     if (!parsed || typeof parsed !== "object" || !parsed.savedAt) return null;
     const hasData =
       Boolean(parsed.title?.trim()) ||
+      Boolean(parsed.supplierSku?.trim()) ||
       (Array.isArray(parsed.images) && parsed.images.length > 0) ||
       Number(parsed.price || 0) > 0 ||
       Boolean(parsed.linkWithProduct) ||
@@ -214,6 +216,7 @@ function readSupplierUnsavedDraft(): SupplierUnsavedDraft | null {
     return {
       savedAt: parsed.savedAt,
       title: parsed.title || "",
+      supplierSku: parsed.supplierSku || "",
       shortDesc: parsed.shortDesc || "",
       description: parsed.description || "",
       categoryId: parsed.categoryId || "",
@@ -320,6 +323,7 @@ function parseDetailImages(
 
 interface ProductPayloadParams {
   title: string;
+  supplierSku: string;
   shortDesc: string;
   description: string;
   categoryId: string;
@@ -377,6 +381,7 @@ function buildProductPayload(params: ProductPayloadParams) {
 
   return {
     title: params.title.trim(),
+    supplier_sku: params.supplierSku.trim(),
     short_description: params.shortDesc.trim() || undefined,
     description: params.description.trim() || undefined,
     category_id: params.categoryId || undefined,
@@ -787,6 +792,7 @@ function normalizeEditableProductDetail(
 
   return {
     title: strVal(data.title),
+    supplierSku: strVal(data.sku, prod.sku || ""),
     shortDesc: strVal(data.short_description),
     description: strVal(data.description),
     categoryId: strVal(data.category_id, prod.category_id || ""),
@@ -1022,6 +1028,13 @@ function SupplierProductTable({
                           <span className="font-mono text-[11px] text-slate-500 font-semibold">
                             {p.custom_sku}
                           </span>
+                          {p.sku &&
+                            p.sku.trim() !== "" &&
+                            p.sku.trim().toUpperCase() !== p.custom_sku.toUpperCase() && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px] font-bold">
+                                Model: {p.sku}
+                              </span>
+                            )}
                           {p.color && (
                             <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold">
                               {p.color}
@@ -2014,6 +2027,7 @@ export default function SupplierDashboardClient() {
 
   // Product Form State (Express & Detailed Unified)
   const [formTitle, setFormTitle] = useState("");
+  const [formSupplierSku, setFormSupplierSku] = useState("");
   const [formShortDesc, setFormShortDesc] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formCategoryId, setFormCategoryId] = useState("");
@@ -2049,6 +2063,7 @@ export default function SupplierDashboardClient() {
     if (activeModal !== "create" || pendingLocalDraft !== null) return;
     const hasMeaningfulContent =
       formTitle.trim().length > 0 ||
+      formSupplierSku.trim().length > 0 ||
       formImages.length > 0 ||
       formPrice > 0 ||
       linkWithProduct !== null ||
@@ -2059,6 +2074,7 @@ export default function SupplierDashboardClient() {
       saveSupplierUnsavedDraft({
         savedAt: new Date().toISOString(),
         title: formTitle,
+        supplierSku: formSupplierSku,
         shortDesc: formShortDesc,
         description: formDescription,
         categoryId: formCategoryId,
@@ -2086,6 +2102,7 @@ export default function SupplierDashboardClient() {
     activeModal,
     pendingLocalDraft,
     formTitle,
+    formSupplierSku,
     formShortDesc,
     formDescription,
     formCategoryId,
@@ -2195,6 +2212,7 @@ export default function SupplierDashboardClient() {
 
     setEditingProductId(null);
     setFormTitle("");
+    setFormSupplierSku("");
     setFormShortDesc("");
     setFormDescription("");
     setFormCategoryId(defaults.categoryId);
@@ -2240,6 +2258,7 @@ export default function SupplierDashboardClient() {
     if (!pendingLocalDraft) return;
     const d = pendingLocalDraft;
     setFormTitle(d.title);
+    setFormSupplierSku(d.supplierSku);
     setFormShortDesc(d.shortDesc);
     setFormDescription(d.description);
     setFormCategoryId(
@@ -2332,6 +2351,7 @@ export default function SupplierDashboardClient() {
       sizeDefinitions
     );
     setFormTitle(normalized.title);
+    setFormSupplierSku(normalized.supplierSku);
     setFormShortDesc(normalized.shortDesc);
     setFormDescription(normalized.description);
     setFormCategoryId(normalized.categoryId);
@@ -2390,6 +2410,7 @@ export default function SupplierDashboardClient() {
 
     const prodSeriesStock = prod.series_stock ?? 0;
     setFormTitle(prod.title || "");
+    setFormSupplierSku("");
     setFormShortDesc("");
     setFormDescription("");
     setFormCategoryId(prod.category_id || defaults.categoryId);
@@ -2491,6 +2512,7 @@ export default function SupplierDashboardClient() {
 
     const payload = buildProductPayload({
       title: formTitle,
+      supplierSku: formSupplierSku,
       shortDesc: formShortDesc,
       description: formDescription,
       categoryId: formCategoryId,
@@ -2804,6 +2826,8 @@ export default function SupplierDashboardClient() {
           onDiscardLocalDraft={handleDiscardLocalDraft}
           formTitle={formTitle}
           setFormTitle={setFormTitle}
+          formSupplierSku={formSupplierSku}
+          setFormSupplierSku={setFormSupplierSku}
           formCategoryId={formCategoryId}
           setFormCategoryId={setFormCategoryId}
           categories={categories}

@@ -23,6 +23,7 @@ export interface SupplierOrderItem {
   product_id: string;
   product_name: string;
   product_sku: string;
+  supplier_sku?: string;
   quantity: number;
   price_at_purchase: number;
   total_price: number;
@@ -280,6 +281,10 @@ function SupplierOrderCard({
                     </p>
                     <p className="text-[11px] text-slate-500 font-mono">
                       SKU: {item.product_sku}
+                      {item.supplier_sku &&
+                      item.supplier_sku.toUpperCase() !== item.product_sku.toUpperCase()
+                        ? ` • Model: ${item.supplier_sku}`
+                        : ""}
                       {item.series_ratio ? ` • Seri: ${item.series_ratio}` : ""}
                     </p>
                   </div>

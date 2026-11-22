@@ -1137,7 +1137,7 @@ def _resolve_brand_id(conn):
             if row and row[0]:
                 brand_id = str(row[0])
             else:
-                cur.execute("SELECT id FROM catalog.brands WHERE alias_code = 'EDUSA'")
+                cur.execute("SELECT id FROM catalog.brands WHERE alias_code IN ('JANES', 'EDUSA') ORDER BY CASE WHEN alias_code = 'JANES' THEN 0 ELSE 1 END LIMIT 1")
                 row = cur.fetchone()
                 if row and row[0]:
                     brand_id = str(row[0])
@@ -1435,7 +1435,7 @@ def _collect_secenek_images(secenek, product_uuid, title, category_tag, desc_tr_
         if not any(x[0] == img_url for x in images_by_product[product_uuid]):
             images_by_product[product_uuid].append((img_url, local_file_path, db_image_url))
             
-        tags_str = "; ".join([t for t in ["EDUSA", v_color, v_fabric] if t])
+        tags_str = "; ".join([t for t in ["JANES", v_color, v_fabric] if t])
         unique_downloads[local_file_path] = {
             "url": img_url,
             "title": title,

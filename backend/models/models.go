@@ -546,6 +546,8 @@ type SeriesTemplate struct {
 
 type SupplierProductInput struct {
 	Title                   string                              `json:"title"`
+	SupplierSKU             *string                             `json:"supplier_sku,omitempty"`
+	SKU                     *string                             `json:"sku,omitempty"`
 	ShortDescription        string                              `json:"short_description,omitempty"`
 	Description             string                              `json:"description,omitempty"`
 	CategoryID              string                              `json:"category_id"`
@@ -651,6 +653,7 @@ type SupplierSubOrderItem struct {
 	ProductID       string  `json:"product_id"`
 	ProductName     string  `json:"product_name"`
 	ProductSKU      string  `json:"product_sku"`
+	SupplierSKU     string  `json:"supplier_sku,omitempty"`
 	Quantity        int     `json:"quantity"`
 	PriceAtPurchase float64 `json:"price_at_purchase"`
 	TotalPrice      float64 `json:"total_price"`
@@ -690,6 +693,7 @@ type SupplierDirectOrderItem struct {
 	ProductID       string  `json:"product_id"`
 	Title           string  `json:"title"`
 	CustomSku       string  `json:"custom_sku"`
+	SupplierSku     string  `json:"supplier_sku,omitempty"`
 	PackagesQty     int     `json:"packages_qty"`
 	PiecesQty       int     `json:"pieces_qty"`
 	UnitsPerPackage int     `json:"units_per_package"`

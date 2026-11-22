@@ -1612,6 +1612,49 @@ func querySyncRunReadyProductRefs(ctx context.Context, query string, args ...any
 	return refs, rows.Err()
 }
 
+func formatSyncRunFeedLabel(feedName, brandName string) string {
+	feedLabel := strings.TrimSpace(feedName)
+	if brandName != "" && !strings.Contains(strings.ToLower(feedLabel), strings.ToLower(brandName)) {
+		if feedLabel != "" {
+			feedLabel = brandName + " (" + feedLabel + ")"
+		} else {
+			feedLabel = brandName
+		}
+	}
+	if feedLabel == "" {
+		return "XML Feed"
+	}
+	return feedLabel
+}
+
+func selectSyncRunIndexNowRefs(ctx context.Context, runID, feedLabel string, startedAt time.Time) ([]indexNowProductRef, string, error) {
+	targetRefs, err := querySyncRunReadyProductRefs(ctx, `
+		SELECT p.id::text, p.slug
+		FROM catalog.products p
+		WHERE p.last_sync_run_id = $1
+		  AND (p.indexnow_notified_at IS NULL OR p.created_at >= ($2 - INTERVAL '2 minutes'))
+		  AND `+indexNowProductReadyClause+`
+		ORDER BY p.created_at DESC`, runID, startedAt)
+	if err != nil {
+		return nil, "", fmt.Errorf("new product slugs: %w", err)
+	}
+	if len(targetRefs) > 0 {
+		return targetRefs, fmt.Sprintf("XML Senkronizasyon: %s (%d yeni ürün)", feedLabel, len(targetRefs)), nil
+	}
+
+	targetRefs, err = querySyncRunReadyProductRefs(ctx, `
+		SELECT p.id::text, p.slug
+		FROM catalog.products p
+		WHERE p.last_sync_run_id = $1
+		  AND `+indexNowProductReadyClause+`
+		ORDER BY p.updated_at DESC
+		LIMIT 50`, runID)
+	if err != nil {
+		return nil, "", fmt.Errorf("updated product slugs: %w", err)
+	}
+	return targetRefs, fmt.Sprintf("XML Senkronizasyon: %s (0 yeni, %d güncel ürün tazelendi)", feedLabel, len(targetRefs)), nil
+}
+
 // runIndexNowForSyncRun queries newly added (or updated) translation-ready active products in the given sync run,
 // expands localized URLs, submits them to IndexNow, and marks notified product IDs.
 func runIndexNowForSyncRun(runID string) {
@@ -1636,47 +1679,11 @@ func runIndexNowForSyncRun(runID string) {
 		return
 	}
 
-	feedLabel := strings.TrimSpace(feedName)
-	if brandName != "" && !strings.Contains(strings.ToLower(feedLabel), strings.ToLower(brandName)) {
-		if feedLabel != "" {
-			feedLabel = brandName + " (" + feedLabel + ")"
-		} else {
-			feedLabel = brandName
-		}
-	}
-	if feedLabel == "" {
-		feedLabel = "XML Feed"
-	}
-
-	// 1. Prioritize ALL unnotified / newly inserted translation-complete active products from this sync run
-	targetRefs, err := querySyncRunReadyProductRefs(ctx, `
-		SELECT p.id::text, p.slug
-		FROM catalog.products p
-		WHERE p.last_sync_run_id = $1
-		  AND (p.indexnow_notified_at IS NULL OR p.created_at >= ($2 - INTERVAL '2 minutes'))
-		  AND `+indexNowProductReadyClause+`
-		ORDER BY p.created_at DESC`, runID, startedAt)
+	feedLabel := formatSyncRunFeedLabel(feedName, brandName)
+	targetRefs, sourceLabel, err := selectSyncRunIndexNowRefs(ctx, runID, feedLabel, startedAt)
 	if err != nil {
-		log.Printf("[IndexNow XML Sync] Failed to query new product slugs: %v", err)
+		log.Printf("[IndexNow XML Sync] Failed to query %v", err)
 		return
-	}
-
-	sourceLabel := fmt.Sprintf("XML Senkronizasyon: %s (%d yeni ürün)", feedLabel, len(targetRefs))
-
-	// 2. If no brand-new/unnotified ready products exist, refresh up to 50 most recently updated ready products
-	if len(targetRefs) == 0 {
-		targetRefs, err = querySyncRunReadyProductRefs(ctx, `
-			SELECT p.id::text, p.slug
-			FROM catalog.products p
-			WHERE p.last_sync_run_id = $1
-			  AND `+indexNowProductReadyClause+`
-			ORDER BY p.updated_at DESC
-			LIMIT 50`, runID)
-		if err != nil {
-			log.Printf("[IndexNow XML Sync] Failed to query updated product slugs: %v", err)
-			return
-		}
-		sourceLabel = fmt.Sprintf("XML Senkronizasyon: %s (0 yeni, %d güncel ürün tazelendi)", feedLabel, len(targetRefs))
 	}
 
 	targetIDs, targetSlugs := extractProductRefIDsAndSlugs(targetRefs)

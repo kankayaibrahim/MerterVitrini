@@ -43,8 +43,19 @@ type NotificationRoute struct {
 	CCEmails []string
 }
 
+// NotificationLogEntry captures the delivery outcome of an admin notification email.
+type NotificationLogEntry struct {
+	EventKey     string
+	Subject      string
+	ToEmails     []string
+	CCEmails     []string
+	Status       string
+	ErrorMessage string
+	Metadata     map[string]any
+}
+
 type NotificationResolverFunc func(ctx context.Context, eventKey string) (NotificationRoute, error)
-type NotificationLoggerFunc func(ctx context.Context, eventKey, subject string, toList, ccList []string, status, errMsg string, metadata map[string]any)
+type NotificationLoggerFunc func(ctx context.Context, entry NotificationLogEntry)
 
 var (
 	notifyHooksMu        sync.RWMutex
@@ -106,12 +117,12 @@ func ResolveAdminNotificationRoute(ctx context.Context, cfg *config.Config, even
 	}
 }
 
-func logNotificationResult(ctx context.Context, eventKey, subject string, toList, ccList []string, status, errMsg string, metadata map[string]any) {
+func logNotificationResult(ctx context.Context, entry NotificationLogEntry) {
 	_, loggerFn := getNotificationHooks()
 	if loggerFn == nil {
 		return
 	}
-	loggerFn(ctx, eventKey, subject, toList, ccList, status, errMsg, metadata)
+	loggerFn(ctx, entry)
 }
 
 func validateSingleEmailToken(token string) (string, error) {
@@ -327,19 +338,50 @@ func DispatchAdminEventMail(cfg *config.Config, eventKey, subject, htmlBody, tex
 
 		route := ResolveAdminNotificationRoute(ctx, cfg, eventKey)
 		if !route.Enabled {
-			logNotificationResult(ctx, eventKey, subject, route.ToEmails, route.CCEmails, "skipped_disabled", "Bildirim kuralı yönetici ayarlarından pasif edildi", metadata)
+			logNotificationResult(ctx, NotificationLogEntry{
+				EventKey:     eventKey,
+				Subject:      subject,
+				ToEmails:     route.ToEmails,
+				CCEmails:     route.CCEmails,
+				Status:       "skipped_disabled",
+				ErrorMessage: "Bildirim kuralı yönetici ayarlarından pasif edildi",
+				Metadata:     metadata,
+			})
 			return
 		}
 		if len(route.ToEmails) == 0 {
-			logNotificationResult(ctx, eventKey, subject, route.ToEmails, route.CCEmails, "failed", "Tanımlı To alıcısı bulunamadı", metadata)
+			logNotificationResult(ctx, NotificationLogEntry{
+				EventKey:     eventKey,
+				Subject:      subject,
+				ToEmails:     route.ToEmails,
+				CCEmails:     route.CCEmails,
+				Status:       "failed",
+				ErrorMessage: "Tanımlı To alıcısı bulunamadı",
+				Metadata:     metadata,
+			})
 			return
 		}
 
 		err := SendMailEnvelope(cfg, route.ToEmails, route.CCEmails, subject, htmlBody, textBody)
 		if err != nil {
-			logNotificationResult(ctx, eventKey, subject, route.ToEmails, route.CCEmails, "failed", err.Error(), metadata)
+			logNotificationResult(ctx, NotificationLogEntry{
+				EventKey:     eventKey,
+				Subject:      subject,
+				ToEmails:     route.ToEmails,
+				CCEmails:     route.CCEmails,
+				Status:       "failed",
+				ErrorMessage: err.Error(),
+				Metadata:     metadata,
+			})
 			return
 		}
-		logNotificationResult(ctx, eventKey, subject, route.ToEmails, route.CCEmails, "sent", "", metadata)
+		logNotificationResult(ctx, NotificationLogEntry{
+			EventKey: eventKey,
+			Subject:  subject,
+			ToEmails: route.ToEmails,
+			CCEmails: route.CCEmails,
+			Status:   "sent",
+			Metadata: metadata,
+		})
 	})
 }

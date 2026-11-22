@@ -4,6 +4,7 @@ import React from "react";
 import { BadgeCheck, Building2, Check, MessageCircle, Phone } from "lucide-react";
 import { t } from "@/app/i18n";
 import { trackWhatsappClick } from "@/app/utils";
+import { formatDualProductSku } from "@/utils/whatsappOrdering";
 import type { SupplierDirectOrderSummary } from "@/types/store";
 import { getCartMultiSupplierCopy } from "@/components/store/cart/cartMultiSupplierCopy";
 
@@ -59,7 +60,7 @@ function SupplierDispatchCard({
         <ul className="m-0 pl-4 text-[11px] text-[#525252] space-y-0.5">
           {supplier.items.slice(0, 3).map((item) => (
             <li key={`${supplier.sub_order_id}-${item.product_id}`} className="truncate">
-              <strong className="text-[#1C1C1C]">{item.title}</strong> ({item.custom_sku}) ·{" "}
+              <strong className="text-[#1C1C1C]">{item.title}</strong> ({formatDualProductSku(item.custom_sku, item.supplier_sku)}) ·{" "}
               {item.packages_qty} {copy.packsShort} / {item.pieces_qty} {t("piece", lang)}
             </li>
           ))}
