@@ -556,7 +556,7 @@ const UI_TEXTS: Record<SupportedSeoLang, B2BUITexts> = {
       "Erhalten Sie Live-Videoberatungen aus dem Showroom, Staffelpreise und Lieferzeiten.",
     fastLineBtn: "Per WhatsApp schreiben",
     assuranceTitle: "Geprüfte B2B-Sicherheit",
-    assurance1: "Offizielle Netto-Exportrechnung inklusive ATR / EUR.1 Präфеrenz-Nachweis.",
+    assurance1: "Offizielle Netto-Exportrechnung inklusive ATR / EUR.1 Präferenznachweis.",
     assurance2: "Original verpackte Serienware geprüfter Hersteller aus Istanbul Merter.",
     assurance3: "Versicherter Tür-zu-Tür-Sammelversand in die gesamte EU.",
     waDefaultHello:

@@ -54,6 +54,7 @@ interface MobileAppLocaleCopy {
   readonly stripReleaseDateSize: string;
   readonly currentFallback: string;
   readonly stripPackageSignature: string;
+  readonly releaseSignedLabel: string;
   readonly whatsNewTitle: string;
   readonly defaultReleaseNote: string;
   readonly sha256Label: string;
@@ -86,6 +87,7 @@ const MOBILE_APP_COPY: Record<SupportedSeoLang, MobileAppLocaleCopy> = {
     stripReleaseDateSize: "YAYIN TARİHİ & BOYUT",
     currentFallback: "Güncel Sürüm",
     stripPackageSignature: "PAKET KİMLİĞİ & İMZA",
+    releaseSignedLabel: "İmzalı Sürüm",
     whatsNewTitle: "BU SÜRÜMDEKİ YENİLİKLER",
     defaultReleaseNote:
       "Merter Vitrini B2B Müşteri Mağazası ve Tedarikçi Kamera Stüdyosu resmi Android sürümü. Uygulama içi otomatik güncelleme (OTA) altyapısı dahildir.",
@@ -120,6 +122,7 @@ const MOBILE_APP_COPY: Record<SupportedSeoLang, MobileAppLocaleCopy> = {
     stripReleaseDateSize: "RELEASE DATE & SIZE",
     currentFallback: "Latest Release",
     stripPackageSignature: "PACKAGE ID & SIGNATURE",
+    releaseSignedLabel: "Release Signed",
     whatsNewTitle: "WHAT'S NEW IN THIS RELEASE",
     defaultReleaseNote:
       "Official Android release of Merter Vitrini B2B Buyer Storefront & Supplier Camera Studio with built-in SHA-256 verified OTA auto-updates.",
@@ -154,6 +157,7 @@ const MOBILE_APP_COPY: Record<SupportedSeoLang, MobileAppLocaleCopy> = {
     stripReleaseDateSize: "ДАТА ВЫПУСКА И РАЗМЕР",
     currentFallback: "Актуальный релиз",
     stripPackageSignature: "ID ПАКЕТА И ПОДПИСЬ",
+    releaseSignedLabel: "Официальная подпись",
     whatsNewTitle: "ЧТО НОВОГО В ЭТОЙ ВЕРСИИ",
     defaultReleaseNote:
       "Официальная Android-версия оптового магазина Merter Vitrini B2B и мобильной фотостудии поставщика со встроенным автообновлением OTA.",
@@ -187,6 +191,7 @@ const MOBILE_APP_COPY: Record<SupportedSeoLang, MobileAppLocaleCopy> = {
     stripReleaseDateSize: "تاريخ النشر والحجم",
     currentFallback: "أحدث إصدار",
     stripPackageSignature: "معرّف الحزمة والتوقيع",
+    releaseSignedLabel: "إصدار رسمي موقّع",
     whatsNewTitle: "الجديد في هذا الإصدار",
     defaultReleaseNote:
       "الإصدار الرسمي لنظام أندرويد لمتجر Merter Vitrini B2B واستوديو كاميرا الموردين مع نظام التحديث التلقائي المدمج (OTA).",
@@ -221,6 +226,7 @@ const MOBILE_APP_COPY: Record<SupportedSeoLang, MobileAppLocaleCopy> = {
     stripReleaseDateSize: "VERÖFFENTLICHUNG & GRÖSSE",
     currentFallback: "Aktuelle Version",
     stripPackageSignature: "PAKET-ID & SIGNATUR",
+    releaseSignedLabel: "Signierte Version",
     whatsNewTitle: "NEUIGKEITEN IN DIESER VERSION",
     defaultReleaseNote:
       "Offizielle Android-Version des Merter Vitrini B2B-Großhandels & Lieferanten-Kamerastudios inklusive SHA-256-gesichertem OTA-Update.",
@@ -255,6 +261,7 @@ const MOBILE_APP_COPY: Record<SupportedSeoLang, MobileAppLocaleCopy> = {
     stripReleaseDateSize: "DATE DE SORTIE & TAILLE",
     currentFallback: "Version à jour",
     stripPackageSignature: "ID DU PAQUET & SIGNATURE",
+    releaseSignedLabel: "Version signée",
     whatsNewTitle: "NOUVEAUTÉS DE CETTE VERSION",
     defaultReleaseNote:
       "Version officielle Android de la boutique B2B Merter Vitrini et du Studio Caméra Fournisseur avec mise à jour automatique OTA vérifiée par SHA-256.",
@@ -289,6 +296,7 @@ const MOBILE_APP_COPY: Record<SupportedSeoLang, MobileAppLocaleCopy> = {
     stripReleaseDateSize: "DATA WYDANIA I ROZMIAR",
     currentFallback: "Najnowsza wersja",
     stripPackageSignature: "ID PAKIETU I PODPIS",
+    releaseSignedLabel: "Podpisane wydanie",
     whatsNewTitle: "CO NOWEGO W TEJ WERSJI",
     defaultReleaseNote:
       "Oficjalne wydanie Android hurtowni Merter Vitrini B2B oraz Studia Kamery Producenta z automatycznymi aktualizacjami OTA (SHA-256).",
@@ -323,6 +331,7 @@ const MOBILE_APP_COPY: Record<SupportedSeoLang, MobileAppLocaleCopy> = {
     stripReleaseDateSize: "ДАТА НА ПУБЛИКУВАНЕ И РАЗМЕР",
     currentFallback: "Актуална версия",
     stripPackageSignature: "ПАКЕТЕН ID И ПОДПИС",
+    releaseSignedLabel: "Подписано издание",
     whatsNewTitle: "НОВОСТИ В ТАЗИ ВЕРСИЯ",
     defaultReleaseNote:
       "Официална Android версия на B2B магазина Merter Vitrini и Камера Студиото за доставчици с вградено OTA обновяване (SHA-256).",
@@ -545,7 +554,7 @@ export default function MobileAppDownloadClient({
                 {copy.stripPackageSignature}
               </div>
               <div className="mt-1 font-mono text-[11px] text-zinc-700 truncate">
-                {manifest?.package_id || "com.mertervitrini.app"} (Release Signed)
+                {manifest?.package_id || "com.mertervitrini.app"} ({copy.releaseSignedLabel})
               </div>
             </div>
           </div>

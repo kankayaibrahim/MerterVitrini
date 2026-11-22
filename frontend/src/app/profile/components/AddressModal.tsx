@@ -2,6 +2,7 @@ import React from "react";
 import { Clipboard, AlertCircle, Check } from "lucide-react";
 import { CountryLookup, StateLookup, CityLookup, UserAddress } from "./types";
 import { t } from "@/app/i18n";
+import { getLocalPhonePlaceholder } from "@/utils/phoneValidation";
 
 interface AddressModalProps {
   readonly isOpen: boolean;
@@ -92,6 +93,11 @@ export default function AddressModal({
   getAddressT,
 }: Readonly<AddressModalProps>) {
   if (!isOpen) return null;
+
+  const selectedPhoneCode = countries.find((c) => c.id === formCountryID)?.phone_code;
+  const localPhonePlaceholder = getLocalPhonePlaceholder(
+    selectedPhoneCode ? `+${selectedPhoneCode}` : "+90"
+  );
 
   return (
     <div className="fixed inset-0 bg-[#0c0d10]/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
@@ -191,7 +197,7 @@ export default function AddressModal({
                 disabled={states.length === 0}
                 className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-bold focus:outline-none focus:border-salmon-pink text-onyx cursor-pointer shadow-sm disabled:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:text-sonic-silver"
               >
-                <option value="">-- {states.length === 0 ? "N/A" : getAddressT("state_label")} --</option>
+                <option value="">-- {states.length === 0 ? "—" : getAddressT("state_label")} --</option>
                 {states.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.state_name}
@@ -211,7 +217,7 @@ export default function AddressModal({
                 disabled={cities.length === 0}
                 className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-lg text-xs font-bold focus:outline-none focus:border-salmon-pink text-onyx cursor-pointer shadow-sm disabled:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:text-sonic-silver"
               >
-                <option value="">-- {cities.length === 0 ? "N/A" : getAddressT("city_label")} --</option>
+                <option value="">-- {cities.length === 0 ? "—" : getAddressT("city_label")} --</option>
                 {cities.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -292,7 +298,7 @@ export default function AddressModal({
                   value={formPhoneOnly}
                   onChange={(e) => setFormPhoneOnly(e.target.value.replace(/\D/g, ""))}
                   className="w-full px-3.5 py-2.5 bg-white border border-cultured rounded-r-lg text-xs font-semibold focus:outline-none focus:border-salmon-pink focus:ring-salmon-pink transition-all shadow-inner text-eerie-black"
-                  placeholder="505 123 45 67"
+                  placeholder={localPhonePlaceholder}
                 />
               </div>
             </div>

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { X, Lock, Mail, User, Phone, Check, AlertCircle, Building2, Info } from "lucide-react";
-import { getCategoryPrefix, t } from "@/app/i18n";
+import { getCategoryPrefix, normalizeLangCode, t } from "@/app/i18n";
 import { ensureRecaptchaLoaded, executeRecaptchaAction, resolveRecaptchaSiteKey } from "@/utils/recaptcha";
 import { getOrSetVisitorId } from "@/components/analytics/AnalyticsTracker";
 import {
@@ -234,7 +234,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
           Authorization: `Bearer ${pendingAuthToken}`,
         },
         body: JSON.stringify({
-          first_name: pendingAuthUser?.first_name || "Müşteri",
+          first_name: pendingAuthUser?.first_name || t("customer_default_name", lang),
           last_name: pendingAuthUser?.last_name || "",
           phone: phoneCheck.normalized,
           preferred_lang: lang,
@@ -625,7 +625,11 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
 
               <div className="pt-3 text-center border-t border-cultured mt-3">
                 <Link
-                  href="/supplier/login"
+                  href={
+                    normalizeLangCode(lang) === "tr"
+                      ? "/supplier/login"
+                      : `/supplier/login?lang=${normalizeLangCode(lang)}`
+                  }
                   onClick={onClose}
                   className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 transition-colors"
                 >

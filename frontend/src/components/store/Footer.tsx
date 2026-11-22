@@ -37,8 +37,13 @@ function openPolicyOrFallback(
     onOpenPolicy(type);
     return;
   }
+  const fallbackSlugByType: Record<PolicyType, string> = {
+    cancellation_and_return: "iptal-iade-kosullari",
+    privacy_policy: "gizlilik-politikasi",
+    terms_of_service: "kullanici-sozlesmesi",
+  };
   if (typeof window !== "undefined") {
-    window.location.href = `/${prefix}/b2b`;
+    window.location.href = `/${prefix}/pages/${fallbackSlugByType[type]}`;
   }
 }
 
@@ -313,7 +318,7 @@ function FooterAboutColumn({ lang }: { readonly lang: string }) {
           </Link>
         </li>
         <li>
-          <Link href="/supplier/login" className="text-[#525252] hover:text-[#1C1C1C] font-semibold hover:underline transition-colors duration-200 inline-flex items-center gap-1.5">
+          <Link href={buildFooterQueryRoute("/supplier/login", lang)} className="text-[#525252] hover:text-[#1C1C1C] font-semibold hover:underline transition-colors duration-200 inline-flex items-center gap-1.5">
             <Building2 className="w-3.5 h-3.5 text-[#525252] shrink-0" />
             <span>{t("supplier_portal_login", lang)}</span>
           </Link>
@@ -444,7 +449,14 @@ function FooterAccountColumn({
             </button>
           </li>
           <li>
-            <Link href="/profile" className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200">
+            <Link
+              href={
+                normalizeLangCode(lang) === "tr"
+                  ? "/profile?tab=orders"
+                  : `/profile?tab=orders&lang=${normalizeLangCode(lang)}`
+              }
+              className="text-[#525252] hover:text-[#1C1C1C] hover:underline transition-colors duration-200"
+            >
               {t("order_tracking", lang)}
             </Link>
           </li>
@@ -452,7 +464,7 @@ function FooterAccountColumn({
       </div>
 
       <div className="pt-2">
-        <a 
+        <a
           href={whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
@@ -574,8 +586,8 @@ function FooterBottomBar({ lang, onOpenPolicy }: FooterBottomBarProps) {
         >
           {consentLabels.footerSettingsButton}
         </button>
-        <Link 
-          href={`/${prefix}/site-haritasi`} 
+        <Link
+          href={`/${prefix}/site-haritasi`}
           className="text-sonic-silver hover:text-[#1C1C1C] transition-colors no-underline"
         >
           {t("sitemap_title", lang)}

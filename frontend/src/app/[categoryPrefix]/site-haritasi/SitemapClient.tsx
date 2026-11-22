@@ -9,6 +9,7 @@ import PolicyViewerModal from "@/components/store/PolicyViewerModal";
 import { Category } from "@/types/store";
 import { BlogPost, Language } from "../blog/page";
 import { t, getCategoryTitle, getCategoryUrl } from "@/app/i18n";
+import { normalizeSeoLang } from "@/utils/seoHelpers";
 
 function subscribeCurrency(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -51,6 +52,7 @@ export default function SitemapClient({
 
   // --- UI States ---
   const [lang, setLang] = useState<string>(initialLang);
+  const safeLang = normalizeSeoLang(lang, "en");
   const [isLangOpen, setIsLangOpen] = useState<boolean>(false);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
   const [policyModalType, setPolicyModalType] = useState<"cancellation_and_return" | "terms_of_service" | "privacy_policy" | "">("");
@@ -131,7 +133,10 @@ export default function SitemapClient({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FDFDFD] font-sans antialiased text-onyx">
+    <div
+      dir={safeLang === "ar" ? "rtl" : "ltr"}
+      className="min-h-screen flex flex-col bg-[#FDFDFD] font-sans antialiased text-onyx"
+    >
       {/* Dynamic Storefront Header */}
       <Header
         lang={lang}
@@ -217,10 +222,14 @@ export default function SitemapClient({
             </h3>
             <ul className="space-y-2.5 text-xs font-semibold text-zinc-600">
               {blogPosts.length === 0 ? (
-                <li className="text-zinc-400 italic">No posts found</li>
+                <li className="text-zinc-400 italic">{t("no_posts_found", safeLang)}</li>
               ) : (
                 blogPosts.map((post) => {
-                  const translation = post.translations[lang] || post.translations["tr"] || post.translations["en"] || Object.values(post.translations)[0];
+                  const translation =
+                    post.translations[safeLang] ||
+                    post.translations["en"] ||
+                    post.translations["tr"] ||
+                    Object.values(post.translations)[0];
                   return (
                     <li key={post.id}>
                       <a href={`/${categoryPrefix}/blog/${translation?.slug || post.slug}/`} className="hover:text-accent-gold transition-colors font-bold text-zinc-700 line-clamp-2">

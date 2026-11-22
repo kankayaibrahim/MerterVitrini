@@ -4,6 +4,8 @@ import React, { useEffect, useState } from "react";
 import { X, Printer, Copy, Check, FileText, Calendar, AlertCircle } from "lucide-react";
 import { apiFetch } from "../../app/utils";
 import { pickLangText, SupportedLangCode, t } from "@/app/i18n";
+import SafeHtml from "@/components/common/SafeHtml";
+import { normalizeSeoLang } from "@/utils/seoHelpers";
 
 interface LegalPolicy {
   id: string;
@@ -196,11 +198,54 @@ function formatDate(dateStr: string, lang: string): string {
 
 function escapeHtml(str: string): string {
   return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function isHtmlPolicyContent(content: string): boolean {
+  const trimmed = content.trim();
+  return trimmed.startsWith("<") && trimmed.toLowerCase().includes("</");
+}
+
+function stripHtmlToPlainText(raw: string): string {
+  const normalizedBreaks = raw
+    .replaceAll("\r\n", "\n")
+    .replaceAll("</p>", "\n\n")
+    .replaceAll("</h2>", "\n")
+    .replaceAll("</h3>", "\n")
+    .replaceAll("</li>", "\n")
+    .replaceAll("<li>", "• ")
+    .replaceAll("<br>", "\n")
+    .replaceAll("<br/>", "\n")
+    .replaceAll("<br />", "\n");
+
+  let result = "";
+  let inTag = false;
+  for (const ch of normalizedBreaks) {
+    if (ch === "<") {
+      inTag = true;
+      continue;
+    }
+    if (ch === ">") {
+      inTag = false;
+      continue;
+    }
+    if (!inTag) {
+      result += ch;
+    }
+  }
+
+  return result
+    .replaceAll("&amp;", "&")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#039;", "'")
+    .replaceAll("&nbsp;", " ")
+    .trim();
 }
 
 interface PolicyModalBodyProps {
@@ -254,6 +299,14 @@ function PolicyModalBody({
   }
 
   if (policy) {
+    if (isHtmlPolicyContent(policy.content)) {
+      return (
+        <SafeHtml
+          html={policy.content}
+          className="prose prose-slate max-w-none text-slate-700 text-xs sm:text-sm leading-relaxed space-y-3 [&_h2]:font-extrabold [&_h2]:text-sm [&_h2]:sm:text-base [&_h2]:text-slate-900 [&_h2]:mt-5 [&_h2]:mb-2 [&_h2]:border-b [&_h2]:border-slate-100 [&_h2]:pb-1.5 [&_ul]:list-disc [&_ul]:ps-5 [&_ul]:space-y-1.5 [&_strong]:font-bold [&_strong]:text-slate-900"
+        />
+      );
+    }
     return (
       <article className="prose prose-slate max-w-none text-slate-700 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans">
         {policy.content}
@@ -276,7 +329,8 @@ export default function PolicyViewerModal({
   const [error, setError] = useState<string | null>(null);
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const [animate, setAnimate] = useState<boolean>(false);
-  const txt = pickLangText(lang, POLICY_UI_TEXTS);
+  const safeLang = normalizeSeoLang(lang, "tr");
+  const txt = pickLangText(safeLang, POLICY_UI_TEXTS);
 
   if (prevIsOpen !== isOpen) {
     setPrevIsOpen(isOpen);
@@ -296,13 +350,15 @@ export default function PolicyViewerModal({
     if (!isOpen || !policyType) return;
 
     async function fetchPolicy() {
-      const currentTxt = pickLangText(lang, POLICY_UI_TEXTS);
+      const currentTxt = pickLangText(safeLang, POLICY_UI_TEXTS);
       setLoading(true);
       setError(null);
       setPolicy(null);
 
       try {
-        const data = await apiFetch<LegalPolicy>(`/policies/${policyType}/active`);
+        const data = await apiFetch<LegalPolicy>(
+          `/policies/${policyType}/active?lang=${encodeURIComponent(safeLang)}`
+        );
         if (data) {
           setPolicy(data);
         } else {
@@ -317,12 +373,15 @@ export default function PolicyViewerModal({
     }
 
     void fetchPolicy();
-  }, [isOpen, policyType, lang]);
+  }, [isOpen, policyType, safeLang]);
 
   const handleCopy = async () => {
     if (!policy) return;
     try {
-      await navigator.clipboard.writeText(policy.content);
+      const plainText = isHtmlPolicyContent(policy.content)
+        ? stripHtmlToPlainText(policy.content)
+        : policy.content;
+      await navigator.clipboard.writeText(plainText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -336,16 +395,20 @@ export default function PolicyViewerModal({
     if (!printWindow) return;
 
     const escapedTitle = escapeHtml(policy.title);
-    const escapedContent = escapeHtml(policy.content);
+    const plainContent = isHtmlPolicyContent(policy.content)
+      ? stripHtmlToPlainText(policy.content)
+      : policy.content;
+    const escapedContent = escapeHtml(plainContent);
     const policyVersion = String(policy.version);
     const policyDate = new Date(policy.updated_at).toLocaleDateString(txt.locale);
+    const printDir = safeLang === "ar" ? "rtl" : "ltr";
 
     const htmlContent = `<!DOCTYPE html>
-<html>
+<html lang="${safeLang}" dir="${printDir}">
 <head>
 <title>${escapedTitle}</title>
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; direction: ${printDir}; }
 h1 { border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; font-size: 24px; color: #0f172a; }
 .meta { font-size: 12px; color: #64748b; margin-bottom: 30px; }
 pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; }
@@ -365,10 +428,11 @@ pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; }
 
   if (!isOpen) return null;
 
-  const modalTitle = getModalTitle(loading, policy, lang);
+  const modalTitle = getModalTitle(loading, policy, safeLang);
 
   return (
     <div
+      dir={safeLang === "ar" ? "rtl" : "ltr"}
       className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-all duration-300 ${
         animate ? "opacity-100" : "opacity-0"
       }`}

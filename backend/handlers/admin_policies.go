@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/middleware"
 	"mertervitrini/backend/models"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type PoliciesHandler struct{}
@@ -275,6 +277,68 @@ func (h *PoliciesHandler) ActivatePolicyVersion(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(p)
 }
 
+func normalizePolicyLang(raw string) string {
+	cleaned := strings.ToLower(strings.TrimSpace(raw))
+	if cleaned == "" {
+		return "tr"
+	}
+	if idx := strings.IndexAny(cleaned, "_-"); idx > 0 {
+		cleaned = cleaned[:idx]
+	}
+	switch cleaned {
+	case "tr", "en", "ru", "ar", "de", "fr", "pl", "bg":
+		return cleaned
+	default:
+		return "tr"
+	}
+}
+
+func policyTypeToPageSlug(policyType string) string {
+	switch strings.TrimSpace(policyType) {
+	case "cancellation_and_return":
+		return "iptal-iade-kosullari"
+	case "terms_of_service":
+		return "kullanici-sozlesmesi"
+	case "privacy_policy":
+		return "gizlilik-politikasi"
+	case "supplier_agreement":
+		return "tedarikci-sozlesmesi"
+	case "copyright_and_takedown":
+		return "telif-hakki-ve-uyar-kaldir"
+	case "cookie_policy":
+		return "cerez-politikasi"
+	default:
+		return ""
+	}
+}
+
+func loadLocalizedPolicyFromCMS(ctx context.Context, policyType, lang string) (string, string, bool) {
+	if lang == "" || lang == "tr" || db.Pool == nil {
+		return "", "", false
+	}
+	slug := policyTypeToPageSlug(policyType)
+	if slug == "" {
+		return "", "", false
+	}
+
+	var title, content string
+	err := db.Pool.QueryRow(ctx, `
+		SELECT pt.title, pt.content
+		FROM catalog.pages p
+		JOIN catalog.page_translations pt ON pt.page_id = p.id
+		WHERE p.slug = $1 AND p.is_active = true AND pt.language_code IN ($2, 'en')
+		ORDER BY CASE WHEN pt.language_code = $2 THEN 0 ELSE 1 END
+		LIMIT 1
+	`, slug, lang).Scan(&title, &content)
+	if err != nil {
+		return "", "", false
+	}
+	if strings.TrimSpace(title) == "" || strings.TrimSpace(content) == "" {
+		return "", "", false
+	}
+	return title, content, true
+}
+
 // GetActivePolicyByType (Public Endpoint) returns the active policy version for a type to be viewed on the storefront
 func (h *PoliciesHandler) GetActivePolicyByType(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -317,10 +381,18 @@ func (h *PoliciesHandler) GetActivePolicyByType(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	lang := normalizePolicyLang(r.URL.Query().Get("lang"))
+	if lang != "tr" {
+		if locTitle, locContent, ok := loadLocalizedPolicyFromCMS(ctx, policyType, lang); ok {
+			p.Title = locTitle
+			p.Content = locContent
+		}
+	}
+
 	// Expose header to allow browsers to inspect policy metadata
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.Header().Set("X-Policy-Version", fmt.Sprintf("%d", p.Version))
-	w.Header().Set("Access-Control-Expose-Headers", "X-Policy-Version")
+	w.Header().Set("X-Policy-Language", lang)
+	w.Header().Set("Access-Control-Expose-Headers", "X-Policy-Version, X-Policy-Language")
 	json.NewEncoder(w).Encode(p)
 }
-

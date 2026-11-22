@@ -1,34 +1,66 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { 
-  Building2, 
-  Globe2, 
-  Award, 
-  Truck, 
-  Coins, 
-  ChevronRight, 
-  ArrowRight 
+import {
+  Building2,
+  Globe2,
+  Award,
+  Truck,
+  Coins,
+  ChevronRight,
+  ArrowRight,
 } from "lucide-react";
 import SupplierApplicationSection from "@/components/store/SupplierApplicationSection";
 import Footer from "@/components/store/Footer";
+import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+import AuthModal from "@/components/store/AuthModal";
+import { SUPPORTED_SEO_LANGS, normalizeSeoLang } from "@/utils/seoHelpers";
 import { SUPPLIER_TRANSLATIONS, SupplierPageTranslations } from "./translations";
 
 interface SupplierApplicationClientProps {
   readonly lang: string;
 }
 
-export default function SupplierApplicationClient({ lang }: Readonly<SupplierApplicationClientProps>) {
-  const t: SupplierPageTranslations = SUPPLIER_TRANSLATIONS[lang] || SUPPLIER_TRANSLATIONS.en;
-  const isRtl = lang === "ar";
+export default function SupplierApplicationClient({
+  lang,
+}: Readonly<SupplierApplicationClientProps>) {
+  const safeLang = normalizeSeoLang(lang, "en");
+  const t: SupplierPageTranslations =
+    SUPPLIER_TRANSLATIONS[safeLang] || SUPPLIER_TRANSLATIONS.en;
+  const isRtl = safeLang === "ar";
+  const supplierLoginHref =
+    safeLang === "tr" ? "/supplier/login" : `/supplier/login?lang=${safeLang}`;
+
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
+  const [policyModalType, setPolicyModalType] = useState<
+    "cancellation_and_return" | "terms_of_service" | "privacy_policy" | ""
+  >("");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register">(
+    "login"
+  );
+
+  useEffect(() => {
+    const handleOpenAuth = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ mode?: "login" | "register" }>)
+        .detail;
+      setAuthModalMode(detail?.mode === "register" ? "register" : "login");
+      setIsAuthModalOpen(true);
+    };
+    window.addEventListener("merter-open-auth", handleOpenAuth);
+    return () => window.removeEventListener("merter-open-auth", handleOpenAuth);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex flex-col justify-between font-sans" dir={isRtl ? "rtl" : "ltr"}>
+    <div
+      className="min-h-screen bg-zinc-50 flex flex-col justify-between font-sans"
+      dir={isRtl ? "rtl" : "ltr"}
+    >
       {/* Top Bar / Navigation */}
       <header className="bg-white border-b border-zinc-200/80 sticky top-0 z-40">
-        <div className="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href={`/${lang}`} className="flex items-center gap-2.5">
+        <div className="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 min-h-16 py-2 flex flex-wrap items-center justify-between gap-3">
+          <Link href={`/${safeLang}`} className="flex items-center gap-2.5">
             <span className="bg-black text-white px-2 py-0.5 rounded-none text-xs font-black tracking-widest">
               B2B
             </span>
@@ -37,16 +69,32 @@ export default function SupplierApplicationClient({ lang }: Readonly<SupplierApp
             </span>
           </Link>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+            <div className="hidden md:flex items-center gap-1">
+              {SUPPORTED_SEO_LANGS.map((code) => (
+                <Link
+                  key={code}
+                  href={`/${code}/tedarikci-basvuru`}
+                  className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase border transition-colors ${
+                    safeLang === code
+                      ? "bg-zinc-950 text-white border-zinc-950"
+                      : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400"
+                  }`}
+                >
+                  {code}
+                </Link>
+              ))}
+            </div>
+
             <Link
-              href="/supplier/login"
+              href={supplierLoginHref}
               className="text-xs font-bold text-zinc-600 hover:text-zinc-950 transition-colors flex items-center gap-1"
             >
               <span>{t.supplier_login}</span>
               <ArrowRight size={13} className={isRtl ? "rotate-180" : ""} />
             </Link>
             <Link
-              href={`/${lang}`}
+              href={`/${safeLang}`}
               className="text-xs text-zinc-500 hover:text-zinc-800 transition-colors hidden sm:inline-block"
             >
               {t.back_to_shop}
@@ -61,11 +109,16 @@ export default function SupplierApplicationClient({ lang }: Readonly<SupplierApp
           <div className="max-w-5xl mx-auto">
             {/* Breadcrumb */}
             <nav className="flex items-center gap-1.5 text-xs text-zinc-400 mb-6 font-medium">
-              <Link href={`/${lang}`} className="hover:text-zinc-700 transition-colors">
+              <Link
+                href={`/${safeLang}`}
+                className="hover:text-zinc-700 transition-colors"
+              >
                 {t.nav_home}
               </Link>
               <ChevronRight size={13} className={isRtl ? "rotate-180" : ""} />
-              <span className="text-zinc-900 font-semibold">{t.nav_supplier_apply}</span>
+              <span className="text-zinc-900 font-semibold">
+                {t.nav_supplier_apply}
+              </span>
             </nav>
 
             <div className="max-w-3xl">
@@ -87,7 +140,9 @@ export default function SupplierApplicationClient({ lang }: Readonly<SupplierApp
                 <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center mb-3.5 shadow-sm">
                   <Globe2 size={20} />
                 </div>
-                <h2 className="font-bold text-sm text-zinc-950">{t.feature_1_title}</h2>
+                <h2 className="font-bold text-sm text-zinc-950">
+                  {t.feature_1_title}
+                </h2>
                 <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
                   {t.feature_1_desc}
                 </p>
@@ -97,7 +152,9 @@ export default function SupplierApplicationClient({ lang }: Readonly<SupplierApp
                 <div className="w-10 h-10 rounded-xl bg-amber-500 text-black flex items-center justify-center mb-3.5 shadow-sm">
                   <Award size={20} />
                 </div>
-                <h2 className="font-bold text-sm text-zinc-950">{t.feature_2_title}</h2>
+                <h2 className="font-bold text-sm text-zinc-950">
+                  {t.feature_2_title}
+                </h2>
                 <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
                   {t.feature_2_desc}
                 </p>
@@ -107,7 +164,9 @@ export default function SupplierApplicationClient({ lang }: Readonly<SupplierApp
                 <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center mb-3.5 shadow-sm">
                   <Coins size={20} />
                 </div>
-                <h2 className="font-bold text-sm text-zinc-950">{t.feature_3_title}</h2>
+                <h2 className="font-bold text-sm text-zinc-950">
+                  {t.feature_3_title}
+                </h2>
                 <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
                   {t.feature_3_desc}
                 </p>
@@ -117,7 +176,9 @@ export default function SupplierApplicationClient({ lang }: Readonly<SupplierApp
                 <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center mb-3.5 shadow-sm">
                   <Truck size={20} />
                 </div>
-                <h2 className="font-bold text-sm text-zinc-950">{t.feature_4_title}</h2>
+                <h2 className="font-bold text-sm text-zinc-950">
+                  {t.feature_4_title}
+                </h2>
                 <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
                   {t.feature_4_desc}
                 </p>
@@ -127,11 +188,35 @@ export default function SupplierApplicationClient({ lang }: Readonly<SupplierApp
         </div>
 
         {/* The Localized Form Section */}
-        <SupplierApplicationSection lang={lang} />
+        <SupplierApplicationSection lang={safeLang} />
       </main>
 
       {/* Footer without duplicate application form */}
-      <Footer lang={lang} showApplicationForm={false} />
+      <Footer
+        lang={safeLang}
+        showApplicationForm={false}
+        onOpenPolicy={(type) => {
+          setPolicyModalType(type);
+          setIsPolicyModalOpen(true);
+        }}
+      />
+
+      <PolicyViewerModal
+        isOpen={isPolicyModalOpen}
+        onClose={() => {
+          setIsPolicyModalOpen(false);
+          setPolicyModalType("");
+        }}
+        policyType={policyModalType}
+        lang={safeLang}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        lang={safeLang}
+        initialMode={authModalMode}
+      />
     </div>
   );
 }

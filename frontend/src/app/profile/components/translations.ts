@@ -276,7 +276,7 @@ export const addressTranslations: Record<string, Record<string, string>> = {
     postal_code_required_error: "Die Postleitzahl ist erforderlich.",
     phone_invalid_error: "Ungültige Telefonnummer.",
     phone_tr_length_error: "Türkische Telefonnummern müssen 10-stellig sein (z.B. 5324819264).",
-    phone_intl_length_error: "Die Telefonnummer muss zwischen 6 and 15 Ziffern lang sein.",
+    phone_intl_length_error: "Die Telefonnummer muss zwischen 6 und 15 Ziffern lang sein.",
     country_required_error: "Bitte wählen Sie zuerst ein Land aus.",
   },
   fr: {

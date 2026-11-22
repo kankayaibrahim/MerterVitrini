@@ -1,0 +1,318 @@
+import type { SupportedSeoLang } from "@/utils/seoHelpers";
+
+export interface SupplierLoginCopy {
+  readonly metaTitle: string;
+  readonly metaDesc: string;
+  readonly portalSubtitle: string;
+  readonly backToStore: string;
+  readonly verifiedStudioBadge: string;
+  readonly heading: string;
+  readonly subtitle: string;
+  readonly verifyingSession: string;
+  readonly emailLabel: string;
+  readonly emailPlaceholder: string;
+  readonly passwordLabel: string;
+  readonly forgotPasswordBtn: string;
+  readonly showPasswordAria: string;
+  readonly hidePasswordAria: string;
+  readonly recoveryTitle: string;
+  readonly recoveryDesc: string;
+  readonly recoveryMailSubject: string;
+  readonly recoveryMailBodyPrefix: string;
+  readonly recoveryMailBodyDefaultEmail: string;
+  readonly recoveryMailBodySuffix: string;
+  readonly whatsappSupportBtn: string;
+  readonly whatsappPrefill: string;
+  readonly submitBtn: string;
+  readonly submittingBtn: string;
+  readonly notSupplierYet: string;
+  readonly sslBadge: string;
+  readonly copyright: string;
+  readonly errorEmptyFields: string;
+  readonly errorInvalidCredentials: string;
+  readonly errorSessionVerify: string;
+  readonly errorGenericLogin: string;
+}
+
+export const SUPPLIER_LOGIN_COPY: Record<SupportedSeoLang, SupplierLoginCopy> = {
+  tr: {
+    metaTitle: "Tedarikçi Girişi | Merter Vitrini B2B Tedarikçi Portalı",
+    metaDesc: "Merter Vitrini toptancı tedarikçi giriş ve ürün yönetim paneli.",
+    portalSubtitle: "Tedarikçi Portalı",
+    backToStore: "Mağaza Vitrini",
+    verifiedStudioBadge: "Doğrulanmış B2B Tedarikçi Stüdyosu",
+    heading: "Tedarikçi Girişi",
+    subtitle:
+      "Ürünlerinizi, stoklarınızı, siparişlerinizi ve toptan müşteri mesajlarınızı yönetmek için giriş yapınız.",
+    verifyingSession: "Oturumunuz doğrulanıyor, yönlendiriliyorsunuz...",
+    emailLabel: "Kurumsal E-Posta",
+    emailPlaceholder: "ornek@tedarikci.com",
+    passwordLabel: "Şifre",
+    forgotPasswordBtn: "Şifremi Unuttum / Destek",
+    showPasswordAria: "Şifreyi göster",
+    hidePasswordAria: "Şifreyi gizle",
+    recoveryTitle: "Parola Sıfırlama & Tedarikçi Erişim Desteği",
+    recoveryDesc:
+      "Güvenliğiniz için kurumsal tedarikçi hesaplarının parolaları doğrulanmış e-posta veya B2B Tedarikçi Destek birimimiz üzerinden yenilenir. Satış temsilcisi alt kullanıcı şifreleri ise firma ana yetkilisi tarafından panel içinden sıfırlanabilir.",
+    recoveryMailSubject: "Tedarikçi Portalı Parola Sıfırlama Talebi",
+    recoveryMailBodyPrefix:
+      "Merhaba Merter Vitrini Tedarikçi Destek Ekibi,\n\nKurumsal tedarikçi hesabım (",
+    recoveryMailBodyDefaultEmail: "firma e-posta adresim",
+    recoveryMailBodySuffix: ") için parola sıfırlama / yeni aktivasyon bağlantısı talep ediyorum.",
+    whatsappSupportBtn: "WhatsApp Destek",
+    whatsappPrefill: "Merhaba, Merter Vitrini Tedarikçi Portalı parola sıfırlama desteği talep ediyorum.",
+    submitBtn: "Tedarikçi Paneline Giriş Yap",
+    submittingBtn: "Giriş Yapılıyor...",
+    notSupplierYet: "Henüz tedarikçimiz değil misiniz? Başvuru Yapın",
+    sslBadge: "Güvenli 256-Bit SSL Şifreli Giriş",
+    copyright: "© 2026 Merter Vitrini B2B E-Ticaret Platformu. Tüm hakları saklıdır.",
+    errorEmptyFields: "Lütfen kurumsal e-posta adresinizi ve şifrenizi giriniz.",
+    errorInvalidCredentials: "E-posta veya şifre hatalı.",
+    errorSessionVerify: "Giriş oturumu doğrulanamadı.",
+    errorGenericLogin: "Giriş yapılırken bir hata oluştu.",
+  },
+  en: {
+    metaTitle: "Supplier Portal Login | Merter Vitrini B2B",
+    metaDesc: "Authorized wholesale manufacturer login and catalog management portal for Merter Vitrini B2B.",
+    portalSubtitle: "Supplier Portal",
+    backToStore: "Storefront",
+    verifiedStudioBadge: "Verified B2B Supplier Studio",
+    heading: "Supplier Login",
+    subtitle:
+      "Sign in to manage your wholesale products, live series inventory, orders, and buyer inquiries.",
+    verifyingSession: "Verifying your session, redirecting...",
+    emailLabel: "Corporate Email",
+    emailPlaceholder: "contact@yourfactory.com",
+    passwordLabel: "Password",
+    forgotPasswordBtn: "Forgot Password / Support",
+    showPasswordAria: "Show password",
+    hidePasswordAria: "Hide password",
+    recoveryTitle: "Password Reset & Supplier Access Support",
+    recoveryDesc:
+      "For corporate security, primary supplier account passwords are reset via verified email or our B2B Supplier Support Desk. Sub-account passwords can be reset by your company administrator inside the portal.",
+    recoveryMailSubject: "Supplier Portal Password Reset Request",
+    recoveryMailBodyPrefix: "Hello Merter Vitrini Supplier Support Team,\n\nI would like to request a password reset / activation link for my supplier account (",
+    recoveryMailBodyDefaultEmail: "company email address",
+    recoveryMailBodySuffix: ").",
+    whatsappSupportBtn: "WhatsApp Support",
+    whatsappPrefill: "Hello, I would like password reset support for the Merter Vitrini Supplier Portal.",
+    submitBtn: "Sign In to Supplier Portal",
+    submittingBtn: "Signing in...",
+    notSupplierYet: "Not a verified supplier yet? Apply now",
+    sslBadge: "256-Bit SSL Encrypted Access",
+    copyright: "© 2026 Merter Vitrini B2B Wholesale Platform. All rights reserved.",
+    errorEmptyFields: "Please enter your corporate email address and password.",
+    errorInvalidCredentials: "Invalid email address or password.",
+    errorSessionVerify: "Unable to verify login session.",
+    errorGenericLogin: "An error occurred while signing in.",
+  },
+  ru: {
+    metaTitle: "Вход для Поставщиков | Merter Vitrini B2B",
+    metaDesc: "Вход в личный кабинет производителя и управление оптовым каталогом Merter Vitrini B2B.",
+    portalSubtitle: "Портал Поставщика",
+    backToStore: "Витрина магазина",
+    verifiedStudioBadge: "Проверенная студия поставщика B2B",
+    heading: "Вход для поставщиков",
+    subtitle:
+      "Войдите для управления оптовыми коллекциями, остатками серий, заказами и перепиской с байерами.",
+    verifyingSession: "Проверка сессии, перенаправление...",
+    emailLabel: "Корпоративный E-mail",
+    emailPlaceholder: "info@factory.com",
+    passwordLabel: "Пароль",
+    forgotPasswordBtn: "Забыли пароль / Поддержка",
+    showPasswordAria: "Показать пароль",
+    hidePasswordAria: "Скрыть пароль",
+    recoveryTitle: "Сброс пароля и поддержка доступа",
+    recoveryDesc:
+      "В целях безопасности пароли основных аккаунтов поставщиков восстанавливаются через подтвержденный e-mail или службу B2B поддержки. Пароли менеджеров сбрасываются владельцем аккаунта в кабинете.",
+    recoveryMailSubject: "Запрос на сброс пароля Портала Поставщика",
+    recoveryMailBodyPrefix: "Здравствуйте, команда поддержки Merter Vitrini!\n\nПрошу выслать ссылку для сброса пароля моей корпоративной учетной записи (",
+    recoveryMailBodyDefaultEmail: "корпоративный e-mail",
+    recoveryMailBodySuffix: ").",
+    whatsappSupportBtn: "Поддержка WhatsApp",
+    whatsappPrefill: "Здравствуйте! Мне нужна помощь со сбросом пароля для Портала Поставщика Merter Vitrini.",
+    submitBtn: "Войти в кабинет поставщика",
+    submittingBtn: "Выполняется вход...",
+    notSupplierYet: "Еще не стали нашим поставщиком? Подать заявку",
+    sslBadge: "Защищенный вход по 256-битному SSL",
+    copyright: "© 2026 Merter Vitrini B2B Платформа. Все права защищены.",
+    errorEmptyFields: "Пожалуйста, введите корпоративный e-mail и пароль.",
+    errorInvalidCredentials: "Неверный e-mail или пароль.",
+    errorSessionVerify: "Не удалось подтвердить сессию входа.",
+    errorGenericLogin: "Произошла ошибка при входе.",
+  },
+  ar: {
+    metaTitle: "دخول بوابة الموردين | Merter Vitrini B2B",
+    metaDesc: "بوابة تسجيل دخول المصانع والموردين لإدارة الكتالوج والطلبات على Merter Vitrini B2B.",
+    portalSubtitle: "بوابة الموردين",
+    backToStore: "العودة للمتجر",
+    verifiedStudioBadge: "استوديو الموردين المعتمد B2B",
+    heading: "تسجيل دخول الموردين",
+    subtitle: "سجّل الدخول لإدارة منتجاتك ومخزون السيري والطلبات ورسائل تجار الجملة.",
+    verifyingSession: "جاري التحقق من جلستك وإعادة التوجيه...",
+    emailLabel: "البريد الإلكتروني للشركة",
+    emailPlaceholder: "info@yourcompany.com",
+    passwordLabel: "كلمة المرور",
+    forgotPasswordBtn: "نسيت كلمة المرور / الدعم",
+    showPasswordAria: "إظهار كلمة المرور",
+    hidePasswordAria: "إخفاء كلمة المرور",
+    recoveryTitle: "استعادة كلمة المرور ودعم دخول الموردين",
+    recoveryDesc:
+      "لأمان حسابات الشركات، يتم تجديد كلمات المرور لحسابات الموردين الرئيسية عبر البريد المؤكد أو فريق دعم الموردين B2B، بينما يمكن لمسؤول الشركة إعادة تعيين كلمات مرور موظفي المبيعات من داخل اللوحة.",
+    recoveryMailSubject: "طلب إعادة تعيين كلمة مرور بوابة الموردين",
+    recoveryMailBodyPrefix: "مرحباً فريق دعم موردي Merter Vitrini،\n\nأطلب رابط إعادة تعيين كلمة المرور لحساب شركتنا (",
+    recoveryMailBodyDefaultEmail: "البريد الإلكتروني للشركة",
+    recoveryMailBodySuffix: ").",
+    whatsappSupportBtn: "دعم واتساب",
+    whatsappPrefill: "مرحباً، أطلب دعماً لإعادة تعيين كلمة مرور بوابة موردي Merter Vitrini.",
+    submitBtn: "الدخول إلى لوحة المورد",
+    submittingBtn: "جاري تسجيل الدخول...",
+    notSupplierYet: "لست مورداً لدينا بعد؟ قدّم طلب انضمام",
+    sslBadge: "دخول مشفّر وآمن بتقنية 256-Bit SSL",
+    copyright: "© 2026 منصة Merter Vitrini B2B. جميع الحقوق محفوظة.",
+    errorEmptyFields: "يرجى إدخال البريد الإلكتروني الرسمي وكلمة المرور.",
+    errorInvalidCredentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
+    errorSessionVerify: "تعذر التحقق من جلسة الدخول.",
+    errorGenericLogin: "حدث خطأ أثناء تسجيل الدخول.",
+  },
+  de: {
+    metaTitle: "Lieferanten-Portal Login | Merter Vitrini B2B",
+    metaDesc: "Geschützter Login-Bereich für verifizierte Textilhersteller und Großhändler auf Merter Vitrini B2B.",
+    portalSubtitle: "Lieferanten-Portal",
+    backToStore: "Zum Shop",
+    verifiedStudioBadge: "Geprüftes B2B-Lieferantenstudio",
+    heading: "Lieferanten-Login",
+    subtitle:
+      "Melden Sie sich an, um Kollektionen, Serienbestände, Bestellungen und Einkäuferanfragen zu verwalten.",
+    verifyingSession: "Sitzung wird überprüft, Sie werden weitergeleitet...",
+    emailLabel: "Geschäfts-E-Mail",
+    emailPlaceholder: "kontakt@ihrefirma.de",
+    passwordLabel: "Passwort",
+    forgotPasswordBtn: "Passwort vergessen / Support",
+    showPasswordAria: "Passwort anzeigen",
+    hidePasswordAria: "Passwort verbergen",
+    recoveryTitle: "Passwort zurücksetzen & Zugangshilfe",
+    recoveryDesc:
+      "Zu Ihrer Sicherheit werden Hauptpasswörter von Lieferantenkonten über die verifizierte E-Mail-Adresse oder unseren B2B-Support erneuert. Passwörter von Vertriebsmitarbeitern setzt Ihr Hauptadministrator im Portal zurück.",
+    recoveryMailSubject: "Anfrage Passwort-Reset Lieferanten-Portal",
+    recoveryMailBodyPrefix: "Guten Tag Merter Vitrini Support-Team,\n\nich beantrage einen Link zum Zurücksetzen meines Passworts für (",
+    recoveryMailBodyDefaultEmail: "Firmen-E-Mail",
+    recoveryMailBodySuffix: ").",
+    whatsappSupportBtn: "WhatsApp Support",
+    whatsappPrefill: "Hallo, ich benötige Unterstützung beim Zurücksetzen meines Lieferanten-Passworts auf Merter Vitrini.",
+    submitBtn: "Im Lieferanten-Portal anmelden",
+    submittingBtn: "Wird angemeldet...",
+    notSupplierYet: "Noch kein Lieferant? Jetzt bewerben",
+    sslBadge: "Sichere 256-Bit-SSL-Verschlüsselung",
+    copyright: "© 2026 Merter Vitrini B2B Großhandelsplattform. Alle Rechte vorbehalten.",
+    errorEmptyFields: "Bitte geben Sie Ihre geschäftliche E-Mail-Adresse und Ihr Passwort ein.",
+    errorInvalidCredentials: "E-Mail-Adresse oder Passwort ist ungültig.",
+    errorSessionVerify: "Anmeldesitzung konnte nicht bestätigt werden.",
+    errorGenericLogin: "Bei der Anmeldung ist ein Fehler aufgetreten.",
+  },
+  fr: {
+    metaTitle: "Connexion Portail Fournisseur | Merter Vitrini B2B",
+    metaDesc: "Espace de connexion sécurisé pour les fabricants et grossistes vérifiés sur Merter Vitrini B2B.",
+    portalSubtitle: "Portail Fournisseur",
+    backToStore: "Boutique en ligne",
+    verifiedStudioBadge: "Studio Fournisseur B2B Certifié",
+    heading: "Connexion Fournisseur",
+    subtitle:
+      "Connectez-vous pour gérer vos collections, stocks par séries, commandes et messages acheteurs.",
+    verifyingSession: "Vérification de votre session, redirection en cours...",
+    emailLabel: "E-mail Professionnel",
+    emailPlaceholder: "contact@votremarque.fr",
+    passwordLabel: "Mot de passe",
+    forgotPasswordBtn: "Mot de passe oublié / Support",
+    showPasswordAria: "Afficher le mot de passe",
+    hidePasswordAria: "Masquer le mot de passe",
+    recoveryTitle: "Réinitialisation & Assistance Fournisseur",
+    recoveryDesc:
+      "Pour votre sécurité, le mot de passe principal fournisseur est réinitialisé via e-mail vérifié ou notre support B2B. Les accès des conseillers commerciaux peuvent être réinitialisés depuis votre tableau de bord.",
+    recoveryMailSubject: "Demande de réinitialisation mot de passe Portail Fournisseur",
+    recoveryMailBodyPrefix: "Bonjour l'équipe support Merter Vitrini,\n\nJe souhaite réinitialiser le mot de passe de notre compte fournisseur (",
+    recoveryMailBodyDefaultEmail: "e-mail professionnel",
+    recoveryMailBodySuffix: ").",
+    whatsappSupportBtn: "Support WhatsApp",
+    whatsappPrefill: "Bonjour, je demande l'assistance pour réinitialiser mon mot de passe Portail Fournisseur Merter Vitrini.",
+    submitBtn: "Accéder au Portail Fournisseur",
+    submittingBtn: "Connexion en cours...",
+    notSupplierYet: "Pas encore fournisseur ? Déposer une candidature",
+    sslBadge: "Connexion sécurisée SSL 256 bits",
+    copyright: "© 2026 Merter Vitrini Plateforme B2B. Tous droits réservés.",
+    errorEmptyFields: "Veuillez saisir votre e-mail professionnel et votre mot de passe.",
+    errorInvalidCredentials: "Adresse e-mail ou mot de passe incorrect.",
+    errorSessionVerify: "Impossible de vérifier votre session.",
+    errorGenericLogin: "Une erreur est survenue lors de la connexion.",
+  },
+  pl: {
+    metaTitle: "Logowanie do Portalu Dostawcy | Merter Vitrini B2B",
+    metaDesc: "Bezpieczny panel logowania dla zweryfikowanych producentów i hurtowników na Merter Vitrini B2B.",
+    portalSubtitle: "Portal Dostawcy",
+    backToStore: "Sklep główny",
+    verifiedStudioBadge: "Zweryfikowane Studio Dostawcy B2B",
+    heading: "Logowanie Dostawcy",
+    subtitle:
+      "Zaloguj się, aby zarządzać kolekcjami, stanami magazynowymi, zamówieniami i wiadomościami kupców.",
+    verifyingSession: "Weryfikacja sesji, przekierowanie...",
+    emailLabel: "Firmowy adres e-mail",
+    emailPlaceholder: "kontakt@twojafirma.pl",
+    passwordLabel: "Hasło",
+    forgotPasswordBtn: "Nie pamiętasz hasła / Pomoc",
+    showPasswordAria: "Pokaż hasło",
+    hidePasswordAria: "Ukryj hasło",
+    recoveryTitle: "Reset hasła i wsparcie dostawcy",
+    recoveryDesc:
+      "Ze względów bezpieczeństwa główne hasła kont dostawców są resetowane przez zweryfikowany e-mail lub nasz dział wsparcia B2B. Hasła pracowników handlowych może zresetować administrator firmy w panelu.",
+    recoveryMailSubject: "Prośba o reset hasła do Portalu Dostawcy",
+    recoveryMailBodyPrefix: "Dzień dobry, zespole wsparcia Merter Vitrini,\n\nProszę o link do resetu hasła dla naszego konta dostawcy (",
+    recoveryMailBodyDefaultEmail: "adres e-mail firmy",
+    recoveryMailBodySuffix: ").",
+    whatsappSupportBtn: "Pomoc WhatsApp",
+    whatsappPrefill: "Dzień dobry, potrzebuję pomocy z resetem hasła do Portalu Dostawcy Merter Vitrini.",
+    submitBtn: "Zaloguj się do Panelu Dostawcy",
+    submittingBtn: "Logowanie...",
+    notSupplierYet: "Nie jesteś jeszcze naszym dostawcą? Złóż wniosek",
+    sslBadge: "Bezpieczne połączenie 256-Bit SSL",
+    copyright: "© 2026 Merter Vitrini Platforma B2B. Wszelkie prawa zastrzeżone.",
+    errorEmptyFields: "Proszę podać firmowy adres e-mail oraz hasło.",
+    errorInvalidCredentials: "Nieprawidłowy adres e-mail lub hasło.",
+    errorSessionVerify: "Nie udało się zweryfikować sesji logowania.",
+    errorGenericLogin: "Wystąpił błąd podczas logowania.",
+  },
+  bg: {
+    metaTitle: "Вход в Портала за Доставчици | Merter Vitrini B2B",
+    metaDesc: "Защитен вход за проверени производители и търговци на едро в Merter Vitrini B2B.",
+    portalSubtitle: "Портал за Доставчици",
+    backToStore: "Към Витрината",
+    verifiedStudioBadge: "Проверено B2B Студио за Доставчици",
+    heading: "Вход за Доставчици",
+    subtitle:
+      "Влезте, за да управлявате продуктите, наличностите на серии, поръчките и запитванията от клиенти.",
+    verifyingSession: "Проверка на сесията, пренасочване...",
+    emailLabel: "Фирмен Имейл",
+    emailPlaceholder: "office@yourbrand.bg",
+    passwordLabel: "Парола",
+    forgotPasswordBtn: "Забравена парола / Поддръжка",
+    showPasswordAria: "Покажи паролата",
+    hidePasswordAria: "Скрий паролата",
+    recoveryTitle: "Нулиране на парола и достъп за доставчици",
+    recoveryDesc:
+      "От съображения за сигурност паролите на основните профили на доставчици се нулират през потвърден имейл или нашия B2B екип за поддръжка. Паролите на търговски представители могат да бъдат сменени от администратора на фирмата в панела.",
+    recoveryMailSubject: "Заявка за нулиране на парола за Портал за Доставчици",
+    recoveryMailBodyPrefix: "Здравейте, екип по поддръжка на Merter Vitrini,\n\nМоля за линк за нулиране на паролата на нашия фирмен профил (",
+    recoveryMailBodyDefaultEmail: "фирмен имейл",
+    recoveryMailBodySuffix: ").",
+    whatsappSupportBtn: "WhatsApp Поддръжка",
+    whatsappPrefill: "Здравейте, нуждая се от съдействие за нулиране на парола за Портала за Доставчици на Merter Vitrini.",
+    submitBtn: "Влез в Панела за Доставчици",
+    submittingBtn: "Влизане...",
+    notSupplierYet: "Все още не сте наш доставчик? Кандидатствайте",
+    sslBadge: "Сигурна 256-Bit SSL криптирана връзка",
+    copyright: "© 2026 Merter Vitrini B2B Платформа. Всички права запазени.",
+    errorEmptyFields: "Моля, въведете служебен имейл и парола.",
+    errorInvalidCredentials: "Грешен имейл адрес или парола.",
+    errorSessionVerify: "Неуспешна проверка на сесията за вход.",
+    errorGenericLogin: "Възникна грешка при влизане в системата.",
+  },
+};

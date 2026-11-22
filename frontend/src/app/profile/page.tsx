@@ -52,16 +52,55 @@ interface ProfileAddressValidationInput {
   readonly addressLine: string;
 }
 
+const PROFILE_SELECT_ERRORS: Record<
+  SupportedSeoLang,
+  { readonly stateRequired: string; readonly cityRequired: string }
+> = {
+  tr: {
+    stateRequired: "Lütfen il / eyalet seçimi yapın.",
+    cityRequired: "Lütfen ilçe / şehir seçimi yapın.",
+  },
+  en: {
+    stateRequired: "Please select a state / province.",
+    cityRequired: "Please select a city / district.",
+  },
+  ru: {
+    stateRequired: "Пожалуйста, выберите область / провинцию.",
+    cityRequired: "Пожалуйста, выберите город / район.",
+  },
+  ar: {
+    stateRequired: "يرجى اختيار الولاية / المحافظة.",
+    cityRequired: "يرجى اختيار المدينة / المنطقة.",
+  },
+  de: {
+    stateRequired: "Bitte wählen Sie ein Bundesland / eine Provinz aus.",
+    cityRequired: "Bitte wählen Sie eine Stadt / einen Bezirk aus.",
+  },
+  fr: {
+    stateRequired: "Veuillez sélectionner un État / une province.",
+    cityRequired: "Veuillez sélectionner une ville / un district.",
+  },
+  pl: {
+    stateRequired: "Proszę wybrać województwo / prowincję.",
+    cityRequired: "Proszę wybrać miasto / powiat.",
+  },
+  bg: {
+    stateRequired: "Моля, изберете област / провинция.",
+    cityRequired: "Моля, изберете град / община.",
+  },
+};
+
 function validateProfileAddressDetails(input: ProfileAddressValidationInput): string | null {
+  const selectErr = PROFILE_SELECT_ERRORS[normalizeSeoLang(input.lang, "tr")];
   const firstErr = validateHumanPersonNameClient(input.firstName, input.lang);
   if (firstErr) return firstErr;
   const lastErr = validateHumanPersonNameClient(input.lastName, input.lang);
   if (lastErr) return lastErr;
   if (input.hasStates && !input.stateId.trim()) {
-    return input.lang === "tr" ? "Lütfen il / eyalet seçimi yapın." : "Please select a state / province.";
+    return selectErr.stateRequired;
   }
   if (input.hasCities && !input.cityId.trim()) {
-    return input.lang === "tr" ? "Lütfen ilçe / şehir seçimi yapın." : "Please select a city / district.";
+    return selectErr.cityRequired;
   }
   const pcErr = validatePostalCodeClient(input.postalCode, input.lang);
   if (pcErr) return pcErr;

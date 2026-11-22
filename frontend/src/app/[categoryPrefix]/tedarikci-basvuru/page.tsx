@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import SupplierApplicationClient from "./SupplierApplicationClient";
 import { SUPPLIER_TRANSLATIONS } from "./translations";
-import { isSupportedSeoLang, stripBrandTitleSuffix } from "@/utils/seoHelpers";
+import { OG_LOCALE_BY_LANG, isSupportedSeoLang, normalizeSeoLang, stripBrandTitleSuffix } from "@/utils/seoHelpers";
 
 interface PageProps {
   readonly params: Promise<{
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Readonly<PageProps>): Promise
   if (!isSupportedSeoLang(categoryPrefix)) {
     notFound();
   }
-  const lang = categoryPrefix || "tr";
+  const lang = normalizeSeoLang(categoryPrefix, "tr");
   const t = SUPPLIER_TRANSLATIONS[lang] || SUPPLIER_TRANSLATIONS.en;
 
   const canonicalUrl = `https://mertervitrini.com.tr/${lang}/tedarikci-basvuru`;
@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: Readonly<PageProps>): Promise
       description: t.meta_desc,
       url: canonicalUrl,
       siteName: "Merter Vitrini B2B",
-      locale: lang === "tr" ? "tr_TR" : "en_US",
+      locale: OG_LOCALE_BY_LANG[lang],
       type: "website",
     },
   };
