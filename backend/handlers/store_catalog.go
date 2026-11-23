@@ -19,6 +19,7 @@ import (
 
 	"mertervitrini/backend/config"
 	"mertervitrini/backend/db"
+	"mertervitrini/backend/middleware"
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/httpx"
 
@@ -185,6 +186,9 @@ func appendCatalogSearchFilter(sqlBase *string, q string, argIndex *int, args *[
 		return
 	}
 	words := strings.Fields(q)
+	if len(words) > 5 {
+		words = words[:5]
+	}
 	for _, word := range words {
 		trimmed := strings.TrimSpace(word)
 		if trimmed == "" {
@@ -748,7 +752,42 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 
 	countQuery := "SELECT COUNT(*)" + sqlBase
 	var totalCount int
-	_ = db.Pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount)
+	if countErr := db.Pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); countErr != nil {
+		log.Printf("[STORE API ERROR] Failed to count products: %v", countErr)
+		middleware.SetRequestErrorDetail(r.Context(), fmt.Sprintf("Failed to count products: %v", countErr))
+		http.Error(w, `{"error":"Failed to fetch catalog"}`, http.StatusInternalServerError)
+		return
+	}
+
+	queryParams := r.URL.Query()
+	recordSearchIfNeeded := func(matchedCount int) {
+		if searchText := strings.TrimSpace(queryParams.Get("q")); searchText != "" && offset == 0 && shouldRecordStoreBrandEvent(r) {
+			recordStoreSearchLogAsync(r, searchLogEntry{
+				QueryText:    searchText,
+				LanguageCode: queryParams.Get("lang"),
+				CategorySlug: queryParams.Get("category_id"),
+				ResultsCount: matchedCount,
+				HasFilters:   hasCatalogExtraFilters(queryParams),
+			})
+		}
+	}
+
+	if totalCount == 0 {
+		recordSearchIfNeeded(0)
+		w.Header().Add("Vary", "Authorization")
+		w.Header().Set(headerContentType, mimeApplicationJSON)
+		json.NewEncoder(w).Encode(map[string]any{
+			"products": []*models.Product{},
+			"total":    0,
+			"facets": map[string]any{
+				"brands":     map[string]int{},
+				"genders":    map[string]int{},
+				"seasons":    map[string]int{},
+				"attributes": map[string]map[string]int{},
+			},
+		})
+		return
+	}
 
 	selectPrefix := `
 		SELECT p.id, p.feed_id, p.source_product_id, p.source_product_group_id, p.title, p.slug, p.slug_id, p.custom_sku, 
@@ -768,6 +807,7 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	rows, err := db.Pool.Query(ctx, sqlQuery, args...)
 	if err != nil {
 		log.Printf("[STORE API ERROR] Failed to query products: %v", err)
+		middleware.SetRequestErrorDetail(r.Context(), fmt.Sprintf("Failed to query products: %v", err))
 		http.Error(w, `{"error":"Failed to fetch catalog"}`, http.StatusInternalServerError)
 		return
 	}
@@ -776,6 +816,7 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	products, err := scanCatalogProducts(rows)
 	if err != nil {
 		log.Printf("Failed to scan storefront product row: %v", err)
+		middleware.SetRequestErrorDetail(r.Context(), fmt.Sprintf("Failed to scan storefront product row: %v", err))
 		http.Error(w, `{"error":"Failed to process products"}`, http.StatusInternalServerError)
 		return
 	}
@@ -785,16 +826,7 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	fetchCatalogBrandProfiles(ctx, products)
 	facets := fetchCatalogFacetsCached(ctx, buildCatalogFacetCacheKey(r.URL.Query(), displayCurrency), sqlBase, args[:argIndex-1])
 
-	queryParams := r.URL.Query()
-	if searchText := strings.TrimSpace(queryParams.Get("q")); searchText != "" && offset == 0 && shouldRecordStoreBrandEvent(r) {
-		recordStoreSearchLogAsync(r, searchLogEntry{
-			QueryText:    searchText,
-			LanguageCode: queryParams.Get("lang"),
-			CategorySlug: queryParams.Get("category_id"),
-			ResultsCount: totalCount,
-			HasFilters:   hasCatalogExtraFilters(queryParams),
-		})
-	}
+	recordSearchIfNeeded(totalCount)
 
 	showPrices := isStorePriceVisibleToCaller(ctx, r)
 	sanitizePublicStoreProducts(products, showPrices)

@@ -793,8 +793,9 @@ const biSearchEventsUnionCTE = `
 			  AND (
 				p.custom_sku ILIKE ('%' || BTRIM(me.entity_id) || '%')
 				OR p.brand_name ILIKE ('%' || BTRIM(me.entity_id) || '%')
-				OR COALESCE(p.names::text, '') ILIKE ('%' || BTRIM(me.entity_id) || '%')
-				OR COALESCE(p.descriptions::text, '') ILIKE ('%' || BTRIM(me.entity_id) || '%')
+				OR COALESCE(p.title, '') ILIKE ('%' || BTRIM(me.entity_id) || '%')
+				OR COALESCE(p.description, '') ILIKE ('%' || BTRIM(me.entity_id) || '%')
+				OR COALESCE(p.translations_json::text, '') ILIKE ('%' || BTRIM(me.entity_id) || '%')
 			  )
 		) cat_match
 		WHERE me.event_type = 'search_query'

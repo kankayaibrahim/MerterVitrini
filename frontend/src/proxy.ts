@@ -196,20 +196,72 @@ function stripTrailingSlashExceptRoot(pathname: string): string {
   return pathname;
 }
 
+function isAllowedSubdomainCorsOrigin(origin: string | null): origin is string {
+  if (!origin) return false;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    return host === ROOT_DOMAIN || host === `www.${ROOT_DOMAIN}` || extractSupplierSubdomainFromHost(host) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function applyCrossSubdomainCorsHeaders(
+  response: NextResponse,
+  origin: string | null,
+  requestHeaders?: string | null
+): NextResponse {
+  if (!isAllowedSubdomainCorsOrigin(origin)) {
+    return response;
+  }
+  response.headers.set("Access-Control-Allow-Origin", origin);
+  response.headers.set("Access-Control-Allow-Credentials", "true");
+  response.headers.set("Vary", "Origin");
+  if (requestHeaders !== undefined) {
+    response.headers.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    response.headers.set(
+      "Access-Control-Allow-Headers",
+      requestHeaders || "RSC, Next-Router-State-Tree, Next-Router-Prefetch, Next-Url, Content-Type"
+    );
+    response.headers.set("Access-Control-Max-Age", "86400");
+  }
+  return response;
+}
+
 export async function proxy(request: NextRequest): Promise<NextResponse> {
+  const origin = request.headers.get("origin");
+  if (request.method === "OPTIONS") {
+    if (isAllowedSubdomainCorsOrigin(origin)) {
+      return applyCrossSubdomainCorsHeaders(
+        new NextResponse(null, { status: 204 }),
+        origin,
+        request.headers.get("access-control-request-headers")
+      );
+    }
+    return new NextResponse(null, { status: 204 });
+  }
+
   const rawHost =
     request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
   const primaryHost = rawHost.split(",")[0]?.trim().toLowerCase() || "";
   const { pathname, search } = request.nextUrl;
 
   if (primaryHost.startsWith("www.mertervitrini.com.tr")) {
-    return NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308);
+    return applyCrossSubdomainCorsHeaders(
+      NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308),
+      origin
+    );
   }
 
   const tenantSubdomain = extractSupplierSubdomainFromHost(primaryHost);
   if (tenantSubdomain) {
     if (isCentralPlatformPath(pathname)) {
-      return NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308);
+      return applyCrossSubdomainCorsHeaders(
+        NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308),
+        origin
+      );
     }
 
     const tenant = await resolveTenantBySubdomain(tenantSubdomain);
@@ -266,7 +318,10 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    return NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308);
+    return applyCrossSubdomainCorsHeaders(
+      NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308),
+      origin
+    );
   }
 
   const slugMatch = pathname.match(SUPPLIER_SLUG_ROUTE_RE);
@@ -281,9 +336,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
       const tenant = await resolveTenantBySlug(rawSlug);
       if (tenant && tenant.subdomain && tenant.subdomain_enabled) {
         const subPath = slugMatch[2] ? "/tanitim" : "/";
-        return NextResponse.redirect(
-          `https://${tenant.subdomain}.${ROOT_DOMAIN}${subPath}${search}`,
-          301
+        return applyCrossSubdomainCorsHeaders(
+          NextResponse.redirect(
+            `https://${tenant.subdomain}.${ROOT_DOMAIN}${subPath}${search}`,
+            301
+          ),
+          origin
         );
       }
     }

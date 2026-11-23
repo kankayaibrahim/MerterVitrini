@@ -483,12 +483,20 @@ func BuildExceptionAlertEmailBodies(data ExceptionAlertEmailData) (subject, html
 		}
 		textSb.WriteByte('\n')
 	}
+	if len(data.RecentTimeline) > 0 {
+		textSb.WriteString("Son Olay Zaman Çizelgesi:\n")
+		for _, ev := range data.RecentTimeline {
+			textSb.WriteString(fmt.Sprintf("- [%s | %s] %s -> %s\n", ev.Timestamp, ev.Severity, ev.Source, ev.Message))
+		}
+		textSb.WriteByte('\n')
+	}
 	if strings.TrimSpace(data.StackTrace) != "" {
-		textSb.WriteString("Stack Trace:\n")
+		textSb.WriteString("Teknik Detay / Hata & Stack Trace:\n")
 		textSb.WriteString(data.StackTrace)
 		textSb.WriteString("\n\n")
 	}
-	textSb.WriteString("Parametreleri yönetmek için: https://mertervitrini.com.tr/admin/settings/notifications\n")
+	textSb.WriteString("Sistem Logları & Stacktrace: https://mertervitrini.com.tr/admin/system-logs\n")
+	textSb.WriteString("Bildirim & Eşik Ayarları: https://mertervitrini.com.tr/admin/settings/notifications\n")
 	textBody = textSb.String()
 
 	var rowsHTML strings.Builder
@@ -505,6 +513,35 @@ func BuildExceptionAlertEmailBodies(data ExceptionAlertEmailData) (subject, html
 		}
 	}
 
+	timelineSection := ""
+	if len(data.RecentTimeline) > 0 {
+		var tlRows strings.Builder
+		for _, ev := range data.RecentTimeline {
+			tlRows.WriteString(fmt.Sprintf(`
+        <tr style="border-bottom:1px solid #e2e8f0;">
+          <td style="padding:6px 10px;font-family:monospace;font-size:11px;color:#64748b;white-space:nowrap;">%s</td>
+          <td style="padding:6px 10px;font-size:11px;font-weight:700;color:#be123c;white-space:nowrap;">%s</td>
+          <td style="padding:6px 10px;font-family:monospace;font-size:11px;color:#0f172a;">%s</td>
+          <td style="padding:6px 10px;font-size:12px;color:#334155;word-break:break-word;">%s</td>
+        </tr>`, html.EscapeString(ev.Timestamp), html.EscapeString(ev.Severity), html.EscapeString(ev.Source), html.EscapeString(ev.Message)))
+		}
+		timelineSection = fmt.Sprintf(`
+      <div style="margin-top:16px;">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;">Son Olay Zaman Çizelgesi</div>
+        <table style="width:100%%;border-collapse:collapse;font-size:12px;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+          <thead>
+            <tr style="background:#f1f5f9;text-align:left;color:#475569;font-size:11px;">
+              <th style="padding:6px 10px;">Zaman</th>
+              <th style="padding:6px 10px;">Seviye</th>
+              <th style="padding:6px 10px;">Kaynak</th>
+              <th style="padding:6px 10px;">Mesaj</th>
+            </tr>
+          </thead>
+          <tbody>%s</tbody>
+        </table>
+      </div>`, tlRows.String())
+	}
+
 	stackSection := ""
 	if strings.TrimSpace(data.StackTrace) != "" {
 		trimmedStack := data.StackTrace
@@ -512,7 +549,10 @@ func BuildExceptionAlertEmailBodies(data ExceptionAlertEmailData) (subject, html
 			trimmedStack = trimmedStack[:4000] + "\n... (kesildi)"
 		}
 		stackSection = fmt.Sprintf(`
-      <div style="margin-top:16px;background:#0f172a;color:#fda4af;border-radius:10px;padding:14px;font-family:monospace;font-size:11px;line-height:1.45;overflow-x:auto;white-space:pre-wrap;">%s</div>`,
+      <div style="margin-top:16px;">
+        <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:6px;">Teknik Detay / Hata &amp; Stack Trace</div>
+        <div style="background:#0f172a;color:#fda4af;border-radius:10px;padding:14px;font-family:monospace;font-size:11px;line-height:1.45;overflow-x:auto;white-space:pre-wrap;">%s</div>
+      </div>`,
 			html.EscapeString(trimmedStack))
 	}
 
@@ -553,8 +593,10 @@ func BuildExceptionAlertEmailBodies(data ExceptionAlertEmailData) (subject, html
         <tbody>%s</tbody>
       </table>
       %s
+      %s
       <div style="margin-top:20px;text-align:center;">
-        <a href="https://mertervitrini.com.tr/admin/settings/notifications" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:700;">Hata Eşik &amp; Bildirim Ayarlarını Düzenle →</a>
+        <a href="https://mertervitrini.com.tr/admin/system-logs" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:10px;font-size:12px;font-weight:700;margin:4px;">Sistem Logları &amp; Stacktrace İncele →</a>
+        <a href="https://mertervitrini.com.tr/admin/settings/notifications" style="display:inline-block;background:#f1f5f9;color:#0f172a;text-decoration:none;padding:10px 18px;border-radius:10px;font-size:12px;font-weight:700;border:1px solid #cbd5e1;margin:4px;">Bildirim &amp; Eşik Ayarları</a>
       </div>
     </div>
   </div>
@@ -570,6 +612,7 @@ func BuildExceptionAlertEmailBodies(data ExceptionAlertEmailData) (subject, html
 		html.EscapeString(data.PrimarySource),
 		html.EscapeString(data.PrimaryMessage),
 		rowsHTML.String(),
+		timelineSection,
 		stackSection,
 	)
 

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rsa"
 	"encoding/json"
@@ -34,9 +35,35 @@ const (
 
 // LogContainer holds mutable request log metadata shared across middleware boundaries
 type LogContainer struct {
-	UserEmail string
-	UserRole  string
-	ClientIP  string
+	UserEmail   string
+	UserRole    string
+	ClientIP    string
+	ErrorDetail string
+}
+
+// SetRequestErrorDetail attaches a sanitized internal error or cause message onto the active request log container.
+func SetRequestErrorDetail(ctx context.Context, detail string) {
+	if ctx == nil {
+		return
+	}
+	trimmed := strings.TrimSpace(detail)
+	if trimmed == "" {
+		return
+	}
+	container, ok := ctx.Value(LogContextKey).(*LogContainer)
+	if !ok || container == nil {
+		return
+	}
+	if container.ErrorDetail != "" {
+		if strings.Contains(container.ErrorDetail, trimmed) {
+			return
+		}
+		trimmed = container.ErrorDetail + " | " + trimmed
+	}
+	if len(trimmed) > 2000 {
+		trimmed = trimmed[:1997] + "..."
+	}
+	container.ErrorDetail = trimmed
 }
 
 // GetUserFromContext extracts authenticated user info from context
@@ -45,10 +72,11 @@ func GetUserFromContext(ctx context.Context) (*models.UserInfo, bool) {
 	return u, ok
 }
 
-// responseWriter is a wrapper to capture HTTP status codes
+// responseWriter is a wrapper to capture HTTP status codes and bounded 5xx bodies
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
+	errBody    bytes.Buffer
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -59,6 +87,14 @@ func (rw *responseWriter) WriteHeader(code int) {
 func (rw *responseWriter) Write(b []byte) (int, error) {
 	if rw.statusCode == 0 {
 		rw.statusCode = http.StatusOK
+	}
+	if rw.statusCode >= 500 && rw.errBody.Len() < 1024 {
+		remaining := 1024 - rw.errBody.Len()
+		if len(b) > remaining {
+			_, _ = rw.errBody.Write(b[:remaining])
+		} else {
+			_, _ = rw.errBody.Write(b)
+		}
 	}
 	return rw.ResponseWriter.Write(b)
 }
@@ -133,6 +169,113 @@ func logJSON(r *http.Request, ip string, container *LogContainer, statusCode int
 	log.Println(string(jsonBytes))
 }
 
+func isSensitiveQueryParam(key string) bool {
+	lower := strings.ToLower(strings.TrimSpace(key))
+	for _, needle := range []string{"token", "password", "passwd", "secret", "key", "authorization", "code"} {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func sanitizeQueryForLog(rawQuery string) string {
+	trimmed := strings.TrimSpace(rawQuery)
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.Split(trimmed, "&")
+	sanitized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		k, v, hasEq := strings.Cut(part, "=")
+		decodedKey, err := url.QueryUnescape(k)
+		if err != nil {
+			decodedKey = k
+		}
+		if hasEq && isSensitiveQueryParam(decodedKey) && v != "" {
+			sanitized = append(sanitized, k+"=[REDACTED]")
+			continue
+		}
+		sanitized = append(sanitized, part)
+	}
+	joined := strings.Join(sanitized, "&")
+	if len(joined) > 240 {
+		return joined[:237] + "..."
+	}
+	return joined
+}
+
+func truncateAlertField(s string, maxLen int) string {
+	trimmed := strings.TrimSpace(s)
+	if maxLen > 3 && len(trimmed) > maxLen {
+		return trimmed[:maxLen-3] + "..."
+	}
+	return trimmed
+}
+
+func buildHTTP5xxAlertPayload(
+	r *http.Request,
+	rw *responseWriter,
+	ip, userText string,
+	duration time.Duration,
+	container *LogContainer,
+) (source, message, detail string) {
+	source = fmt.Sprintf("%s %s", r.Method, r.URL.Path)
+	sanitizedQ := sanitizeQueryForLog(r.URL.RawQuery)
+	internalErr := ""
+	if container != nil {
+		internalErr = strings.TrimSpace(container.ErrorDetail)
+	}
+	respSnippet := strings.TrimSpace(rw.errBody.String())
+
+	var msgParts []string
+	msgParts = append(msgParts, fmt.Sprintf("HTTP %d", rw.statusCode))
+	if sanitizedQ != "" {
+		msgParts = append(msgParts, "Query: ?"+sanitizedQ)
+	}
+	if errCause := truncateAlertField(internalErr, 180); errCause != "" {
+		msgParts = append(msgParts, "Error: "+errCause)
+	} else if bodyCause := truncateAlertField(respSnippet, 180); bodyCause != "" {
+		msgParts = append(msgParts, "Error: "+bodyCause)
+	}
+	msgParts = append(msgParts,
+		"IP: "+ip,
+		"User: "+userText,
+		fmt.Sprintf("Duration: %.2fms", float64(duration.Microseconds())/1000.0),
+		"UA: "+r.Header.Get("User-Agent"),
+	)
+	message = strings.Join(msgParts, " | ")
+
+	endpoint := source
+	if sanitizedQ != "" {
+		endpoint += "?" + sanitizedQ
+	}
+	detailLines := []string{
+		"Endpoint: " + endpoint,
+		"Host: " + r.Host,
+	}
+	if ref := strings.TrimSpace(r.Referer()); ref != "" {
+		detailLines = append(detailLines, "Referer: "+truncateAlertField(ref, 240))
+	}
+	detailLines = append(detailLines,
+		"Client IP: "+ip,
+		"User: "+userText,
+		fmt.Sprintf("Duration: %.2fms", float64(duration.Microseconds())/1000.0),
+		"User-Agent: "+truncateAlertField(r.Header.Get("User-Agent"), 240),
+	)
+	if respSnippet != "" {
+		detailLines = append(detailLines, "Response Body: "+truncateAlertField(respSnippet, 512))
+	}
+	if internalErr != "" {
+		detailLines = append(detailLines, "Internal Error: "+truncateAlertField(internalErr, 1500))
+	}
+	detail = strings.Join(detailLines, "\n")
+	return source, message, detail
+}
+
 func logText(r *http.Request, ip string, container *LogContainer, statusCode int, duration time.Duration) {
 	userText := "anonymous"
 	if container.UserEmail != "" {
@@ -147,8 +290,15 @@ func logText(r *http.Request, ip string, container *LogContainer, statusCode int
 		ua = "unknown"
 	}
 
+	reqPath := r.URL.Path
+	if statusCode >= 500 && r.URL.RawQuery != "" {
+		if sanitizedQ := sanitizeQueryForLog(r.URL.RawQuery); sanitizedQ != "" {
+			reqPath += "?" + sanitizedQ
+		}
+	}
+
 	msg := fmt.Sprintf("[API] %s - [%s] %s %s %s | Status: %d | Duration: %.2fms | UA: %s",
-		ip, userText, r.Method, r.URL.Path, r.Proto, statusCode,
+		ip, userText, r.Method, reqPath, r.Proto, statusCode,
 		float64(duration.Microseconds())/1000.0, ua)
 
 	if statusCode >= 500 {
@@ -180,13 +330,8 @@ func LoggingMiddleware(logFormat string) func(http.Handler) http.Handler {
 				if container.UserEmail != "" {
 					userText = fmt.Sprintf("%s (%s)", container.UserEmail, container.UserRole)
 				}
-				logger.NotifyError(
-					"http_5xx",
-					fmt.Sprintf("%s %s", r.Method, r.URL.Path),
-					fmt.Sprintf("HTTP %d | IP: %s | User: %s | Duration: %.2fms | UA: %s",
-						rw.statusCode, ip, userText, float64(duration.Microseconds())/1000.0, r.Header.Get("User-Agent")),
-					"",
-				)
+				src, alertMsg, alertDetail := buildHTTP5xxAlertPayload(r, rw, ip, userText, duration, container)
+				logger.NotifyError("http_5xx", src, alertMsg, alertDetail)
 			}
 
 			if logFormat == "json" {

@@ -121,3 +121,42 @@ func TestBuildTestEventEmailBodiesNoBayiWording(t *testing.T) {
 		t.Fatalf("expected supplier test email to explicitly contain 'Tedarikçi'")
 	}
 }
+
+func TestBuildExceptionAlertEmailBodiesIncludesDetailTimelineAndLogsLink(t *testing.T) {
+	subj, htmlBody, textBody := BuildExceptionAlertEmailBodies(ExceptionAlertEmailData{
+		Hostname:        "ozgursistemorg",
+		Severity:        "http_5xx",
+		TriggerReason:   "Son 5 dakikada 5 olay",
+		WindowMinutes:   5,
+		BurstThreshold:  5,
+		WindowCount:     5,
+		CooldownMinutes: 15,
+		GeneratedAt:     "23.11.2026 20:14:36",
+		PrimarySource:   "GET /api/v1/store/products",
+		PrimaryMessage:  "HTTP 500 | Query: ?q=Una%20Tutt | Error: context deadline exceeded",
+		StackTrace:      "Endpoint: GET /api/v1/store/products?q=Una%20Tutt\nInternal Error: context deadline exceeded",
+		GroupedSamples: []ExceptionAlertSample{
+			{Timestamp: "20:14:36", Severity: "http_5xx", Source: "GET /api/v1/store/products", Message: "HTTP 500 | Error: context deadline exceeded", Count: 5},
+		},
+		RecentTimeline: []ExceptionAlertSample{
+			{Timestamp: "20:14:36", Severity: "http_5xx", Source: "GET /api/v1/store/products", Message: "Query: ?q=Una%20Tutt | Duration: 12001ms", Count: 1},
+		},
+	})
+	if !strings.Contains(subj, "GET /api/v1/store/products") {
+		t.Fatalf("unexpected alert subject: %s", subj)
+	}
+	for _, want := range []string{
+		"Son Olay Zaman Çizelgesi",
+		"Query: ?q=Una%20Tutt",
+		"Internal Error: context deadline exceeded",
+		"https://mertervitrini.com.tr/admin/system-logs",
+		"https://mertervitrini.com.tr/admin/settings/notifications",
+	} {
+		if !strings.Contains(htmlBody, want) {
+			t.Fatalf("htmlBody missing %q", want)
+		}
+		if !strings.Contains(textBody, want) {
+			t.Fatalf("textBody missing %q", want)
+		}
+	}
+}

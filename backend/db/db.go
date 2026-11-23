@@ -644,16 +644,33 @@ func ConnectDB(cfg *config.Config) (*pgxpool.Pool, error) {
 		`ALTER TABLE catalog.settings ADD COLUMN IF NOT EXISTS recaptcha_enabled BOOLEAN NOT NULL DEFAULT true`,
 		`ALTER TABLE catalog.settings ADD COLUMN IF NOT EXISTS recaptcha_site_key TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE catalog.settings ADD COLUMN IF NOT EXISTS recaptcha_secret_key TEXT NOT NULL DEFAULT ''`,
+		`CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA extensions`,
+		`CREATE INDEX IF NOT EXISTS idx_mv_products_title_trgm ON catalog.mv_products USING gin (title extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_mv_products_custom_sku_trgm ON catalog.mv_products USING gin (custom_sku extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_mv_products_brand_name_trgm ON catalog.mv_products USING gin (brand_name extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_mv_products_category_title_trgm ON catalog.mv_products USING gin (category_title extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_mv_products_color_trgm ON catalog.mv_products USING gin (color extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_mv_products_fabric_trgm ON catalog.mv_products USING gin (kumas_fabric extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_product_translations_title_trgm ON catalog.product_translations USING gin (title extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_product_translations_short_desc_trgm ON catalog.product_translations USING gin (short_description extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_color_translations_name_trgm ON catalog.color_translations USING gin (color_name extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_fabric_translations_name_trgm ON catalog.fabric_translations USING gin (fabric_name extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_category_translations_title_trgm ON catalog.category_translations USING gin (title extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_attribute_values_val_trgm ON catalog.attribute_values USING gin (attribute_value extensions.gin_trgm_ops)`,
+		`CREATE INDEX IF NOT EXISTS idx_attribute_value_translations_val_trgm ON catalog.attribute_value_translations USING gin (attribute_value extensions.gin_trgm_ops)`,
 	}
 
+	ddlCtx, ddlCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer ddlCancel()
+
 	for _, ddl := range ddlQueries {
-		_, err = pool.Exec(ctx, ddl)
+		_, err = pool.Exec(ddlCtx, ddl)
 		if err != nil {
 			log.Printf("[DB WARNING] Failed to provision table/seed settings: %v", err)
 		}
 	}
 
-	repairHistoricalOrderCurrencies(ctx, pool)
+	repairHistoricalOrderCurrencies(ddlCtx, pool)
 
 	Pool = pool
 	return pool, nil

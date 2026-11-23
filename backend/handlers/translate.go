@@ -140,6 +140,21 @@ func getTranslateAPIConfig() (string, string, string) {
 	return apiURL, apiUser, apiPass
 }
 
+var translateHTTPClient = buildTranslateHTTPClient()
+
+func buildTranslateHTTPClient() *http.Client {
+	if tr, ok := httpclient.DefaultPooledClient.Transport.(*http.Transport); ok && tr != nil {
+		return &http.Client{
+			Timeout:   65 * time.Second,
+			Transport: tr.Clone(),
+		}
+	}
+	return &http.Client{
+		Timeout:   65 * time.Second,
+		Transport: httpclient.DefaultPooledClient.Transport,
+	}
+}
+
 func translateText(ctx context.Context, text, source, target string) (string, error) {
 	if text == "" {
 		return "", nil
@@ -172,7 +187,7 @@ func translateText(ctx context.Context, text, source, target string) (string, er
 	req.Header.Set(contentTypeHeader, appJSON)
 	req.SetBasicAuth(apiUser, apiPass)
 
-	resp, err := httpclient.DefaultPooledClient.Do(req)
+	resp, err := translateHTTPClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -1009,8 +1024,8 @@ func loadExistingProductTranslationsByLang(ctx context.Context, productID string
 }
 
 const (
-	autoTranslateMaxChunkRunes  = 900
-	autoTranslateCallTimeout    = 35 * time.Second
+	autoTranslateMaxChunkRunes  = 450
+	autoTranslateCallTimeout    = 50 * time.Second
 	autoTranslateBreakerLimit   = 3
 	autoTranslateBreakerCoolOff = 10 * time.Minute
 )

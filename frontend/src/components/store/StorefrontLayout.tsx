@@ -491,11 +491,19 @@ export default function StorefrontLayout({
 
 
   // --- Dynamic URL Query Param Filter Syncer handled by QueryParamSyncer component ---
+  const prevSearchQueryRef = useRef<string>("");
 
   // --- Products Catalog Loader ---
   useEffect(() => {
     const isFirstMount = initialMountRef.current;
     initialMountRef.current = false;
+    const prevSearch = prevSearchQueryRef.current;
+    prevSearchQueryRef.current = searchQuery;
+    const searchChanged = prevSearch !== searchQuery;
+
+    const controller = new AbortController();
+    let isDisposed = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const loadProducts = async () => {
       if (mode === "portal") {
@@ -516,7 +524,12 @@ export default function StorefrontLayout({
           products: Product[];
           total: number;
         }
-        const data = await apiFetch<PortalResponse>("/products?limit=8&sort_by=newest");
+        const data = await apiFetch<PortalResponse>("/products?limit=8&sort_by=newest", {
+          signal: controller.signal,
+        });
+        if (isDisposed || controller.signal.aborted) {
+          return;
+        }
         if (data?.products) {
           setPortalNewArrivals(data.products);
         }
@@ -551,7 +564,12 @@ export default function StorefrontLayout({
         activeAttributes,
       });
 
-      const data = await apiFetch<ProductsResponse>(`/products${queryParams}`);
+      const data = await apiFetch<ProductsResponse>(`/products${queryParams}`, {
+        signal: controller.signal,
+      });
+      if (isDisposed || controller.signal.aborted) {
+        return;
+      }
       if (data?.products) {
         setProducts(data.products);
         setTotalProductsCount(data.total);
@@ -565,7 +583,22 @@ export default function StorefrontLayout({
       setLoadingProducts(false);
     };
 
-    void loadProducts();
+    const shouldDebounce = mode !== "portal" && (searchQuery !== "" || searchChanged);
+    if (shouldDebounce) {
+      debounceTimer = setTimeout(() => {
+        void loadProducts();
+      }, 320);
+    } else {
+      void loadProducts();
+    }
+
+    return () => {
+      isDisposed = true;
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      controller.abort();
+    };
   }, [
     currentPage,
     itemsPerPage,

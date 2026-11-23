@@ -367,8 +367,8 @@ func buildGroupedSamples(events []capturedExceptionEntry, loc *time.Location) []
 	byKey := make(map[string]*bucket)
 	for _, ev := range events {
 		shortMsg := ev.message
-		if len(shortMsg) > 220 {
-			shortMsg = shortMsg[:217] + "..."
+		if len(shortMsg) > 360 {
+			shortMsg = shortMsg[:357] + "..."
 		}
 		key := ev.severity + "|" + ev.source
 		b, ok := byKey[key]
@@ -403,6 +403,41 @@ func buildGroupedSamples(events []capturedExceptionEntry, loc *time.Location) []
 		out = out[:10]
 	}
 	return out
+}
+
+func buildAlertTimeline(events []capturedExceptionEntry, loc *time.Location) []mailer.ExceptionAlertSample {
+	if len(events) == 0 {
+		return nil
+	}
+	maxItems := min(len(events), 8)
+	timeline := make([]mailer.ExceptionAlertSample, 0, maxItems)
+	for i := len(events) - 1; i >= 0 && len(timeline) < maxItems; i-- {
+		ev := events[i]
+		msg := ev.message
+		if len(msg) > 320 {
+			msg = msg[:317] + "..."
+		}
+		timeline = append(timeline, mailer.ExceptionAlertSample{
+			Timestamp: ev.ts.In(loc).Format("15:04:05"),
+			Severity:  ev.severity,
+			Source:    ev.source,
+			Message:   msg,
+			Count:     1,
+		})
+	}
+	return timeline
+}
+
+func pickBestAlertDetail(entry capturedExceptionEntry, events []capturedExceptionEntry) string {
+	if strings.TrimSpace(entry.stack) != "" {
+		return entry.stack
+	}
+	for i := len(events) - 1; i >= 0; i-- {
+		if strings.TrimSpace(events[i].stack) != "" {
+			return events[i].stack
+		}
+	}
+	return ""
 }
 
 const exceptionAlertTimeLayout = "02.01.2006 15:04:05"
@@ -489,8 +524,9 @@ func (m *ExceptionAlertMonitor) Observe(severity, source, message, stack string)
 			GeneratedAt:     now.In(loc).Format(exceptionAlertTimeLayout),
 			PrimarySource:   entry.source,
 			PrimaryMessage:  entry.message,
-			StackTrace:      entry.stack,
+			StackTrace:      pickBestAlertDetail(entry, snapshotEvents),
 			GroupedSamples:  buildGroupedSamples(snapshotEvents, loc),
+			RecentTimeline:  buildAlertTimeline(snapshotEvents, loc),
 		}
 		m.onAlert(alertData)
 	}

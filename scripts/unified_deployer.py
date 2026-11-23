@@ -324,17 +324,15 @@ print(json.dumps(res))
 
         try:
             t_upload_start = time.time()
-            # Stop modern service and legacy services
-            self._ssh_cmd(ssh, f"systemctl stop {cfg['service_name']} admin-backend shop-backend || true")
-
             sftp = ssh.open_sftp()
             remote_bin_dir = f"{cfg['remote_dir']}/bin"
             self._ssh_cmd(ssh, f"mkdir -p {remote_bin_dir}")
-            
+
             remote_bin_path = f"{remote_bin_dir}/{cfg['binary_name']}"
-            self.log(f"[UPLOAD] SFTP Uploading Go Binary: {local_bin} -> {remote_bin_path}")
-            sftp.put(local_bin, remote_bin_path)
-            sftp.chmod(remote_bin_path, 0o755)
+            staging_bin_path = f"{remote_bin_path}.new"
+            self.log(f"[UPLOAD] SFTP Staging Go Binary: {local_bin} -> {staging_bin_path}")
+            sftp.put(local_bin, staging_bin_path)
+            sftp.chmod(staging_bin_path, 0o755)
 
             # Merge existing remote production config (preserving server-only keys) with template and live Redis TLS settings
             prod_config_path = f"{remote_bin_dir}/config.json"
@@ -369,7 +367,7 @@ print(json.dumps(res))
             self.record_time(proj_key, "backend", "SFTP Dosya ve Konfigürasyon Yükleme", t_upload_end - t_upload_start)
 
             t_service_start = time.time()
-            self.log("[SYSTEMD] Configuring backend daemon service...")
+            self.log("[SYSTEMD] Configuring backend daemon service & performing atomic binary swap...")
             systemd_content = f"""[Unit]
 Description=Merter Vitrini Unified Go Backend API Service
 After=network.target redis.service
@@ -399,6 +397,9 @@ WantedBy=multi-user.target
             finally:
                 os.remove(tmp_path)
 
+            # Stop legacy services if present, swap staged binary atomically, and restart active service
+            self._ssh_cmd(ssh, "systemctl stop admin-backend shop-backend || true")
+            self._ssh_cmd(ssh, f"mv -f {staging_bin_path} {remote_bin_path} && chmod 755 {remote_bin_path}")
             self._ssh_cmd(ssh, CMD_DAEMON_RELOAD)
             self._ssh_cmd(ssh, f"systemctl enable {cfg['service_name']}")
             self._ssh_cmd(ssh, f"systemctl restart {cfg['service_name']}")

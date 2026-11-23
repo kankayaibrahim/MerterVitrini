@@ -900,8 +900,9 @@ func countStoreSearchMatches(ctx context.Context, rawQuery string) int {
 		  AND (
 			p.custom_sku ILIKE $1
 			OR p.brand_name ILIKE $1
-			OR COALESCE(p.names::text, '') ILIKE $1
-			OR COALESCE(p.descriptions::text, '') ILIKE $1
+			OR COALESCE(p.title, '') ILIKE $1
+			OR COALESCE(p.description, '') ILIKE $1
+			OR COALESCE(p.translations_json::text, '') ILIKE $1
 		  )
 	`, pattern).Scan(&cnt)
 	return cnt
