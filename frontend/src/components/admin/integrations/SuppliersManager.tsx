@@ -45,6 +45,12 @@ import XmlImportWizard, { getDefaultFeedUrlForScript } from "./XmlImportWizard";
 import SupplierUsersSection from "./SupplierUsersSection";
 import SupplierApplicationsSection from "./SupplierApplicationsSection";
 import SupplierBillingAdminSection from "./SupplierBillingAdminSection";
+import {
+  ROOT_DOMAIN,
+  getSupplierSubdomainUrl,
+  normalizeSubdomainDraft,
+  validateSupplierSubdomainInput,
+} from "@/utils/subdomain";
 
 // Strict internationalization safe LABELS dictionary
 const LABELS = {
@@ -158,6 +164,8 @@ const LABELS = {
 interface SupplierBrandFormState {
   name: string;
   aliasCode: string;
+  subdomain: string;
+  subdomainEnabled: boolean;
   website: string;
   instagramHandle: string;
   publicEmail: string;
@@ -176,6 +184,8 @@ function createEmptyBrandFormState(): SupplierBrandFormState {
   return {
     name: "",
     aliasCode: "",
+    subdomain: "",
+    subdomainEnabled: true,
     website: "",
     instagramHandle: "",
     publicEmail: "",
@@ -477,6 +487,22 @@ function SupplierCard({
                   Yalnızca WhatsApp Sipariş
                 </span>
               )}
+              {getSupplierSubdomainUrl(supplier) ? (
+                <a
+                  href={getSupplierSubdomainUrl(supplier) || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 no-underline"
+                >
+                  <Globe size={10} />
+                  <span>{supplier.subdomain}.{ROOT_DOMAIN}</span>
+                  <ExternalLink size={9} />
+                </a>
+              ) : supplier.subdomain ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex bg-zinc-100 text-zinc-500 border border-zinc-200">
+                  Subdomain Pasif ({supplier.subdomain})
+                </span>
+              ) : null}
             </h3>
             <p className="text-xs font-mono text-zinc-400 mt-1 uppercase">
               {LABELS.ALIAS_PREFIX}<span className="font-bold text-zinc-700">{supplier.alias_code || "-"}</span>
@@ -847,6 +873,56 @@ function SupplierFormFields({
             <span
               className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
                 brandForm.isActive ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* Supplier Storefront Subdomain Section */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border border-indigo-200/80 rounded-2xl p-3.5 bg-indigo-50/30 items-center">
+        <div className="sm:col-span-2 flex flex-col gap-1.5">
+          <label className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+            <Globe size={13} className="text-indigo-600" />
+            <span>Özel Mağaza Subdomain Adresi</span>
+          </label>
+          <div className="flex items-center rounded-xl border border-indigo-200 bg-white overflow-hidden focus-within:border-indigo-500">
+            <input
+              type="text"
+              value={brandForm.subdomain}
+              onChange={(e) => onFieldChange("subdomain", normalizeSubdomainDraft(e.target.value))}
+              className="flex-1 min-w-0 px-3 py-2 text-xs sm:text-sm font-bold text-zinc-900 focus:outline-none bg-transparent"
+              placeholder="Örn: lustrin, etika, janes"
+              disabled={isPending}
+            />
+            <span className="px-3 py-2 bg-indigo-50/70 border-l border-indigo-100 text-[11px] font-bold text-indigo-700 shrink-0">
+              .{ROOT_DOMAIN}
+            </span>
+          </div>
+          {brandForm.subdomain && (
+            <span className="text-[11px] font-medium text-indigo-700">
+              Önizleme: <strong>https://{brandForm.subdomain}.{ROOT_DOMAIN}</strong>
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between border border-indigo-200/70 rounded-xl px-3.5 py-2.5 bg-white">
+          <div className="flex flex-col">
+            <span className="text-xs font-extrabold text-zinc-800">Subdomain Aktif</span>
+            <span className="text-[10px] text-zinc-500">Mağaza alt alan adı</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onFieldChange("subdomainEnabled", !brandForm.subdomainEnabled)}
+            aria-pressed={brandForm.subdomainEnabled}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              brandForm.subdomainEnabled ? "bg-indigo-600" : "bg-zinc-200"
+            }`}
+            disabled={isPending}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                brandForm.subdomainEnabled ? "translate-x-5" : "translate-x-0"
               }`}
             />
           </button>
@@ -1501,6 +1577,8 @@ export default function SuppliersManager({
     setBrandForm({
       name: supplier.name || "",
       aliasCode: supplier.alias_code || "",
+      subdomain: supplier.subdomain || "",
+      subdomainEnabled: supplier.subdomain_enabled ?? true,
       website: supplier.website || "",
       instagramHandle: supplier.instagram_handle || "",
       publicEmail: supplier.public_email || "",
@@ -1726,9 +1804,16 @@ export default function SuppliersManager({
           setFormError(LABELS.REQUIRED_FIELDS);
           return;
         }
+        const subErr = validateSupplierSubdomainInput(brandForm.subdomain);
+        if (subErr) {
+          setFormError(subErr);
+          return;
+        }
         handleSupplierSave({
           name: brandForm.name.trim(),
           alias_code: brandForm.aliasCode.trim() || null,
+          subdomain: brandForm.subdomain.trim(),
+          subdomain_enabled: brandForm.subdomainEnabled,
           website: brandForm.website.trim() || null,
           instagram_handle: brandForm.instagramHandle.trim(),
           public_email: brandForm.publicEmail.trim(),

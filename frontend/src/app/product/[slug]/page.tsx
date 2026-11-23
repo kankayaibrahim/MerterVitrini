@@ -20,6 +20,7 @@ import {
   fetchSsrStoreSettings,
 } from "@/utils/seoHelpers";
 import ProductDetailClient from "./ProductDetailClient";
+import { getSupplierShowcaseHref } from "@/utils/subdomain";
 
 interface PageProps {
   readonly params: Promise<{ readonly slug: string }>;
@@ -227,13 +228,13 @@ function buildProductBreadcrumbElements(
   }
 
   if (product.brand_name) {
-    const supplierSlug = encodeURIComponent(
-      product.brand_profile?.slug || product.brand_id
+    const rawSupplierHref = getSupplierShowcaseHref(
+      product.brand_profile || { id: product.brand_id },
+      lang
     );
-    const supplierUrl =
-      lang === "tr"
-        ? `${SITE_ORIGIN}/ureticiler/${supplierSlug}`
-        : `${SITE_ORIGIN}/ureticiler/${supplierSlug}?lang=${lang}`;
+    const supplierUrl = rawSupplierHref.startsWith("http")
+      ? rawSupplierHref
+      : `${SITE_ORIGIN}${rawSupplierHref}`;
     items.push({
       "@type": "ListItem",
       position: items.length + 1,

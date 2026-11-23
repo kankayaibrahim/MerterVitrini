@@ -14,6 +14,7 @@ import {
   fetchSsrCategories,
 } from "@/utils/seoHelpers";
 import SuppliersDirectoryClient from "./SuppliersDirectoryClient";
+import { getSupplierShowcaseHref } from "@/utils/subdomain";
 
 interface PageProps {
   readonly searchParams: Promise<{ lang?: string | string[] }>;
@@ -78,7 +79,6 @@ export default async function SuppliersDirectoryPage({ searchParams }: PageProps
   const activeBrands = brands.filter((b) => (b.active_product_count ?? 0) > 0);
   const alternates = buildQueryLangAlternates("/ureticiler", lang);
   const seoCopy = GLOBAL_B2B_SEO_MATRIX[lang];
-  const langSuffix = lang === "tr" ? "" : `?lang=${lang}`;
 
   const directoryJsonLd = {
     "@context": "https://schema.org",
@@ -95,12 +95,15 @@ export default async function SuppliersDirectoryPage({ searchParams }: PageProps
         "@type": "ItemList",
         "@id": `${alternates.canonical}#manufacturers`,
         numberOfItems: activeBrands.length,
-        itemListElement: activeBrands.slice(0, 50).map((brand, idx) => ({
-          "@type": "ListItem",
-          position: idx + 1,
-          name: brand.name,
-          url: `${SITE_ORIGIN}/ureticiler/${encodeURIComponent(brand.slug || brand.id)}${langSuffix}`,
-        })),
+        itemListElement: activeBrands.slice(0, 50).map((brand, idx) => {
+          const href = getSupplierShowcaseHref(brand, lang);
+          return {
+            "@type": "ListItem",
+            position: idx + 1,
+            name: brand.name,
+            url: href.startsWith("http") ? href : `${SITE_ORIGIN}${href}`,
+          };
+        }),
       },
       {
         "@type": "BreadcrumbList",

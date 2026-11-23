@@ -3,8 +3,9 @@
 import { useSyncExternalStore } from "react";
 import { pickLangText } from "@/app/i18n";
 import { isRealisticPhoneNumber } from "@/utils/phoneValidation";
+import { buildCookieDomainAttribute } from "@/utils/subdomain";
 
-export interface StoreUser {
+export interface StoreSessionUser {
   id?: string;
   first_name?: string;
   last_name?: string;
@@ -17,6 +18,9 @@ export interface StoreUser {
   impersonated?: boolean;
   impersonated_by?: string;
   impersonated_by_id?: string;
+}
+
+export interface StoreUser extends StoreSessionUser {
   [key: string]: unknown;
 }
 
@@ -27,12 +31,127 @@ export interface ImpersonationBootstrapPayload {
 }
 
 const IMPERSONATION_BACKUP_KEY = "merter_impersonation_prev_session";
+const COOKIE_TOKEN_KEY = "mv_store_token";
+const COOKIE_USER_KEY = "mv_store_user";
+const COOKIE_LOGGED_OUT_KEY = "mv_store_logged_out";
 
 let verifiedTokenCache: string | null = null;
 let verifyingTokenInFlight: string | null = null;
 let showPricesToGuestsCache: boolean | null = null;
 let storeSettingsFetchedOnce = false;
 let storeSettingsFetchInFlight = false;
+
+export function readSharedCookie(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const cookies = document.cookie ? document.cookie.split(";") : [];
+  const prefix = `${name}=`;
+  for (const rawEntry of cookies) {
+    const entry = rawEntry.trim();
+    if (entry.startsWith(prefix)) {
+      const encoded = entry.slice(prefix.length);
+      try {
+        return decodeURIComponent(encoded);
+      } catch {
+        return encoded;
+      }
+    }
+  }
+  return null;
+}
+
+export function writeSharedCookie(
+  name: string,
+  value: string,
+  maxAgeSeconds: number
+): void {
+  if (typeof document === "undefined" || typeof window === "undefined") {
+    return;
+  }
+  const secureAttr = window.location.protocol === "https:" ? "; Secure" : "";
+  const domainAttr = buildCookieDomainAttribute(window.location.hostname);
+  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}; SameSite=Lax${secureAttr}${domainAttr}`;
+}
+
+export function deleteSharedCookie(name: string): void {
+  if (typeof document === "undefined" || typeof window === "undefined") {
+    return;
+  }
+  const secureAttr = window.location.protocol === "https:" ? "; Secure" : "";
+  const domainAttr = buildCookieDomainAttribute(window.location.hostname);
+  if (domainAttr) {
+    document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secureAttr}${domainAttr}`;
+  }
+  document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax${secureAttr}`;
+}
+
+function getJwtRemainingSeconds(token: string): number {
+  try {
+    const parts = token.trim().split(".");
+    if (parts.length !== 3) return 7 * 86400;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const decoded = atob(padded);
+    const payload = JSON.parse(decoded) as { exp?: number };
+    if (typeof payload.exp !== "number") return 7 * 86400;
+    const remaining = Math.floor(payload.exp - Date.now() / 1000);
+    return Math.max(60, Math.min(30 * 86400, remaining));
+  } catch {
+    return 7 * 86400;
+  }
+}
+
+function toCompactStoreUser(user: StoreSessionUser): StoreSessionUser {
+  return {
+    id: user.id,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    email: user.email,
+    phone: user.phone,
+    role: user.role,
+    preferred_lang: user.preferred_lang,
+    preferred_currency: user.preferred_currency,
+    email_verified: user.email_verified,
+    impersonated: user.impersonated === true ? true : undefined,
+    impersonated_by: user.impersonated_by,
+    impersonated_by_id: user.impersonated_by_id,
+  };
+}
+
+function writeSessionCookies(token: string, user: StoreSessionUser): void {
+  const ttl = getJwtRemainingSeconds(token);
+  deleteSharedCookie(COOKIE_LOGGED_OUT_KEY);
+  writeSharedCookie(COOKIE_TOKEN_KEY, token, ttl);
+  writeSharedCookie(COOKIE_USER_KEY, JSON.stringify(toCompactStoreUser(user)), ttl);
+}
+
+export function setStoreSession(token: string, user: StoreSessionUser): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  verifiedTokenCache = null;
+  localStorage.setItem("store_user_token", token);
+  localStorage.setItem("store_user_info", JSON.stringify(user));
+  if (token.trim() && isJwtTokenUnexpired(token)) {
+    writeSessionCookies(token, user);
+  }
+}
+
+export function clearStoreSession(markExplicitLogout = false): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  verifiedTokenCache = null;
+  localStorage.removeItem("store_user_token");
+  localStorage.removeItem("store_user_info");
+  deleteSharedCookie(COOKIE_TOKEN_KEY);
+  deleteSharedCookie(COOKIE_USER_KEY);
+  if (markExplicitLogout) {
+    writeSharedCookie(COOKIE_LOGGED_OUT_KEY, "1", 86400);
+  }
+}
 
 export function syncShowPricesToGuestsSetting(enabled: boolean): void {
   const normalized = Boolean(enabled);
@@ -95,6 +214,10 @@ function clearStaleStoreSession(): void {
     localStorage.removeItem("store_user_token");
     localStorage.removeItem("store_user_info");
   }
+  if (readSharedCookie(COOKIE_TOKEN_KEY) || readSharedCookie(COOKIE_USER_KEY)) {
+    deleteSharedCookie(COOKIE_TOKEN_KEY);
+    deleteSharedCookie(COOKIE_USER_KEY);
+  }
 }
 
 export function isStoreSessionImpersonated(): boolean {
@@ -126,9 +249,7 @@ export function startCustomerImpersonationSession(payload: ImpersonationBootstra
     ...payload.customer,
     impersonated: true,
   };
-  verifiedTokenCache = null;
-  localStorage.setItem("store_user_token", payload.token);
-  localStorage.setItem("store_user_info", JSON.stringify(normalizedUser));
+  setStoreSession(payload.token, normalizedUser);
 
   if (payload.customer.id) {
     localStorage.setItem("merter_cart_owner_id", payload.customer.id);
@@ -145,9 +266,7 @@ export function startCustomerImpersonationSession(payload: ImpersonationBootstra
 
 export function endCustomerImpersonationSession(): void {
   if (typeof window === "undefined") return;
-  verifiedTokenCache = null;
-  localStorage.removeItem("store_user_token");
-  localStorage.removeItem("store_user_info");
+  clearStoreSession(false);
   localStorage.removeItem("merter_b2b_cart");
   localStorage.removeItem("merter_cart_owner_id");
 
@@ -157,9 +276,13 @@ export function endCustomerImpersonationSession(): void {
     try {
       const backup = JSON.parse(rawBackup) as Partial<StoredSessionBackup>;
       if (typeof backup.store_user_token === "string" && backup.store_user_token) {
-        localStorage.setItem("store_user_token", backup.store_user_token);
-      }
-      if (typeof backup.store_user_info === "string" && backup.store_user_info) {
+        if (typeof backup.store_user_info === "string" && backup.store_user_info) {
+          const parsedInfo = JSON.parse(backup.store_user_info) as StoreUser;
+          setStoreSession(backup.store_user_token, parsedInfo);
+        } else {
+          localStorage.setItem("store_user_token", backup.store_user_token);
+        }
+      } else if (typeof backup.store_user_info === "string" && backup.store_user_info) {
         localStorage.setItem("store_user_info", backup.store_user_info);
       }
       if (typeof backup.merter_b2b_cart === "string") {
@@ -195,9 +318,10 @@ function isJwtTokenUnexpired(token: string): boolean {
 
 function syncVerifiedProfileFields(emailVerified?: boolean, phone?: string): void {
   const current = localStorage.getItem("store_user_info");
+  const token = localStorage.getItem("store_user_token");
   if (!current) return;
   try {
-    const parsed = JSON.parse(current) as Record<string, unknown>;
+    const parsed = JSON.parse(current) as StoreUser;
     let changed = false;
     if (typeof emailVerified === "boolean" && parsed.email_verified !== emailVerified) {
       parsed.email_verified = emailVerified;
@@ -209,6 +333,9 @@ function syncVerifiedProfileFields(emailVerified?: boolean, phone?: string): voi
     }
     if (changed) {
       localStorage.setItem("store_user_info", JSON.stringify(parsed));
+      if (token && isJwtTokenUnexpired(token)) {
+        writeSessionCookies(token, parsed);
+      }
       window.dispatchEvent(new Event("auth-change"));
     }
   } catch {
@@ -280,19 +407,35 @@ function parseValidStoreUserRecord(customerInfo: string): Record<string, unknown
 
 /**
  * Pure snapshot reader safe for React 19 useSyncExternalStore getSnapshot:
- * never mutates localStorage and never triggers network fetches.
+ * never mutates localStorage/cookies and never triggers network fetches.
  */
 function readValidStoreUserPure<T = Record<string, unknown>>(): T | null {
   if (typeof window === "undefined") {
     return null;
   }
-  const customerToken = localStorage.getItem("store_user_token");
-  const customerInfo = localStorage.getItem("store_user_info");
-  if (!customerToken || !customerInfo || !isJwtTokenUnexpired(customerToken)) {
+  const cookieToken = readSharedCookie(COOKIE_TOKEN_KEY);
+  const loggedOut = readSharedCookie(COOKIE_LOGGED_OUT_KEY) === "1";
+  if (loggedOut && !cookieToken) {
     return null;
   }
-  const parsed = parseValidStoreUserRecord(customerInfo);
-  return parsed ? (parsed as T) : null;
+
+  const localToken = localStorage.getItem("store_user_token");
+  const localInfo = localStorage.getItem("store_user_info");
+  if (localToken && localInfo && isJwtTokenUnexpired(localToken)) {
+    const parsed = parseValidStoreUserRecord(localInfo);
+    if (parsed) {
+      return parsed as T;
+    }
+  }
+
+  const cookieInfo = readSharedCookie(COOKIE_USER_KEY);
+  if (cookieToken && cookieInfo && isJwtTokenUnexpired(cookieToken)) {
+    const parsed = parseValidStoreUserRecord(cookieInfo);
+    if (parsed) {
+      return parsed as T;
+    }
+  }
+  return null;
 }
 
 /**
@@ -306,39 +449,58 @@ export function getValidStoreBearerToken(): string | null {
   if (readValidStoreUserPure() === null) {
     return null;
   }
-  const token = localStorage.getItem("store_user_token");
-  const trimmed = token ? token.trim() : "";
-  return trimmed !== "" ? trimmed : null;
+  const localToken = localStorage.getItem("store_user_token")?.trim() || "";
+  if (localToken && isJwtTokenUnexpired(localToken)) {
+    return localToken;
+  }
+  const cookieToken = readSharedCookie(COOKIE_TOKEN_KEY)?.trim() || "";
+  if (cookieToken && isJwtTokenUnexpired(cookieToken)) {
+    return cookieToken;
+  }
+  return null;
 }
 
 function hydrateStoreAuthSideEffects(): void {
   if (typeof window === "undefined") {
     return;
   }
-  const customerToken = localStorage.getItem("store_user_token");
-  const customerInfo = localStorage.getItem("store_user_info");
+  const cookieToken = readSharedCookie(COOKIE_TOKEN_KEY);
+  const cookieInfo = readSharedCookie(COOKIE_USER_KEY);
+  const loggedOut = readSharedCookie(COOKIE_LOGGED_OUT_KEY) === "1";
 
-  if (!customerToken || !customerInfo) {
+  if (loggedOut && !cookieToken) {
     clearStaleStoreSession();
     triggerStorePriceVisibilityFetchOnce();
     return;
   }
 
-  if (!isJwtTokenUnexpired(customerToken)) {
+  const localToken = localStorage.getItem("store_user_token");
+  const localInfo = localStorage.getItem("store_user_info");
+  const localParsed =
+    localToken && localInfo && isJwtTokenUnexpired(localToken)
+      ? parseValidStoreUserRecord(localInfo)
+      : null;
+
+  if (!localParsed) {
+    if (cookieToken && cookieInfo && isJwtTokenUnexpired(cookieToken) && parseValidStoreUserRecord(cookieInfo)) {
+      localStorage.setItem("store_user_token", cookieToken);
+      localStorage.setItem("store_user_info", cookieInfo);
+      verifyTokenWithBackendOnce(cookieToken);
+      window.dispatchEvent(new Event("auth-change"));
+      return;
+    }
     verifiedTokenCache = null;
     clearStaleStoreSession();
     triggerStorePriceVisibilityFetchOnce();
     return;
   }
 
-  const parsed = parseValidStoreUserRecord(customerInfo);
-  if (!parsed) {
-    clearStaleStoreSession();
-    triggerStorePriceVisibilityFetchOnce();
-    return;
+  if (!cookieToken && localToken) {
+    writeSessionCookies(localToken, localParsed as StoreUser);
   }
-
-  verifyTokenWithBackendOnce(customerToken);
+  if (localToken) {
+    verifyTokenWithBackendOnce(localToken);
+  }
 }
 
 export function getValidStoreUser<T = Record<string, unknown>>(): T | null {

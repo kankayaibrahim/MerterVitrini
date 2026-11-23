@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { User, Clipboard, Home, LogOut, Check, AlertCircle, AlertTriangle } from "lucide-react";
+import { User, Clipboard, Home, LogOut, Check, AlertCircle, AlertTriangle, Heart, Bell } from "lucide-react";
 import { getCategoryPrefix, t } from "@/app/i18n";
 import { Category, CartItem } from "@/types/store";
 import { apiFetch, showToast } from "@/app/utils";
+import { clearStoreSession, setStoreSession } from "@/app/storeAuth";
 import { normalizeCurrencyCode } from "@/utils/orderCurrency";
 import {
   SupportedSeoLang,
@@ -39,6 +40,8 @@ import RefundModal, { RefundOrderItem } from "./components/RefundModal";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+import FavoriteSuppliersPanel from "@/components/store/FavoriteSuppliersPanel";
+import CustomerNotificationsPanel from "@/components/store/CustomerNotificationsPanel";
 
 interface ProfileAddressValidationInput {
   readonly lang: string;
@@ -128,6 +131,8 @@ interface ProfilePageLocaleCopy {
   readonly addressSaveFailed: string;
   readonly addressDeleteFailed: string;
   readonly migrationFailed: string;
+  readonly favoritesTab: string;
+  readonly notificationsTab: string;
 }
 
 const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
@@ -156,6 +161,8 @@ const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
     addressSaveFailed: "Adres kaydedilemedi",
     addressDeleteFailed: "Adres silinemedi",
     migrationFailed: "Taşıma işlemi başarısız oldu",
+    favoritesTab: "Favori Tedarikçilerim",
+    notificationsTab: "Bildirimlerim",
   },
   en: {
     verifiedSuccess:
@@ -182,6 +189,8 @@ const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
     addressSaveFailed: "Failed to save address",
     addressDeleteFailed: "Failed to delete address",
     migrationFailed: "Address migration failed",
+    favoritesTab: "Favorite Suppliers",
+    notificationsTab: "Notifications",
   },
   ru: {
     verifiedSuccess:
@@ -208,6 +217,8 @@ const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
     addressSaveFailed: "Не удалось сохранить адрес",
     addressDeleteFailed: "Не удалось удалить адрес",
     migrationFailed: "Не удалось перенести адреса",
+    favoritesTab: "Избранные поставщики",
+    notificationsTab: "Уведомления",
   },
   ar: {
     verifiedSuccess:
@@ -233,6 +244,8 @@ const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
     addressSaveFailed: "تعذر حفظ العنوان",
     addressDeleteFailed: "تعذر حذف العنوان",
     migrationFailed: "فشل نقل العناوين",
+    favoritesTab: "الموردون المفضلون",
+    notificationsTab: "الإشعارات",
   },
   de: {
     verifiedSuccess:
@@ -259,6 +272,8 @@ const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
     addressSaveFailed: "Adresse konnte nicht gespeichert werden",
     addressDeleteFailed: "Adresse konnte nicht gelöscht werden",
     migrationFailed: "Adressmigration fehlgeschlagen",
+    favoritesTab: "Favorisierte Hersteller",
+    notificationsTab: "Benachrichtigungen",
   },
   fr: {
     verifiedSuccess:
@@ -285,6 +300,8 @@ const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
     addressSaveFailed: "Impossible d'enregistrer l'adresse",
     addressDeleteFailed: "Impossible de supprimer l'adresse",
     migrationFailed: "Échec de la migration des adresses",
+    favoritesTab: "Fournisseurs favoris",
+    notificationsTab: "Notifications",
   },
   pl: {
     verifiedSuccess:
@@ -311,6 +328,8 @@ const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
     addressSaveFailed: "Nie udało się zapisać adresu",
     addressDeleteFailed: "Nie udało się usunąć adresu",
     migrationFailed: "Migracja adresów nie powiodła się",
+    favoritesTab: "Ulubieni dostawcy",
+    notificationsTab: "Powiadomienia",
   },
   bg: {
     verifiedSuccess:
@@ -337,6 +356,8 @@ const PROFILE_PAGE_COPY: Record<SupportedSeoLang, ProfilePageLocaleCopy> = {
     addressSaveFailed: "Неуспешно запазване на адреса",
     addressDeleteFailed: "Неуспешно изтриване на адреса",
     migrationFailed: "Прехвърлянето на адресите бе неуспешно",
+    favoritesTab: "Любими доставчици",
+    notificationsTab: "Известия",
   },
 };
 
@@ -592,15 +613,34 @@ export default function ProfilePage() {
   const [verificationFeedback, setVerificationFeedback] = useState<VerificationFeedback | null>(getInitialVerificationFeedback);
 
   // --- Section state ---
-  const [activeSection, setActiveSection] = useState<"profile" | "orders">(() => {
+  const [activeSection, setActiveSection] = useState<
+    "profile" | "orders" | "favorites" | "notifications"
+  >(() => {
     if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("tab") === "orders") {
-        return "orders";
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab === "orders" || tab === "favorites" || tab === "notifications") {
+        return tab;
       }
     }
     return "profile";
   });
+
+  useEffect(() => {
+    const handleTabSwitch = (e: Event) => {
+      const detail = (e as CustomEvent<{ tab?: string }>).detail;
+      const tab = detail?.tab;
+      if (
+        tab === "profile" ||
+        tab === "orders" ||
+        tab === "favorites" ||
+        tab === "notifications"
+      ) {
+        setActiveSection(tab);
+      }
+    };
+    window.addEventListener("merter-profile-tab", handleTabSwitch);
+    return () => window.removeEventListener("merter-profile-tab", handleTabSwitch);
+  }, []);
 
   // --- Orders states ---
   const [orders, setOrders] = useState<UserOrder[]>([]);
@@ -702,8 +742,7 @@ export default function ProfilePage() {
 
   const handleLogout = useCallback(() => {
     if (typeof window !== "undefined") {
-      localStorage.removeItem("store_user_token");
-      localStorage.removeItem("store_user_info");
+      clearStoreSession(true);
       window.dispatchEvent(new Event("auth-change"));
 
       const origin = window.location.origin;
@@ -1438,7 +1477,12 @@ export default function ProfilePage() {
           phone: savedPhone
         };
         setUser(updatedUserInfo);
-        localStorage.setItem("store_user_info", JSON.stringify(updatedUserInfo));
+        const currentToken = localStorage.getItem("store_user_token") || "";
+        if (currentToken) {
+          setStoreSession(currentToken, updatedUserInfo);
+        } else {
+          localStorage.setItem("store_user_info", JSON.stringify(updatedUserInfo));
+        }
         localStorage.setItem("preferred_lang", preferredLang);
         localStorage.setItem("merter_preferred_currency", preferredCurrency);
 
@@ -1677,6 +1721,28 @@ export default function ProfilePage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setActiveSection("favorites")}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-bold text-left cursor-pointer w-full transition-all ${activeSection === "favorites"
+                    ? "bg-salmon-pink/5 border-salmon-pink/20 text-salmon-pink"
+                    : "bg-transparent border-transparent text-sonic-silver hover:text-salmon-pink hover:bg-cultured"
+                    }`}
+                >
+                  <Heart className="w-4 h-4" />
+                  <span>{pageCopy.favoritesTab}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("notifications")}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-xs font-bold text-left cursor-pointer w-full transition-all ${activeSection === "notifications"
+                    ? "bg-salmon-pink/5 border-salmon-pink/20 text-salmon-pink"
+                    : "bg-transparent border-transparent text-sonic-silver hover:text-salmon-pink hover:bg-cultured"
+                    }`}
+                >
+                  <Bell className="w-4 h-4" />
+                  <span>{pageCopy.notificationsTab}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={handleLogout}
                   className="flex items-center gap-3 px-3 py-2.5 text-sonic-silver hover:text-salmon-pink hover:bg-cultured transition-all rounded-lg text-xs font-bold text-left border border-transparent bg-transparent cursor-pointer w-full"
                 >
@@ -1689,7 +1755,7 @@ export default function ProfilePage() {
 
           {/* Right Column: Dynamic Section Router */}
           <div className="lg:col-span-3">
-            {activeSection === "profile" ? (
+            {activeSection === "profile" && (
               <div className="flex flex-col gap-8">
                 <ProfileDetails
                   lang={lang}
@@ -1732,7 +1798,9 @@ export default function ProfilePage() {
                   getAddressT={getAddressT}
                 />
               </div>
-            ) : (
+            )}
+
+            {activeSection === "orders" && (
               <OrderHistory
                 orders={orders}
                 loadingOrders={loadingOrders}
@@ -1746,6 +1814,14 @@ export default function ProfilePage() {
                 openRefundModal={openRefundModal}
                 handleCancelOrder={handleCancelOrder}
               />
+            )}
+
+            {activeSection === "favorites" && (
+              <FavoriteSuppliersPanel lang={safeLang} />
+            )}
+
+            {activeSection === "notifications" && (
+              <CustomerNotificationsPanel lang={safeLang} />
             )}
           </div>
 

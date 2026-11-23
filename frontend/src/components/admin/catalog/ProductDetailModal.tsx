@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   PauseCircle,
   Trash2,
+  ExternalLink,
+  Globe,
 } from "lucide-react";
 import { Product, XmlFeed, ProductImage, GroupProductColor } from "@/types/integration";
 import { BulkProductActionType } from "@/services/admin-api.service";
@@ -42,8 +44,49 @@ const LABELS = {
   deactivateProduct: "Pasife Al",
   deleteProduct: "Ürünü Sil",
   onSale: "Satışta",
-  passive: "Pasif"
+  passive: "Pasif",
+  viewOnSite: "Sitede Görüntüle",
+  viewOnSitePassive: "Vitrinde Gör (Pasif)",
+  passiveSiteTooltip:
+    "Bu ürün şu anda pasif olduğu için canlı vitrinde gizlidir (404 dönebilir). Önce Aktife Al ile yayına alabilirsiniz.",
+  storefrontUrlLabel: "Canlı Vitrin Sayfası",
+  priceAndCurrency: "Satış Fiyatı / Para Birimi",
+  stockAndSeries: "Stok (Adet / Seri)",
+  colorLabel: "Renk",
+  noPrice: "Fiyat Belirtilmemiş",
 };
+
+const STOREFRONT_ORIGIN = "https://mertervitrini.com.tr";
+
+function buildStorefrontProductUrl(product: Product): string {
+  const slugOrId = product.slug?.trim() || product.slug_id?.trim() || product.id;
+  return `${STOREFRONT_ORIGIN}/product/${encodeURIComponent(slugOrId)}`;
+}
+
+function resolveCurrencySymbol(currency?: string): string {
+  const upper = (currency || "TRY").toUpperCase();
+  if (upper === "USD") return "$";
+  if (upper === "EUR") return "€";
+  if (upper === "GBP") return "£";
+  return "₺";
+}
+
+function formatDetailPrice(product: Product): string {
+  const base = typeof product.price === "number" ? product.price : 0;
+  const discount =
+    typeof product.discounted_price === "number" ? product.discounted_price : 0;
+  const hasDiscount = discount > 0 && base > 0 && discount < base;
+  const effective = hasDiscount ? discount : base;
+  if (effective <= 0) return LABELS.noPrice;
+
+  const sym = resolveCurrencySymbol(product.currency);
+  const code = (product.currency || "TRY").toUpperCase();
+  const formatted = effective.toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${formatted} ${sym} (${code})`;
+}
 
 // Safe helper to strip HTML tags while preserving line breaks, avoiding dangerouslySetInnerHTML XSS
 const stripHtmlTags = (html: string | null): string => {
@@ -92,22 +135,23 @@ export default function ProductDetailModal({
 
   const images = product.images || [];
   const activeImage = images[activeImageIdx] || images[0] || null;
+  const storefrontUrl = buildStorefrontProductUrl(product);
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
 
       <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl overflow-hidden border border-zinc-200/60 max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
         {/* Modal Header */}
-        <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200/60 flex items-center justify-between">
-          <div>
+        <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-200/60 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold text-violet-700 bg-violet-100 px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
                 {product.custom_sku}
               </span>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${product.is_active
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-rose-100 text-rose-800"
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-rose-100 text-rose-800"
                   }`}
               >
                 {product.is_active ? LABELS.onSale : LABELS.passive}
@@ -115,12 +159,31 @@ export default function ProductDetailModal({
             </div>
             <h3 className="text-lg font-bold text-zinc-900 mt-1 line-clamp-1">{product.title}</h3>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 hover:bg-zinc-200 rounded-xl transition-colors text-zinc-500"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={storefrontUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={product.is_active ? storefrontUrl : LABELS.passiveSiteTooltip}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors shadow-sm ${product.is_active
+                  ? "bg-violet-600 hover:bg-violet-700 text-white"
+                  : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200"
+                }`}
+            >
+              <ExternalLink size={14} />
+              <span>
+                {product.is_active ? LABELS.viewOnSite : LABELS.viewOnSitePassive}
+              </span>
+            </a>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={LABELS.close}
+              className="p-1.5 hover:bg-zinc-200 rounded-xl transition-colors text-zinc-500 cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -232,6 +295,47 @@ export default function ProductDetailModal({
                   </span>
                 </div>
 
+                <div className="p-3 bg-zinc-50 border border-zinc-200/40 rounded-xl">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">{LABELS.priceAndCurrency}</span>
+                  <span className="font-semibold text-zinc-900">
+                    {formatDetailPrice(product)}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-zinc-50 border border-zinc-200/40 rounded-xl">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">{LABELS.stockAndSeries}</span>
+                  <span className="font-semibold text-zinc-800">
+                    {(product.stock ?? 0).toLocaleString("tr-TR")} Adet / {(product.series_stock ?? 0).toLocaleString("tr-TR")} Seri
+                    {product.color ? ` • ${LABELS.colorLabel}: ${product.color}` : ""}
+                  </span>
+                </div>
+
+                <div className="p-3 bg-violet-50/50 border border-violet-200/60 rounded-xl col-span-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-violet-700 uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                      <Globe size={11} />
+                      {LABELS.storefrontUrlLabel}
+                    </span>
+                    <a
+                      href={storefrontUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-violet-700 hover:text-violet-900 break-all underline text-left block truncate"
+                    >
+                      {storefrontUrl}
+                    </a>
+                  </div>
+                  <a
+                    href={storefrontUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-white hover:bg-violet-50 text-violet-700 border border-violet-200 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 shrink-0 transition-colors"
+                  >
+                    <ExternalLink size={12} />
+                    <span>{LABELS.viewOnSite}</span>
+                  </a>
+                </div>
+
                 {product.source_url && (
                   <div className="p-3 bg-zinc-50 border border-zinc-200/40 rounded-xl col-span-2 flex flex-col gap-0.5">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">{LABELS.sourceUrl}</span>
@@ -284,8 +388,8 @@ export default function ProductDetailModal({
                         }
                       }}
                       className={`group border rounded-2xl overflow-hidden flex flex-col transition-all duration-200 select-none text-left ${isCurrent
-                          ? "border-violet-600 ring-2 ring-violet-500/20 bg-violet-50/20 cursor-default"
-                          : "border-zinc-200 hover:border-violet-400 hover:shadow-md cursor-pointer active:scale-[0.98]"
+                        ? "border-violet-600 ring-2 ring-violet-500/20 bg-violet-50/20 cursor-default"
+                        : "border-zinc-200 hover:border-violet-400 hover:shadow-md cursor-pointer active:scale-[0.98]"
                         }`}
                     >
                       {/* Cover image of the color */}
@@ -350,8 +454,8 @@ export default function ProductDetailModal({
                   )
                 }
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 transition-colors cursor-pointer ${product.is_active
-                    ? "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200"
-                    : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200"
+                  ? "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200"
+                  : "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200"
                   }`}
               >
                 {product.is_active ? (

@@ -33,6 +33,7 @@ import {
 } from "@/utils/brandContactHelpers";
 import { isProductWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
 import { getDirectSellerNoticeCopy } from "@/utils/legalNotices";
+import { getSupplierShowcaseHref } from "@/utils/subdomain";
 
 function normalizeWaPhone(raw?: string): string {
   return normalizeWhatsappDigits(raw);
@@ -515,11 +516,11 @@ export default function SupplierDirectCard({
     ? `https://wa.me/${waDigits}?text=${encodeURIComponent(directWaMessage)}`
     : "";
 
-  const supplierSlug = encodeURIComponent(bp?.slug || product.brand_id);
-  const supplierHref =
-    safeLang === "tr"
-      ? `/ureticiler/${supplierSlug}`
-      : `/ureticiler/${supplierSlug}?lang=${safeLang}`;
+  const supplierHref = getSupplierShowcaseHref(
+    bp || { id: product.brand_id, slug: product.brand_id },
+    safeLang
+  );
+  const isExternalSupplierHref = supplierHref.startsWith("http");
 
   const [showContactForm, setShowContactForm] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -593,12 +594,21 @@ export default function SupplierDirectCard({
           </div>
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Link
-                href={supplierHref}
-                className="text-xs font-extrabold text-[#1C1C1C] hover:text-[#8C6D3F] tracking-wide no-underline transition-colors"
-              >
-                {formatAsciiSafeUpper(supplierName)}
-              </Link>
+              {isExternalSupplierHref ? (
+                <a
+                  href={supplierHref}
+                  className="text-xs font-extrabold text-[#1C1C1C] hover:text-[#8C6D3F] tracking-wide no-underline transition-colors"
+                >
+                  {formatAsciiSafeUpper(supplierName)}
+                </a>
+              ) : (
+                <Link
+                  href={supplierHref}
+                  className="text-xs font-extrabold text-[#1C1C1C] hover:text-[#8C6D3F] tracking-wide no-underline transition-colors"
+                >
+                  {formatAsciiSafeUpper(supplierName)}
+                </Link>
+              )}
               {(bp?.is_verified ?? true) && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 text-[10px] font-bold">
                   <ShieldCheck size={11} />
@@ -618,12 +628,21 @@ export default function SupplierDirectCard({
           </div>
         </div>
 
-        <Link
-          href={supplierHref}
-          className="px-2.5 py-1 rounded-md bg-white hover:bg-[#EFECE6] border border-[#D6D1C7] hover:border-[#1C1C1C] text-[10px] font-extrabold text-[#1C1C1C] no-underline shrink-0 transition-colors"
-        >
-          {copy.showcaseLink}
-        </Link>
+        {isExternalSupplierHref ? (
+          <a
+            href={supplierHref}
+            className="px-2.5 py-1 rounded-md bg-white hover:bg-[#EFECE6] border border-[#D6D1C7] hover:border-[#1C1C1C] text-[10px] font-extrabold text-[#1C1C1C] no-underline shrink-0 transition-colors"
+          >
+            {copy.showcaseLink}
+          </a>
+        ) : (
+          <Link
+            href={supplierHref}
+            className="px-2.5 py-1 rounded-md bg-white hover:bg-[#EFECE6] border border-[#D6D1C7] hover:border-[#1C1C1C] text-[10px] font-extrabold text-[#1C1C1C] no-underline shrink-0 transition-colors"
+          >
+            {copy.showcaseLink}
+          </Link>
+        )}
       </div>
 
       {(bp?.supports_private_label || bp?.supports_fason || bp?.export_countries) && (

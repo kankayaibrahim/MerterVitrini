@@ -331,7 +331,12 @@ func ConnectDB(cfg *config.Config) (*pgxpool.Pool, error) {
 			ADD COLUMN IF NOT EXISTS bank_name VARCHAR(150) NOT NULL DEFAULT '',
 			ADD COLUMN IF NOT EXISTS bank_account_holder VARCHAR(200) NOT NULL DEFAULT '',
 			ADD COLUMN IF NOT EXISTS iban VARCHAR(64) NOT NULL DEFAULT '',
-			ADD COLUMN IF NOT EXISTS whatsapp_only_ordering BOOLEAN NOT NULL DEFAULT false`,
+			ADD COLUMN IF NOT EXISTS whatsapp_only_ordering BOOLEAN NOT NULL DEFAULT false,
+			ADD COLUMN IF NOT EXISTS subdomain VARCHAR(63) NULL,
+			ADD COLUMN IF NOT EXISTS subdomain_enabled BOOLEAN NOT NULL DEFAULT true`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_brands_subdomain_lower
+			ON catalog.brands (LOWER(subdomain))
+			WHERE subdomain IS NOT NULL AND BTRIM(subdomain) <> ''`,
 		`ALTER TABLE catalog.orders ALTER COLUMN user_id DROP NOT NULL`,
 		`ALTER TABLE catalog.orders
 			ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255) NOT NULL DEFAULT '',

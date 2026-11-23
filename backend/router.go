@@ -44,6 +44,8 @@ type AppHandlers struct {
 	Marketplace          *handlers.MarketplaceHandler
 	Mobile               *handlers.MobileHandler
 	ConsentCompliance    *handlers.ConsentComplianceHandler
+	StoriesAndFavorites  *handlers.StoriesAndFavoritesHandler
+	AdminSystemLogs      *handlers.AdminSystemLogsHandler
 }
 
 // NewAppHandlers wires shared SOLID domain services into all HTTP handlers via constructor injection.
@@ -54,8 +56,10 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 
 	storeAuth := handlers.NewStoreAuthHandler(cfg)
 	supplierPortal := handlers.NewSupplierPortalHandler(cfg, mediaSvc)
+	supplierPortal.SetNotifier(notifierSvc)
 	supplierApps := handlers.NewSupplierApplicationsHandler(cfg)
 	marketplace := handlers.NewMarketplaceHandler(cfg, notifierSvc)
+	storiesAndFavs := handlers.NewStoriesAndFavoritesHandler(cfg, mediaSvc, notifierSvc)
 
 	return &AppHandlers{
 		MediaRootDir:         mediaSvc.RootDir(),
@@ -92,7 +96,9 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 			SupplierApps: supplierApps,
 			Marketplace:  marketplace,
 		}),
-		ConsentCompliance: handlers.NewConsentComplianceHandler(cfg),
+		ConsentCompliance:   handlers.NewConsentComplianceHandler(cfg),
+		StoriesAndFavorites: storiesAndFavs,
+		AdminSystemLogs:     handlers.NewAdminSystemLogsHandler(cfg),
 	}
 }
 
@@ -195,6 +201,8 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 	mux.HandleFunc("GET /api/v1/store/categories", h.StoreCatalog.ListCategories)
 	mux.HandleFunc("GET /api/v1/store/brands", h.StoreCatalog.ListBrands)
 	mux.HandleFunc("GET /api/v1/store/brands/{slug}", h.StoreCatalog.GetBrandBySlug)
+	mux.HandleFunc("GET /api/v1/store/tenant/by-slug/{slug}", h.StoreCatalog.ResolveTenantBySlug)
+	mux.HandleFunc("GET /api/v1/store/tenant/{subdomain}", h.StoreCatalog.ResolveTenantBySubdomain)
 	mux.HandleFunc("GET /api/v1/store/attributes", h.StoreCatalog.ListAttributes)
 	mux.HandleFunc("GET /api/v1/store/settings", h.StoreCatalog.GetStoreSettings)
 	mux.HandleFunc("GET /api/v1/store/languages", h.StoreCatalog.ListLanguages)
@@ -233,6 +241,18 @@ func registerStorefrontRoutes(mux *http.ServeMux, h *AppHandlers) {
 	mux.HandleFunc("GET /api/v1/store/consent/init", h.ConsentCompliance.GetStorefrontConsentInit)
 	mux.HandleFunc("POST /api/v1/store/consent/record", h.ConsentCompliance.RecordStorefrontConsent)
 	mux.HandleFunc("GET /api/v1/store/consent/receipt/{ref_id}", h.ConsentCompliance.GetStorefrontConsentReceipt)
+
+	// Supplier Ephemeral Stories, Customer Favorite Suppliers & Storefront Notifications
+	mux.HandleFunc("GET /api/v1/store/stories", h.StoriesAndFavorites.ListPublicStories)
+	mux.HandleFunc("POST /api/v1/store/stories/{id}/view", h.StoriesAndFavorites.TrackStoryView)
+	mux.HandleFunc("POST /api/v1/store/stories/{id}/click", h.StoriesAndFavorites.TrackStoryClick)
+	mux.HandleFunc("GET /api/v1/store/favorite-suppliers", h.StoriesAndFavorites.ListFavoriteSuppliers)
+	mux.HandleFunc("POST /api/v1/store/favorite-suppliers/{brand_id}", h.StoriesAndFavorites.AddFavoriteSupplier)
+	mux.HandleFunc("PATCH /api/v1/store/favorite-suppliers/{brand_id}", h.StoriesAndFavorites.UpdateFavoriteSupplierPrefs)
+	mux.HandleFunc("DELETE /api/v1/store/favorite-suppliers/{brand_id}", h.StoriesAndFavorites.RemoveFavoriteSupplier)
+	mux.HandleFunc("GET /api/v1/store/notifications", h.StoriesAndFavorites.ListCustomerNotifications)
+	mux.HandleFunc("POST /api/v1/store/notifications/read-all", h.StoriesAndFavorites.MarkAllCustomerNotificationsRead)
+	mux.HandleFunc("POST /api/v1/store/notifications/{id}/read", h.StoriesAndFavorites.MarkCustomerNotificationRead)
 }
 
 func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Handler) http.Handler) {
@@ -437,6 +457,24 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("PUT /api/v1/admin/consent/settings", protect(h.ConsentCompliance.UpdateAdminSettings))
 	mux.Handle("POST /api/v1/admin/consent/scan", protect(h.ConsentCompliance.RunAdminCookieScan))
 	mux.Handle("GET /api/v1/admin/consent/scans", protect(h.ConsentCompliance.ListAdminScanRuns))
+
+	// Admin Supplier Stories & Monetization Quota Settings
+	mux.Handle("GET /api/v1/admin/stories/overview", protect(h.StoriesAndFavorites.GetAdminStoriesOverview))
+	mux.Handle("PUT /api/v1/admin/stories/settings", protect(h.StoriesAndFavorites.UpdateAdminStorySettings))
+	mux.Handle("POST /api/v1/admin/stories/upload", protect(h.StoriesAndFavorites.UploadAdminStoryMedia))
+	mux.Handle("POST /api/v1/admin/stories", protect(h.StoriesAndFavorites.CreateAdminStory))
+	mux.Handle("PATCH /api/v1/admin/stories/{id}", protect(h.StoriesAndFavorites.ToggleAdminStoryActive))
+	mux.Handle("DELETE /api/v1/admin/stories/{id}", protect(h.StoriesAndFavorites.DeleteAdminStory))
+
+	// Admin System Health, Exception Stacktraces & Multi-Source Log Center (Admin Role Only)
+	adminOnlyMW := middleware.RequireRole(models.RoleAdmin)
+	protectAdminOnly := func(fn http.HandlerFunc) http.Handler {
+		return authMW(adminOnlyMW(fn))
+	}
+	mux.Handle("GET /api/v1/admin/system-logs/health", protectAdminOnly(h.AdminSystemLogs.GetSystemHealth))
+	mux.Handle("GET /api/v1/admin/system-logs", protectAdminOnly(h.AdminSystemLogs.QuerySystemLogs))
+	mux.Handle("POST /api/v1/admin/system-logs/resolve", protectAdminOnly(h.AdminSystemLogs.ResolveExceptions))
+	mux.Handle("POST /api/v1/admin/system-logs/clear", protectAdminOnly(h.AdminSystemLogs.ClearSystemLogs))
 }
 
 func registerSupplierPortalRoutes(mux *http.ServeMux, h *AppHandlers, supplierMW func(http.Handler) http.Handler) {
@@ -484,6 +522,12 @@ func registerSupplierPortalRoutes(mux *http.ServeMux, h *AppHandlers, supplierMW
 	mux.Handle("GET /api/v1/supplier/analytics", protect(h.Analytics.GetSupplierBrandAnalytics))
 	mux.Handle("GET /api/v1/supplier/rfqs", protect(h.Marketplace.ListSupplierRfqs))
 	mux.Handle("POST /api/v1/supplier/rfqs/{id}/offers", protect(h.Marketplace.SubmitSupplierRfqOffer))
+
+	// Supplier Ephemeral Stories
+	mux.Handle("GET /api/v1/supplier/stories", protect(h.StoriesAndFavorites.ListSupplierStories))
+	mux.Handle("POST /api/v1/supplier/stories/upload", protect(h.StoriesAndFavorites.UploadSupplierStoryMedia))
+	mux.Handle("POST /api/v1/supplier/stories", protect(h.StoriesAndFavorites.CreateSupplierStory))
+	mux.Handle("DELETE /api/v1/supplier/stories/{id}", protect(h.StoriesAndFavorites.DeleteSupplierStory))
 }
 
 func registerMobileRoutes(mux *http.ServeMux, h *AppHandlers, supplierMW func(http.Handler) http.Handler) {

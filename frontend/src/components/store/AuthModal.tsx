@@ -16,6 +16,8 @@ import {
   validateAndNormalizeRealisticPhone,
 } from "@/utils/phoneValidation";
 import { getAuthLegalCopy } from "@/utils/legalNotices";
+import { setStoreSession, writeSharedCookie } from "@/app/storeAuth";
+import { ROOT_ORIGIN, stripHostnamePort, ROOT_DOMAIN } from "@/utils/subdomain";
 
 interface AuthModalUser {
   id?: string;
@@ -107,16 +109,23 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
 
   const handleGoogleLogin = () => {
     if (typeof window !== "undefined") {
+      const host = stripHostnamePort(window.location.hostname);
+      const isProdDomain = host === ROOT_DOMAIN || host.endsWith(`.${ROOT_DOMAIN}`);
       const currentRel = `${window.location.pathname}${window.location.search}`;
-      if (
+      const isSafeRel =
         currentRel.startsWith("/") &&
         !currentRel.startsWith("//") &&
         !currentRel.startsWith("/\\") &&
-        !currentRel.startsWith("/google-callback")
-      ) {
+        !currentRel.startsWith("/google-callback");
+      if (isProdDomain && !window.location.pathname.startsWith("/google-callback")) {
+        writeSharedCookie("mv_auth_return_to", window.location.href, 600);
+        if (isSafeRel) {
+          sessionStorage.setItem("merter_auth_return_to", currentRel);
+        }
+      } else if (isSafeRel) {
         sessionStorage.setItem("merter_auth_return_to", currentRel);
       }
-      const origin = window.location.origin;
+      const origin = isProdDomain ? ROOT_ORIGIN : window.location.origin;
       const keycloakUrl = "https://auth.mertervitrini.com.tr";
       const realm = "merter";
       const clientId = "admin-client";
@@ -180,9 +189,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
         return;
       }
 
-      // Save to localStorage
-      localStorage.setItem("store_user_token", data.token || "");
-      localStorage.setItem("store_user_info", JSON.stringify(data.user));
+      setStoreSession(data.token || "", data.user || {});
       if (rememberMe && email.trim()) {
         localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim());
       } else {
@@ -254,8 +261,7 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
       const completedUser = pendingAuthUser
         ? { ...pendingAuthUser, phone: savedPhone }
         : { phone: savedPhone };
-      localStorage.setItem("store_user_token", pendingAuthToken);
-      localStorage.setItem("store_user_info", JSON.stringify(completedUser));
+      setStoreSession(pendingAuthToken, completedUser);
       if (rememberMe && email.trim()) {
         localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim());
       } else {
@@ -329,10 +335,8 @@ export default function AuthModal({ isOpen, onClose, lang, initialMode = "login"
         throw new Error(data.error || t("register_failed", lang));
       }
 
-      // Save user if auto-logged in
       if (data.token && data.user) {
-        localStorage.setItem("store_user_token", data.token);
-        localStorage.setItem("store_user_info", JSON.stringify(data.user));
+        setStoreSession(data.token, data.user);
         setSuccess(t("register_success_autologin", lang));
         window.dispatchEvent(new Event("auth-change"));
       } else {

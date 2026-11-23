@@ -29,6 +29,7 @@ import {
   Rocket,
   Loader2,
   AlertCircle,
+  Sparkles,
   X
 } from "lucide-react";
 import {
@@ -70,6 +71,7 @@ import SupplierProfilePanel from "./SupplierProfilePanel";
 import SupplierBillingPanel from "./SupplierBillingPanel";
 import SupplierAnalyticsPanel from "./SupplierAnalyticsPanel";
 import SupplierRfqPanel from "./SupplierRfqPanel";
+import SupplierStoriesPanel from "./SupplierStoriesPanel";
 
 export interface CategoryOption {
   id: string;
@@ -1218,7 +1220,7 @@ function SupplierDeleteConfirmModal({
   );
 }
 
-type SupplierDashboardSection = "catalog" | "orders" | "chat" | "profile" | "billing" | "analytics" | "rfq";
+type SupplierDashboardSection = "catalog" | "stories" | "orders" | "chat" | "profile" | "billing" | "analytics" | "rfq";
 
 interface SupplierQuickWhatsappBannerProps {
   readonly quickWhatsapp: string;
@@ -1343,6 +1345,15 @@ function SupplierDashboardNavTabs({
         >
           <Package size={15} />
           <span>Ürün Kataloğum ({stats.total_products})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSection("stories")}
+          className={tabClass("stories")}
+        >
+          <Sparkles size={15} />
+          <span>Hikayeler (24s)</span>
         </button>
 
         <button
@@ -1573,6 +1584,7 @@ function SupplierSectionContent({
   getToken,
   onOrderCountChange,
   onProfileSaved,
+  onOpenBilling,
   profile,
   products,
   onUnreadTotalChange,
@@ -1600,6 +1612,7 @@ function SupplierSectionContent({
   getToken: () => string | null;
   onOrderCountChange: (cnt: number) => void;
   onProfileSaved: () => void;
+  onOpenBilling: () => void;
   profile: SupplierProfile | null;
   products: SupplierProductRow[];
   onUnreadTotalChange: (cnt: number) => void;
@@ -1623,6 +1636,16 @@ function SupplierSectionContent({
   onToggleArchive: (p: SupplierProductRow) => void;
   onOpenDelete: (p: SupplierProductRow) => void;
 }>) {
+  if (activeSection === "stories") {
+    return (
+      <SupplierStoriesPanel
+        getToken={getToken}
+        products={products}
+        onOpenBilling={onOpenBilling}
+      />
+    );
+  }
+
   if (activeSection === "orders") {
     return (
       <SupplierOrdersPanel
@@ -2730,6 +2753,7 @@ export default function SupplierDashboardClient() {
           getToken={getToken}
           onOrderCountChange={handleOrderCountChange}
           onProfileSaved={handleProfileSaved}
+          onOpenBilling={() => setActiveSection("billing")}
           profile={profile}
           products={products}
           onUnreadTotalChange={setUnreadChatCount}

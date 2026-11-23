@@ -665,7 +665,7 @@ func updateExistingImportedProductTx(ctx context.Context, tx pgx.Tx, existingID 
 	return updatedSlug, nil
 }
 
-func insertNewImportedProductTx(ctx context.Context, tx pgx.Tx, item *importedSpreadsheetItem) (string, error) {
+func insertNewImportedProductTx(ctx context.Context, tx pgx.Tx, item *importedSpreadsheetItem) (string, string, error) {
 	sourceProductID := fmt.Sprintf("XLS-%d-%d", time.Now().UnixNano(), item.RowIdx)
 	var newProductID, newSlug string
 	err := tx.QueryRow(ctx, `
@@ -689,13 +689,13 @@ func insertNewImportedProductTx(ctx context.Context, tx pgx.Tx, item *importedSp
 		item.MOQ, item.TotalStock, item.ContentAccepted, item.ContentVersion,
 	).Scan(&newProductID, &newSlug)
 	if err != nil {
-		return "", fmt.Errorf("Satır %d (%s): Kayıt hatası", item.RowIdx, item.Title)
+		return "", "", fmt.Errorf("Satır %d (%s): Kayıt hatası", item.RowIdx, item.Title)
 	}
 
 	upsertSupplierProductTranslations(ctx, tx, newProductID, item.Title, item.ShortDesc, item.Desc, nil)
 	insertProductVariants(ctx, tx, newProductID, sourceProductID, item.Variants, item.TotalStock)
 	insertProductImages(ctx, tx, newProductID, item.Images)
-	return newSlug, nil
+	return newProductID, newSlug, nil
 }
 
 func upsertSingleImportedRow(
@@ -703,15 +703,15 @@ func upsertSingleImportedRow(
 	sess excelImportSession,
 	rowIdx int,
 	row []string,
-) (slug string, updated bool, err error) {
+) (slug string, alertItem *NewProductAlertItem, updated bool, err error) {
 	item, parseErr := parseImportedSpreadsheetRow(ctx, sess, rowIdx, row)
 	if parseErr != nil {
-		return "", false, parseErr
+		return "", nil, false, parseErr
 	}
 
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		return "", false, fmt.Errorf("Satır %d: Veritabanı işlemi başlatılamadı", rowIdx)
+		return "", nil, false, fmt.Errorf("Satır %d: Veritabanı işlemi başlatılamadı", rowIdx)
 	}
 	defer tx.Rollback(ctx)
 
@@ -727,29 +727,38 @@ func upsertSingleImportedRow(
 			LIMIT 1
 		`, sess.BrandID, item.SupplierSKU).Scan(&existingID, &existingSlug)
 		if lookupErr != nil && !errors.Is(lookupErr, pgx.ErrNoRows) {
-			return "", false, fmt.Errorf("Satır %d (%s): Ürün kodu kontrol hatası", rowIdx, item.Title)
+			return "", nil, false, fmt.Errorf("Satır %d (%s): Ürün kodu kontrol hatası", rowIdx, item.Title)
 		}
 	}
 
 	if existingID != "" {
 		updatedSlug, updErr := updateExistingImportedProductTx(ctx, tx, existingID, item)
 		if updErr != nil {
-			return "", false, updErr
+			return "", nil, false, updErr
 		}
 		if commitErr := tx.Commit(ctx); commitErr != nil {
-			return "", false, fmt.Errorf("Satır %d: Onay hatası", rowIdx)
+			return "", nil, false, fmt.Errorf("Satır %d: Onay hatası", rowIdx)
 		}
-		return updatedSlug, true, nil
+		return updatedSlug, nil, true, nil
 	}
 
-	newSlug, insErr := insertNewImportedProductTx(ctx, tx, item)
+	newID, newSlug, insErr := insertNewImportedProductTx(ctx, tx, item)
 	if insErr != nil {
-		return "", false, insErr
+		return "", nil, false, insErr
 	}
 	if commitErr := tx.Commit(ctx); commitErr != nil {
-		return "", false, fmt.Errorf("Satır %d: Onay hatası", rowIdx)
+		return "", nil, false, fmt.Errorf("Satır %d: Onay hatası", rowIdx)
 	}
-	return newSlug, false, nil
+	firstImg := ""
+	if len(item.Images) > 0 {
+		firstImg = item.Images[0]
+	}
+	return newSlug, &NewProductAlertItem{
+		ID:       newID,
+		Slug:     newSlug,
+		Title:    item.Title,
+		ImageURL: firstImg,
+	}, false, nil
 }
 
 func buildExcelImportSummaryMessage(importedCount, updatedCount int) string {
@@ -817,6 +826,7 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 	skippedCount := 0
 	rowErrors := make([]string, 0)
 	affectedSlugs := make([]string, 0)
+	newAlertItems := make([]NewProductAlertItem, 0)
 	seenSKUs := make(map[string]int)
 
 	for i := 1; i < len(rows); i++ {
@@ -836,7 +846,7 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 			seenSKUs[normSKU] = i + 1
 		}
 
-		slug, wasUpdated, err := upsertSingleImportedRow(ctx, sess, i+1, row)
+		slug, alertItem, wasUpdated, err := upsertSingleImportedRow(ctx, sess, i+1, row)
 		if err != nil {
 			skippedCount++
 			if len(rowErrors) < 15 {
@@ -848,6 +858,9 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 			updatedCount++
 		} else {
 			importedCount++
+			if alertItem != nil {
+				newAlertItems = append(newAlertItems, *alertItem)
+			}
 		}
 		if strings.TrimSpace(slug) != "" {
 			affectedSlugs = append(affectedSlugs, slug)
@@ -863,6 +876,9 @@ func (h *SupplierPortalHandler) ImportProductsFromExcel(w http.ResponseWriter, r
 		})
 	} else if totalChanged > 0 {
 		triggerProductMVRefresh()
+	}
+	if len(newAlertItems) > 0 {
+		NotifyFavoriteSupplierFollowersAsync(h.Cfg, h.Notifier, claims.BrandID, newAlertItems)
 	}
 
 	if totalChanged > 0 && strings.TrimSpace(r.FormValue("content_responsibility_accepted")) != "" {

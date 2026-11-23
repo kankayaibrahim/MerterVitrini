@@ -52,11 +52,13 @@ type SupplierSubscriptionDTO struct {
 	OutstandingBalance  float64    `json:"outstanding_balance"`
 	BillingCompanyTitle string     `json:"billing_company_title"`
 	TaxOffice           string     `json:"tax_office"`
-	TaxNumber           string     `json:"tax_number"`
-	BillingAddress      string     `json:"billing_address"`
-	BillingEmail        string     `json:"billing_email"`
-	Notes               string     `json:"notes"`
-	UpdatedAt           time.Time  `json:"updated_at"`
+	TaxNumber                string     `json:"tax_number"`
+	BillingAddress           string     `json:"billing_address"`
+	BillingEmail             string     `json:"billing_email"`
+	StoryEntitlementOverride *bool      `json:"story_entitlement_override,omitempty"`
+	StoryDailyLimitOverride  *int       `json:"story_daily_limit_override,omitempty"`
+	Notes                    string     `json:"notes"`
+	UpdatedAt                time.Time  `json:"updated_at"`
 }
 
 type SupplierInvoiceDTO struct {
@@ -188,7 +190,7 @@ func fetchSupplierSubscriptionByBrand(ctx context.Context, brandID string) (*Sup
 			ss.current_period_start, ss.current_period_end, ss.next_billing_date, ss.auto_renew,
 			ss.total_paid_amount::float8, ss.total_invoiced_amount::float8, ss.outstanding_balance::float8,
 			ss.billing_company_title, ss.tax_office, ss.tax_number, ss.billing_address, ss.billing_email,
-			ss.notes, ss.updated_at
+			ss.story_entitlement_override, ss.story_daily_limit_override, ss.notes, ss.updated_at
 		FROM catalog.supplier_subscriptions ss
 		JOIN catalog.brands b ON b.id = ss.brand_id
 		LEFT JOIN catalog.subscription_plans sp ON sp.code = ss.plan_code
@@ -202,7 +204,7 @@ func fetchSupplierSubscriptionByBrand(ctx context.Context, brandID string) (*Sup
 		&s.CurrentPeriodStart, &s.CurrentPeriodEnd, &s.NextBillingDate, &s.AutoRenew,
 		&s.TotalPaidAmount, &s.TotalInvoicedAmount, &s.OutstandingBalance,
 		&s.BillingCompanyTitle, &s.TaxOffice, &s.TaxNumber, &s.BillingAddress, &s.BillingEmail,
-		&s.Notes, &s.UpdatedAt,
+		&s.StoryEntitlementOverride, &s.StoryDailyLimitOverride, &s.Notes, &s.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -504,7 +506,7 @@ func (h *MarketplaceHandler) GetAdminBillingOverview(w http.ResponseWriter, r *h
 			ss.current_period_start, ss.current_period_end, ss.next_billing_date, ss.auto_renew,
 			ss.total_paid_amount::float8, ss.total_invoiced_amount::float8, ss.outstanding_balance::float8,
 			ss.billing_company_title, ss.tax_office, ss.tax_number, ss.billing_address, ss.billing_email,
-			ss.notes, ss.updated_at
+			ss.story_entitlement_override, ss.story_daily_limit_override, ss.notes, ss.updated_at
 		FROM catalog.supplier_subscriptions ss
 		JOIN catalog.brands b ON b.id = ss.brand_id
 		LEFT JOIN catalog.subscription_plans sp ON sp.code = ss.plan_code
@@ -526,7 +528,7 @@ func (h *MarketplaceHandler) GetAdminBillingOverview(w http.ResponseWriter, r *h
 				&s.CurrentPeriodStart, &s.CurrentPeriodEnd, &s.NextBillingDate, &s.AutoRenew,
 				&s.TotalPaidAmount, &s.TotalInvoicedAmount, &s.OutstandingBalance,
 				&s.BillingCompanyTitle, &s.TaxOffice, &s.TaxNumber, &s.BillingAddress, &s.BillingEmail,
-				&s.Notes, &s.UpdatedAt,
+				&s.StoryEntitlementOverride, &s.StoryDailyLimitOverride, &s.Notes, &s.UpdatedAt,
 			); scanErr == nil {
 				subscriptions = append(subscriptions, s)
 				totalCollected += s.TotalPaidAmount
@@ -572,21 +574,27 @@ func (h *MarketplaceHandler) UpdateAdminSupplierSubscription(w http.ResponseWrit
 	}
 
 	var req struct {
-		PlanCode            string  `json:"plan_code"`
-		BillingCycle        string  `json:"billing_cycle"`
-		Status              string  `json:"status"`
-		IsComplimentary     bool    `json:"is_complimentary"`
-		AgreedPrice         float64 `json:"agreed_price"`
-		ExtendMonths        int     `json:"extend_months"`
-		BillingCompanyTitle string  `json:"billing_company_title"`
-		TaxOffice           string  `json:"tax_office"`
-		TaxNumber           string  `json:"tax_number"`
-		BillingAddress      string  `json:"billing_address"`
-		BillingEmail        string  `json:"billing_email"`
-		Notes               string  `json:"notes"`
+		PlanCode                 string  `json:"plan_code"`
+		BillingCycle             string  `json:"billing_cycle"`
+		Status                   string  `json:"status"`
+		IsComplimentary          bool    `json:"is_complimentary"`
+		AgreedPrice              float64 `json:"agreed_price"`
+		ExtendMonths             int     `json:"extend_months"`
+		BillingCompanyTitle      string  `json:"billing_company_title"`
+		TaxOffice                string  `json:"tax_office"`
+		TaxNumber                string  `json:"tax_number"`
+		BillingAddress           string  `json:"billing_address"`
+		BillingEmail             string  `json:"billing_email"`
+		StoryEntitlementOverride *bool   `json:"story_entitlement_override"`
+		StoryDailyLimitOverride  *int    `json:"story_daily_limit_override"`
+		Notes                    string  `json:"notes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"Geçersiz veri"}`, http.StatusBadRequest)
+		return
+	}
+	if req.StoryDailyLimitOverride != nil && (*req.StoryDailyLimitOverride < 1 || *req.StoryDailyLimitOverride > 50) {
+		http.Error(w, `{"error":"Özel hikaye limiti 1 ile 50 arasında olmalıdır"}`, http.StatusBadRequest)
 		return
 	}
 	if req.PlanCode == "" {
@@ -620,17 +628,20 @@ func (h *MarketplaceHandler) UpdateAdminSupplierSubscription(w http.ResponseWrit
 		    tax_number = $8,
 		    billing_address = $9,
 		    billing_email = $10,
-		    notes = $11,
+		    story_entitlement_override = $11,
+		    story_daily_limit_override = $12,
+		    notes = $13,
 		    current_period_end = %s,
 		    updated_at = NOW()
-		WHERE brand_id = $12::uuid
+		WHERE brand_id = $14::uuid
 	`, periodEndSQL)
 
 	_, err := db.Pool.Exec(ctx, query,
 		req.PlanCode, req.BillingCycle, req.Status, req.IsComplimentary, req.AgreedPrice,
 		strings.TrimSpace(req.BillingCompanyTitle), strings.TrimSpace(req.TaxOffice),
 		strings.TrimSpace(req.TaxNumber), strings.TrimSpace(req.BillingAddress),
-		strings.TrimSpace(req.BillingEmail), strings.TrimSpace(req.Notes), brandID,
+		strings.TrimSpace(req.BillingEmail), req.StoryEntitlementOverride, req.StoryDailyLimitOverride,
+		strings.TrimSpace(req.Notes), brandID,
 	)
 	if err != nil {
 		http.Error(w, `{"error":"Abonelik güncellenemedi"}`, http.StatusInternalServerError)

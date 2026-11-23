@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,13 +65,38 @@ func (h *AdminCatalogHandler) ListCategories(w http.ResponseWriter, r *http.Requ
 	defer cancel()
 
 	query := `
+		WITH direct_counts AS (
+			SELECT p.category_id,
+			       COUNT(*)::int AS direct_total,
+			       COUNT(*) FILTER (WHERE p.is_active = true)::int AS direct_active
+			FROM catalog.products p
+			WHERE p.deleted_at IS NULL AND p.category_id IS NOT NULL
+			GROUP BY p.category_id
+		),
+		rolled_counts AS (
+			SELECT c.id AS category_id,
+			       COALESCE(dc_self.direct_total, 0) AS direct_total,
+			       COALESCE(dc_self.direct_active, 0) AS direct_active,
+			       COALESCE(SUM(dc_desc.direct_total), 0)::int AS subtree_total,
+			       COALESCE(SUM(dc_desc.direct_active), 0)::int AS subtree_active
+			FROM catalog.categories c
+			LEFT JOIN direct_counts dc_self ON dc_self.category_id = c.id
+			LEFT JOIN catalog.categories desc_c ON desc_c.node_path <@ c.node_path
+			LEFT JOIN direct_counts dc_desc ON dc_desc.category_id = desc_c.id
+			GROUP BY c.id, dc_self.direct_total, dc_self.direct_active
+		)
 		SELECT c.id, c.parent_id, c.title, c.slug, c.node_path, c.is_active, c.created_at, c.updated_at,
+		       COALESCE(rc.subtree_total, 0) AS total_products,
+		       COALESCE(rc.subtree_active, 0) AS active_products,
+		       COALESCE(rc.direct_total, 0) AS direct_total_products,
+		       COALESCE(rc.direct_active, 0) AS direct_active_products,
 		       COALESCE(
 		           (SELECT json_object_agg(ct.language_code, json_build_object('category_id', ct.category_id, 'language_code', ct.language_code, 'title', ct.title, 'seo_description', ct.seo_description))
 		            FROM catalog.category_translations ct
 		            WHERE ct.category_id = c.id), '{}'::json
 		       ) as translations_json
 		FROM catalog.categories c
+		LEFT JOIN rolled_counts rc ON rc.category_id = c.id
 		ORDER BY c.node_path ASC, c.title ASC`
 
 	rows, err := db.Pool.Query(ctx, query)
@@ -86,7 +112,8 @@ func (h *AdminCatalogHandler) ListCategories(w http.ResponseWriter, r *http.Requ
 		var c models.Category
 		var transBytes []byte
 		err := rows.Scan(
-			&c.ID, &c.ParentID, &c.Title, &c.Slug, &c.NodePath, &c.IsActive, &c.CreatedAt, &c.UpdatedAt, &transBytes,
+			&c.ID, &c.ParentID, &c.Title, &c.Slug, &c.NodePath, &c.IsActive, &c.CreatedAt, &c.UpdatedAt,
+			&c.TotalProducts, &c.ActiveProducts, &c.DirectTotalProducts, &c.DirectActiveProducts, &transBytes,
 		)
 		if err != nil {
 			log.Printf("Failed to scan category: %v", err)
@@ -94,7 +121,7 @@ func (h *AdminCatalogHandler) ListCategories(w http.ResponseWriter, r *http.Requ
 		}
 		c.Translations = make(map[string]models.CategoryTranslation)
 		if len(transBytes) > 0 {
-			json.Unmarshal(transBytes, &c.Translations)
+			_ = json.Unmarshal(transBytes, &c.Translations)
 		}
 		categories = append(categories, &c)
 	}
@@ -340,14 +367,18 @@ func buildCategoryTree(flat []*models.Category) []*models.CategoryNode {
 
 	for _, c := range flat {
 		nodesMap[c.ID] = &models.CategoryNode{
-			ID:           c.ID,
-			ParentID:     c.ParentID,
-			Title:        c.Title,
-			Slug:         c.Slug,
-			NodePath:     c.NodePath,
-			IsActive:     c.IsActive,
-			Translations: c.Translations,
-			Children:     make([]*models.CategoryNode, 0),
+			ID:                   c.ID,
+			ParentID:             c.ParentID,
+			Title:                c.Title,
+			Slug:                 c.Slug,
+			NodePath:             c.NodePath,
+			IsActive:             c.IsActive,
+			TotalProducts:        c.TotalProducts,
+			ActiveProducts:       c.ActiveProducts,
+			DirectTotalProducts:  c.DirectTotalProducts,
+			DirectActiveProducts: c.DirectActiveProducts,
+			Translations:         c.Translations,
+			Children:             make([]*models.CategoryNode, 0),
 		}
 	}
 
@@ -369,112 +400,314 @@ func buildCategoryTree(flat []*models.Category) []*models.CategoryNode {
 
 // --- PRODUCT HANDLERS ---
 
-func buildProductFilterSQL(q, brandID, categoryID, status string) (string, []any) {
-	filterSQL := " AND p.deleted_at IS NULL"
-	var args []any
-	argIndex := 1
+const effectiveAdminPriceExpr = "COALESCE(NULLIF(p.discounted_price, 0), COALESCE(p.price, 0))"
 
-	if q != "" {
-		for _, word := range strings.Fields(q) {
-			trimmed := strings.TrimSpace(word)
-			if trimmed == "" {
-				continue
-			}
-			filterSQL += fmt.Sprintf(` AND (
-				p.title ILIKE $%[1]d 
-				OR p.custom_sku ILIKE $%[1]d 
-				OR p.description ILIKE $%[1]d 
-				OR c.title ILIKE $%[1]d 
-				OR b.brand_name ILIKE $%[1]d 
-				OR fab.fabric_name ILIKE $%[1]d
-				OR EXISTS (
-					SELECT 1 FROM catalog.colors col WHERE p.color_id = col.id AND col.color_name ILIKE $%[1]d
-				)
-				OR EXISTS (
-					SELECT 1 FROM catalog.product_translations pt
-					WHERE pt.product_id = p.id AND (pt.title ILIKE $%[1]d OR pt.description ILIKE $%[1]d OR pt.short_description ILIKE $%[1]d)
-				)
-				OR EXISTS (
-					SELECT 1 FROM catalog.products prod
-					JOIN catalog.color_translations ct ON prod.color_id = ct.color_id
-					WHERE prod.id = p.id AND ct.color_name ILIKE $%[1]d
-				)
-				OR EXISTS (
-					SELECT 1 FROM catalog.products prod
-					JOIN catalog.fabric_translations ft ON prod.fabric_id = ft.fabric_id
-					WHERE prod.id = p.id AND ft.fabric_name ILIKE $%[1]d
-				)
-				OR EXISTS (
-					SELECT 1 FROM catalog.category_translations cat_trans
-					WHERE cat_trans.category_id = p.category_id AND cat_trans.title ILIKE $%[1]d
-				)
-				OR EXISTS (
-					SELECT 1 
-					FROM catalog.product_attributes_map pam 
-					JOIN catalog.attribute_values av ON pam.attribute_value_id = av.id 
-					LEFT JOIN catalog.attribute_value_translations avt ON av.id = avt.attribute_value_id
-					WHERE pam.product_id = p.id AND (av.attribute_value ILIKE $%[1]d OR avt.attribute_value ILIKE $%[1]d)
-				)
-			)`, argIndex)
-			args = append(args, "%"+trimmed+"%")
-			argIndex++
+type adminProductFilterParams struct {
+	Query       string
+	BrandID     string
+	CategoryID  string
+	Status      string
+	Currency    string
+	MinPrice    *float64
+	MaxPrice    *float64
+	PriceStatus string
+	StockStatus string
+	HasImage    string
+	Gender      string
+	Season      string
+	Source      string
+	DateFrom    string
+	DateTo      string
+	SortBy      string
+}
+
+func parseNonNegativeFloatQuery(raw string) *float64 {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+	val, err := strconv.ParseFloat(trimmed, 64)
+	if err != nil || math.IsNaN(val) || math.IsInf(val, 0) || val < 0 {
+		return nil
+	}
+	return &val
+}
+
+func parseAdminCurrencyQuery(raw string) string {
+	upper := strings.ToUpper(strings.TrimSpace(raw))
+	if upper == "TL" {
+		upper = "TRY"
+	}
+	switch upper {
+	case "TRY", "USD", "EUR", "GBP":
+		return upper
+	default:
+		return ""
+	}
+}
+
+func parseAdminDateQuery(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	if _, err := time.Parse("2006-01-02", trimmed); err != nil {
+		return ""
+	}
+	return trimmed
+}
+
+func parseAdminProductFilterParams(r *http.Request) adminProductFilterParams {
+	q := r.URL.Query()
+	search := strings.TrimSpace(q.Get("q"))
+	if search == "" {
+		search = strings.TrimSpace(q.Get("search"))
+	}
+	return adminProductFilterParams{
+		Query:       search,
+		BrandID:     strings.TrimSpace(q.Get("brand_id")),
+		CategoryID:  strings.TrimSpace(q.Get("category_id")),
+		Status:      strings.TrimSpace(q.Get("status")),
+		Currency:    parseAdminCurrencyQuery(q.Get("currency")),
+		MinPrice:    parseNonNegativeFloatQuery(q.Get("min_price")),
+		MaxPrice:    parseNonNegativeFloatQuery(q.Get("max_price")),
+		PriceStatus: strings.TrimSpace(q.Get("price_status")),
+		StockStatus: strings.TrimSpace(q.Get("stock_status")),
+		HasImage:    strings.TrimSpace(q.Get("has_image")),
+		Gender:      strings.TrimSpace(q.Get("gender")),
+		Season:      strings.TrimSpace(q.Get("season")),
+		Source:      strings.TrimSpace(q.Get("source")),
+		DateFrom:    parseAdminDateQuery(q.Get("date_from")),
+		DateTo:      parseAdminDateQuery(q.Get("date_to")),
+		SortBy:      strings.TrimSpace(q.Get("sort_by")),
+	}
+}
+
+func appendAdminProductSearchFilter(filterSQL *strings.Builder, args *[]any, argIndex *int, q string) {
+	if q == "" {
+		return
+	}
+	for _, word := range strings.Fields(q) {
+		trimmed := strings.TrimSpace(word)
+		if trimmed == "" {
+			continue
+		}
+		filterSQL.WriteString(fmt.Sprintf(` AND (
+			p.title ILIKE $%[1]d
+			OR p.custom_sku ILIKE $%[1]d
+			OR p.source_product_id ILIKE $%[1]d
+			OR p.barcode ILIKE $%[1]d
+			OR p.description ILIKE $%[1]d
+			OR c.title ILIKE $%[1]d
+			OR b.brand_name ILIKE $%[1]d
+			OR fab.fabric_name ILIKE $%[1]d
+			OR EXISTS (
+				SELECT 1 FROM catalog.colors col WHERE p.color_id = col.id AND col.color_name ILIKE $%[1]d
+			)
+			OR EXISTS (
+				SELECT 1 FROM catalog.product_translations pt
+				WHERE pt.product_id = p.id AND (pt.title ILIKE $%[1]d OR pt.description ILIKE $%[1]d OR pt.short_description ILIKE $%[1]d)
+			)
+			OR EXISTS (
+				SELECT 1 FROM catalog.products prod
+				JOIN catalog.color_translations ct ON prod.color_id = ct.color_id
+				WHERE prod.id = p.id AND ct.color_name ILIKE $%[1]d
+			)
+			OR EXISTS (
+				SELECT 1 FROM catalog.products prod
+				JOIN catalog.fabric_translations ft ON prod.fabric_id = ft.fabric_id
+				WHERE prod.id = p.id AND ft.fabric_name ILIKE $%[1]d
+			)
+			OR EXISTS (
+				SELECT 1 FROM catalog.category_translations cat_trans
+				WHERE cat_trans.category_id = p.category_id AND cat_trans.title ILIKE $%[1]d
+			)
+			OR EXISTS (
+				SELECT 1
+				FROM catalog.product_attributes_map pam
+				JOIN catalog.attribute_values av ON pam.attribute_value_id = av.id
+				LEFT JOIN catalog.attribute_value_translations avt ON av.id = avt.attribute_value_id
+				WHERE pam.product_id = p.id AND (av.attribute_value ILIKE $%[1]d OR avt.attribute_value ILIKE $%[1]d)
+			)
+		)`, *argIndex))
+		*args = append(*args, "%"+trimmed+"%")
+		*argIndex++
+	}
+}
+
+func appendAdminProductPricingAndStockFilter(filterSQL *strings.Builder, args *[]any, argIndex *int, params adminProductFilterParams) {
+	if params.Currency != "" {
+		if params.Currency == "TRY" {
+			filterSQL.WriteString(" AND UPPER(COALESCE(NULLIF(p.currency, ''), 'TRY')) IN ('TRY', 'TL')")
+		} else {
+			filterSQL.WriteString(fmt.Sprintf(" AND UPPER(COALESCE(p.currency, '')) = $%d", *argIndex))
+			*args = append(*args, params.Currency)
+			*argIndex++
 		}
 	}
 
-	if brandID != "" {
-		filterSQL += fmt.Sprintf(" AND (p.brand_id = $%d OR p.feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $%d))", argIndex, argIndex)
-		args = append(args, brandID)
-		argIndex++
+	if params.MinPrice != nil {
+		filterSQL.WriteString(fmt.Sprintf(" AND %s >= $%d", effectiveAdminPriceExpr, *argIndex))
+		*args = append(*args, *params.MinPrice)
+		*argIndex++
 	}
 
-	if categoryID != "" {
-		filterSQL += fmt.Sprintf(" AND (p.category_id = $%d OR p.category_id IN (SELECT id FROM catalog.categories WHERE node_path <@ (SELECT node_path FROM catalog.categories WHERE id = $%d)))", argIndex, argIndex)
-		args = append(args, categoryID)
+	if params.MaxPrice != nil {
+		filterSQL.WriteString(fmt.Sprintf(" AND %s <= $%d", effectiveAdminPriceExpr, *argIndex))
+		*args = append(*args, *params.MaxPrice)
+		*argIndex++
 	}
 
-	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "active":
-		filterSQL += " AND p.is_active = true"
-	case "inactive":
-		filterSQL += " AND p.is_active = false"
+	switch strings.ToLower(strings.TrimSpace(params.PriceStatus)) {
+	case "priced":
+		filterSQL.WriteString(" AND COALESCE(p.price, 0) > 0")
+	case "unpriced":
+		filterSQL.WriteString(" AND COALESCE(p.price, 0) <= 0")
+	case "discounted":
+		filterSQL.WriteString(" AND p.discounted_price IS NOT NULL AND p.discounted_price > 0 AND p.discounted_price < COALESCE(p.price, 0)")
 	}
 
-	return filterSQL, args
+	switch strings.ToLower(strings.TrimSpace(params.StockStatus)) {
+	case "in_stock":
+		filterSQL.WriteString(" AND COALESCE(p.stock, 0) > 0")
+	case "out_of_stock":
+		filterSQL.WriteString(" AND COALESCE(p.stock, 0) <= 0")
+	case "low_stock":
+		filterSQL.WriteString(" AND (COALESCE(p.stock, 0) > 0 AND COALESCE(p.stock, 0) <= 10)")
+	}
 }
 
-// ListProducts lists products with support for pagination, search, category/brand/status filters
+func appendAdminProductCatalogMetaFilter(filterSQL *strings.Builder, args *[]any, argIndex *int, params adminProductFilterParams) {
+	if params.BrandID != "" {
+		filterSQL.WriteString(fmt.Sprintf(" AND (p.brand_id = $%[1]d OR p.feed_id IN (SELECT id FROM integration.xml_feeds WHERE brand_id = $%[1]d))", *argIndex))
+		*args = append(*args, params.BrandID)
+		*argIndex++
+	}
+
+	if params.CategoryID == "uncategorized" {
+		filterSQL.WriteString(" AND p.category_id IS NULL")
+	} else if params.CategoryID != "" {
+		filterSQL.WriteString(fmt.Sprintf(" AND (p.category_id = $%[1]d OR p.category_id IN (SELECT id FROM catalog.categories WHERE node_path <@ (SELECT node_path FROM catalog.categories WHERE id = $%[1]d)))", *argIndex))
+		*args = append(*args, params.CategoryID)
+		*argIndex++
+	}
+
+	switch strings.ToLower(strings.TrimSpace(params.Status)) {
+	case "active":
+		filterSQL.WriteString(" AND p.is_active = true")
+	case "inactive":
+		filterSQL.WriteString(" AND p.is_active = false")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(params.HasImage)) {
+	case "yes":
+		filterSQL.WriteString(" AND EXISTS (SELECT 1 FROM catalog.product_images pi WHERE pi.product_id = p.id)")
+	case "no":
+		filterSQL.WriteString(" AND NOT EXISTS (SELECT 1 FROM catalog.product_images pi WHERE pi.product_id = p.id)")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(params.Source)) {
+	case "xml":
+		filterSQL.WriteString(" AND p.feed_id IS NOT NULL")
+	case "manual":
+		filterSQL.WriteString(" AND p.feed_id IS NULL")
+	}
+}
+
+func appendAdminProductAttributesAndDateFilter(filterSQL *strings.Builder, args *[]any, argIndex *int, params adminProductFilterParams) {
+	if params.Gender != "" {
+		filterSQL.WriteString(fmt.Sprintf(" AND LOWER(TRIM(COALESCE(p.gender, ''))) = LOWER($%d)", *argIndex))
+		*args = append(*args, params.Gender)
+		*argIndex++
+	}
+	if params.Season != "" {
+		filterSQL.WriteString(fmt.Sprintf(" AND LOWER(TRIM(COALESCE(p.season, ''))) = LOWER($%d)", *argIndex))
+		*args = append(*args, params.Season)
+		*argIndex++
+	}
+	if params.DateFrom != "" {
+		filterSQL.WriteString(fmt.Sprintf(" AND p.created_at >= $%d::date", *argIndex))
+		*args = append(*args, params.DateFrom)
+		*argIndex++
+	}
+	if params.DateTo != "" {
+		filterSQL.WriteString(fmt.Sprintf(" AND p.created_at < ($%d::date + INTERVAL '1 day')", *argIndex))
+		*args = append(*args, params.DateTo)
+		*argIndex++
+	}
+}
+
+func buildAdminProductFilterSQL(params adminProductFilterParams) (string, []any) {
+	var filterSQL strings.Builder
+	filterSQL.WriteString(" AND p.deleted_at IS NULL")
+	var args []any
+	argIndex := 1
+
+	appendAdminProductSearchFilter(&filterSQL, &args, &argIndex, params.Query)
+	appendAdminProductCatalogMetaFilter(&filterSQL, &args, &argIndex, params)
+	appendAdminProductPricingAndStockFilter(&filterSQL, &args, &argIndex, params)
+	appendAdminProductAttributesAndDateFilter(&filterSQL, &args, &argIndex, params)
+
+	return filterSQL.String(), args
+}
+
+func buildProductFilterSQL(q, brandID, categoryID, status string) (string, []any) {
+	return buildAdminProductFilterSQL(adminProductFilterParams{
+		Query:      q,
+		BrandID:    brandID,
+		CategoryID: categoryID,
+		Status:     status,
+	})
+}
+
+func buildAdminProductOrderBy(sortBy string) string {
+	switch strings.ToLower(strings.TrimSpace(sortBy)) {
+	case "oldest":
+		return "ORDER BY p.created_at ASC, p.id ASC"
+	case "updated_desc":
+		return "ORDER BY p.updated_at DESC, p.id DESC"
+	case "price_asc":
+		return fmt.Sprintf("ORDER BY (COALESCE(p.price, 0) <= 0) ASC, %s ASC, p.created_at DESC", effectiveAdminPriceExpr)
+	case "price_desc":
+		return fmt.Sprintf("ORDER BY %s DESC, p.created_at DESC", effectiveAdminPriceExpr)
+	case "stock_desc":
+		return "ORDER BY COALESCE(p.stock, 0) DESC, COALESCE(p.series_stock, 0) DESC, p.created_at DESC"
+	case "stock_asc":
+		return "ORDER BY COALESCE(p.stock, 0) ASC, COALESCE(p.series_stock, 0) ASC, p.created_at DESC"
+	case "title_asc":
+		return "ORDER BY LOWER(p.title) ASC, p.created_at DESC"
+	default:
+		return "ORDER BY p.created_at DESC, p.id DESC"
+	}
+}
+
+// ListProducts lists products with support for pagination, search, category/brand/status, and advanced filters
 func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 		return
 	}
 
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if q == "" {
-		q = strings.TrimSpace(r.URL.Query().Get("search"))
-	}
-	brandID := strings.TrimSpace(r.URL.Query().Get("brand_id"))
-	categoryID := strings.TrimSpace(r.URL.Query().Get("category_id"))
-	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	params := parseAdminProductFilterParams(r)
 
 	limit := 20
 	offset := 0
 
-	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 {
+	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 && l <= 200 {
 		limit = l
 	}
 	if o, err := strconv.Atoi(r.URL.Query().Get("offset")); err == nil && o >= 0 {
 		offset = o
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
 
-	filterSQL, args := buildProductFilterSQL(q, brandID, categoryID, status)
+	filterSQL, args := buildAdminProductFilterSQL(params)
 
 	var totalCount int
 	countQuery := `
-		SELECT COUNT(*) 
+		SELECT COUNT(*)
 		FROM catalog.products p
 		LEFT JOIN catalog.brands b ON p.brand_id = b.id
 		LEFT JOIN catalog.categories c ON p.category_id = c.id
@@ -486,11 +719,15 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 		totalCount = 0
 	}
 
+	orderBySQL := buildAdminProductOrderBy(params.SortBy)
 	sqlQuery := fmt.Sprintf(`
-		SELECT p.id, p.feed_id, p.source_product_id, p.title, p.slug, p.custom_sku, 
-		       p.short_description, p.description, p.brand_id, p.category_id, 
-		       p.gender, p.season, COALESCE(fab.fabric_name, 'Polyester') as kumas_fabric, p.desi_volume, p.shipping_weight_kg, 
-		       p.packing_ratio, p.series_ratio, p.minimum_order_quantity, p.is_active, 
+		SELECT p.id, p.feed_id, p.source_product_id, p.title, p.slug, COALESCE(p.slug_id, ''), p.custom_sku,
+		       p.short_description, p.description, p.brand_id, p.category_id,
+		       p.gender, p.season, COALESCE(fab.fabric_name, 'Polyester') as kumas_fabric, p.desi_volume, p.shipping_weight_kg,
+		       p.packing_ratio, p.series_ratio, p.minimum_order_quantity,
+		       COALESCE(p.price, 0), p.discounted_price, p.buying_price, p.single_price,
+		       COALESCE(NULLIF(p.currency, ''), 'TRY'), COALESCE(p.stock, 0), COALESCE(p.series_stock, 0),
+		       col.color_name, p.barcode, p.is_active,
 		       p.created_at, p.updated_at, b.brand_name as brand_name, c.title as category_title,
 		       p.source_url,
 		       COALESCE(
@@ -502,9 +739,10 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 		LEFT JOIN catalog.brands b ON p.brand_id = b.id
 		LEFT JOIN catalog.categories c ON p.category_id = c.id
 		LEFT JOIN catalog.fabrics fab ON p.fabric_id = fab.id
+		LEFT JOIN catalog.colors col ON p.color_id = col.id
 		WHERE 1=1%s
-		ORDER BY p.created_at DESC
-		LIMIT $%d OFFSET $%d`, filterSQL, len(args)+1, len(args)+2)
+		%s
+		LIMIT $%d OFFSET $%d`, filterSQL, orderBySQL, len(args)+1, len(args)+2)
 
 	queryArgs := append(args, limit, offset)
 	rows, err := db.Pool.Query(ctx, sqlQuery, queryArgs...)
@@ -520,10 +758,13 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 		var p models.Product
 		var imgJSON []byte
 		err := rows.Scan(
-			&p.ID, &p.FeedID, &p.SourceProductID, &p.Title, &p.Slug, &p.CustomSku,
+			&p.ID, &p.FeedID, &p.SourceProductID, &p.Title, &p.Slug, &p.SlugID, &p.CustomSku,
 			&p.ShortDescription, &p.Description, &p.BrandID, &p.CategoryID,
 			&p.Gender, &p.Season, &p.KumasFabric, &p.DesiVolume, &p.ShippingWeightKg,
-			&p.PackingRatio, &p.SeriesRatio, &p.MinimumOrderQty, &p.IsActive,
+			&p.PackingRatio, &p.SeriesRatio, &p.MinimumOrderQty,
+			&p.Price, &p.DiscountedPrice, &p.BuyingPrice, &p.SinglePrice,
+			&p.Currency, &p.Stock, &p.SeriesStock,
+			&p.Color, &p.Barcode, &p.IsActive,
 			&p.CreatedAt, &p.UpdatedAt, &p.BrandName, &p.CategoryTitle,
 			&p.SourceURL, &imgJSON,
 		)
@@ -532,7 +773,7 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 		if len(imgJSON) > 0 {
-			json.Unmarshal(imgJSON, &p.Images)
+			_ = json.Unmarshal(imgJSON, &p.Images)
 		}
 		products = append(products, &p)
 	}
@@ -649,23 +890,30 @@ func (h *AdminCatalogHandler) GetProductByID(w http.ResponseWriter, r *http.Requ
 
 	var p models.Product
 	prodQuery := `
-		SELECT p.id, p.feed_id, p.source_product_id, p.title, p.slug, p.custom_sku, 
-		       p.short_description, p.description, p.brand_id, p.category_id, 
-		       p.gender, p.season, COALESCE(fab.fabric_name, 'Polyester') as kumas_fabric, p.desi_volume, p.shipping_weight_kg, 
-		       p.packing_ratio, p.series_ratio, p.minimum_order_quantity, p.is_active, 
+		SELECT p.id, p.feed_id, p.source_product_id, p.title, p.slug, COALESCE(p.slug_id, ''), p.custom_sku,
+		       p.short_description, p.description, p.brand_id, p.category_id,
+		       p.gender, p.season, COALESCE(fab.fabric_name, 'Polyester') as kumas_fabric, p.desi_volume, p.shipping_weight_kg,
+		       p.packing_ratio, p.series_ratio, p.minimum_order_quantity,
+		       COALESCE(p.price, 0), p.discounted_price, p.buying_price, p.single_price,
+		       COALESCE(NULLIF(p.currency, ''), 'TRY'), COALESCE(p.stock, 0), COALESCE(p.series_stock, 0),
+		       col.color_name, p.barcode, p.is_active,
 		       p.created_at, p.updated_at, b.brand_name as brand_name, c.title as category_title,
 		       p.source_url, COALESCE(p.source_product_group_id, '')
 		FROM catalog.products p
 		LEFT JOIN catalog.brands b ON p.brand_id = b.id
 		LEFT JOIN catalog.categories c ON p.category_id = c.id
 		LEFT JOIN catalog.fabrics fab ON p.fabric_id = fab.id
+		LEFT JOIN catalog.colors col ON p.color_id = col.id
 		WHERE p.id = $1`
 
 	err := db.Pool.QueryRow(ctx, prodQuery, id).Scan(
-		&p.ID, &p.FeedID, &p.SourceProductID, &p.Title, &p.Slug, &p.CustomSku,
+		&p.ID, &p.FeedID, &p.SourceProductID, &p.Title, &p.Slug, &p.SlugID, &p.CustomSku,
 		&p.ShortDescription, &p.Description, &p.BrandID, &p.CategoryID,
 		&p.Gender, &p.Season, &p.KumasFabric, &p.DesiVolume, &p.ShippingWeightKg,
-		&p.PackingRatio, &p.SeriesRatio, &p.MinimumOrderQty, &p.IsActive,
+		&p.PackingRatio, &p.SeriesRatio, &p.MinimumOrderQty,
+		&p.Price, &p.DiscountedPrice, &p.BuyingPrice, &p.SinglePrice,
+		&p.Currency, &p.Stock, &p.SeriesStock,
+		&p.Color, &p.Barcode, &p.IsActive,
 		&p.CreatedAt, &p.UpdatedAt, &p.BrandName, &p.CategoryTitle,
 		&p.SourceURL, &p.SourceProductGroupID,
 	)

@@ -76,15 +76,19 @@ type AuthResponse struct {
 // --- Catalog Domain Models ---
 
 type Category struct {
-	ID           string                         `json:"id"`
-	ParentID     *string                        `json:"parent_id,omitempty"`
-	Title        string                         `json:"title"`
-	Slug         string                         `json:"slug"`
-	NodePath     string                         `json:"node_path"`
-	IsActive     bool                           `json:"is_active"`
-	Translations map[string]CategoryTranslation `json:"translations,omitempty"`
-	CreatedAt    time.Time                      `json:"created_at"`
-	UpdatedAt    time.Time                      `json:"updated_at"`
+	ID                   string                         `json:"id"`
+	ParentID             *string                        `json:"parent_id,omitempty"`
+	Title                string                         `json:"title"`
+	Slug                 string                         `json:"slug"`
+	NodePath             string                         `json:"node_path"`
+	IsActive             bool                           `json:"is_active"`
+	TotalProducts        int                            `json:"total_products"`
+	ActiveProducts       int                            `json:"active_products"`
+	DirectTotalProducts  int                            `json:"direct_total_products"`
+	DirectActiveProducts int                            `json:"direct_active_products"`
+	Translations         map[string]CategoryTranslation `json:"translations,omitempty"`
+	CreatedAt            time.Time                      `json:"created_at"`
+	UpdatedAt            time.Time                      `json:"updated_at"`
 }
 
 type CategoryTranslation struct {
@@ -95,16 +99,18 @@ type CategoryTranslation struct {
 }
 
 type CategoryNode struct {
-	ID             string                         `json:"id"`
-	ParentID       *string                        `json:"parent_id,omitempty"`
-	Title          string                         `json:"title"`
-	Slug           string                         `json:"slug"`
-	NodePath       string                         `json:"node_path"`
-	IsActive       bool                           `json:"is_active"`
-	TotalProducts  int                            `json:"total_products,omitempty"`
-	ActiveProducts int                            `json:"active_products,omitempty"`
-	Translations   map[string]CategoryTranslation `json:"translations,omitempty"`
-	Children       []*CategoryNode                `json:"children"`
+	ID                   string                         `json:"id"`
+	ParentID             *string                        `json:"parent_id,omitempty"`
+	Title                string                         `json:"title"`
+	Slug                 string                         `json:"slug"`
+	NodePath             string                         `json:"node_path"`
+	IsActive             bool                           `json:"is_active"`
+	TotalProducts        int                            `json:"total_products"`
+	ActiveProducts       int                            `json:"active_products"`
+	DirectTotalProducts  int                            `json:"direct_total_products"`
+	DirectActiveProducts int                            `json:"direct_active_products"`
+	Translations         map[string]CategoryTranslation `json:"translations,omitempty"`
+	Children             []*CategoryNode                `json:"children"`
 }
 
 type Brand struct {
@@ -112,6 +118,8 @@ type Brand struct {
 	Name                 string     `json:"name"`
 	Slug                 string     `json:"slug"`
 	AliasCode            *string    `json:"alias_code,omitempty"`
+	Subdomain            string     `json:"subdomain"`
+	SubdomainEnabled     bool       `json:"subdomain_enabled"`
 	CompanyType          string     `json:"company_type"`
 	Description             string            `json:"description"`
 	DescriptionTranslations map[string]string `json:"description_translations,omitempty"`

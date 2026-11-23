@@ -7,6 +7,7 @@ import { Product, Category } from "@/types/store";
 import { t, getCategoryPrefix, getCategoryTitle, pickLangText, SupportedLangCode } from "@/app/i18n";
 import { ExchangeRate } from "@/app/utils";
 import ProductCard from "@/components/store/ProductCard";
+import StoriesStrip from "@/components/store/StoriesStrip";
 import { PortalSponsoredSuppliersSection } from "@/components/store/SponsoredShowcaseSection";
 import GlobalB2BSeoKnowledgeSection from "@/components/seo/GlobalB2BSeoKnowledgeSection";
 import { GLOBAL_B2B_SEO_MATRIX, normalizeSeoLang } from "@/utils/seoHelpers";
@@ -187,7 +188,8 @@ export default function PortalView({
 
   return (
     <main className="flex-grow max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-300">
-      
+      <StoriesStrip lang={lang} />
+
       {/* A. PREMIUM AUTO-SLIDING HERO CAROUSEL */}
       <div className="w-full relative rounded-none overflow-hidden border border-cultured aspect-[16/10] xs:aspect-[16/9] sm:aspect-[21/9.5] md:aspect-[21/9] lg:aspect-[21/8.5] min-h-[260px] xs:min-h-[320px] sm:min-h-[400px] bg-[#fafafa] select-none mb-8 group">
         

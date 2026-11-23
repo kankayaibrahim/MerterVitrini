@@ -25,6 +25,7 @@ import { syncShowPricesToGuestsSetting } from "@/app/storeAuth";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+import FavoriteSupplierButton from "@/components/store/FavoriteSupplierButton";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
 import InstagramIcon from "@/components/shared/InstagramIcon";
 import {
@@ -34,6 +35,12 @@ import {
   formatBrandWebsiteLabel,
   formatBrandWebsiteUrl,
 } from "@/utils/brandContactHelpers";
+import { SupplierSubdomainPill } from "@/components/store/SupplierSubdomainBar";
+import {
+  getSupplierEditorialHref,
+  getSupplierShowcaseHref,
+  getSupplierSubdomainUrl,
+} from "@/utils/subdomain";
 
 interface DirectoryLocaleCopy {
   readonly heroBadge: string;
@@ -412,6 +419,7 @@ function getCartPkgsServerSnapshot(): number {
 interface SupplierDirectoryCardProps {
   readonly brand: Brand;
   readonly copy: DirectoryLocaleCopy;
+  readonly lang: string;
   readonly langSuffix: string;
 }
 
@@ -535,14 +543,15 @@ function SupplierCardContactDetails({
   );
 }
 
-function SupplierDirectoryCard({ brand, copy, langSuffix }: SupplierDirectoryCardProps) {
+function SupplierDirectoryCard({ brand, copy, lang }: SupplierDirectoryCardProps) {
   const companyLabel = getCompanyTypeLabel(brand.company_type, copy);
-  const slugPart = encodeURIComponent(brand.slug || brand.id);
-  const showcaseHref = `/ureticiler/${slugPart}${langSuffix}`;
-  const editorialHref = `/ureticiler/${slugPart}/tanitim${langSuffix}`;
+  const showcaseHref = getSupplierShowcaseHref(brand, lang);
+  const editorialHref = getSupplierEditorialHref(brand, lang);
+  const isExternalSubdomain = showcaseHref.startsWith("http");
   const productCount = brand.active_product_count ?? 0;
   const descText = brand.description || `${brand.name} ${copy.defaultBrandDescSuffix}`;
   const exportText = brand.export_countries || copy.defaultExportRegions;
+  const subdomainUrl = getSupplierSubdomainUrl(brand);
 
   return (
     <div className="bg-white rounded-lg border border-[#E5E0D8] hover:border-[#1C1C1C]/40 shadow-xs hover:shadow-md transition-all p-5 flex flex-col justify-between gap-4">
@@ -554,18 +563,28 @@ function SupplierDirectoryCard({ brand, copy, langSuffix }: SupplierDirectoryCar
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <Link
-                  href={showcaseHref}
-                  className="text-base font-extrabold text-[#1C1C1C] hover:text-[#6E542E] transition-colors no-underline"
-                >
-                  {brand.name}
-                </Link>
+                {isExternalSubdomain ? (
+                  <a
+                    href={showcaseHref}
+                    className="text-base font-extrabold text-[#1C1C1C] hover:text-[#6E542E] transition-colors no-underline"
+                  >
+                    {brand.name}
+                  </a>
+                ) : (
+                  <Link
+                    href={showcaseHref}
+                    className="text-base font-extrabold text-[#1C1C1C] hover:text-[#6E542E] transition-colors no-underline"
+                  >
+                    {brand.name}
+                  </Link>
+                )}
                 {(brand.is_verified ?? true) && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-[#15803D] border border-emerald-200 text-[10px] font-bold">
                     <ShieldCheck size={11} />
                     <span>{copy.verifiedBadge}</span>
                   </span>
                 )}
+                {subdomainUrl && <SupplierSubdomainPill subdomainUrl={subdomainUrl} compact />}
               </div>
               <p className="text-xs font-semibold text-slate-500 mt-0.5">
                 {companyLabel} • {copy.zeroCommission}
@@ -573,12 +592,15 @@ function SupplierDirectoryCard({ brand, copy, langSuffix }: SupplierDirectoryCar
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#F8F6F2] border border-[#E5E0D8] text-[#1C1C1C] text-xs font-extrabold shrink-0">
-            <Package size={13} className="text-[#8C6D3F]" />
-            <span>
-              {productCount} {copy.productCountSuffix}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <FavoriteSupplierButton brandId={brand.id} lang={lang} variant="compact" />
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#F8F6F2] border border-[#E5E0D8] text-[#1C1C1C] text-xs font-extrabold shrink-0">
+              <Package size={13} className="text-[#8C6D3F]" />
+              <span>
+                {productCount} {copy.productCountSuffix}
+              </span>
             </span>
-          </span>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-1.5">
@@ -611,21 +633,43 @@ function SupplierDirectoryCard({ brand, copy, langSuffix }: SupplierDirectoryCar
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-3 border-t border-slate-100">
-        <Link
-          href={showcaseHref}
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold transition-colors no-underline shadow-xs"
-        >
-          <span>{copy.collectionBtn}</span>
-          <ArrowRight size={14} className="rtl:rotate-180" />
-        </Link>
+        {isExternalSubdomain ? (
+          <>
+            <a
+              href={showcaseHref}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold transition-colors no-underline shadow-xs"
+            >
+              <span>{copy.collectionBtn}</span>
+              <ArrowRight size={14} className="rtl:rotate-180" />
+            </a>
 
-        <Link
-          href={editorialHref}
-          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] text-xs font-extrabold transition-colors no-underline"
-        >
-          <BookOpen size={14} className="text-[#8C6D3F]" />
-          <span>{copy.storyGuideBtn}</span>
-        </Link>
+            <a
+              href={editorialHref}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] text-xs font-extrabold transition-colors no-underline"
+            >
+              <BookOpen size={14} className="text-[#8C6D3F]" />
+              <span>{copy.storyGuideBtn}</span>
+            </a>
+          </>
+        ) : (
+          <>
+            <Link
+              href={showcaseHref}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md bg-[#1C1C1C] hover:bg-[#333333] text-white text-xs font-extrabold transition-colors no-underline shadow-xs"
+            >
+              <span>{copy.collectionBtn}</span>
+              <ArrowRight size={14} className="rtl:rotate-180" />
+            </Link>
+
+            <Link
+              href={editorialHref}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-md bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] text-xs font-extrabold transition-colors no-underline"
+            >
+              <BookOpen size={14} className="text-[#8C6D3F]" />
+              <span>{copy.storyGuideBtn}</span>
+            </Link>
+          </>
+        )}
       </div>
     </div>
   );
@@ -635,6 +679,7 @@ interface DirectoryContentProps {
   readonly loading: boolean;
   readonly brands: readonly Brand[];
   readonly copy: DirectoryLocaleCopy;
+  readonly lang: string;
   readonly langSuffix: string;
   readonly onResetFilters: () => void;
 }
@@ -643,6 +688,7 @@ function DirectoryContent({
   loading,
   brands,
   copy,
+  lang,
   langSuffix,
   onResetFilters,
 }: DirectoryContentProps) {
@@ -672,6 +718,7 @@ function DirectoryContent({
           key={brand.id}
           brand={brand}
           copy={copy}
+          lang={lang}
           langSuffix={langSuffix}
         />
       ))}
@@ -877,6 +924,7 @@ export default function SuppliersDirectoryClient({
           loading={loading}
           brands={filteredBrands}
           copy={copy}
+          lang={safeLang}
           langSuffix={langSuffix}
           onResetFilters={() => {
             setSearchQuery("");

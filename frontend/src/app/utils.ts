@@ -294,7 +294,7 @@ export function trackBrandEvent(
   if (!cleanBrand && cleanType !== "whatsapp_click") return;
   const lang = localStorage.getItem("preferred_lang") || "tr";
   const visitorId = localStorage.getItem("mv_vid") || "";
-  const authToken = localStorage.getItem("store_user_token") || "";
+  const authToken = getValidStoreBearerToken() || localStorage.getItem("store_user_token") || "";
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (authToken) {
     headers.Authorization = `Bearer ${authToken}`;

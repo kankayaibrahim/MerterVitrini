@@ -43,6 +43,7 @@ import {
   stripBrandTitleSuffix,
   SupportedSeoLang,
 } from "@/utils/seoHelpers";
+import { getSupplierShowcaseHref } from "@/utils/subdomain";
 
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
@@ -814,11 +815,14 @@ export default function ProductDetailClient({
     setShowSuccessOverlay(true);
   };
 
-  const supplierSlug = activeProduct.brand_profile?.slug || activeProduct.brand_id;
-  const supplierHref =
-    safeLang === "tr"
-      ? `/ureticiler/${encodeURIComponent(supplierSlug)}`
-      : `/ureticiler/${encodeURIComponent(supplierSlug)}?lang=${safeLang}`;
+  const supplierHref = getSupplierShowcaseHref(
+    activeProduct.brand_profile || {
+      id: activeProduct.brand_id,
+      slug: activeProduct.brand_id,
+    },
+    safeLang
+  );
+  const isExternalSupplierHref = supplierHref.startsWith("http");
 
   const supplierWaRaw =
     activeProduct.brand_profile?.whatsapp_phone ||
@@ -894,12 +898,21 @@ export default function ProductDetailClient({
           {activeProduct.brand_name && (
             <>
               <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />
-              <Link
-                href={supplierHref}
-                className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver font-bold"
-              >
-                {activeProduct.brand_name}
-              </Link>
+              {isExternalSupplierHref ? (
+                <a
+                  href={supplierHref}
+                  className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver font-bold"
+                >
+                  {activeProduct.brand_name}
+                </a>
+              ) : (
+                <Link
+                  href={supplierHref}
+                  className="hover:text-salmon-pink transition-colors no-underline text-sonic-silver font-bold"
+                >
+                  {activeProduct.brand_name}
+                </Link>
+              )}
             </>
           )}
           <ChevronRight className="w-3 h-3 text-spanish-gray rtl:rotate-180" />

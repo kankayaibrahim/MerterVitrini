@@ -329,8 +329,9 @@ func updateProductImages(ctx context.Context, tx pgx.Tx, productID string, image
 }
 
 type SupplierPortalHandler struct {
-	Cfg   *config.Config
-	Media services.MediaProcessor
+	Cfg      *config.Config
+	Media    services.MediaProcessor
+	Notifier services.NotificationDispatcher
 }
 
 func NewSupplierPortalHandler(cfg *config.Config, mediaProcessors ...services.MediaProcessor) *SupplierPortalHandler {
@@ -341,6 +342,13 @@ func NewSupplierPortalHandler(cfg *config.Config, mediaProcessors ...services.Me
 		media = services.NewLocalImageMediaService("")
 	}
 	return &SupplierPortalHandler{Cfg: cfg, Media: media}
+}
+
+// SetNotifier injects the NotificationDispatcher used for favorite-supplier product alerts.
+func (h *SupplierPortalHandler) SetNotifier(n services.NotificationDispatcher) {
+	if h != nil {
+		h.Notifier = n
+	}
 }
 
 func issueLocalSupplierJWT(jwtSecret string, u *models.SupplierUser) string {
@@ -530,6 +538,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 	brandQuery := `
 		SELECT 
 			b.id, b.brand_name, b.slug, b.alias_code,
+			coalesce(b.subdomain, ''), coalesce(b.subdomain_enabled, true),
 			coalesce(b.company_type, 'uretici_toptanci'),
 			coalesce(b.description, ''),
 			coalesce(b.description_translations, '{}'::jsonb),
@@ -561,6 +570,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 		WHERE b.id = $1`
 	_ = db.Pool.QueryRow(ctx, brandQuery, claims.BrandID).Scan(
 		&brandProfile.ID, &brandProfile.Name, &brandProfile.Slug, &brandProfile.AliasCode,
+		&brandProfile.Subdomain, &brandProfile.SubdomainEnabled,
 		&brandProfile.CompanyType, &brandProfile.Description, &descTransJSON,
 		&brandProfile.Website, &brandProfile.Phone, &brandProfile.LandlinePhone,
 		&brandProfile.WhatsappPhone, &brandProfile.PublicEmail, &brandProfile.InstagramHandle,
@@ -599,6 +609,7 @@ func (h *SupplierPortalHandler) GetProfile(w http.ResponseWriter, r *http.Reques
 
 type UpdateSupplierBrandProfileRequest struct {
 	BrandName               string            `json:"brand_name"`
+	Subdomain               *string           `json:"subdomain,omitempty"`
 	CompanyType             string            `json:"company_type"`
 	Description             string            `json:"description"`
 	DescriptionTranslations map[string]string `json:"description_translations,omitempty"`
@@ -746,10 +757,29 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 		}
 	}
 
+	updateSubdomain := false
+	subdomainVal := ""
+	if req.Subdomain != nil {
+		var subEnabled bool
+		_ = db.Pool.QueryRow(ctx, `SELECT COALESCE(subdomain_enabled, true) FROM catalog.brands WHERE id = $1`, claims.BrandID).Scan(&subEnabled)
+		if !subEnabled {
+			writeSupplierJSON(w, http.StatusForbidden, map[string]string{"error": "Özel mağaza subdomain özelliği hesabınızda aktif değil."})
+			return
+		}
+		normSub, valErr := NormalizeAndValidateBrandSubdomain(*req.Subdomain)
+		if valErr != nil {
+			writeSupplierJSON(w, http.StatusBadRequest, map[string]string{"error": valErr.Error()})
+			return
+		}
+		updateSubdomain = true
+		subdomainVal = normSub
+	}
+
 	updateQuery := `
 		UPDATE catalog.brands
 		SET 
 			brand_name = $1,
+			subdomain = CASE WHEN $23::boolean THEN NULLIF($24, '') ELSE subdomain END,
 			company_type = $2,
 			description = $3,
 			description_translations = $4::jsonb,
@@ -772,7 +802,7 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 			iban = $21,
 			whatsapp_only_ordering = COALESCE($22, whatsapp_only_ordering, false),
 			updated_at = CURRENT_TIMESTAMP
-		WHERE id = $23`
+		WHERE id = $25`
 
 	_, err := db.Pool.Exec(ctx, updateQuery,
 		brandName,
@@ -797,9 +827,15 @@ func (h *SupplierPortalHandler) UpdateProfile(w http.ResponseWriter, r *http.Req
 		strings.TrimSpace(req.BankAccountHolder),
 		ibanClean,
 		req.WhatsappOnlyOrdering,
+		updateSubdomain,
+		subdomainVal,
 		claims.BrandID,
 	)
 	if err != nil {
+		if isSubdomainUniqueViolation(err) {
+			writeSupplierJSON(w, http.StatusConflict, map[string]string{"error": "Bu alt alan adı (subdomain) başka bir tedarikçi tarafından kullanılıyor."})
+			return
+		}
 		log.Printf("[SUPPLIER PORTAL] UpdateProfile error: %v", err)
 		writeSupplierJSON(w, http.StatusInternalServerError, map[string]string{"error": "Firma profili güncellenemedi."})
 		return
@@ -1240,6 +1276,20 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 		triggerProductMVRefresh()
 	}
 
+	if req.IsActive && strings.TrimSpace(mainSlug) != "" {
+		cleanImgs := cleanNonEmptyStrings(req.Images)
+		firstImg := ""
+		if len(cleanImgs) > 0 {
+			firstImg = cleanImgs[0]
+		}
+		NotifyFavoriteSupplierFollowersAsync(h.Cfg, h.Notifier, claims.BrandID, []NewProductAlertItem{{
+			ID:       mainItem.ID,
+			Slug:     mainSlug,
+			Title:    req.Title,
+			ImageURL: firstImg,
+		}})
+	}
+
 	msg := "Ürün taslak olarak kaydedildi."
 	if req.IsActive {
 		msg = "Ürün başarıyla oluşturuldu ve vitrinde yayına alındı."
@@ -1317,8 +1367,9 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	var wasActive bool
 	var existingGroupID *string
-	if err := tx.QueryRow(ctx, "SELECT source_product_group_id FROM catalog.products WHERE id = $1 AND brand_id = $2", id, claims.BrandID).Scan(&existingGroupID); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT COALESCE(is_active, false), source_product_group_id FROM catalog.products WHERE id = $1 AND brand_id = $2", id, claims.BrandID).Scan(&wasActive, &existingGroupID); err != nil {
 		httpx.Error(w, http.StatusNotFound, "Ürün bulunamadı veya güncelleme yetkiniz yok")
 		return
 	}
@@ -1408,6 +1459,20 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		})
 	} else {
 		triggerProductMVRefresh()
+	}
+
+	if !wasActive && req.IsActive && strings.TrimSpace(updatedSlug) != "" {
+		cleanImgs := cleanNonEmptyStrings(req.Images)
+		firstImg := ""
+		if len(cleanImgs) > 0 {
+			firstImg = cleanImgs[0]
+		}
+		NotifyFavoriteSupplierFollowersAsync(h.Cfg, h.Notifier, claims.BrandID, []NewProductAlertItem{{
+			ID:       id,
+			Slug:     updatedSlug,
+			Title:    req.Title,
+			ImageURL: firstImg,
+		}})
 	}
 	writeSupplierJSON(w, http.StatusOK, map[string]any{
 		"message":                 "Ürün başarıyla güncellendi.",

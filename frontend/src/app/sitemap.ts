@@ -6,6 +6,7 @@ import {
   ssrStoreFetch,
   SUPPORTED_SEO_LANGS,
 } from "@/utils/seoHelpers";
+import { getSupplierSubdomainUrl } from "@/utils/subdomain";
 
 export const revalidate = 3600;
 
@@ -38,6 +39,8 @@ interface SitemapStaticPage {
 interface SitemapBrand {
   id: string;
   slug?: string;
+  subdomain?: string;
+  subdomain_enabled?: boolean;
   is_active?: boolean;
   updated_at?: string;
 }
@@ -141,12 +144,13 @@ function appendStandaloneDirectoryRoutes(
   for (const brand of brands) {
     if (!brand.slug || brand.is_active === false) continue;
     const modDate = brand.updated_at ? new Date(brand.updated_at) : now;
+    const subUrl = getSupplierSubdomainUrl(brand);
     const showcaseAlt = buildQueryLangAlternates(
-      `/ureticiler/${brand.slug}`,
+      subUrl || `/ureticiler/${brand.slug}`,
       "tr"
     );
     const editorialAlt = buildQueryLangAlternates(
-      `/ureticiler/${brand.slug}/tanitim`,
+      subUrl ? `${subUrl}/tanitim` : `/ureticiler/${brand.slug}/tanitim`,
       "tr"
     );
     entries.push(

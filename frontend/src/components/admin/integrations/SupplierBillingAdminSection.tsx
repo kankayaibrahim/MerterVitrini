@@ -37,6 +37,8 @@ interface SubscriptionRow {
   tax_number: string;
   billing_address: string;
   billing_email: string;
+  story_entitlement_override?: boolean | null;
+  story_daily_limit_override?: number | null;
 }
 
 interface InvoiceRow {
@@ -133,6 +135,8 @@ export default function SupplierBillingAdminSection({
   const [taxOffice, setTaxOffice] = useState("");
   const [taxNumber, setTaxNumber] = useState("");
   const [billingTitle, setBillingTitle] = useState("");
+  const [storyOverrideMode, setStoryOverrideMode] = useState<"auto" | "allow" | "deny">("auto");
+  const [storyDailyLimitOverride, setStoryDailyLimitOverride] = useState("");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -201,6 +205,18 @@ export default function SupplierBillingAdminSection({
     setBillingTitle(row.billing_company_title || row.brand_name);
     setTaxOffice(row.tax_office || "");
     setTaxNumber(row.tax_number || "");
+    if (row.story_entitlement_override === true) {
+      setStoryOverrideMode("allow");
+    } else if (row.story_entitlement_override === false) {
+      setStoryOverrideMode("deny");
+    } else {
+      setStoryOverrideMode("auto");
+    }
+    setStoryDailyLimitOverride(
+      typeof row.story_daily_limit_override === "number"
+        ? String(row.story_daily_limit_override)
+        : ""
+    );
     setPeriodMonths(0);
     setNotes("");
     setModalMode("plan");
@@ -287,6 +303,14 @@ export default function SupplierBillingAdminSection({
     e.preventDefault();
     setSubmitting(true);
     setMsg(null);
+    let storyOverrideValue: boolean | null = null;
+    if (storyOverrideMode === "allow") storyOverrideValue = true;
+    else if (storyOverrideMode === "deny") storyOverrideValue = false;
+    const parsedLimit = Number(storyDailyLimitOverride);
+    const storyLimitValue =
+      storyDailyLimitOverride.trim() !== "" && parsedLimit >= 1 && parsedLimit <= 50
+        ? Math.round(parsedLimit)
+        : null;
     try {
       const res = await fetch(
         `${apiUrl}/api/v1/admin/billing/subscriptions/${selectedBrandId}`,
@@ -306,6 +330,8 @@ export default function SupplierBillingAdminSection({
             billing_company_title: billingTitle,
             tax_office: taxOffice,
             tax_number: taxNumber,
+            story_entitlement_override: storyOverrideValue,
+            story_daily_limit_override: storyLimitValue,
             notes,
           }),
         }
@@ -979,6 +1005,38 @@ export default function SupplierBillingAdminSection({
                       type="text"
                       value={taxNumber}
                       onChange={(e) => setTaxNumber(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-zinc-300"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-1 border-t border-zinc-100">
+                  <div>
+                    <label className="block font-bold text-zinc-700 mb-1">
+                      Hikaye (24s) Yetkisi
+                    </label>
+                    <select
+                      value={storyOverrideMode}
+                      onChange={(e) =>
+                        setStoryOverrideMode(e.target.value as "auto" | "allow" | "deny")
+                      }
+                      className="w-full px-3 py-2 rounded-lg border border-zinc-300"
+                    >
+                      <option value="auto">Otomatik (Pakete Göre)</option>
+                      <option value="allow">Özel İzin Ver (Açık)</option>
+                      <option value="deny">Engelle (Kapalı)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-zinc-700 mb-1">
+                      Özel 24s Hikaye Limiti
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      placeholder="Varsayılan (8)"
+                      value={storyDailyLimitOverride}
+                      onChange={(e) => setStoryDailyLimitOverride(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg border border-zinc-300"
                     />
                   </div>

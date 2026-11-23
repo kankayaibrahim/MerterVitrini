@@ -406,7 +406,7 @@ WantedBy=multi-user.target
         self._ssh_cmd(ssh, f"systemctl enable {cfg['service_name']}")
         self._ssh_cmd(ssh, f"systemctl restart {cfg['service_name']}")
 
-    def _generate_nginx_conf(self, cfg):
+    def _generate_nginx_conf(self, cfg, use_origin_wildcard_ssl=False):
         csp_policy = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
@@ -417,16 +417,20 @@ WantedBy=multi-user.target
             "frame-src 'self' https://www.google.com https://maps.google.com https://www.recaptcha.net https://auth.mertervitrini.com.tr; "
             "frame-ancestors 'self';"
         )
-        return f"""# 1. Main Unified Storefront & Admin Server Block (HTTPS)
-server {{
-    listen 443 ssl;
-    server_name {SERVER_HOST_ADDR} mertervitrini.com.tr www.mertervitrini.com.tr;
+        letsencrypt_ssl_block = """    ssl_certificate /etc/letsencrypt/live/mertervitrini.com.tr/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/mertervitrini.com.tr/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot"""
 
-    if ($host = 'www.mertervitrini.com.tr') {{
-        return 301 https://mertervitrini.com.tr$request_uri;
-    }}
+        if use_origin_wildcard_ssl:
+            wildcard_ssl_block = """    ssl_certificate /etc/nginx/ssl/mertervitrini-origin-wildcard.pem;
+    ssl_certificate_key /etc/nginx/ssl/mertervitrini-origin-wildcard.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;"""
+        else:
+            wildcard_ssl_block = letsencrypt_ssl_block
 
-    root {cfg['remote_dir']}/public;
+        shared_frontend_body = f"""    root {cfg['remote_dir']}/public;
     index index.html index.htm;
     access_log /var/log/nginx/mertervitrini_access.log main;
 
@@ -525,12 +529,30 @@ server {{
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+    }}"""
+
+        return f"""# 1A. Main Unified Storefront & Admin Server Block (HTTPS - Let's Encrypt ECDSA)
+server {{
+    listen 443 ssl;
+    server_name {SERVER_HOST_ADDR} mertervitrini.com.tr www.mertervitrini.com.tr;
+
+    if ($host = 'www.mertervitrini.com.tr') {{
+        return 301 https://mertervitrini.com.tr$request_uri;
     }}
 
-    ssl_certificate /etc/letsencrypt/live/mertervitrini.com.tr/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/mertervitrini.com.tr/privkey.pem; # managed by Certbot
-    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+{shared_frontend_body}
+
+{letsencrypt_ssl_block}
+}}
+
+# 1B. Multi-Tenant Supplier Subdomains Block (*.mertervitrini.com.tr - Cloudflare Origin Wildcard SSL)
+server {{
+    listen 443 ssl;
+    server_name *.mertervitrini.com.tr;
+
+{shared_frontend_body}
+
+{wildcard_ssl_block}
 }}
 
 # 2. Unified Backend API Server Block (HTTPS)
@@ -560,10 +582,7 @@ server {{
         proxy_set_header X-Forwarded-Proto $scheme;
     }}
 
-    ssl_certificate /etc/letsencrypt/live/mertervitrini.com.tr/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/mertervitrini.com.tr/privkey.pem; # managed by Certbot
-    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+{letsencrypt_ssl_block}
 }}
 
 # 3. Admin Domain Redirect Block (HTTPS) -> Redirects to /admin on main domain
@@ -584,7 +603,7 @@ server {{
 # 4. HTTP redirect block (Port 80)
 server {{
     listen 80;
-    server_name {SERVER_HOST_ADDR} mertervitrini.com.tr www.mertervitrini.com.tr api.mertervitrini.com.tr admin.mertervitrini.com.tr;
+    server_name {SERVER_HOST_ADDR} mertervitrini.com.tr www.mertervitrini.com.tr *.mertervitrini.com.tr api.mertervitrini.com.tr admin.mertervitrini.com.tr;
 
     # Let Certbot challenges bypass HTTPS redirect
     location /.well-known/acme-challenge/ {{
@@ -600,7 +619,14 @@ server {{
     def _deploy_nginx_conf(self, ssh, cfg):
         self.log("[NGINX] Dynamic Virtual Host configuration update...")
         dest_conf = "/etc/nginx/conf.d/mertervitrini.com.tr.conf"
-        nginx_conf = self._generate_nginx_conf(cfg)
+        origin_check_out, _ = self._ssh_cmd(
+            ssh,
+            "[ -f /etc/nginx/ssl/mertervitrini-origin-wildcard.pem ] && [ -f /etc/nginx/ssl/mertervitrini-origin-wildcard.key ] && echo ORIGIN_OK || echo LETSENCRYPT",
+        )
+        use_origin_wildcard_ssl = "ORIGIN_OK" in origin_check_out
+        if use_origin_wildcard_ssl:
+            self.log("[NGINX] Detected Cloudflare Origin Wildcard SSL certificate in /etc/nginx/ssl/")
+        nginx_conf = self._generate_nginx_conf(cfg, use_origin_wildcard_ssl=use_origin_wildcard_ssl)
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".conf") as tmp:
             tmp.write(nginx_conf)
@@ -613,6 +639,7 @@ server {{
             os.remove(tmp_path)
 
         t_nginx_start = time.time()
+        self._ssh_cmd(ssh, "nginx -t", check=True)
         self._ssh_cmd(ssh, CMD_RESTART_NGINX)
         t_nginx_end = time.time()
         self.record_time("unified", "frontend", "Nginx ve Servisler Yeniden Başlatıldı", t_nginx_end - t_nginx_start)

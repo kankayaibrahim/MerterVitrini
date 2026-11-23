@@ -6,10 +6,19 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 )
+
+// LogFileInfo describes a rotatable or active daily log file in activeLogDir.
+type LogFileInfo struct {
+	Name      string    `json:"name"`
+	SizeBytes int64     `json:"size_bytes"`
+	ModTime   time.Time `json:"mod_time"`
+	IsActive  bool      `json:"is_active"`
+}
 
 // DailyFileWriter handles thread-safe daily rotating file writes
 type DailyFileWriter struct {
@@ -62,6 +71,43 @@ func (w *DailyFileWriter) Close() error {
 		return err
 	}
 	return nil
+}
+
+// TruncateCurrent safely truncates today's active log file without breaking active descriptors.
+func (w *DailyFileWriter) TruncateCurrent() (int64, error) {
+	if w == nil {
+		return 0, nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	dateStr := time.Now().Format("2006-01-02")
+	filename := fmt.Sprintf("%s-%s.log", w.prefix, dateStr)
+	filePath := filepath.Join(w.dir, filename)
+
+	var prevSize int64
+	if info, statErr := os.Stat(filePath); statErr == nil {
+		prevSize = info.Size()
+	}
+
+	if w.currentFile != nil {
+		_ = w.currentFile.Close()
+		w.currentFile = nil
+	}
+
+	if _, err := os.Stat(filePath); err == nil {
+		if truncErr := os.Truncate(filePath, 0); truncErr != nil {
+			return 0, truncErr
+		}
+	}
+
+	f, openErr := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if openErr != nil {
+		return prevSize, openErr
+	}
+	w.currentFile = f
+	w.currentDate = dateStr
+	return prevSize, nil
 }
 
 // ErrorHookFunc receives severe log, HTTP 5xx, and panic notifications without blocking callers.
@@ -158,6 +204,121 @@ func Init(preferredDir string) (string, error) {
 // GetLogDir returns the active log directory path
 func GetLogDir() string {
 	return activeLogDir
+}
+
+func matchesLogPrefix(prefix, name string) bool {
+	if !strings.HasSuffix(name, ".log") {
+		return false
+	}
+	if prefix == "error" {
+		return strings.HasPrefix(name, "error-")
+	}
+	if prefix == "backend" {
+		if strings.HasPrefix(name, "backend-") {
+			return true
+		}
+		// Legacy date-only daily filenames: YYYY-MM-DD.log
+		return len(name) == 14 && strings.HasPrefix(name, "20") && name[4] == '-' && name[7] == '-'
+	}
+	return false
+}
+
+// ListLogFilesByPrefix returns log files in activeLogDir matching prefix ("error" or "backend") sorted newest first.
+func ListLogFilesByPrefix(prefix string) []LogFileInfo {
+	dir := activeLogDir
+	if dir == "" {
+		dir = ResolveLogDirectory("")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	activeName := fmt.Sprintf("%s-%s.log", prefix, time.Now().Format("2006-01-02"))
+	out := make([]LogFileInfo, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !matchesLogPrefix(prefix, entry.Name()) {
+			continue
+		}
+		info, statErr := entry.Info()
+		if statErr != nil {
+			continue
+		}
+		out = append(out, LogFileInfo{
+			Name:      entry.Name(),
+			SizeBytes: info.Size(),
+			ModTime:   info.ModTime(),
+			IsActive:  entry.Name() == activeName,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].ModTime.Equal(out[j].ModTime) {
+			return out[i].ModTime.After(out[j].ModTime)
+		}
+		return out[i].Name > out[j].Name
+	})
+	return out
+}
+
+// ClearLogFilesByPrefix safely truncates active files and optionally deletes rotated files for prefix.
+func ClearLogFilesByPrefix(prefix string, specificFiles []string, includeArchived bool) (int, int64, error) {
+	dir := activeLogDir
+	if dir == "" {
+		return 0, 0, fmt.Errorf("active log directory not initialized")
+	}
+
+	var writer *DailyFileWriter
+	if prefix == "error" {
+		writer = globalErrorWriter
+	} else if prefix == "backend" {
+		writer = globalMainWriter
+	}
+
+	available := ListLogFilesByPrefix(prefix)
+	allowedSet := make(map[string]LogFileInfo, len(available))
+	for _, item := range available {
+		allowedSet[item.Name] = item
+	}
+
+	targets := make(map[string]LogFileInfo)
+	if len(specificFiles) > 0 {
+		for _, raw := range specificFiles {
+			clean := filepath.Base(strings.TrimSpace(raw))
+			if clean == "" || strings.Contains(raw, "..") || strings.ContainsAny(raw, "/\\") {
+				continue
+			}
+			if info, ok := allowedSet[clean]; ok {
+				targets[clean] = info
+			}
+		}
+	} else {
+		for _, item := range available {
+			if item.IsActive || includeArchived {
+				targets[item.Name] = item
+			}
+		}
+	}
+
+	clearedCount := 0
+	var freedBytes int64
+	activeName := fmt.Sprintf("%s-%s.log", prefix, time.Now().Format("2006-01-02"))
+	for name, info := range targets {
+		if name == activeName && writer != nil {
+			sz, truncErr := writer.TruncateCurrent()
+			if truncErr != nil {
+				return clearedCount, freedBytes, truncErr
+			}
+			clearedCount++
+			freedBytes += sz
+			continue
+		}
+		fullPath := filepath.Join(dir, name)
+		if remErr := os.Remove(fullPath); remErr == nil {
+			clearedCount++
+			freedBytes += info.SizeBytes
+		}
+	}
+	return clearedCount, freedBytes, nil
 }
 
 // Close gracefully closes open log file descriptors

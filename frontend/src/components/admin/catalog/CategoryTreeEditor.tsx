@@ -1,20 +1,23 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { 
-  Folder, 
-  FolderOpen, 
-  ChevronRight, 
-  ChevronDown, 
-  Plus, 
-  Edit3, 
-  Trash2, 
+import Link from "next/link";
+import {
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  ChevronDown,
+  Plus,
+  Edit3,
+  Trash2,
   RefreshCw,
   FolderPlus,
   CheckCircle,
   AlertTriangle,
   X,
-  Sparkles
+  Sparkles,
+  Package,
+  ChevronsUpDown
 } from "lucide-react";
 import { CategoryNode } from "@/types/integration";
 import { getFlatCategoriesList } from "@/utils/formatters";
@@ -52,8 +55,21 @@ const LABELS = {
   REQUIRED_FIELD: "Kategori adı zorunludur.",
   ERROR_SELF_PARENT: "Bir kategori kendisinin veya alt kategorilerinin altına taşınamaz.",
   CRITICAL_ACTION: "Hassas İşlem",
-  DELETE_WARNING_DESC: "Silinen kategorideki tüm ürünler kategorisiz kalacaktır. Bu işlem geri alınamaz!"
+  DELETE_WARNING_DESC: "Silinen kategorideki tüm ürünler kategorisiz kalacaktır. Bu işlem geri alınamaz!",
+  EXPAND_ALL: "Tümünü Genişlet",
+  COLLAPSE_ALL: "Tümünü Daralt",
+  VIEW_PRODUCTS: "Bu kategorideki ürünleri görüntüle",
 };
+
+function collectExpandableNodeIds(nodes: CategoryNode[]): string[] {
+  const ids: string[] = [];
+  for (const node of nodes) {
+    if (node.children && node.children.length > 0) {
+      ids.push(node.id, ...collectExpandableNodeIds(node.children));
+    }
+  }
+  return ids;
+}
 
 const LANGUAGES = [
   { code: "tr", label: "TR", name: "Türkçe" },
@@ -133,11 +149,11 @@ export default function CategoryTreeEditor({
 }: Readonly<CategoryTreeEditorProps>) {
   const [isPending, startTransition] = useTransition();
   const [expandedNodes, setExpandedNodes] = useState<Map<string, boolean>>(new Map());
-  
+
   // Modals state
   const [activeModal, setActiveModal] = useState<"create" | "edit" | "delete" | null>(null);
   const [selectedNode, setSelectedNode] = useState<CategoryNode | null>(null);
-  
+
   // Form fields
   const [formTitle, setFormTitle] = useState("");
   const [formIsActive, setFormIsActive] = useState(true);
@@ -151,6 +167,16 @@ export default function CategoryTreeEditor({
 
   // Flat list helper for parent selection dropdowns
   const flatCategories = getFlatCategoriesList(categories);
+  const hasAnyExpanded = Array.from(expandedNodes.values()).some(Boolean);
+
+  const toggleExpandAll = () => {
+    if (hasAnyExpanded) {
+      setExpandedNodes(new Map());
+      return;
+    }
+    const expandableIds = collectExpandableNodeIds(categories);
+    setExpandedNodes(new Map(expandableIds.map((id) => [id, true])));
+  };
 
   // Toggle node expansion
   const toggleExpand = (nodeId: string) => {
@@ -311,24 +337,26 @@ export default function CategoryTreeEditor({
   const renderTreeNode = (node: CategoryNode, depth: number = 0) => {
     const hasChildren = node.children && node.children.length > 0;
     const isExpanded = !!expandedNodes.get(node.id);
+    const totalCount = node.total_products ?? 0;
+    const activeCount = node.active_products ?? 0;
+    const passiveCount = Math.max(0, totalCount - activeCount);
 
     return (
       <div key={node.id} className="flex flex-col">
         {/* Row element */}
-        <div 
-          className={`flex items-center justify-between py-2.5 px-4 rounded-xl border border-transparent transition-all group ${
-            node.is_active 
-              ? "hover:bg-violet-50/40 hover:border-violet-100/60" 
+        <div
+          className={`flex items-center justify-between py-2.5 px-4 rounded-xl border border-transparent transition-all group ${node.is_active
+              ? "hover:bg-violet-50/40 hover:border-violet-100/60"
               : "bg-zinc-50/50 hover:bg-zinc-100/40 opacity-80"
-          }`}
+            }`}
           style={{ paddingLeft: `${Math.max(16, depth * 28)}px` }}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap min-w-0">
             {/* Collapse Trigger Button */}
             {hasChildren ? (
-              <button 
+              <button
                 onClick={() => toggleExpand(node.id)}
-                className="p-1 rounded-md hover:bg-zinc-200/50 text-zinc-500 transition-colors"
+                className="p-1 rounded-md hover:bg-zinc-200/50 text-zinc-500 transition-colors cursor-pointer"
                 type="button"
               >
                 {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -343,29 +371,50 @@ export default function CategoryTreeEditor({
             </span>
 
             {/* Category title */}
-            <span className={`font-semibold text-sm transition-colors ${
-              node.is_active ? "text-zinc-800" : "text-zinc-500 line-through decoration-zinc-400"
-            }`}>
+            <span className={`font-semibold text-sm transition-colors ${node.is_active ? "text-zinc-800" : "text-zinc-500 line-through decoration-zinc-400"
+              }`}>
               {node.title}
             </span>
 
             {/* Slug badge */}
-            <span className="text-[10px] font-mono text-zinc-500 bg-zinc-100/80 px-2 py-0.5 rounded border border-zinc-200/60 hidden md:inline-block">
+            <span className="text-[10px] font-mono text-zinc-500 bg-zinc-100/80 px-2 py-0.5 rounded border border-zinc-200/60 hidden lg:inline-block">
               {resolveCategorySlug(node)}
             </span>
 
             {/* Status indicators */}
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex ${
-              node.is_active 
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex ${node.is_active
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
                 : "bg-zinc-100 text-zinc-600 border border-zinc-200"
-            }`}>
+              }`}>
               {node.is_active ? LABELS.ACTIVE : LABELS.PASSIVE}
             </span>
+
+            {/* Category product counts */}
+            <div className="inline-flex items-center gap-1 text-[10px] font-bold">
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+                Aktif: {activeCount.toLocaleString("tr-TR")}
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/70">
+                Toplam: {totalCount.toLocaleString("tr-TR")}
+              </span>
+              {passiveCount > 0 && (
+                <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200/70">
+                  Pasif: {passiveCount.toLocaleString("tr-TR")}
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Quick Actions (Visually gorgeous hover states) */}
-          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Quick Actions */}
+          <div className="flex items-center gap-1.5 opacity-85 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+            <Link
+              href={`/admin/catalog/products?category_id=${encodeURIComponent(node.id)}`}
+              className="p-1.5 rounded-lg text-zinc-500 hover:text-emerald-700 hover:bg-emerald-50 transition-all"
+              title={LABELS.VIEW_PRODUCTS}
+            >
+              <Package size={16} />
+            </Link>
+
             {/* Add child */}
             <button
               onClick={() => openCreateModal(node)}
@@ -427,7 +476,7 @@ export default function CategoryTreeEditor({
 
   return (
     <div className="glass-card bg-white rounded-3xl border border-zinc-200/50 p-6 flex flex-col gap-6 shadow-sm">
-      
+
       {/* Header bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-100 pb-5">
         <div>
@@ -435,7 +484,19 @@ export default function CategoryTreeEditor({
           <p className="text-sm text-zinc-500 mt-1">{LABELS.DESCRIPTION}</p>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {/* Expand / Collapse all */}
+          {categories.length > 0 && (
+            <button
+              onClick={toggleExpandAll}
+              className="px-3 py-2.5 border border-zinc-200 rounded-xl hover:bg-zinc-50 text-zinc-600 transition-colors bg-white shadow-sm flex items-center justify-center gap-1.5 text-sm font-semibold cursor-pointer"
+              type="button"
+            >
+              <ChevronsUpDown size={15} />
+              {hasAnyExpanded ? LABELS.COLLAPSE_ALL : LABELS.EXPAND_ALL}
+            </button>
+          )}
+
           {/* Refresh button */}
           <button
             onClick={() => {
@@ -497,9 +558,9 @@ export default function CategoryTreeEditor({
       {/* Modal Backdrop Container */}
       {activeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          
+
           <div className="bg-white rounded-3xl border border-zinc-100 max-w-lg w-full overflow-hidden shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
-            
+
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100 bg-zinc-50/50">
               <h3 className="font-bold text-lg text-zinc-900">
@@ -507,7 +568,7 @@ export default function CategoryTreeEditor({
                 {activeModal === "edit" && LABELS.EDIT_TITLE}
                 {activeModal === "delete" && LABELS.DELETE_CONFIRM_TITLE}
               </h3>
-              <button 
+              <button
                 onClick={() => setActiveModal(null)}
                 className="p-1.5 rounded-lg hover:bg-zinc-200/50 text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer border-none"
                 type="button"
@@ -518,10 +579,10 @@ export default function CategoryTreeEditor({
 
             {/* Modal Form */}
             <form onSubmit={handleSave} className="flex flex-col">
-              
+
               {/* Modal Body */}
               <div className="p-6 flex flex-col gap-5 max-h-[70vh] overflow-y-auto">
-                
+
                 {/* General Alerts / Error Display */}
                 {formError && (
                   <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-2xl text-xs font-semibold">
@@ -545,13 +606,13 @@ export default function CategoryTreeEditor({
                 ) : (
                   /* Create / Edit Form UI */
                   <div className="flex flex-col gap-4">
-                    
+
                     {/* General Settings */}
                     <div className="grid grid-cols-1 gap-4">
                       {/* Parent Selector Selector (To move or set structure) */}
                       <div className="flex flex-col gap-1.5">
                         <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">{LABELS.PARENT}</label>
-                        <select 
+                        <select
                           value={formParentId}
                           onChange={(e) => setFormParentId(e.target.value)}
                           className="w-full px-3 py-2.5 border border-zinc-200 rounded-xl bg-zinc-50/50 hover:bg-zinc-100/50 focus:outline-none focus:border-violet-500 focus:bg-white text-sm font-semibold transition-all cursor-pointer text-zinc-700"
@@ -572,19 +633,17 @@ export default function CategoryTreeEditor({
                           <span className="text-sm font-bold text-zinc-800">{LABELS.STATUS}</span>
                           <span className="text-xs text-zinc-400">Ürün hiyerarşisinde görünürlüğü belirler</span>
                         </div>
-                        
+
                         <button
                           type="button"
                           onClick={() => setFormIsActive(!formIsActive)}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none border-none ${
-                            formIsActive ? "bg-violet-600" : "bg-zinc-200"
-                          }`}
+                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none border-none ${formIsActive ? "bg-violet-600" : "bg-zinc-200"
+                            }`}
                           disabled={isPending}
                         >
                           <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              formIsActive ? "translate-x-5" : "translate-x-0"
-                            }`}
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${formIsActive ? "translate-x-5" : "translate-x-0"
+                              }`}
                           />
                         </button>
                       </div>
@@ -606,11 +665,10 @@ export default function CategoryTreeEditor({
                             key={l.code}
                             type="button"
                             onClick={() => setActiveLangTab(l.code)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-none cursor-pointer ${
-                              activeLangTab === l.code
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-none cursor-pointer ${activeLangTab === l.code
                                 ? "bg-violet-50 text-violet-600 font-extrabold"
                                 : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
-                            }`}
+                              }`}
                           >
                             {l.name}
                           </button>
@@ -675,14 +733,13 @@ export default function CategoryTreeEditor({
                 >
                   {LABELS.CANCEL}
                 </button>
-                
+
                 <button
                   type="submit"
-                  className={`px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition-all cursor-pointer border-none ${
-                    activeModal === "delete" 
-                      ? "bg-red-600 hover:bg-red-700 shadow-red-600/10 hover:shadow-lg hover:shadow-red-600/20" 
+                  className={`px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-md transition-all cursor-pointer border-none ${activeModal === "delete"
+                      ? "bg-red-600 hover:bg-red-700 shadow-red-600/10 hover:shadow-lg hover:shadow-red-600/20"
                       : "bg-violet-600 hover:bg-violet-700 shadow-violet-600/10 hover:shadow-lg hover:shadow-violet-600/20"
-                  }`}
+                    }`}
                   disabled={isPending}
                 >
                   {getSubmitButtonLabel()}

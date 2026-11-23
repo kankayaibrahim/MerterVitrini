@@ -24,6 +24,7 @@ import {
   Bell,
   MessageCircle,
   Radar,
+  Terminal,
   LucideIcon
 } from "lucide-react";
 
@@ -76,6 +77,15 @@ export const ADMIN_NAVIGATION: NavigationGroup[] = [
         badge: "Yeni",
         badgeColor: "violet",
         description: "Yapay zeka botları vs Google taramaları, ChatGPT / arama ziyaretleri ve geliş kelimeleri"
+      },
+      {
+        id: "system-logs",
+        title: "Sistem Sağlığı & Loglar",
+        href: "/admin/system-logs",
+        icon: Terminal,
+        badge: "SRE",
+        badgeColor: "amber",
+        description: "Hata, uyarı, panic stacktrace, Nginx ve PostgreSQL log izleme & temizleme merkezi"
       }
     ]
   },

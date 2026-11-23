@@ -90,6 +90,8 @@ export interface Brand {
   name: string;
   slug?: string;
   alias_code?: string;
+  subdomain?: string;
+  subdomain_enabled?: boolean;
   company_type?: string;
   description?: string;
   website?: string;

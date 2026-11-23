@@ -1,4 +1,5 @@
 import { normalizeLangCode, pickLangText, SupportedLangCode } from "@/app/i18n";
+import { getValidStoreBearerToken, getValidStoreUser, type StoreUser } from "@/app/storeAuth";
 
 export interface SupplierAgent {
   id: string;
@@ -130,7 +131,21 @@ export function getOrInitCustomerChatIdentity(lang?: string): {
     };
   }
 
-  const token = localStorage.getItem("store_user_token");
+  const token = getValidStoreBearerToken() || localStorage.getItem("store_user_token");
+  const validUser = getValidStoreUser<StoreUser>();
+  if (validUser?.id) {
+    const fullName =
+      `${validUser.first_name || ""} ${validUser.last_name || ""}`.trim() ||
+      validUser.email ||
+      defaults.member;
+    return {
+      customerId: validUser.id,
+      customerName: fullName,
+      customerEmail: validUser.email || "",
+      customerPhone: validUser.phone || "",
+      token,
+    };
+  }
   const rawUser = localStorage.getItem("store_user_info");
   if (rawUser) {
     try {

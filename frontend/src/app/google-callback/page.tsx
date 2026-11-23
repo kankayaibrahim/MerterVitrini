@@ -19,6 +19,18 @@ import {
   isRealisticPhoneNumber,
   validateAndNormalizeRealisticPhone,
 } from "@/utils/phoneValidation";
+import {
+  clearStoreSession,
+  deleteSharedCookie,
+  readSharedCookie,
+  setStoreSession,
+} from "@/app/storeAuth";
+import {
+  ROOT_DOMAIN,
+  ROOT_ORIGIN,
+  extractSupplierSubdomainFromHost,
+  stripHostnamePort,
+} from "@/utils/subdomain";
 
 interface CallbackUserInfo {
   id?: string;
@@ -29,22 +41,50 @@ interface CallbackUserInfo {
   role?: string;
 }
 
+function isSafeRelativeReturnPath(raw: string): boolean {
+  return (
+    raw.startsWith("/") &&
+    !raw.startsWith("//") &&
+    !raw.startsWith("/\\") &&
+    !raw.startsWith("/google-callback")
+  );
+}
+
 function consumeSafeReturnToPath(): string {
   if (typeof window === "undefined") {
     return "/profile/";
   }
+  const cookieRaw = readSharedCookie("mv_auth_return_to");
+  deleteSharedCookie("mv_auth_return_to");
+  if (cookieRaw) {
+    const trimmedCookie = cookieRaw.trim();
+    if (isSafeRelativeReturnPath(trimmedCookie)) {
+      sessionStorage.removeItem("merter_auth_return_to");
+      return trimmedCookie;
+    }
+    try {
+      const parsed = new URL(trimmedCookie);
+      const host = parsed.hostname.toLowerCase();
+      if (
+        parsed.protocol === "https:" &&
+        (host === ROOT_DOMAIN || extractSupplierSubdomainFromHost(host) !== null) &&
+        !parsed.pathname.startsWith("/google-callback")
+      ) {
+        sessionStorage.removeItem("merter_auth_return_to");
+        return parsed.toString();
+      }
+    } catch {
+      // ignore invalid URL
+    }
+  }
+
   const raw = sessionStorage.getItem("merter_auth_return_to");
   sessionStorage.removeItem("merter_auth_return_to");
   if (!raw) {
     return "/profile/";
   }
   const trimmed = raw.trim();
-  if (
-    !trimmed.startsWith("/") ||
-    trimmed.startsWith("//") ||
-    trimmed.startsWith("/\\") ||
-    trimmed.startsWith("/google-callback")
-  ) {
+  if (!isSafeRelativeReturnPath(trimmed)) {
     return "/profile/";
   }
   return trimmed;
@@ -150,8 +190,7 @@ function GoogleCallbackHandler() {
           ((role === "" || role === "customer") && !isRealisticPhoneNumber(userPhone));
 
         if (needsPhoneGate) {
-          localStorage.removeItem("store_user_token");
-          localStorage.removeItem("store_user_info");
+          clearStoreSession(false);
           window.dispatchEvent(new Event("auth-change"));
           setPendingToken(data.token || "");
           setPendingUser(data.user || null);
@@ -159,16 +198,19 @@ function GoogleCallbackHandler() {
           return;
         }
 
-        // Save token & user to localStorage only after verified phone exists
-        localStorage.setItem("store_user_token", data.token || "");
-        localStorage.setItem("store_user_info", JSON.stringify(data.user));
+        // Save token & user after verified phone exists (syncs cross-subdomain cookie)
+        setStoreSession(data.token || "", data.user || {});
         window.dispatchEvent(new Event("auth-change"));
 
         setSuccess(true);
 
         const targetPath = consumeSafeReturnToPath();
         setTimeout(() => {
-          router.push(targetPath);
+          if (targetPath.startsWith("https://")) {
+            window.location.href = targetPath;
+          } else {
+            router.push(targetPath);
+          }
         }, 1500);
 
       } catch (err: unknown) {
@@ -181,7 +223,9 @@ function GoogleCallbackHandler() {
 
   const handleGoogleRetry = () => {
     if (typeof window !== "undefined") {
-      const origin = window.location.origin;
+      const host = stripHostnamePort(window.location.hostname);
+      const isProdDomain = host === ROOT_DOMAIN || host.endsWith(`.${ROOT_DOMAIN}`);
+      const origin = isProdDomain ? ROOT_ORIGIN : window.location.origin;
       const keycloakUrl = "https://auth.mertervitrini.com.tr";
       const realm = "merter";
       const clientId = "admin-client";
@@ -244,15 +288,18 @@ function GoogleCallbackHandler() {
       const updatedUser = pendingUser
         ? { ...pendingUser, phone: savedPhone, email_verified: true }
         : { phone: savedPhone, email_verified: true };
-      localStorage.setItem("store_user_token", pendingToken);
-      localStorage.setItem("store_user_info", JSON.stringify(updatedUser));
+      setStoreSession(pendingToken, updatedUser);
       window.dispatchEvent(new Event("auth-change"));
 
       setNeedsPhone(false);
       setSuccess(true);
       const targetPath = consumeSafeReturnToPath();
       setTimeout(() => {
-        router.push(targetPath);
+        if (targetPath.startsWith("https://")) {
+          window.location.href = targetPath;
+        } else {
+          router.push(targetPath);
+        }
       }, 1500);
     } catch (err: unknown) {
       setPhoneError((err as Error).message);

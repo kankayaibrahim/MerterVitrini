@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { Suspense, useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, X } from "lucide-react";
-import CatalogFilters from "@/components/admin/catalog/CatalogFilters";
+import CatalogFilters, {
+  AdminCatalogFilterState,
+  INITIAL_ADMIN_CATALOG_FILTERS,
+} from "@/components/admin/catalog/CatalogFilters";
 import SupplierBulkActionsBar from "@/components/admin/catalog/SupplierBulkActionsBar";
 import BulkActionConfirmModal, {
   ConfirmTone,
@@ -12,6 +16,7 @@ import ProductDetailModal from "@/components/admin/catalog/ProductDetailModal";
 import { useAdmin } from "@/context/AdminContext";
 import { Brand, Product } from "@/types/integration";
 import {
+  AdminProductFilterParams,
   BulkProductActionResult,
   BulkProductActionType,
   ProductStatusFilter,
@@ -129,7 +134,15 @@ function formatActionFeedbackMessage(res: BulkProductActionResult): string {
   return `${base}${imageNote} Vitrin önbelleği arka planda güncelleniyor.`;
 }
 
-export default function AdminCatalogProductsPage() {
+interface AdminCatalogProductsContentProps {
+  readonly initialCategory: string;
+  readonly initialStatus: ProductStatusFilter;
+}
+
+function AdminCatalogProductsContent({
+  initialCategory,
+  initialStatus,
+}: AdminCatalogProductsContentProps) {
   const {
     products,
     totalProductsCount,
@@ -145,10 +158,16 @@ export default function AdminCatalogProductsPage() {
     fetchWithConfig,
   } = useAdmin();
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBrandId, setSelectedBrandId] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState<ProductStatusFilter>("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [filters, setFilters] = useState<AdminCatalogFilterState>(() => ({
+    ...INITIAL_ADMIN_CATALOG_FILTERS,
+    categoryId: initialCategory,
+    status: initialStatus,
+  }));
+  const [debouncedText, setDebouncedText] = useState({
+    searchQuery: "",
+    minPrice: "",
+    maxPrice: "",
+  });
   const [offset, setOffset] = useState(0);
   const limit = 24;
 
@@ -163,35 +182,65 @@ export default function AdminCatalogProductsPage() {
   } | null>(null);
 
   const selectedSupplier = useMemo(
-    () => suppliers.find((s) => s.id === selectedBrandId) ?? null,
-    [suppliers, selectedBrandId]
+    () => suppliers.find((s) => s.id === filters.brandId) ?? null,
+    [suppliers, filters.brandId]
   );
 
-  // Load products whenever filters or pagination change
+  // Debounce text/numeric inputs while clearing immediately on reset
   useEffect(() => {
-    void loadProducts(
+    const isAllEmpty =
+      !filters.searchQuery.trim() &&
+      !filters.minPrice.trim() &&
+      !filters.maxPrice.trim();
+    const delayMs = isAllEmpty ? 0 : 300;
+    const timer = setTimeout(() => {
+      setDebouncedText({
+        searchQuery: filters.searchQuery,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
+      });
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [filters.searchQuery, filters.minPrice, filters.maxPrice]);
+
+  const activeRequestParams = useMemo<AdminProductFilterParams>(
+    () => ({
       limit,
       offset,
-      selectedCategory,
-      searchQuery,
-      selectedBrandId,
-      selectedStatus
-    );
-  }, [
-    loadProducts,
-    limit,
-    offset,
-    selectedCategory,
-    searchQuery,
-    selectedBrandId,
-    selectedStatus,
-  ]);
+      categoryId: filters.categoryId,
+      search: debouncedText.searchQuery,
+      brandId: filters.brandId,
+      status: filters.status,
+      currency: filters.currency,
+      minPrice: debouncedText.minPrice,
+      maxPrice: debouncedText.maxPrice,
+      priceStatus: filters.priceStatus,
+      stockStatus: filters.stockStatus,
+      hasImage: filters.hasImage,
+      gender: filters.gender,
+      season: filters.season,
+      source: filters.source,
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+      sortBy: filters.sortBy,
+    }),
+    [limit, offset, filters, debouncedText]
+  );
+
+  useEffect(() => {
+    void loadProducts(activeRequestParams);
+  }, [loadProducts, activeRequestParams]);
+
+  const handleUpdateFilters = (patch: Partial<AdminCatalogFilterState>) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+    setOffset(0);
+    if ("brandId" in patch || "status" in patch) {
+      setSelectedProductIds([]);
+    }
+  };
 
   const handleResetFilters = () => {
-    setSearchQuery("");
-    setSelectedBrandId("");
-    setSelectedStatus("");
-    setSelectedCategory("");
+    setFilters(INITIAL_ADMIN_CATALOG_FILTERS);
     setOffset(0);
     setSelectedProductIds([]);
   };
@@ -303,14 +352,7 @@ export default function AdminCatalogProductsPage() {
       if (nextOffset !== offset) {
         setOffset(0);
       } else {
-        await loadProducts(
-          limit,
-          offset,
-          selectedCategory,
-          searchQuery,
-          selectedBrandId,
-          selectedStatus
-        );
+        await loadProducts(activeRequestParams);
       }
 
       setConfirmModal(null);
@@ -332,28 +374,8 @@ export default function AdminCatalogProductsPage() {
     <div className="flex flex-col gap-6 animate-in fade-in duration-200">
       {/* Top Filter and Search Bar */}
       <CatalogFilters
-        searchQuery={searchQuery}
-        setSearchQuery={(q) => {
-          setSearchQuery(q);
-          setOffset(0);
-        }}
-        selectedBrandId={selectedBrandId}
-        setSelectedBrandId={(brandId) => {
-          setSelectedBrandId(brandId);
-          setOffset(0);
-          setSelectedProductIds([]);
-        }}
-        selectedStatus={selectedStatus}
-        setSelectedStatus={(status) => {
-          setSelectedStatus(status);
-          setOffset(0);
-          setSelectedProductIds([]);
-        }}
-        selectedCategory={selectedCategory}
-        setSelectedCategory={(cat) => {
-          setSelectedCategory(cat);
-          setOffset(0);
-        }}
+        filters={filters}
+        onUpdateFilters={handleUpdateFilters}
         suppliers={suppliers}
         flatCategories={flatCategories}
         onReset={handleResetFilters}
@@ -442,5 +464,29 @@ export default function AdminCatalogProductsPage() {
         />
       )}
     </div>
+  );
+}
+
+function ProductsSearchParamsBridge() {
+  const searchParams = useSearchParams();
+  const initialCategory = searchParams.get("category_id") || "";
+  const statusRaw = searchParams.get("status") || "";
+  const initialStatus: ProductStatusFilter =
+    statusRaw === "active" || statusRaw === "inactive" ? statusRaw : "";
+
+  return (
+    <AdminCatalogProductsContent
+      key={`${initialCategory}|${initialStatus}`}
+      initialCategory={initialCategory}
+      initialStatus={initialStatus}
+    />
+  );
+}
+
+export default function AdminCatalogProductsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProductsSearchParamsBridge />
+    </Suspense>
   );
 }

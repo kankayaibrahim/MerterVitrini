@@ -1,5 +1,6 @@
 import React from "react";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import type { Brand } from "@/types/store";
 import {
@@ -16,6 +17,7 @@ import {
   fetchSsrCategories,
 } from "@/utils/seoHelpers";
 import SupplierEditorialProfileClient from "./SupplierEditorialProfileClient";
+import { getSupplierSubdomainUrl } from "@/utils/subdomain";
 
 interface SupplierEditorialPageProps {
   readonly params: Promise<{ slug: string }>;
@@ -75,7 +77,11 @@ export async function generateMetadata({
 
   const displayName = brand.name || decoded.toUpperCase();
   const canonicalSlug = encodeURIComponent(brand.slug || decoded);
-  const alternates = buildQueryLangAlternates(`/ureticiler/${canonicalSlug}/tanitim`, lang);
+  const subdomainUrl = getSupplierSubdomainUrl(brand);
+  const alternates = buildQueryLangAlternates(
+    subdomainUrl ? `${subdomainUrl}/tanitim` : `/ureticiler/${canonicalSlug}/tanitim`,
+    lang
+  );
   const title = stripBrandTitleSuffix(buildEditorialTitle(displayName, lang));
   const description = buildEditorialDesc(displayName, lang);
 
@@ -101,9 +107,14 @@ export default async function SupplierEditorialPage({
   params,
   searchParams,
 }: SupplierEditorialPageProps) {
-  const [{ slug }, sParams] = await Promise.all([params, searchParams]);
+  const [{ slug }, sParams, reqHeaders] = await Promise.all([
+    params,
+    searchParams,
+    headers(),
+  ]);
   const decoded = decodeURIComponent(slug);
   const lang = normalizeSeoLang(sParams?.lang, "tr");
+  const tenantSubdomain = reqHeaders.get("x-mv-tenant-subdomain") || "";
 
   const [brand, categories] = await Promise.all([
     ssrStoreFetch<Brand>(`/brands/${encodeURIComponent(decoded)}`, 300),
@@ -122,9 +133,16 @@ export default async function SupplierEditorialPage({
     : { products: [], total: 0 };
 
   const canonicalSlug = encodeURIComponent(brand?.slug || decoded);
-  const alternates = buildQueryLangAlternates(`/ureticiler/${canonicalSlug}/tanitim`, lang);
+  const subdomainUrl = getSupplierSubdomainUrl(brand);
+  const alternates = buildQueryLangAlternates(
+    subdomainUrl ? `${subdomainUrl}/tanitim` : `/ureticiler/${canonicalSlug}/tanitim`,
+    lang
+  );
   const seoCopy = GLOBAL_B2B_SEO_MATRIX[lang];
   const langSuffix = lang === "tr" ? "" : `?lang=${lang}`;
+  const brandShowcaseUrl = subdomainUrl
+    ? `${subdomainUrl}${langSuffix}`
+    : `${SITE_ORIGIN}/ureticiler/${canonicalSlug}${langSuffix}`;
 
   const editorialJsonLd = brand
     ? {
@@ -148,7 +166,7 @@ export default async function SupplierEditorialPage({
             about: {
               "@type": "Organization",
               name: brand.name,
-              url: `${SITE_ORIGIN}/ureticiler/${canonicalSlug}${langSuffix}`,
+              url: brandShowcaseUrl,
             },
           },
           {
@@ -171,7 +189,7 @@ export default async function SupplierEditorialPage({
                 "@type": "ListItem",
                 position: 3,
                 name: brand.name,
-                item: `${SITE_ORIGIN}/ureticiler/${canonicalSlug}${langSuffix}`,
+                item: brandShowcaseUrl,
               },
               {
                 "@type": "ListItem",
@@ -196,6 +214,7 @@ export default async function SupplierEditorialPage({
       <SupplierEditorialProfileClient
         key={`${decoded}-${lang}`}
         slug={decoded}
+        tenantSubdomain={tenantSubdomain}
         initialLang={lang}
         initialBrand={brand}
         initialFeaturedProducts={productsPayload.products}

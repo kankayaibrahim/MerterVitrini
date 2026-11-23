@@ -37,6 +37,55 @@ interface ProductGridProps {
   onToggleSelectAllPage?: () => void;
 }
 
+function resolveCurrencySymbol(currency?: string): string {
+  const upper = (currency || "TRY").toUpperCase();
+  if (upper === "USD") return "$";
+  if (upper === "EUR") return "€";
+  if (upper === "GBP") return "£";
+  return "₺";
+}
+
+function formatAdminPrice(amount: number, currency?: string): string {
+  const formatted = amount.toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${formatted} ${resolveCurrencySymbol(currency)}`;
+}
+
+function resolveProductPricingSummary(product: Product): {
+  effectivePriceLabel: string;
+  originalPriceLabel?: string;
+  hasPrice: boolean;
+} {
+  const basePrice = typeof product.price === "number" ? product.price : 0;
+  const discountPrice =
+    typeof product.discounted_price === "number" ? product.discounted_price : 0;
+  const hasDiscount = discountPrice > 0 && basePrice > 0 && discountPrice < basePrice;
+  const effectivePrice = hasDiscount ? discountPrice : basePrice;
+
+  if (effectivePrice <= 0) {
+    return {
+      effectivePriceLabel: "Fiyatsız",
+      hasPrice: false,
+    };
+  }
+
+  return {
+    effectivePriceLabel: formatAdminPrice(effectivePrice, product.currency),
+    originalPriceLabel: hasDiscount
+      ? formatAdminPrice(basePrice, product.currency)
+      : undefined,
+    hasPrice: true,
+  };
+}
+
+function resolveCardStockBadgeClass(stock: number): string {
+  if (stock <= 0) return "bg-rose-50 text-rose-700";
+  if (stock <= 10) return "bg-amber-50 text-amber-800";
+  return "bg-zinc-100 text-zinc-700";
+}
+
 function ProductCoverThumb({
   imageUrl,
   title,
@@ -202,6 +251,34 @@ export default function ProductGrid({
                   >
                     {product.title}
                   </h4>
+
+                  {(() => {
+                    const pricing = resolveProductPricingSummary(product);
+                    const unitStock = typeof product.stock === "number" ? product.stock : 0;
+                    return (
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <div className="flex items-baseline gap-1.5">
+                          <span
+                            className={`text-xs font-extrabold ${
+                              pricing.hasPrice ? "text-zinc-900" : "text-amber-700"
+                            }`}
+                          >
+                            {pricing.effectivePriceLabel}
+                          </span>
+                          {pricing.originalPriceLabel && (
+                            <span className="text-[10px] text-zinc-400 line-through">
+                              {pricing.originalPriceLabel}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${resolveCardStockBadgeClass(unitStock)}`}
+                        >
+                          Stok: {unitStock.toLocaleString("tr-TR")}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   <div className="mt-auto border-t border-zinc-100 pt-3 flex items-center justify-between text-xs text-zinc-500 font-medium">
                     <span>

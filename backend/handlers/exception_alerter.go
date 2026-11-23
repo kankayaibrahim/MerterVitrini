@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -126,9 +128,103 @@ func StartExceptionAlertMonitor(cfg *config.Config) {
 		})
 		defaultExceptionMonitor = mon
 		logger.RegisterErrorHook(func(severity, source, message, stack string) {
+			persistSystemExceptionAsync(severity, source, message, stack)
 			mon.Observe(severity, source, message, stack)
 		})
 		log.Println("[EXCEPTION ALERTER] Parametric error & 5xx burst email monitor active.")
+	})
+}
+
+// ResetMemoryRing clears the in-memory exception sliding window and recent ring buffer.
+func (m *ExceptionAlertMonitor) ResetMemoryRing() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.windowEvents = nil
+	m.recentRing = nil
+	m.mu.Unlock()
+}
+
+// ResetDefaultExceptionMonitorRing clears the singleton monitor ring buffer when admin clears exceptions.
+func ResetDefaultExceptionMonitorRing() {
+	if defaultExceptionMonitor != nil {
+		defaultExceptionMonitor.ResetMemoryRing()
+	}
+}
+
+func computeExceptionFingerprint(severity, source, message string) string {
+	normMsg := strings.TrimSpace(message)
+	if len(normMsg) > 160 {
+		normMsg = normMsg[:160]
+	}
+	sum := sha256.Sum256([]byte(strings.ToLower(severity + "|" + strings.TrimSpace(source) + "|" + normMsg)))
+	return hex.EncodeToString(sum[:16])
+}
+
+func persistSystemExceptionAsync(severity, source, message, stack string) {
+	if db.Pool == nil {
+		return
+	}
+	if strings.Contains(message, "[SYSTEM LOGS]") || strings.Contains(source, "[SYSTEM LOGS]") {
+		return
+	}
+	sev := strings.ToLower(strings.TrimSpace(severity))
+	if sev == "" {
+		sev = "error"
+	}
+	src := strings.TrimSpace(source)
+	if src == "" {
+		src = "backend"
+	}
+	if len(src) > 120 {
+		src = src[:120]
+	}
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		return
+	}
+	if len(msg) > 4000 {
+		msg = msg[:4000]
+	}
+	stackStr := strings.TrimSpace(stack)
+	if len(stackStr) > 16000 {
+		stackStr = stackStr[:16000]
+	}
+	fp := computeExceptionFingerprint(sev, src, msg)
+
+	safe.Go("Persist System Exception", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		tag, err := db.Pool.Exec(ctx, `
+			WITH latest AS (
+				SELECT id
+				FROM identity.system_exception_logs
+				WHERE fingerprint = $1
+				  AND is_resolved = false
+				  AND last_seen_at >= NOW() - INTERVAL '24 hours'
+				ORDER BY last_seen_at DESC
+				LIMIT 1
+			)
+			UPDATE identity.system_exception_logs e
+			SET occurrence_count = e.occurrence_count + 1,
+			    last_seen_at = NOW(),
+			    message = $2,
+			    stack_trace = CASE WHEN $3 <> '' THEN $3 ELSE e.stack_trace END
+			FROM latest
+			WHERE e.id = latest.id
+		`, fp, msg, stackStr)
+		if err != nil {
+			return
+		}
+		if tag.RowsAffected() == 0 {
+			_, _ = db.Pool.Exec(ctx, `
+				INSERT INTO identity.system_exception_logs (
+					severity, source, message, stack_trace, fingerprint
+				) VALUES ($1, $2, $3, $4, $5)
+			`, sev, src, msg, stackStr, fp)
+		}
 	})
 }
 

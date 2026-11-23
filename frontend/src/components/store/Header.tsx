@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { Search, ShoppingBag, Heart, User, ChevronDown, Menu, Smartphone } from "lucide-react";
 import {
@@ -17,15 +17,19 @@ import { Category } from "@/types/store";
 import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/app/utils";
 import {
-  getValidStoreUser,
-  StoreUser,
+  clearStoreSession,
   endCustomerImpersonationSession,
+  getValidStoreUser,
   isStoreSessionImpersonated,
+  StoreUser,
+  writeSharedCookie,
 } from "@/app/storeAuth";
+import { ROOT_ORIGIN, isSupplierSubdomainHostname } from "@/utils/subdomain";
 import { clearStoreCartOnLogout, pullAndReconcileStoreCart } from "@/utils/cartSync";
 import ImpersonationBanner from "./ImpersonationBanner";
 import AuthModal from "./AuthModal";
 import WishlistDrawer from "./WishlistDrawer";
+import CustomerNotificationBell from "./CustomerNotificationBell";
 import { useWishlistStore } from "@/store/useWishlistStore";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
 
@@ -76,6 +80,8 @@ interface HeaderTexts {
   verifyNow: string;
   newArrivals: string;
   last7Days: string;
+  favoriteSuppliers: string;
+  notifications: string;
 }
 
 const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
@@ -96,6 +102,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     verifyNow: "Doğrula",
     newArrivals: "YENİ ÜRÜNLER",
     last7Days: "Son 7 Gün",
+    favoriteSuppliers: "Favori Tedarikçilerim",
+    notifications: "Bildirimlerim",
   },
   en: {
     manufacturers: "MANUFACTURERS",
@@ -114,6 +122,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     verifyNow: "Verify",
     newArrivals: "NEW ARRIVALS",
     last7Days: "Last 7 Days",
+    favoriteSuppliers: "Favorite Suppliers",
+    notifications: "Notifications",
   },
   ru: {
     manufacturers: "ФАБРИКИ",
@@ -132,6 +142,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     verifyNow: "Подтвердить",
     newArrivals: "НОВИНКИ",
     last7Days: "За 7 дней",
+    favoriteSuppliers: "Избранные поставщики",
+    notifications: "Уведомления",
   },
   ar: {
     manufacturers: "المصنّعون",
@@ -150,6 +162,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     verifyNow: "تأكيد",
     newArrivals: "وصل حديثاً",
     last7Days: "آخر 7 أيام",
+    favoriteSuppliers: "الموردون المفضلون",
+    notifications: "الإشعارات",
   },
   de: {
     manufacturers: "HERSTELLER",
@@ -168,6 +182,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     verifyNow: "Bestätigen",
     newArrivals: "NEUHEITEN",
     last7Days: "Letzte 7 Tage",
+    favoriteSuppliers: "Favorisierte Hersteller",
+    notifications: "Benachrichtigungen",
   },
   fr: {
     manufacturers: "FABRICANTS",
@@ -186,6 +202,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     verifyNow: "Vérifier",
     newArrivals: "NOUVEAUTÉS",
     last7Days: "7 derniers jours",
+    favoriteSuppliers: "Fournisseurs favoris",
+    notifications: "Notifications",
   },
   pl: {
     manufacturers: "PRODUCENCI",
@@ -204,6 +222,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     verifyNow: "Zweryfikuj",
     newArrivals: "NOWOŚCI",
     last7Days: "Ostatnie 7 dni",
+    favoriteSuppliers: "Ulubieni dostawcy",
+    notifications: "Powiadomienia",
   },
   bg: {
     manufacturers: "ПРОИЗВОДИТЕЛИ",
@@ -222,6 +242,8 @@ const HEADER_TEXTS: Record<SupportedLangCode, HeaderTexts> = {
     verifyNow: "Потвърди",
     newArrivals: "НОВИ ПРОДУКТИ",
     last7Days: "Последните 7 дни",
+    favoriteSuppliers: "Любими доставчици",
+    notifications: "Известия",
   },
 };
 
@@ -958,6 +980,11 @@ export default function Header({
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const isSubdomainHost = useSyncExternalStore(
+    () => () => {},
+    () => isSupplierSubdomainHostname(window.location.hostname),
+    () => false
+  );
 
   const [activeLanguages, setActiveLanguages] = useState<LanguageItem[]>(languages);
   const [user, setUser] = useState<StoreUser | null>(null);
@@ -1040,8 +1067,7 @@ export default function Header({
       }
 
       clearStoreCartOnLogout();
-      localStorage.removeItem("store_user_token");
-      localStorage.removeItem("store_user_info");
+      clearStoreSession(true);
       setIsUserMenuOpen(false);
       window.dispatchEvent(new Event("auth-change"));
 
@@ -1112,6 +1138,7 @@ export default function Header({
     const currentSearch = typeof window !== "undefined" ? window.location.search : "";
     if (typeof window !== "undefined") {
       localStorage.setItem("preferred_lang", newCode);
+      writeSharedCookie("mv_pref_lang", newCode, 30 * 86400);
     }
     setIsLangOpen(false);
     setCurrentPage(1);
@@ -1185,17 +1212,31 @@ export default function Header({
 
           {/* Center Column: Logo */}
           <div className="sm:col-span-1 flex items-center justify-between sm:justify-center w-full">
-            <Link
-              href={lang && lang !== "en" ? `/${getCategoryPrefix()}` : "/"}
-              className="flex flex-col no-underline group active:scale-[0.98] transition-transform duration-100 shrink-0 text-center sm:mx-auto"
-            >
-              <span className="font-serif font-extrabold text-[20px] sm:text-[30px] tracking-[2px] uppercase text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
-                {t("brand_title", lang) || "Merter Vitrini"}
-              </span>
-              <span className="text-[7.5px] sm:text-[9px] uppercase tracking-[3.5px] text-sonic-silver -mt-0.5 font-bold">
-                {t("brand_subtitle", lang) || "Toptan Showroom"}
-              </span>
-            </Link>
+            {isSubdomainHost ? (
+              <a
+                href={`${ROOT_ORIGIN}${lang && lang !== "en" ? `/${getCategoryPrefix()}` : "/"}`}
+                className="flex flex-col no-underline group active:scale-[0.98] transition-transform duration-100 shrink-0 text-center sm:mx-auto"
+              >
+                <span className="font-serif font-extrabold text-[20px] sm:text-[30px] tracking-[2px] uppercase text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
+                  {t("brand_title", lang) || "Merter Vitrini"}
+                </span>
+                <span className="text-[7.5px] sm:text-[9px] uppercase tracking-[3.5px] text-sonic-silver -mt-0.5 font-bold">
+                  {t("brand_subtitle", lang) || "Toptan Showroom"}
+                </span>
+              </a>
+            ) : (
+              <Link
+                href={lang && lang !== "en" ? `/${getCategoryPrefix()}` : "/"}
+                className="flex flex-col no-underline group active:scale-[0.98] transition-transform duration-100 shrink-0 text-center sm:mx-auto"
+              >
+                <span className="font-serif font-extrabold text-[20px] sm:text-[30px] tracking-[2px] uppercase text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
+                  {t("brand_title", lang) || "Merter Vitrini"}
+                </span>
+                <span className="text-[7.5px] sm:text-[9px] uppercase tracking-[3.5px] text-sonic-silver -mt-0.5 font-bold">
+                  {t("brand_subtitle", lang) || "Toptan Showroom"}
+                </span>
+              </Link>
+            )}
 
             {/* Mobile Actions */}
             <div className="flex sm:hidden items-center gap-1.5 text-eerie-black shrink-0">
@@ -1292,6 +1333,9 @@ export default function Header({
                 )}
               </div>
 
+              {/* Notifications Bell (Authenticated Customers) */}
+              {user && <CustomerNotificationBell lang={lang} compact />}
+
               {/* Wishlist Heart Icon */}
               <button
                 type="button"
@@ -1368,6 +1412,38 @@ export default function Header({
                         className="w-full text-left px-3 py-2.5 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
                       >
                         {t("my_profile", lang)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          window.dispatchEvent(
+                            new CustomEvent("merter-profile-tab", { detail: { tab: "favorites" } })
+                          );
+                          router.push(
+                            `/profile?tab=favorites${lang !== "tr" ? `&lang=${lang}` : ""}`
+                          );
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
+                      >
+                        {ui.favoriteSuppliers}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          window.dispatchEvent(
+                            new CustomEvent("merter-profile-tab", {
+                              detail: { tab: "notifications" },
+                            })
+                          );
+                          router.push(
+                            `/profile?tab=notifications${lang !== "tr" ? `&lang=${lang}` : ""}`
+                          );
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
+                      >
+                        {ui.notifications}
                       </button>
                       <button
                         type="button"
@@ -1475,6 +1551,40 @@ export default function Header({
                         </button>
                         <button
                           type="button"
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            window.dispatchEvent(
+                              new CustomEvent("merter-profile-tab", {
+                                detail: { tab: "favorites" },
+                              })
+                            );
+                            router.push(
+                              `/profile?tab=favorites${lang !== "tr" ? `&lang=${lang}` : ""}`
+                            );
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
+                        >
+                          {ui.favoriteSuppliers}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            window.dispatchEvent(
+                              new CustomEvent("merter-profile-tab", {
+                                detail: { tab: "notifications" },
+                              })
+                            );
+                            router.push(
+                              `/profile?tab=notifications${lang !== "tr" ? `&lang=${lang}` : ""}`
+                            );
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
+                        >
+                          {ui.notifications}
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleLogout}
                           className="w-full text-left px-4 py-2.5 border-t border-cultured text-xs font-bold text-red-500 hover:bg-red-50 transition-colors border-none bg-transparent cursor-pointer"
                         >
@@ -1498,6 +1608,9 @@ export default function Header({
                 </button>
               )}
             </div>
+
+            {/* Notifications Bell Desktop */}
+            {user && <CustomerNotificationBell lang={lang} />}
 
             {/* Wishlist Heart Icon */}
             <button

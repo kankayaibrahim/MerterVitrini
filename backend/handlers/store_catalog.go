@@ -830,6 +830,7 @@ func fetchCatalogBrandProfiles(ctx context.Context, products []*models.Product) 
 	}
 	brandRows, err := db.Pool.Query(ctx, `
 		SELECT b.id, b.brand_name AS name, b.slug, b.alias_code,
+		       COALESCE(b.subdomain, ''), COALESCE(b.subdomain_enabled, true),
 		       COALESCE(b.company_type, 'uretici_toptanci'),
 		       COALESCE(b.description, ''),
 		       b.website, b.phone,
@@ -867,6 +868,7 @@ func fetchCatalogBrandProfiles(ctx context.Context, products []*models.Product) 
 		var b models.Brand
 		if err := brandRows.Scan(
 			&b.ID, &b.Name, &b.Slug, &b.AliasCode,
+			&b.Subdomain, &b.SubdomainEnabled,
 			&b.CompanyType, &b.Description,
 			&b.Website, &b.Phone, &b.LandlinePhone,
 			&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
@@ -902,6 +904,7 @@ func fetchProductBase(ctx context.Context, id string) (*models.Product, error) {
 		       p.is_active, 
 		       p.created_at, p.updated_at, b.brand_name as brand_name, c.title as category_title,
 		       b.id, b.brand_name, b.slug, b.alias_code,
+		       COALESCE(b.subdomain, ''), COALESCE(b.subdomain_enabled, true),
 		       COALESCE(b.company_type, 'uretici_toptanci'),
 		       COALESCE(b.description, ''),
 		       b.website, b.phone,
@@ -947,6 +950,7 @@ func fetchProductBase(ctx context.Context, id string) (*models.Product, error) {
 		&p.IsActive,
 		&p.CreatedAt, &p.UpdatedAt, &p.BrandName, &p.CategoryTitle,
 		&b.ID, &b.Name, &b.Slug, &b.AliasCode,
+		&b.Subdomain, &b.SubdomainEnabled,
 		&b.CompanyType, &b.Description,
 		&b.Website, &b.Phone, &b.LandlinePhone,
 		&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
@@ -1290,6 +1294,7 @@ func (h *StoreCatalogHandler) ListBrands(w http.ResponseWriter, r *http.Request)
 
 	query := `
 		SELECT b.id, b.brand_name AS name, b.slug, b.alias_code,
+		       COALESCE(b.subdomain, ''), COALESCE(b.subdomain_enabled, true),
 		       COALESCE(b.company_type, 'uretici_toptanci'),
 		       COALESCE(b.description, ''),
 		       COALESCE(b.description_translations, '{}'::jsonb),
@@ -1336,6 +1341,7 @@ func (h *StoreCatalogHandler) ListBrands(w http.ResponseWriter, r *http.Request)
 		var addressesBytes, descTransBytes []byte
 		err := rows.Scan(
 			&b.ID, &b.Name, &b.Slug, &b.AliasCode,
+			&b.Subdomain, &b.SubdomainEnabled,
 			&b.CompanyType, &b.Description, &descTransBytes,
 			&b.Website, &b.Phone, &b.LandlinePhone,
 			&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
@@ -1376,8 +1382,15 @@ func (h *StoreCatalogHandler) GetBrandBySlug(w http.ResponseWriter, r *http.Requ
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
+	lookupMode := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("lookup")))
+	whereClause := "b.is_active = true AND (b.slug = $1 OR b.id::text = $1 OR (COALESCE(b.subdomain_enabled, false) = true AND COALESCE(b.subdomain, '') <> '' AND LOWER(b.subdomain) = LOWER($1)))"
+	if lookupMode == "subdomain" {
+		whereClause = "b.is_active = true AND COALESCE(b.subdomain_enabled, false) = true AND COALESCE(b.subdomain, '') <> '' AND LOWER(b.subdomain) = LOWER($1)"
+	}
+
 	query := `
 		SELECT b.id, b.brand_name AS name, b.slug, b.alias_code,
+		       COALESCE(b.subdomain, ''), COALESCE(b.subdomain_enabled, true),
 		       COALESCE(b.company_type, 'uretici_toptanci'),
 		       COALESCE(b.description, ''),
 		       COALESCE(b.description_translations, '{}'::jsonb),
@@ -1406,13 +1419,14 @@ func (h *StoreCatalogHandler) GetBrandBySlug(w http.ResponseWriter, r *http.Requ
 		       (SELECT COUNT(*)::int FROM catalog.products p WHERE p.brand_id = b.id AND p.is_active = true) AS active_product_count,
 		       b.addresses, b.is_active, b.created_at, b.updated_at
 		FROM catalog.brands b
-		WHERE b.is_active = true AND (b.slug = $1 OR b.id::text = $1)
+		WHERE ` + whereClause + `
 		LIMIT 1`
 
 	var b models.Brand
 	var addressesBytes, descTransBytes []byte
 	err := db.Pool.QueryRow(ctx, query, slugOrID).Scan(
 		&b.ID, &b.Name, &b.Slug, &b.AliasCode,
+		&b.Subdomain, &b.SubdomainEnabled,
 		&b.CompanyType, &b.Description, &descTransBytes,
 		&b.Website, &b.Phone, &b.LandlinePhone,
 		&b.WhatsappPhone, &b.PublicEmail, &b.InstagramHandle,
@@ -1439,6 +1453,101 @@ func (h *StoreCatalogHandler) GetBrandBySlug(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	json.NewEncoder(w).Encode(b)
+}
+
+// ResolveTenantBySubdomain resolves an active supplier subdomain without firing profile-view analytics.
+func (h *StoreCatalogHandler) ResolveTenantBySubdomain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	rawSub := strings.ToLower(strings.TrimSpace(r.PathValue("subdomain")))
+	normalizedSub, valErr := NormalizeAndValidateBrandSubdomain(rawSub)
+	if normalizedSub == "" || valErr != nil {
+		httpx.Error(w, http.StatusNotFound, "Tenant not found")
+		return
+	}
+
+	if db.Pool == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "Database unavailable")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	var id, name, slug, resolvedSub string
+	var subEnabled bool
+	err := db.Pool.QueryRow(ctx, `
+		SELECT b.id::text, b.brand_name, COALESCE(NULLIF(b.slug, ''), b.id::text),
+		       COALESCE(b.subdomain, ''), COALESCE(b.subdomain_enabled, false)
+		FROM catalog.brands b
+		WHERE b.is_active = true
+		  AND COALESCE(b.subdomain_enabled, false) = true
+		  AND COALESCE(b.subdomain, '') <> ''
+		  AND LOWER(b.subdomain) = LOWER($1)
+		LIMIT 1
+	`, normalizedSub).Scan(&id, &name, &slug, &resolvedSub, &subEnabled)
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "Tenant not found")
+		return
+	}
+
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"id":                id,
+		"name":              name,
+		"slug":              slug,
+		"subdomain":         resolvedSub,
+		"subdomain_enabled": subEnabled,
+	})
+}
+
+// ResolveTenantBySlug resolves an active supplier brand by slug or ID for root->subdomain 301 redirects.
+func (h *StoreCatalogHandler) ResolveTenantBySlug(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	rawSlug := strings.TrimSpace(r.PathValue("slug"))
+	if rawSlug == "" || strings.HasPrefix(rawSlug, "__") {
+		httpx.Error(w, http.StatusNotFound, "Tenant not found")
+		return
+	}
+
+	if db.Pool == nil {
+		httpx.Error(w, http.StatusServiceUnavailable, "Database unavailable")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	var id, name, slug, resolvedSub string
+	var subEnabled bool
+	err := db.Pool.QueryRow(ctx, `
+		SELECT b.id::text, b.brand_name, COALESCE(NULLIF(b.slug, ''), b.id::text),
+		       COALESCE(b.subdomain, ''), COALESCE(b.subdomain_enabled, false)
+		FROM catalog.brands b
+		WHERE b.is_active = true
+		  AND (b.slug = $1 OR b.id::text = $1)
+		LIMIT 1
+	`, rawSlug).Scan(&id, &name, &slug, &resolvedSub, &subEnabled)
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "Tenant not found")
+		return
+	}
+
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"id":                id,
+		"name":              name,
+		"slug":              slug,
+		"subdomain":         resolvedSub,
+		"subdomain_enabled": subEnabled,
+	})
 }
 
 // ListAttributes queries the active distinct product attributes for sidebar filtering

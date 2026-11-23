@@ -24,9 +24,9 @@ import {
 } from "@/services/http-client";
 import {
   AdminApiService,
+  AdminProductFilterParams,
   BulkProductActionResult,
   BulkProductActionType,
-  ProductStatusFilter,
   StoreSettingsDTO,
   normalizeCanonicalAdminUrl,
 } from "@/services/admin-api.service";
@@ -92,14 +92,7 @@ export interface AdminCatalogSlice {
   setTotalProductsCount: React.Dispatch<React.SetStateAction<number>>;
   loadingProducts: boolean;
   setLoadingProducts: React.Dispatch<React.SetStateAction<boolean>>;
-  loadProducts: (
-    limit?: number,
-    offset?: number,
-    categoryId?: string,
-    search?: string,
-    brandId?: string,
-    status?: ProductStatusFilter
-  ) => Promise<void>;
+  loadProducts: (params?: AdminProductFilterParams) => Promise<void>;
   activateSupplierProducts: (brandId: string) => Promise<BulkProductActionResult>;
   deactivateSupplierProducts: (brandId: string) => Promise<BulkProductActionResult>;
   deleteSupplierProducts: (
@@ -352,23 +345,13 @@ export function AdminProvider({
   }, [adminService]);
 
   const loadProducts = useCallback(
-    async (
-      limit = 24,
-      offset = 0,
-      categoryId = "",
-      search = "",
-      brandId = "",
-      status: ProductStatusFilter = ""
-    ) => {
+    async (params: AdminProductFilterParams = {}) => {
       setLoadingProducts(true);
       try {
         const page = await adminService.listProducts({
-          limit,
-          offset,
-          categoryId,
-          search,
-          brandId,
-          status,
+          limit: params.limit ?? 24,
+          offset: params.offset ?? 0,
+          ...params,
         });
         setProducts(page.products);
         setTotalProductsCount(page.total);

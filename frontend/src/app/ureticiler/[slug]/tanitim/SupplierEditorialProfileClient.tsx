@@ -46,6 +46,10 @@ import {
   formatBrandWebsiteLabel,
   formatBrandWebsiteUrl,
 } from "@/utils/brandContactHelpers";
+import SupplierSubdomainBar, {
+  SupplierSubdomainPill,
+} from "@/components/store/SupplierSubdomainBar";
+import { ROOT_ORIGIN, getSupplierSubdomainUrl } from "@/utils/subdomain";
 
 interface EditorialCopy {
   readonly backToDirectory: string;
@@ -1030,6 +1034,7 @@ interface SidebarIdentityCardProps {
   readonly isMemberLoggedIn: boolean;
   readonly copy: EditorialCopy;
   readonly langSuffix: string;
+  readonly isSubdomainMode: boolean;
   readonly onOpenChat: () => void;
 }
 
@@ -1040,6 +1045,7 @@ function SidebarIdentityCard({
   isMemberLoggedIn,
   copy,
   langSuffix,
+  isSubdomainMode,
   onOpenChat,
 }: SidebarIdentityCardProps) {
   const waRaw = brand.whatsapp_phone || brand.phone || "";
@@ -1049,6 +1055,13 @@ function SidebarIdentityCard({
   const waUrl = waDigits
     ? `https://wa.me/${waDigits}?text=${encodeURIComponent(waMessage)}`
     : "";
+  const showcaseHref = isSubdomainMode
+    ? `/${langSuffix}`
+    : `/ureticiler/${encodeURIComponent(slug)}${langSuffix}`;
+  const rfqHref = isSubdomainMode
+    ? `${ROOT_ORIGIN}/alim-talepleri${langSuffix}`
+    : `/alim-talepleri${langSuffix}`;
+  const subdomainUrl = !isSubdomainMode ? getSupplierSubdomainUrl(brand) : null;
 
   return (
     <aside className="space-y-5 lg:sticky lg:top-24">
@@ -1170,8 +1183,14 @@ function SidebarIdentityCard({
         )}
 
         <div className="space-y-2.5 pt-2">
+          {subdomainUrl && (
+            <div className="pb-1">
+              <SupplierSubdomainPill subdomainUrl={subdomainUrl} />
+            </div>
+          )}
+
           <Link
-            href={`/ureticiler/${encodeURIComponent(slug)}${langSuffix}`}
+            href={showcaseHref}
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold no-underline transition-colors shadow-xs"
           >
             <Package size={15} />
@@ -1216,13 +1235,23 @@ function SidebarIdentityCard({
             </a>
           )}
 
-          <Link
-            href={`/alim-talepleri${langSuffix}`}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold no-underline transition-colors"
-          >
-            <FileText size={14} />
-            <span>{copy.postRfqBtn}</span>
-          </Link>
+          {isSubdomainMode ? (
+            <a
+              href={rfqHref}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold no-underline transition-colors"
+            >
+              <FileText size={14} />
+              <span>{copy.postRfqBtn}</span>
+            </a>
+          ) : (
+            <Link
+              href={rfqHref}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold no-underline transition-colors"
+            >
+              <FileText size={14} />
+              <span>{copy.postRfqBtn}</span>
+            </Link>
+          )}
         </div>
       </div>
     </aside>
@@ -1231,6 +1260,7 @@ function SidebarIdentityCard({
 
 interface SupplierEditorialProfileClientProps {
   readonly slug: string;
+  readonly tenantSubdomain?: string;
   readonly initialLang?: SupportedSeoLang;
   readonly initialBrand?: Brand | null;
   readonly initialFeaturedProducts?: readonly Product[];
@@ -1240,12 +1270,14 @@ interface SupplierEditorialProfileClientProps {
 
 export default function SupplierEditorialProfileClient({
   slug,
+  tenantSubdomain = "",
   initialLang = "tr",
   initialBrand = null,
   initialFeaturedProducts = [],
   initialTotalProducts = 0,
   initialCategories = [],
 }: SupplierEditorialProfileClientProps) {
+  const isSubdomainMode = Boolean(tenantSubdomain);
   const router = useRouter();
   const isMemberLoggedIn = useIsStoreMemberLoggedIn();
   const [lang, setLang] = useState<string>(initialLang);
@@ -1344,6 +1376,10 @@ export default function SupplierEditorialProfileClient({
   const handleLangChange = (nextLang: string) => {
     const normalized = normalizeSeoLang(nextLang, "tr");
     setLang(normalized);
+    if (isSubdomainMode) {
+      router.push(normalized === "tr" ? "/tanitim" : `/tanitim?lang=${normalized}`);
+      return;
+    }
     const encodedSlug = encodeURIComponent(slug);
     router.push(
       normalized === "tr"
@@ -1351,6 +1387,16 @@ export default function SupplierEditorialProfileClient({
         : `/ureticiler/${encodedSlug}/tanitim?lang=${normalized}`
     );
   };
+
+  const collectionHref = isSubdomainMode
+    ? `/${langSuffix}`
+    : `/ureticiler/${encodeURIComponent(slug)}${langSuffix}`;
+  const editorialTabHref = isSubdomainMode
+    ? `/tanitim${langSuffix}`
+    : `/ureticiler/${encodeURIComponent(slug)}/tanitim${langSuffix}`;
+  const directoryHref = isSubdomainMode
+    ? `${ROOT_ORIGIN}/ureticiler${langSuffix}`
+    : `/ureticiler${langSuffix}`;
 
   return (
     <div
@@ -1373,20 +1419,38 @@ export default function SupplierEditorialProfileClient({
         onCurrencyChange={setDisplayCurrency}
       />
 
+      {isSubdomainMode && (
+        <SupplierSubdomainBar
+          tenantSubdomain={tenantSubdomain}
+          brandName={brand?.name || slug}
+          lang={safeLang}
+        />
+      )}
+
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 py-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <Link
-            href={`/ureticiler${langSuffix}`}
-            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-emerald-700 no-underline"
-          >
-            <ChevronLeft size={15} />
-            <span>{copy.backToDirectory}</span>
-          </Link>
+          {isSubdomainMode ? (
+            <a
+              href={directoryHref}
+              className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-emerald-700 no-underline"
+            >
+              <ChevronLeft size={15} />
+              <span>{copy.backToDirectory}</span>
+            </a>
+          ) : (
+            <Link
+              href={directoryHref}
+              className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-600 hover:text-emerald-700 no-underline"
+            >
+              <ChevronLeft size={15} />
+              <span>{copy.backToDirectory}</span>
+            </Link>
+          )}
 
           {brand && (
             <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-white border border-slate-200 shadow-2xs">
               <Link
-                href={`/ureticiler/${encodeURIComponent(slug)}${langSuffix}`}
+                href={collectionHref}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 no-underline transition-colors"
               >
                 <Package size={14} />
@@ -1395,7 +1459,7 @@ export default function SupplierEditorialProfileClient({
                 </span>
               </Link>
               <Link
-                href={`/ureticiler/${encodeURIComponent(slug)}/tanitim${langSuffix}`}
+                href={editorialTabHref}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-extrabold no-underline shadow-xs"
               >
                 <BookOpen size={14} />
@@ -1414,12 +1478,21 @@ export default function SupplierEditorialProfileClient({
         {!loading && !brand && (
           <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-3">
             <p className="text-base font-extrabold text-slate-800">{copy.notFoundText}</p>
-            <Link
-              href={`/ureticiler${langSuffix}`}
-              className="inline-flex px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold no-underline"
-            >
-              {copy.goDirectoryBtn}
-            </Link>
+            {isSubdomainMode ? (
+              <a
+                href={directoryHref}
+                className="inline-flex px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold no-underline"
+              >
+                {copy.goDirectoryBtn}
+              </a>
+            ) : (
+              <Link
+                href={directoryHref}
+                className="inline-flex px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold no-underline"
+              >
+                {copy.goDirectoryBtn}
+              </Link>
+            )}
           </div>
         )}
 
@@ -1524,7 +1597,7 @@ export default function SupplierEditorialProfileClient({
                         <p className="text-xs text-slate-500">{copy.featuredSub}</p>
                       </div>
                       <Link
-                        href={`/ureticiler/${encodeURIComponent(slug)}${langSuffix}`}
+                        href={collectionHref}
                         className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold no-underline shrink-0 shadow-xs"
                       >
                         <span>
@@ -1562,6 +1635,7 @@ export default function SupplierEditorialProfileClient({
                   isMemberLoggedIn={isMemberLoggedIn}
                   copy={copy}
                   langSuffix={langSuffix}
+                  isSubdomainMode={isSubdomainMode}
                   onOpenChat={() => setIsChatOpen(true)}
                 />
               </div>

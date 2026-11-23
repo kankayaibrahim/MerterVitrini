@@ -18,8 +18,10 @@ import {
   Package,
   Lock,
   BookOpen,
+  Sparkles,
 } from "lucide-react";
 import { Brand, Category, Product } from "@/types/store";
+import { PublicStoryGroup } from "@/types/stories";
 import { getCategoryPrefix } from "@/app/i18n";
 import { apiFetch, ExchangeRate, trackBrandEvent } from "@/app/utils";
 import {
@@ -32,6 +34,8 @@ import Footer from "@/components/store/Footer";
 import ProductCard from "@/components/store/ProductCard";
 import StoreChatDrawer from "@/components/store/StoreChatDrawer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
+import FavoriteSupplierButton from "@/components/store/FavoriteSupplierButton";
+import StoryViewerModal from "@/components/store/StoryViewerModal";
 import { SupportedSeoLang, normalizeSeoLang } from "@/utils/seoHelpers";
 import InstagramIcon from "@/components/shared/InstagramIcon";
 import {
@@ -42,6 +46,10 @@ import {
   formatBrandWebsiteUrl,
 } from "@/utils/brandContactHelpers";
 import { isBrandWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
+import SupplierSubdomainBar, {
+  SupplierSubdomainPill,
+} from "@/components/store/SupplierSubdomainBar";
+import { ROOT_ORIGIN, getSupplierSubdomainUrl } from "@/utils/subdomain";
 
 interface ShowcaseCopy {
   readonly typeManufacturer: string;
@@ -446,7 +454,11 @@ interface SupplierProfileBannerProps {
   readonly totalProducts: number;
   readonly isMemberLoggedIn: boolean;
   readonly copy: ShowcaseCopy;
+  readonly lang: string;
   readonly langSuffix: string;
+  readonly storyGroup: PublicStoryGroup | null;
+  readonly isSubdomainMode: boolean;
+  readonly onOpenStory: () => void;
   readonly onOpenChat: () => void;
 }
 
@@ -455,7 +467,11 @@ function SupplierProfileBanner({
   totalProducts,
   isMemberLoggedIn,
   copy,
+  lang,
   langSuffix,
+  storyGroup,
+  isSubdomainMode,
+  onOpenStory,
   onOpenChat,
 }: SupplierProfileBannerProps) {
   const companyLabel = getCompanyLabel(brand.company_type, copy);
@@ -466,14 +482,32 @@ function SupplierProfileBanner({
   const waUrl = waDigits
     ? `https://wa.me/${waDigits}?text=${encodeURIComponent(waMessage)}`
     : "";
+  const storyCount = storyGroup?.stories.length ?? 0;
+  const subdomainUrl = !isSubdomainMode ? getSupplierSubdomainUrl(brand) : null;
+  const editorialHref = isSubdomainMode
+    ? `/tanitim${langSuffix}`
+    : `/ureticiler/${encodeURIComponent(brand.slug || brand.id)}/tanitim${langSuffix}`;
 
   return (
     <div className="bg-[#F8F6F2] rounded-lg border border-[#E5E0D8] shadow-xs p-6 sm:p-8 space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
         <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-lg bg-white border border-[#E5E0D8] text-[#1C1C1C] flex items-center justify-center shrink-0">
-            <Building2 size={28} />
-          </div>
+          {storyCount > 0 ? (
+            <button
+              type="button"
+              onClick={onOpenStory}
+              className="w-15 h-15 rounded-full bg-gradient-to-tr from-[#D4AF37] via-[#E1306C] to-[#F77737] p-[2.5px] shrink-0 cursor-pointer border-none hover:scale-105 transition-transform"
+              title={`${brand.name} (${storyCount})`}
+            >
+              <div className="w-full h-full rounded-full bg-white text-[#1C1C1C] flex items-center justify-center">
+                <Building2 size={26} />
+              </div>
+            </button>
+          ) : (
+            <div className="w-14 h-14 rounded-lg bg-white border border-[#E5E0D8] text-[#1C1C1C] flex items-center justify-center shrink-0">
+              <Building2 size={28} />
+            </div>
+          )}
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-black text-[#1C1C1C]">{brand.name}</h1>
@@ -493,6 +527,7 @@ function SupplierProfileBanner({
                   </span>
                 </span>
               )}
+              {subdomainUrl && <SupplierSubdomainPill subdomainUrl={subdomainUrl} />}
             </div>
             <p className="text-xs sm:text-sm font-bold text-[#525252]">
               {companyLabel} • {copy.zeroCommissionSubtitle}
@@ -504,8 +539,21 @@ function SupplierProfileBanner({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {storyCount > 0 && (
+            <button
+              type="button"
+              onClick={onOpenStory}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-md bg-gradient-to-r from-[#D4AF37] via-[#E1306C] to-[#F77737] text-white text-xs font-black border-none cursor-pointer shadow-xs hover:opacity-95 transition-opacity"
+            >
+              <Sparkles size={14} />
+              <span>{storyCount}</span>
+            </button>
+          )}
+
+          <FavoriteSupplierButton brandId={brand.id} lang={lang} variant="full" />
+
           <Link
-            href={`/ureticiler/${encodeURIComponent(brand.slug || brand.id)}/tanitim${langSuffix}`}
+            href={editorialHref}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-white hover:bg-[#EFECE6] text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] text-xs font-extrabold no-underline transition-colors"
           >
             <BookOpen size={15} className="text-[#8C6D3F]" />
@@ -721,6 +769,7 @@ function ShowcaseProductsGrid({
 
 interface SupplierShowcaseClientProps {
   readonly slug: string;
+  readonly tenantSubdomain?: string;
   readonly initialLang?: SupportedSeoLang;
   readonly initialBrand?: Brand | null;
   readonly initialProducts?: readonly Product[];
@@ -730,12 +779,14 @@ interface SupplierShowcaseClientProps {
 
 export default function SupplierShowcaseClient({
   slug,
+  tenantSubdomain = "",
   initialLang = "tr",
   initialBrand = null,
   initialProducts = [],
   initialTotalProducts = 0,
   initialCategories = [],
 }: SupplierShowcaseClientProps) {
+  const isSubdomainMode = Boolean(tenantSubdomain);
   const router = useRouter();
   const isMemberLoggedIn = useIsStoreMemberLoggedIn();
   const [lang, setLang] = useState<string>(initialLang);
@@ -751,6 +802,8 @@ export default function SupplierShowcaseClient({
     Boolean(!initialBrand || (initialProducts.length === 0 && initialTotalProducts > 0))
   );
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [storyGroup, setStoryGroup] = useState<PublicStoryGroup | null>(null);
+  const [isStoryModalOpen, setIsStoryModalOpen] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState<boolean>(false);
   const [policyModalType, setPolicyModalType] = useState<
@@ -789,6 +842,26 @@ export default function SupplierShowcaseClient({
     }
     void loadInitial();
   }, [slug, initialBrand, initialCategories.length]);
+
+  useEffect(() => {
+    let ignore = false;
+    const storySlug = brand?.slug || slug;
+    fetch(`/api/v1/store/stories?brand_slug=${encodeURIComponent(storySlug)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { groups?: PublicStoryGroup[] };
+        if (!ignore) {
+          setStoryGroup(Array.isArray(data.groups) && data.groups[0] ? data.groups[0] : null);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      ignore = true;
+    };
+  }, [slug, brand?.slug]);
 
   const isSupplierWhatsappOnly = isBrandWhatsappOnly(brand);
 
@@ -847,6 +920,10 @@ export default function SupplierShowcaseClient({
   const handleLangChange = (nextLang: string) => {
     const normalized = normalizeSeoLang(nextLang, "tr");
     setLang(normalized);
+    if (isSubdomainMode) {
+      router.push(normalized === "tr" ? "/" : `/?lang=${normalized}`);
+      return;
+    }
     const encodedSlug = encodeURIComponent(slug);
     router.push(
       normalized === "tr"
@@ -854,6 +931,16 @@ export default function SupplierShowcaseClient({
         : `/ureticiler/${encodedSlug}?lang=${normalized}`
     );
   };
+
+  const collectionHref = isSubdomainMode
+    ? `/${langSuffix}`
+    : `/ureticiler/${encodeURIComponent(slug)}${langSuffix}`;
+  const editorialTabHref = isSubdomainMode
+    ? `/tanitim${langSuffix}`
+    : `/ureticiler/${encodeURIComponent(slug)}/tanitim${langSuffix}`;
+  const directoryHref = isSubdomainMode
+    ? `${ROOT_ORIGIN}/ureticiler${langSuffix}`
+    : `/ureticiler${langSuffix}`;
 
   return (
     <div
@@ -876,20 +963,38 @@ export default function SupplierShowcaseClient({
         onCurrencyChange={setDisplayCurrency}
       />
 
+      {isSubdomainMode && (
+        <SupplierSubdomainBar
+          tenantSubdomain={tenantSubdomain}
+          brandName={brand?.name || slug}
+          lang={safeLang}
+        />
+      )}
+
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 py-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <Link
-            href={`/ureticiler${langSuffix}`}
-            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#525252] hover:text-[#1C1C1C] no-underline"
-          >
-            <ChevronLeft size={15} className="rtl:rotate-180" />
-            <span>{copy.backToDirectory}</span>
-          </Link>
+          {isSubdomainMode ? (
+            <a
+              href={directoryHref}
+              className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#525252] hover:text-[#1C1C1C] no-underline"
+            >
+              <ChevronLeft size={15} className="rtl:rotate-180" />
+              <span>{copy.backToDirectory}</span>
+            </a>
+          ) : (
+            <Link
+              href={directoryHref}
+              className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#525252] hover:text-[#1C1C1C] no-underline"
+            >
+              <ChevronLeft size={15} className="rtl:rotate-180" />
+              <span>{copy.backToDirectory}</span>
+            </Link>
+          )}
 
           {brand && (
             <div className="inline-flex items-center gap-1.5 p-1 rounded-lg bg-white border border-[#E5E0D8] shadow-2xs">
               <Link
-                href={`/ureticiler/${encodeURIComponent(slug)}${langSuffix}`}
+                href={collectionHref}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-[#1C1C1C] text-white text-xs font-extrabold no-underline shadow-xs"
               >
                 <Package size={14} />
@@ -898,7 +1003,7 @@ export default function SupplierShowcaseClient({
                 </span>
               </Link>
               <Link
-                href={`/ureticiler/${encodeURIComponent(slug)}/tanitim${langSuffix}`}
+                href={editorialTabHref}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold text-[#525252] hover:text-[#1C1C1C] no-underline transition-colors"
               >
                 <BookOpen size={14} />
@@ -917,12 +1022,21 @@ export default function SupplierShowcaseClient({
         {!loadingBrand && !brand && (
           <div className="bg-white rounded-lg border border-[#E5E0D8] p-12 text-center space-y-3">
             <p className="text-base font-extrabold text-[#1C1C1C]">{copy.notFoundTitle}</p>
-            <Link
-              href={`/ureticiler${langSuffix}`}
-              className="inline-flex px-4 py-2 rounded-md bg-[#1C1C1C] text-white text-xs font-bold no-underline"
-            >
-              {copy.goToDirectoryBtn}
-            </Link>
+            {isSubdomainMode ? (
+              <a
+                href={directoryHref}
+                className="inline-flex px-4 py-2 rounded-md bg-[#1C1C1C] text-white text-xs font-bold no-underline"
+              >
+                {copy.goToDirectoryBtn}
+              </a>
+            ) : (
+              <Link
+                href={directoryHref}
+                className="inline-flex px-4 py-2 rounded-md bg-[#1C1C1C] text-white text-xs font-bold no-underline"
+              >
+                {copy.goToDirectoryBtn}
+              </Link>
+            )}
           </div>
         )}
 
@@ -933,7 +1047,11 @@ export default function SupplierShowcaseClient({
               totalProducts={totalProducts}
               isMemberLoggedIn={isMemberLoggedIn}
               copy={copy}
+              lang={safeLang}
               langSuffix={langSuffix}
+              storyGroup={storyGroup}
+              isSubdomainMode={isSubdomainMode}
+              onOpenStory={() => setIsStoryModalOpen(true)}
               onOpenChat={() => setIsChatOpen(true)}
             />
 
@@ -978,6 +1096,15 @@ export default function SupplierShowcaseClient({
           </>
         )}
       </main>
+
+      {isStoryModalOpen && storyGroup && (
+        <StoryViewerModal
+          groups={[storyGroup]}
+          initialGroupIndex={0}
+          lang={safeLang}
+          onClose={() => setIsStoryModalOpen(false)}
+        />
+      )}
 
       {brand && (
         <StoreChatDrawer

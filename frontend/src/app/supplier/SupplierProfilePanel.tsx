@@ -17,6 +17,8 @@ import {
   Plus,
   Trash2,
   ExternalLink,
+  Copy,
+  Check,
 } from "lucide-react";
 import type { SupplierAddress } from "@/types/integration";
 import TurkeyLocationSelects from "@/components/shared/TurkeyLocationSelects";
@@ -27,12 +29,19 @@ import {
   formatBrandWebsiteLabel,
   formatBrandWebsiteUrl,
 } from "@/utils/brandContactHelpers";
+import {
+  ROOT_DOMAIN,
+  normalizeSubdomainDraft,
+  validateSupplierSubdomainInput,
+} from "@/utils/subdomain";
 
 export interface SupplierBrandProfile {
   id: string;
   name: string;
   slug: string;
   alias_code?: string;
+  subdomain?: string;
+  subdomain_enabled?: boolean;
   company_type: string;
   description: string;
   description_translations?: Record<string, string>;
@@ -72,6 +81,8 @@ const DESCRIPTION_LANG_OPTIONS: ReadonlyArray<{
 
 interface NormalizedBrandProfileForm {
   brandName: string;
+  subdomain: string;
+  subdomainEnabled: boolean;
   companyType: string;
   description: string;
   descTranslations: Record<string, string>;
@@ -104,6 +115,8 @@ function normalizeBrandProfileToForm(bp: SupplierBrandProfile): NormalizedBrandP
   const dt = bp.description_translations;
   return {
     brandName: strOrEmpty(bp.name),
+    subdomain: strOrEmpty(bp.subdomain),
+    subdomainEnabled: bp.subdomain_enabled !== false,
     companyType: bp.company_type || "uretici_toptanci",
     description: strOrEmpty(bp.description),
     descTranslations: {
@@ -155,6 +168,9 @@ export default function SupplierProfilePanel({
   const [errorMsg, setErrorMsg] = useState("");
 
   const [brandName, setBrandName] = useState("");
+  const [subdomain, setSubdomain] = useState("");
+  const [subdomainEnabled, setSubdomainEnabled] = useState(true);
+  const [copiedSubdomain, setCopiedSubdomain] = useState(false);
   const [companyType, setCompanyType] = useState("uretici_toptanci");
   const [description, setDescription] = useState("");
   const [descTranslations, setDescTranslations] = useState<Record<string, string>>({
@@ -189,6 +205,8 @@ export default function SupplierProfilePanel({
 
     const applyNormalized = (norm: NormalizedBrandProfileForm) => {
       setBrandName(norm.brandName);
+      setSubdomain(norm.subdomain);
+      setSubdomainEnabled(norm.subdomainEnabled);
       setCompanyType(norm.companyType);
       setDescription(norm.description);
       setDescTranslations(norm.descTranslations);
@@ -282,6 +300,14 @@ export default function SupplierProfilePanel({
     const token = getToken();
     if (!token) return;
 
+    if (subdomainEnabled) {
+      const subErr = validateSupplierSubdomainInput(subdomain);
+      if (subErr) {
+        setErrorMsg(subErr);
+        return;
+      }
+    }
+
     setSaving(true);
     setSaveMessage("");
     setErrorMsg("");
@@ -295,6 +321,7 @@ export default function SupplierProfilePanel({
         },
         body: JSON.stringify({
           brand_name: brandName,
+          subdomain: subdomainEnabled ? subdomain.trim() : undefined,
           company_type: companyType,
           description,
           description_translations: {
@@ -423,6 +450,67 @@ export default function SupplierProfilePanel({
               placeholder="Örn: Lustrin Toptan Tekstil"
               className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-slate-900"
             />
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label
+                htmlFor="prof-subdomain"
+                className="text-xs font-bold text-slate-800 flex items-center gap-1.5"
+              >
+                <Globe size={13} className="text-emerald-700" />
+                <span>Özel Mağaza Adresiniz (Subdomain)</span>
+              </label>
+              {subdomainEnabled && subdomain.trim() && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(`https://${subdomain.trim()}.${ROOT_DOMAIN}`)
+                        .then(() => {
+                          setCopiedSubdomain(true);
+                          setTimeout(() => setCopiedSubdomain(false), 2000);
+                        })
+                        .catch(() => {});
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-slate-200 hover:border-slate-400 text-[10px] font-bold text-slate-700 cursor-pointer"
+                  >
+                    {copiedSubdomain ? <Check size={10} className="text-emerald-600" /> : <Copy size={10} />}
+                    <span>{copiedSubdomain ? "Kopyalandı" : "Kopyala"}</span>
+                  </button>
+                  <a
+                    href={`https://${subdomain.trim()}.${ROOT_DOMAIN}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-[10px] font-bold text-white no-underline"
+                  >
+                    <span>Mağazayı Aç</span>
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {subdomainEnabled ? (
+              <div className="flex items-center rounded-lg border border-slate-300 bg-white overflow-hidden focus-within:border-slate-900">
+                <input
+                  id="prof-subdomain"
+                  type="text"
+                  value={subdomain}
+                  onChange={(e) => setSubdomain(normalizeSubdomainDraft(e.target.value))}
+                  placeholder="orn-magazaniz"
+                  className="flex-1 min-w-0 px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-none bg-transparent"
+                />
+                <span className="px-2.5 py-1.5 bg-slate-100 border-l border-slate-200 text-[11px] font-semibold text-slate-600 shrink-0">
+                  .{ROOT_DOMAIN}
+                </span>
+              </div>
+            ) : (
+              <p className="text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">
+                Özel mağaza subdomain özelliği şu anda hesabınızda pasif. Açtırmak için platform yöneticisi ile iletişime geçebilirsiniz.
+              </p>
+            )}
           </div>
 
           <div>

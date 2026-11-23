@@ -14,6 +14,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminContext";
+import AdminStoriesTab from "@/components/admin/marketing/AdminStoriesTab";
 
 interface AdminSponsoredSlot {
   id: string;
@@ -530,7 +531,7 @@ function NewsletterTab({
 
 export default function AdminMarketingAndSponsoredPage() {
   const { fetchWithConfig } = useAdminAuth();
-  const [activeTab, setActiveTab] = useState<"slots" | "newsletter">("slots");
+  const [activeTab, setActiveTab] = useState<"slots" | "newsletter" | "stories">("slots");
   const [slots, setSlots] = useState<AdminSponsoredSlot[]>([]);
   const [subscribers, setSubscribers] = useState<AdminNewsletterSubscriber[]>([]);
   const [campaigns, setCampaigns] = useState<AdminNewsletterCampaign[]>([]);
@@ -583,6 +584,10 @@ export default function AdminMarketingAndSponsoredPage() {
     activeTab === "newsletter"
       ? "bg-violet-600 text-white"
       : "bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300";
+  const storiesBtnCls =
+    activeTab === "stories"
+      ? "bg-rose-600 text-white"
+      : "bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300";
 
   return (
     <div className="max-w-6xl mx-auto w-full space-y-6">
@@ -593,15 +598,15 @@ export default function AdminMarketingAndSponsoredPage() {
           </div>
           <div>
             <h1 className="text-lg font-extrabold text-zinc-900 dark:text-white">
-              Sponsorlu Vitrin, Reklam Alanları & B2B E-Bülten Yönetimi
+              Sponsorlu Vitrin, Hikayeler (24s) & B2B E-Bülten Yönetimi
             </h1>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Ana sayfa öne çıkan üreticileri, kategori sponsorluklarını, sektörel reklamları ve izinli B2B e-bülten abonelerini yönetin.
+              Ana sayfa öne çıkan üreticileri, Instagram tarzı 24 saatlik hikayeleri ve izinli B2B e-bülten abonelerini yönetin.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveTab("slots")}
@@ -609,6 +614,14 @@ export default function AdminMarketingAndSponsoredPage() {
           >
             <Sparkles size={14} />
             <span>Sponsorlu Vitrin ({slots.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("stories")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold cursor-pointer border-none flex items-center gap-1.5 ${storiesBtnCls}`}
+          >
+            <Sparkles size={14} />
+            <span>Hikayeler (24s)</span>
           </button>
           <button
             type="button"
@@ -628,14 +641,21 @@ export default function AdminMarketingAndSponsoredPage() {
         </div>
       </div>
 
-      {activeTab === "slots" ? (
+      {activeTab === "slots" && (
         <SponsoredSlotsTab
           slots={slots}
           suppliers={suppliers}
           onReload={() => void loadAll()}
           fetchWithConfig={fetchWithConfig}
         />
-      ) : (
+      )}
+      {activeTab === "stories" && (
+        <AdminStoriesTab
+          suppliers={suppliers}
+          fetchWithConfig={fetchWithConfig}
+        />
+      )}
+      {activeTab === "newsletter" && (
         <NewsletterTab
           subscribers={subscribers}
           campaigns={campaigns}

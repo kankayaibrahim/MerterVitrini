@@ -27,6 +27,7 @@ func fetchSuppliers(ctx context.Context) ([]*models.Brand, map[string]*models.Br
 	brandQuery := `
 		SELECT 
 			b.id, b.brand_name AS name, b.slug, b.alias_code,
+			COALESCE(b.subdomain, ''), COALESCE(b.subdomain_enabled, true),
 			COALESCE(b.company_type, 'uretici_toptanci'),
 			COALESCE(b.description, ''),
 			b.website, b.phone,
@@ -68,6 +69,7 @@ func fetchSuppliers(ctx context.Context) ([]*models.Brand, map[string]*models.Br
 		var s models.Brand
 		if err := bRows.Scan(
 			&s.ID, &s.Name, &s.Slug, &s.AliasCode,
+			&s.Subdomain, &s.SubdomainEnabled,
 			&s.CompanyType, &s.Description,
 			&s.Website, &s.Phone, &s.LandlinePhone,
 			&s.WhatsappPhone, &s.PublicEmail, &s.InstagramHandle,
@@ -148,6 +150,8 @@ func (h *SuppliersHandler) ListSuppliers(w http.ResponseWriter, r *http.Request)
 type adminSupplierUpsertRequest struct {
 	Name                 string  `json:"name"`
 	AliasCode            *string `json:"alias_code"`
+	Subdomain            *string `json:"subdomain"`
+	SubdomainEnabled     *bool   `json:"subdomain_enabled"`
 	Website              *string `json:"website"`
 	Phone                *string `json:"phone"`
 	LandlinePhone        *string `json:"landline_phone"`
@@ -168,7 +172,7 @@ type adminSupplierUpsertRequest struct {
 func scanAdminSupplierRow(row pgx.Row) (models.Brand, error) {
 	var s models.Brand
 	err := row.Scan(
-		&s.ID, &s.Name, &s.Slug, &s.AliasCode, &s.Website, &s.Phone, &s.LandlinePhone,
+		&s.ID, &s.Name, &s.Slug, &s.AliasCode, &s.Subdomain, &s.SubdomainEnabled, &s.Website, &s.Phone, &s.LandlinePhone,
 		&s.WhatsappPhone, &s.PublicEmail, &s.InstagramHandle,
 		&s.City, &s.District, &s.LocationAddress,
 		&s.BankName, &s.BankAccountHolder, &s.IBAN,
@@ -177,7 +181,7 @@ func scanAdminSupplierRow(row pgx.Row) (models.Brand, error) {
 	return s, err
 }
 
-const adminSupplierReturningCols = `id, brand_name AS name, slug, alias_code, website, phone, COALESCE(landline_phone, ''), COALESCE(whatsapp_phone, ''), COALESCE(public_email, ''), COALESCE(instagram_handle, ''), COALESCE(city, ''), COALESCE(district, ''), COALESCE(location_address, ''), COALESCE(bank_name, ''), COALESCE(bank_account_holder, ''), COALESCE(iban, ''), COALESCE(whatsapp_only_ordering, false), addresses, is_active, created_at, updated_at`
+const adminSupplierReturningCols = `id, brand_name AS name, slug, alias_code, COALESCE(subdomain, ''), COALESCE(subdomain_enabled, true), website, phone, COALESCE(landline_phone, ''), COALESCE(whatsapp_phone, ''), COALESCE(public_email, ''), COALESCE(instagram_handle, ''), COALESCE(city, ''), COALESCE(district, ''), COALESCE(location_address, ''), COALESCE(bank_name, ''), COALESCE(bank_account_holder, ''), COALESCE(iban, ''), COALESCE(whatsapp_only_ordering, false), addresses, is_active, created_at, updated_at`
 
 func resolveAliasForCreate(reqAlias *string, name string) string {
 	if reqAlias != nil && strings.TrimSpace(*reqAlias) != "" {
@@ -240,22 +244,49 @@ func (h *SuppliersHandler) CreateSupplier(w http.ResponseWriter, r *http.Request
 	ibanStr := strings.ToUpper(strings.ReplaceAll(derefTrimmed(req.IBAN), " ", ""))
 	addressesJSON, _ := json.Marshal(req.Addresses)
 	whatsappOnly := req.WhatsappOnlyOrdering != nil && *req.WhatsappOnlyOrdering
+	subdomainEnabled := true
+	if req.SubdomainEnabled != nil {
+		subdomainEnabled = *req.SubdomainEnabled
+	}
+
+	subdomainVal := ""
+	if req.Subdomain != nil {
+		normSub, valErr := NormalizeAndValidateBrandSubdomain(*req.Subdomain)
+		if valErr != nil {
+			httpx.Error(w, http.StatusBadRequest, valErr.Error())
+			return
+		}
+		subdomainVal = normSub
+	} else {
+		suggested := SuggestBrandSubdomain(aliasCode, slug, req.Name)
+		if suggested != "" {
+			var subTaken bool
+			_ = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM catalog.brands WHERE LOWER(subdomain) = LOWER($1))", suggested).Scan(&subTaken)
+			if !subTaken {
+				subdomainVal = suggested
+			}
+		}
+	}
 
 	query := `
 		INSERT INTO catalog.brands (
-			brand_name, slug, alias_code, website, phone, landline_phone, whatsapp_phone,
+			brand_name, slug, alias_code, subdomain, subdomain_enabled, website, phone, landline_phone, whatsapp_phone,
 			public_email, instagram_handle, city, district, location_address,
 			bank_name, bank_account_holder, iban, whatsapp_only_ordering, addresses, is_active
 		)
-		VALUES ($1, $2, UPPER($3), $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		VALUES ($1, $2, UPPER($3), NULLIF($4, ''), $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		RETURNING ` + adminSupplierReturningCols
 
 	s, err := scanAdminSupplierRow(db.Pool.QueryRow(ctx, query,
-		strings.TrimSpace(req.Name), slug, aliasCode, websitePtr, phonePtr, landlineStr, waStr,
+		strings.TrimSpace(req.Name), slug, aliasCode, subdomainVal, subdomainEnabled, websitePtr, phonePtr, landlineStr, waStr,
 		derefTrimmed(req.PublicEmail), instagramStr, truncateStr(cityStr, 100), truncateStr(districtStr, 100), locStr,
 		derefTrimmed(req.BankName), derefTrimmed(req.BankAccountHolder), ibanStr, whatsappOnly, addressesJSON, req.IsActive,
 	))
 	if err != nil {
+		if isSubdomainUniqueViolation(err) {
+			httpx.Error(w, http.StatusConflict, "Bu alt alan adı (subdomain) başka bir tedarikçi tarafından kullanılıyor.")
+			return
+		}
 		log.Printf("Failed to create supplier: %v", err)
 		http.Error(w, `{"error":"Supplier name or alias code already exists"}`, http.StatusBadRequest)
 		return
@@ -375,11 +406,24 @@ func (h *SuppliersHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request
 		}
 	}
 
+	updateSubdomain := req.Subdomain != nil
+	subdomainVal := ""
+	if req.Subdomain != nil {
+		normSub, valErr := NormalizeAndValidateBrandSubdomain(*req.Subdomain)
+		if valErr != nil {
+			httpx.Error(w, http.StatusBadRequest, valErr.Error())
+			return
+		}
+		subdomainVal = normSub
+	}
+
 	query := `
 		UPDATE catalog.brands
 		SET brand_name = $1,
 		    slug = $2,
 		    alias_code = COALESCE(NULLIF(UPPER($3), ''), alias_code),
+		    subdomain = CASE WHEN $20::boolean THEN NULLIF($21, '') ELSE subdomain END,
+		    subdomain_enabled = COALESCE($22, subdomain_enabled, true),
 		    website = $4,
 		    phone = $5,
 		    landline_phone = COALESCE($6, landline_phone, ''),
@@ -414,10 +458,15 @@ func (h *SuppliersHandler) UpdateSupplier(w http.ResponseWriter, r *http.Request
 		req.WhatsappOnlyOrdering,
 		addressesJSONPtr,
 		req.IsActive, id,
+		updateSubdomain, subdomainVal, req.SubdomainEnabled,
 	))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			http.Error(w, `{"error":"Supplier not found"}`, http.StatusNotFound)
+			return
+		}
+		if isSubdomainUniqueViolation(err) {
+			httpx.Error(w, http.StatusConflict, "Bu alt alan adı (subdomain) başka bir tedarikçi tarafından kullanılıyor.")
 			return
 		}
 		log.Printf("Failed to update supplier %s: %v", id, err)

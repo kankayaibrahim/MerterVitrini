@@ -28,6 +28,42 @@ export interface AdminProductsPage {
 }
 
 export type ProductStatusFilter = "" | "active" | "inactive";
+export type ProductPriceStatusFilter = "" | "priced" | "unpriced" | "discounted";
+export type ProductStockStatusFilter = "" | "in_stock" | "low_stock" | "out_of_stock";
+export type ProductImageFilter = "" | "yes" | "no";
+export type ProductSourceFilter = "" | "xml" | "manual";
+export type ProductCurrencyFilter = "" | "TRY" | "USD" | "EUR" | "GBP";
+export type ProductSortOption =
+  | ""
+  | "newest"
+  | "oldest"
+  | "updated_desc"
+  | "price_asc"
+  | "price_desc"
+  | "stock_desc"
+  | "stock_asc"
+  | "title_asc";
+
+export interface AdminProductFilterParams {
+  limit?: number;
+  offset?: number;
+  categoryId?: string;
+  search?: string;
+  brandId?: string;
+  status?: ProductStatusFilter;
+  currency?: ProductCurrencyFilter;
+  minPrice?: string;
+  maxPrice?: string;
+  priceStatus?: ProductPriceStatusFilter;
+  stockStatus?: ProductStockStatusFilter;
+  hasImage?: ProductImageFilter;
+  gender?: string;
+  season?: string;
+  source?: ProductSourceFilter;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: ProductSortOption;
+}
 
 export type BulkProductActionType = "activate" | "deactivate" | "delete";
 
@@ -68,14 +104,7 @@ export interface IAdminFeedService {
 export interface IAdminCatalogService {
   listCategories(): Promise<CategoryNode[]>;
   listSuppliers(): Promise<Brand[]>;
-  listProducts(params: {
-    limit?: number;
-    offset?: number;
-    categoryId?: string;
-    search?: string;
-    brandId?: string;
-    status?: ProductStatusFilter;
-  }): Promise<AdminProductsPage>;
+  listProducts(params: AdminProductFilterParams): Promise<AdminProductsPage>;
   activateSupplierProducts(brandId: string): Promise<BulkProductActionResult>;
   deactivateSupplierProducts(brandId: string): Promise<BulkProductActionResult>;
   deleteSupplierProducts(
@@ -392,21 +421,46 @@ export class AdminApiService
     search = "",
     brandId = "",
     status = "",
-  }: {
-    limit?: number;
-    offset?: number;
-    categoryId?: string;
-    search?: string;
-    brandId?: string;
-    status?: ProductStatusFilter;
-  }): Promise<AdminProductsPage> {
+    currency = "",
+    minPrice = "",
+    maxPrice = "",
+    priceStatus = "",
+    stockStatus = "",
+    hasImage = "",
+    gender = "",
+    season = "",
+    source = "",
+    dateFrom = "",
+    dateTo = "",
+    sortBy = "",
+  }: AdminProductFilterParams): Promise<AdminProductsPage> {
     const params = new URLSearchParams();
     params.set("limit", limit.toString());
     params.set("offset", offset.toString());
-    if (categoryId) params.set("category_id", categoryId);
-    if (search) params.set("q", search);
-    if (brandId) params.set("brand_id", brandId);
-    if (status) params.set("status", status);
+
+    const optionalEntries: Array<[string, string | undefined]> = [
+      ["category_id", categoryId],
+      ["q", search.trim()],
+      ["brand_id", brandId],
+      ["status", status],
+      ["currency", currency],
+      ["min_price", minPrice.trim()],
+      ["max_price", maxPrice.trim()],
+      ["price_status", priceStatus],
+      ["stock_status", stockStatus],
+      ["has_image", hasImage],
+      ["gender", gender],
+      ["season", season],
+      ["source", source],
+      ["date_from", dateFrom],
+      ["date_to", dateTo],
+      ["sort_by", sortBy],
+    ];
+    for (const [key, value] of optionalEntries) {
+      if (value) {
+        params.set(key, value);
+      }
+    }
 
     const res = await this.http.rawFetch(`/api/v1/products?${params.toString()}`);
     if (!res.ok) {

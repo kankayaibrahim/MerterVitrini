@@ -39,6 +39,10 @@ export interface CategoryNode {
   slug: string;
   node_path: string;
   is_active: boolean;
+  total_products?: number;
+  active_products?: number;
+  direct_total_products?: number;
+  direct_active_products?: number;
   children: CategoryNode[];
   translations?: Record<string, Record<string, unknown>>;
 }
@@ -63,6 +67,15 @@ export interface Product {
   packing_ratio: string | null;
   series_ratio: string | null;
   minimum_order_quantity: number;
+  price?: number;
+  discounted_price?: number | null;
+  buying_price?: number | null;
+  single_price?: number | null;
+  currency?: string;
+  stock?: number;
+  series_stock?: number;
+  color?: string | null;
+  barcode?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -131,6 +144,8 @@ export interface Brand {
   name: string;
   slug: string;
   alias_code: string | null;
+  subdomain?: string | null;
+  subdomain_enabled?: boolean;
   company_type?: string;
   description?: string;
   website?: string | null;
