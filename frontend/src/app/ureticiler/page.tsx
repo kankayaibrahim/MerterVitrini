@@ -21,7 +21,7 @@ interface PageProps {
 }
 
 const DIRECTORY_TITLES: Record<SupportedSeoLang, string> = {
-  tr: "Merter Doğrulanmış Üretici & Toptan Giyim Firmaları Rehberi | Merter Vitrini",
+  tr: "Merter Toptan Hazır Giyim Üreticileri & İmalatçı Firmalar Rehberi | Merter Vitrini",
   en: "Verified Merter Clothing Manufacturers & Turkish Wholesale Suppliers Directory | Merter Vitrini",
   ru: "Каталог проверенных фабрик одежды Мертер (Стамбул) без посредников | Merter Vitrini",
   ar: "دليل مصانع الملابس المعتمدة في مارتر إسطنبول بدون وسطاء | Merter Vitrini",

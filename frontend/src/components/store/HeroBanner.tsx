@@ -16,9 +16,9 @@ export default function HeroBanner({ lang }: Readonly<HeroBannerProps>) {
         <span>{t("b2b_wholesale_showroom", lang)}</span>
       </div>
 
-      <h1 className="font-serif font-bold text-2xl md:text-3xl text-[#1C1C1C] tracking-tight leading-tight max-w-2xl">
+      <p className="font-serif font-bold text-2xl md:text-3xl text-[#1C1C1C] tracking-tight leading-tight max-w-2xl">
         {t("istanbul_wholesale", lang)}
-      </h1>
+      </p>
 
       <p className="mt-2.5 text-xs md:text-sm text-[#525252] leading-relaxed max-w-2xl font-normal">
         {t("hero_subtitle", lang)}

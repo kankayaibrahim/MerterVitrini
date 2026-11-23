@@ -58,14 +58,16 @@ async function resolveHtmlLang(): Promise<SupportedSeoLang> {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),
   title: {
-    default: "Merter Vitrini | Türkiye Toptan B2B Tekstil & Moda Showroom",
+    default: "Toptan Hazır Giyim — Merter Vitrini | İstanbul B2B Tekstil Showroom",
     template: "%s | Merter Vitrini B2B",
   },
   description: GLOBAL_B2B_SEO_MATRIX.tr.portalDescription,
   keywords: [
+    "toptan hazır giyim",
     "merter toptan giyim",
     "istanbul b2b tekstil üreticileri",
     "seri toptan kadın giyim",
+    "toptan giyim siteleri",
     "wholesale clothing turkey merter istanbul",
     "одежда оптом из турции мертер стамбул",
     "ملابس تركية بالجملة مارتر إسطنبول",

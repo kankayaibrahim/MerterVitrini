@@ -78,6 +78,7 @@ function getB2BWholesaleLinks(lang: string): B2BWholesaleLink[] {
   const prefix = getCategoryPrefix(lang);
   const linksMap: Record<string, B2BWholesaleLink[]> = {
     tr: [
+      { label: "Toptan Hazır Giyim", href: "/toptan-hazir-giyim" },
       { label: "Yeni Ürünler (Son 7 Gün)", href: `/${prefix}/yeni-urunler` },
       { label: "Toptan Kadın Giyim", href: `/${prefix}/kadin-giyim` },
       { label: "Toptan Triko & Kazak", href: `/${prefix}/kadin-giyim/triko-hirka-kazak` },

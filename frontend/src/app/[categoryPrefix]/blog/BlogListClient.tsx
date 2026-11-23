@@ -4,7 +4,15 @@ import React, { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Calendar, Search, ArrowRight, BookOpen } from "lucide-react";
+import {
+  Calendar,
+  Search,
+  ArrowRight,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+} from "lucide-react";
 import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
@@ -146,6 +154,27 @@ interface BlogListClientProps {
   readonly blogPosts: readonly BlogPost[];
   readonly categories: readonly Category[];
   readonly activeLangs: readonly Language[];
+  readonly currentPage: number;
+  readonly totalPages: number;
+  readonly totalItems: number;
+  readonly currentTab: "editorial" | "directory" | "all";
+  readonly editorialCount: number;
+  readonly directoryCount: number;
+  readonly initialQuery: string;
+}
+
+function buildBlogPageHref(
+  prefix: string,
+  tab: "editorial" | "directory" | "all",
+  page: number,
+  q: string
+): string {
+  const qs = new URLSearchParams();
+  if (tab !== "editorial") qs.set("tab", tab);
+  if (page > 1) qs.set("page", String(page));
+  if (q.trim()) qs.set("q", q.trim());
+  const str = qs.toString();
+  return str ? `/${prefix}/blog?${str}` : `/${prefix}/blog`;
 }
 
 export default function BlogListClient({
@@ -153,6 +182,13 @@ export default function BlogListClient({
   blogPosts,
   categories,
   activeLangs,
+  currentPage,
+  totalPages,
+  totalItems,
+  currentTab,
+  editorialCount,
+  directoryCount,
+  initialQuery,
 }: Readonly<BlogListClientProps>) {
   const router = useRouter();
 
@@ -165,7 +201,7 @@ export default function BlogListClient({
   const [policyModalType, setPolicyModalType] = useState<
     "cancellation_and_return" | "terms_of_service" | "privacy_policy" | ""
   >("");
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>(initialQuery);
 
   const safeLang = normalizeSeoLang(lang, "en");
   const copy = BLOG_LIST_COPY[safeLang];
@@ -245,25 +281,79 @@ export default function BlogListClient({
       />
 
       <main className="flex-grow w-full max-w-[1440px] mx-auto px-4 md:px-8 py-10 md:py-16 select-none animate-in fade-in duration-300">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b border-cultured pb-8">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-6 border-b border-cultured pb-6">
           <div>
             <h1 className="font-sans font-extrabold text-3xl md:text-4xl text-eerie-black leading-tight tracking-tight mb-2">
-              {t("blog", safeLang)}
+              {safeLang === "tr" ? "Toptan Hazır Giyim & B2B Tekstil Rehberi" : t("blog", safeLang)}
             </h1>
             <p className="text-sm text-sonic-silver font-semibold max-w-2xl leading-relaxed">
               {copy.subtitle}
             </p>
           </div>
 
-          <div className="relative w-full md:w-80">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              router.push(buildBlogPageHref(categoryPrefix, currentTab, 1, searchQuery));
+            }}
+            className="relative w-full md:w-80"
+          >
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <input
               type="text"
               placeholder={copy.searchPlaceholder}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-cultured rounded-[10px] text-xs font-bold text-eerie-black placeholder-zinc-400 focus:outline-none focus:border-salmon-pink transition-all shadow-sm"
+              className="w-full pl-10 pr-20 py-2.5 bg-white border border-cultured rounded-[10px] text-xs font-bold text-eerie-black placeholder-zinc-400 focus:outline-none focus:border-salmon-pink transition-all shadow-sm"
             />
+            <button
+              type="submit"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded-md text-[10px] font-bold cursor-pointer border-none"
+            >
+              {safeLang === "tr" ? "Ara" : "Go"}
+            </button>
+          </form>
+        </div>
+
+        {/* Category / Directory Tabs + Pillar CTA */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+          <div className="inline-flex bg-white border border-cultured rounded-xl p-1 gap-1 shadow-xs">
+            <Link
+              href={buildBlogPageHref(categoryPrefix, "editorial", 1, searchQuery)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold no-underline transition-colors ${
+                currentTab === "editorial"
+                  ? "bg-eerie-black text-white"
+                  : "text-sonic-silver hover:text-eerie-black"
+              }`}
+            >
+              {safeLang === "tr" ? "B2B Sektör Rehberleri" : "B2B Guides"} ({editorialCount})
+            </Link>
+            <Link
+              href={buildBlogPageHref(categoryPrefix, "directory", 1, searchQuery)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold no-underline transition-colors ${
+                currentTab === "directory"
+                  ? "bg-eerie-black text-white"
+                  : "text-sonic-silver hover:text-eerie-black"
+              }`}
+            >
+              {safeLang === "tr" ? "Üretici Tanıtımları" : "Suppliers"} ({directoryCount})
+            </Link>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/toptan-hazir-giyim"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#F8F6F2] border border-[#E5E0D8] hover:border-eerie-black text-xs font-bold text-eerie-black no-underline transition-colors"
+            >
+              <Layers size={14} className="text-[#8C6D3F]" />
+              <span>{safeLang === "tr" ? "Toptan Hazır Giyim Kataloğu" : "Wholesale Catalog"}</span>
+            </Link>
+            <Link
+              href={safeLang === "tr" ? "/ureticiler" : `/ureticiler?lang=${safeLang}`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-cultured hover:border-eerie-black text-xs font-bold text-eerie-black no-underline transition-colors"
+            >
+              <span>{safeLang === "tr" ? "Merter Üretici Rehberi" : "Merter Directory"}</span>
+            </Link>
           </div>
         </div>
 
@@ -342,12 +432,51 @@ export default function BlogListClient({
               {copy.emptyDesc}
             </p>
             <button
-              onClick={() => setSearchQuery("")}
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                router.push(buildBlogPageHref(categoryPrefix, currentTab, 1, ""));
+              }}
               className="mt-2 px-6 py-2.5 bg-salmon-pink hover:bg-eerie-black text-white text-[10px] font-extrabold uppercase rounded-[5px] tracking-[1px] cursor-pointer transition-all active:scale-95 border-none"
             >
               {copy.clearFilters}
             </button>
           </div>
+        )}
+
+        {totalPages > 1 && (
+          <nav
+            aria-label="Blog Sayfaları"
+            className="mt-10 flex flex-wrap items-center justify-between gap-4 bg-white border border-cultured rounded-2xl px-5 py-3.5 shadow-xs"
+          >
+            <span className="text-xs font-semibold text-sonic-silver">
+              {safeLang === "tr" ? "Toplam" : "Total"}{" "}
+              <strong className="text-eerie-black">{totalItems}</strong> •{" "}
+              <strong className="text-eerie-black">
+                {currentPage} / {totalPages}
+              </strong>
+            </span>
+            <div className="flex items-center gap-2">
+              {currentPage > 1 && (
+                <Link
+                  href={buildBlogPageHref(categoryPrefix, currentTab, currentPage - 1, searchQuery)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-cultured bg-white hover:bg-zinc-50 text-xs font-bold text-eerie-black no-underline"
+                >
+                  <ChevronLeft size={14} />
+                  <span>{safeLang === "tr" ? "Önceki" : "Prev"}</span>
+                </Link>
+              )}
+              {currentPage < totalPages && (
+                <Link
+                  href={buildBlogPageHref(categoryPrefix, currentTab, currentPage + 1, searchQuery)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-cultured bg-eerie-black hover:bg-zinc-800 text-xs font-bold text-white no-underline"
+                >
+                  <span>{safeLang === "tr" ? "Sonraki" : "Next"}</span>
+                  <ChevronRight size={14} />
+                </Link>
+              )}
+            </div>
+          </nav>
         )}
       </main>
 

@@ -81,6 +81,7 @@ const DESCRIPTION_LANG_OPTIONS: ReadonlyArray<{
 
 interface NormalizedBrandProfileForm {
   brandName: string;
+  brandSlug: string;
   subdomain: string;
   subdomainEnabled: boolean;
   companyType: string;
@@ -107,6 +108,41 @@ interface NormalizedBrandProfileForm {
   whatsappOnlyOrdering: boolean;
 }
 
+function escapeHtmlText(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function resolveVerifiedStoreUrl(
+  subdomain: string,
+  subdomainEnabled: boolean,
+  brandSlug: string
+): string {
+  const cleanSub = subdomain.trim();
+  if (subdomainEnabled && cleanSub) {
+    return `https://${cleanSub}.${ROOT_DOMAIN}`;
+  }
+  if (brandSlug) {
+    return `https://${ROOT_DOMAIN}/tr?brand=${encodeURIComponent(brandSlug)}`;
+  }
+  return `https://${ROOT_DOMAIN}/toptan-hazir-giyim`;
+}
+
+function buildVerifiedBadgeSnippet(brandName: string, storefrontUrl: string): string {
+  const safeBrand = escapeHtmlText(brandName.trim() || "Merter Vitrini Üyesi");
+  const safeStoreUrl = escapeHtmlText(storefrontUrl);
+  return [
+    `<a href="${safeStoreUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:10px;padding:10px 16px;border-radius:10px;border:1px solid #d4af37;background:#0f172a;color:#ffffff;font-family:system-ui,-apple-system,sans-serif;text-decoration:none;font-size:13px;font-weight:700;">`,
+    `  <span style="display:inline-block;width:10px;height:10px;border-radius:9999px;background:#10b981;"></span>`,
+    `  <span>${safeBrand} &mdash; Doğrulanmış Toptan Hazır Giyim Üreticisi | Merter Vitrini</span>`,
+    `</a>`,
+  ].join("\n");
+}
+
 function strOrEmpty(val?: string): string {
   return val || "";
 }
@@ -115,6 +151,7 @@ function normalizeBrandProfileToForm(bp: SupplierBrandProfile): NormalizedBrandP
   const dt = bp.description_translations;
   return {
     brandName: strOrEmpty(bp.name),
+    brandSlug: strOrEmpty(bp.slug),
     subdomain: strOrEmpty(bp.subdomain),
     subdomainEnabled: bp.subdomain_enabled !== false,
     companyType: bp.company_type || "uretici_toptanci",
@@ -168,9 +205,11 @@ export default function SupplierProfilePanel({
   const [errorMsg, setErrorMsg] = useState("");
 
   const [brandName, setBrandName] = useState("");
+  const [brandSlug, setBrandSlug] = useState("");
   const [subdomain, setSubdomain] = useState("");
   const [subdomainEnabled, setSubdomainEnabled] = useState(true);
   const [copiedSubdomain, setCopiedSubdomain] = useState(false);
+  const [copiedBadgeHtml, setCopiedBadgeHtml] = useState(false);
   const [companyType, setCompanyType] = useState("uretici_toptanci");
   const [description, setDescription] = useState("");
   const [descTranslations, setDescTranslations] = useState<Record<string, string>>({
@@ -205,6 +244,7 @@ export default function SupplierProfilePanel({
 
     const applyNormalized = (norm: NormalizedBrandProfileForm) => {
       setBrandName(norm.brandName);
+      setBrandSlug(norm.brandSlug);
       setSubdomain(norm.subdomain);
       setSubdomainEnabled(norm.subdomainEnabled);
       setCompanyType(norm.companyType);
@@ -384,6 +424,11 @@ export default function SupplierProfilePanel({
       </div>
     );
   }
+
+  const verifiedBadgeSnippet = buildVerifiedBadgeSnippet(
+    brandName,
+    resolveVerifiedStoreUrl(subdomain, subdomainEnabled, brandSlug)
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -691,6 +736,7 @@ export default function SupplierProfilePanel({
               </span>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+              <span className="sr-only">Yalnızca WhatsApp ile Sipariş &amp; Fiyat Sorunuz Modu</span>
               <input
                 type="checkbox"
                 checked={whatsappOnlyOrdering}
@@ -847,7 +893,9 @@ export default function SupplierProfilePanel({
             <strong className="text-slate-900 block mb-0.5">
               %0 Komisyon &amp; Doğrudan Tahsilat Modeli:
             </strong>
-            Merter Vitrini satışlardan komisyon almaz. Alıcılar sipariş verdiğinde ödemeyi doğrudan aşağıda belirttiğiniz banka hesabınıza (Havale/EFT) gönderir.
+            <p className="m-0">
+              Merter Vitrini satışlardan komisyon almaz. Alıcılar sipariş verdiğinde ödemeyi doğrudan aşağıda belirttiğiniz banka hesabınıza (Havale/EFT) gönderir.
+            </p>
           </div>
 
           <div>
@@ -1012,6 +1060,55 @@ export default function SupplierProfilePanel({
             Henüz ek mağaza veya depo adresi eklenmemiş.
           </div>
         )}
+      </div>
+
+      {/* Verified Manufacturer Backlink Badge Widget (SEO-09) */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200/90 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2">
+              <ShieldCheck size={15} className="text-emerald-600" />
+              <span>Web Siteniz İçin Doğrulanmış Üretici Rozeti (SEO &amp; Güven)</span>
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Bu rozeti kendi kurumsal web sitenizin footer alanına ekleyerek hem uluslararası alıcılara doğrulanmış Merter Vitrini üretici statünüzü gösterebilir hem de mağazanızın Google arama görünürlüğünü güçlendirebilirsiniz.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard
+                .writeText(verifiedBadgeSnippet)
+                .then(() => {
+                  setCopiedBadgeHtml(true);
+                  setTimeout(() => setCopiedBadgeHtml(false), 2500);
+                })
+                .catch(() => {});
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer shrink-0 transition-colors"
+          >
+            {copiedBadgeHtml ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+            <span>{copiedBadgeHtml ? "HTML Kodu Kopyalandı" : "HTML Kodunu Kopyala"}</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4 flex flex-col items-start gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Canlı Önizleme
+            </span>
+            <span className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-[10px] border border-[#d4af37] bg-slate-900 text-white text-xs font-bold shadow-xs">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+              <span>
+                {brandName.trim() || "Merter Vitrini Üyesi"} &mdash; Doğrulanmış Toptan Hazır Giyim Üreticisi | Merter Vitrini
+              </span>
+            </span>
+          </div>
+
+          <pre className="rounded-xl bg-slate-900 text-slate-200 p-3.5 text-[10px] font-mono overflow-x-auto leading-relaxed">
+            {verifiedBadgeSnippet}
+          </pre>
+        </div>
       </div>
     </form>
   );

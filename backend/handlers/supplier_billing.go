@@ -351,7 +351,7 @@ func (h *MarketplaceHandler) GetSupplierBilling(w http.ResponseWriter, r *http.R
 	payments, _ := fetchSupplierPayments(ctx, brandID, 50)
 	ledger, _ := fetchSupplierAccountingLedger(ctx, brandID, 100)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"subscription": sub,
 		"plans":        plans,
@@ -406,7 +406,7 @@ func (h *MarketplaceHandler) UpdateSupplierBillingTaxInfo(w http.ResponseWriter,
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Resmi fatura ve vergi bilgileriniz güncellendi."})
 }
 
@@ -463,7 +463,7 @@ func (h *MarketplaceHandler) CreateSupplierSubscriptionPayment(w http.ResponseWr
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"id":             id,
@@ -546,7 +546,7 @@ func (h *MarketplaceHandler) GetAdminBillingOverview(w http.ResponseWriter, r *h
 	var pendingPaymentsCount int
 	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*)::int FROM catalog.supplier_subscription_payments WHERE status = 'PENDING_APPROVAL'`).Scan(&pendingPaymentsCount)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"summary": map[string]interface{}{
 			"total_collected_amount":   totalCollected,
@@ -648,24 +648,34 @@ func (h *MarketplaceHandler) UpdateAdminSupplierSubscription(w http.ResponseWrit
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Tedarikçi abonelik ve muhasebe kartı güncellendi."})
 }
 
-func appendAccountingLedgerEntry(ctx context.Context, tx pgx.Tx, brandID string, invoiceID, paymentID *string, entryType string, debit, credit float64, desc string) error {
+type accountingLedgerEntryInput struct {
+	BrandID     string
+	InvoiceID   *string
+	PaymentID   *string
+	EntryType   string
+	Debit       float64
+	Credit      float64
+	Description string
+}
+
+func appendAccountingLedgerEntry(ctx context.Context, tx pgx.Tx, entry accountingLedgerEntryInput) error {
 	var currentBalance float64
 	_ = tx.QueryRow(ctx, `
 		SELECT COALESCE(outstanding_balance, 0)::float8
 		FROM catalog.supplier_subscriptions
 		WHERE brand_id = $1::uuid
-	`, brandID).Scan(&currentBalance)
+	`, entry.BrandID).Scan(&currentBalance)
 
-	nextBalance := math.Round((currentBalance+debit-credit)*100) / 100
+	nextBalance := math.Round((currentBalance+entry.Debit-entry.Credit)*100) / 100
 	_, err := tx.Exec(ctx, `
 		INSERT INTO catalog.supplier_accounting_ledger (
 			brand_id, invoice_id, payment_id, entry_type, debit_amount, credit_amount, running_balance, currency, description
 		) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, 'TRY', $8)
-	`, brandID, invoiceID, paymentID, entryType, debit, credit, nextBalance, desc)
+	`, entry.BrandID, entry.InvoiceID, entry.PaymentID, entry.EntryType, entry.Debit, entry.Credit, nextBalance, entry.Description)
 	if err != nil {
 		return err
 	}
@@ -677,7 +687,7 @@ func appendAccountingLedgerEntry(ctx context.Context, tx pgx.Tx, brandID string,
 		    outstanding_balance = $3,
 		    updated_at = NOW()
 		WHERE brand_id = $4::uuid
-	`, debit, credit, nextBalance, brandID)
+	`, entry.Debit, entry.Credit, nextBalance, entry.BrandID)
 	return err
 }
 
@@ -764,7 +774,13 @@ func (h *MarketplaceHandler) CreateAdminSupplierInvoice(w http.ResponseWriter, r
 	}
 
 	ledgerDesc := fmt.Sprintf("Fatura Tahakkuku (%s - %s)", invNum, req.PeriodLabel)
-	if err := appendAccountingLedgerEntry(ctx, tx, req.BrandID, &invoiceID, nil, "INVOICE_DEBIT", totalAmount, 0, ledgerDesc); err != nil {
+	if err := appendAccountingLedgerEntry(ctx, tx, accountingLedgerEntryInput{
+		BrandID:     req.BrandID,
+		InvoiceID:   &invoiceID,
+		EntryType:   "INVOICE_DEBIT",
+		Debit:       totalAmount,
+		Description: ledgerDesc,
+	}); err != nil {
 		http.Error(w, `{"error":"Muhasebe defter kaydı oluşturulamadı"}`, http.StatusInternalServerError)
 		return
 	}
@@ -784,7 +800,14 @@ func (h *MarketplaceHandler) CreateAdminSupplierInvoice(w http.ResponseWriter, r
 			RETURNING id::text
 		`, payNum, req.BrandID, invoiceID, req.PlanCode, totalAmount, payMethod, sub.BillingCompanyTitle, req.Notes).Scan(&paymentID); err == nil {
 			payDesc := fmt.Sprintf("Tahsilat Kaydı (%s - Fatura: %s)", payNum, invNum)
-			_ = appendAccountingLedgerEntry(ctx, tx, req.BrandID, &invoiceID, &paymentID, "PAYMENT_CREDIT", 0, totalAmount, payDesc)
+			_ = appendAccountingLedgerEntry(ctx, tx, accountingLedgerEntryInput{
+				BrandID:     req.BrandID,
+				InvoiceID:   &invoiceID,
+				PaymentID:   &paymentID,
+				EntryType:   "PAYMENT_CREDIT",
+				Credit:      totalAmount,
+				Description: payDesc,
+			})
 		}
 	}
 
@@ -793,7 +816,7 @@ func (h *MarketplaceHandler) CreateAdminSupplierInvoice(w http.ResponseWriter, r
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"id":             invoiceID,
@@ -875,7 +898,13 @@ func (h *MarketplaceHandler) RecordAdminSupplierPayment(w http.ResponseWriter, r
 		`, invNum, req.BrandID, sub.ID, req.PlanCode, periodLabel, subtotal, taxAmt, req.Amount,
 			sub.BillingCompanyTitle, sub.TaxOffice, sub.TaxNumber, sub.BillingAddress, req.Notes).Scan(&newInvID); err == nil {
 			linkedInvID = &newInvID
-			_ = appendAccountingLedgerEntry(ctx, tx, req.BrandID, linkedInvID, nil, "INVOICE_DEBIT", req.Amount, 0, fmt.Sprintf("Fatura Tahakkuku (%s)", invNum))
+			_ = appendAccountingLedgerEntry(ctx, tx, accountingLedgerEntryInput{
+				BrandID:     req.BrandID,
+				InvoiceID:   linkedInvID,
+				EntryType:   "INVOICE_DEBIT",
+				Debit:       req.Amount,
+				Description: fmt.Sprintf("Fatura Tahakkuku (%s)", invNum),
+			})
 		}
 	}
 
@@ -894,7 +923,14 @@ func (h *MarketplaceHandler) RecordAdminSupplierPayment(w http.ResponseWriter, r
 		return
 	}
 
-	if err := appendAccountingLedgerEntry(ctx, tx, req.BrandID, linkedInvID, &paymentID, "PAYMENT_CREDIT", 0, req.Amount, fmt.Sprintf("Tedarikçi Ödemesi (%s)", payNum)); err != nil {
+	if err := appendAccountingLedgerEntry(ctx, tx, accountingLedgerEntryInput{
+		BrandID:     req.BrandID,
+		InvoiceID:   linkedInvID,
+		PaymentID:   &paymentID,
+		EntryType:   "PAYMENT_CREDIT",
+		Credit:      req.Amount,
+		Description: fmt.Sprintf("Tedarikçi Ödemesi (%s)", payNum),
+	}); err != nil {
 		http.Error(w, `{"error":"Cari defter güncellenemedi"}`, http.StatusInternalServerError)
 		return
 	}
@@ -916,7 +952,7 @@ func (h *MarketplaceHandler) RecordAdminSupplierPayment(w http.ResponseWriter, r
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"id":             paymentID,
@@ -971,7 +1007,7 @@ func (h *MarketplaceHandler) ProcessAdminSupplierPayment(w http.ResponseWriter, 
 			WHERE id = $2::uuid
 		`, req.Notes, paymentID)
 		_ = tx.Commit(ctx)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(headerContentType, mimeApplicationJSON)
 		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Ödeme bildirimi reddedildi."})
 		return
 	}
@@ -1014,7 +1050,13 @@ func (h *MarketplaceHandler) ProcessAdminSupplierPayment(w http.ResponseWriter, 
 	var invPtr *string
 	if newInvID != "" {
 		invPtr = &newInvID
-		_ = appendAccountingLedgerEntry(ctx, tx, brandID, invPtr, nil, "INVOICE_DEBIT", amount, 0, fmt.Sprintf("Fatura Tahakkuku (%s)", invNum))
+		_ = appendAccountingLedgerEntry(ctx, tx, accountingLedgerEntryInput{
+			BrandID:     brandID,
+			InvoiceID:   invPtr,
+			EntryType:   "INVOICE_DEBIT",
+			Debit:       amount,
+			Description: fmt.Sprintf("Fatura Tahakkuku (%s)", invNum),
+		})
 	}
 
 	_, _ = tx.Exec(ctx, `
@@ -1023,7 +1065,14 @@ func (h *MarketplaceHandler) ProcessAdminSupplierPayment(w http.ResponseWriter, 
 		WHERE id = $2::uuid
 	`, invPtr, paymentID)
 
-	_ = appendAccountingLedgerEntry(ctx, tx, brandID, invPtr, &paymentID, "PAYMENT_CREDIT", 0, amount, fmt.Sprintf("Onaylanan Tedarikçi Ödemesi (%s)", payNum))
+	_ = appendAccountingLedgerEntry(ctx, tx, accountingLedgerEntryInput{
+		BrandID:     brandID,
+		InvoiceID:   invPtr,
+		PaymentID:   &paymentID,
+		EntryType:   "PAYMENT_CREDIT",
+		Credit:      amount,
+		Description: fmt.Sprintf("Onaylanan Tedarikçi Ödemesi (%s)", payNum),
+	})
 
 	_, _ = tx.Exec(ctx, fmt.Sprintf(`
 		UPDATE catalog.supplier_subscriptions
@@ -1041,6 +1090,6 @@ func (h *MarketplaceHandler) ProcessAdminSupplierPayment(w http.ResponseWriter, 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Ödeme onaylandı, fatura kesildi ve abonelik aktifleştirildi."})
 }

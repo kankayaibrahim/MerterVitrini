@@ -279,8 +279,10 @@ function resolveLanguageSwitchUrl(
   if (pathname === `/${oldPrefix}`) {
     return `/${newPrefix}${currentSearch}`;
   }
-  if (pathname.startsWith(`/${oldPrefix}/`)) {
-    return `${pathname.replace(`/${oldPrefix}/`, `/${newPrefix}/`)}${currentSearch}`;
+  const oldSegment = `/${oldPrefix}/`;
+  const newSegment = `/${newPrefix}/`;
+  if (pathname.startsWith(oldSegment)) {
+    return `${pathname.replace(oldSegment, newSegment)}${currentSearch}`;
   }
   if (isQueryLocalizedPathname(pathname)) {
     const params = new URLSearchParams(currentSearch);
@@ -407,6 +409,14 @@ function HeaderTopBar({
 
         {/* Language & Currency Selectors */}
         <div className="flex items-center gap-2">
+          {normalizeLangCode(lang) === "tr" && (
+            <Link
+              href="/toptan-hazir-giyim"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white text-[#1C1C1C] border border-[#D6D1C7] hover:border-[#1C1C1C] font-bold text-[11px] tracking-wider transition-colors whitespace-nowrap no-underline"
+            >
+              <span>TOPTAN HAZIR GİYİM</span>
+            </Link>
+          )}
           <Link
             href={buildQueryLocalizedRouteHref("/ureticiler", lang)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#F8F6F2] text-[#1C1C1C] border border-[#E5E0D8] hover:border-[#1C1C1C] hover:bg-[#EFECE6] font-bold text-[11px] tracking-wider transition-colors whitespace-nowrap no-underline"
@@ -547,6 +557,13 @@ interface MegaMenuDropdownProps {
   readonly onNavigate: (url: string) => void;
 }
 
+const MEGA_MENU_GRID_CLASSES: Record<number, string> = {
+  1: "grid-cols-1 max-w-xs",
+  2: "grid-cols-2 max-w-2xl",
+  3: "grid-cols-3 max-w-4xl",
+  4: "grid-cols-4 max-w-5xl",
+};
+
 function MegaMenuDropdown({
   parentCategory,
   categories,
@@ -558,14 +575,7 @@ function MegaMenuDropdown({
   const populatedSubs = children.filter((sub) => sub.children && sub.children.length > 0);
   const childlessSubs = children.filter((sub) => !sub.children || sub.children.length === 0);
   const totalCols = Math.min(4, Math.max(1, populatedSubs.length + (childlessSubs.length > 0 ? 1 : 0)));
-  const gridColClass =
-    totalCols === 1
-      ? "grid-cols-1 max-w-xs"
-      : totalCols === 2
-        ? "grid-cols-2 max-w-2xl"
-        : totalCols === 3
-          ? "grid-cols-3 max-w-4xl"
-          : "grid-cols-4 max-w-5xl";
+  const gridColClass = MEGA_MENU_GRID_CLASSES[totalCols] || MEGA_MENU_GRID_CLASSES[4];
 
   return (
     <div
@@ -772,6 +782,33 @@ function MobileCategoryAccordion({
   const activeObj = activeCategoryId ? findInTree(categories) : null;
   const activeTitle = activeObj ? getCategoryTitle(activeObj, lang) : "";
 
+  let mobileCategoryBadge: React.ReactNode;
+  if (activeTitle) {
+    mobileCategoryBadge = (
+      <span
+        style={{ backgroundColor: "rgba(230, 23, 48, 0.15)", color: "#e61730" }}
+        className="px-2 py-0.5 rounded-full text-[10px] font-extrabold max-w-[80px] xs:max-w-[120px] truncate animate-fade-in shrink-0"
+      >
+        {activeTitle}
+      </span>
+    );
+  } else if (isNewArrivals) {
+    mobileCategoryBadge = (
+      <span
+        style={{ backgroundColor: "rgba(230, 23, 48, 0.15)", color: "#e61730" }}
+        className="px-2 py-0.5 rounded-full text-[10px] font-extrabold max-w-[110px] xs:max-w-[140px] truncate animate-fade-in shrink-0"
+      >
+        {ui.newArrivals}
+      </span>
+    );
+  } else {
+    mobileCategoryBadge = (
+      <span className="px-2 py-0.5 bg-zinc-100 text-zinc-700 rounded-full text-[10px] font-extrabold max-w-[80px] xs:max-w-[120px] truncate">
+        {t("all_products", lang)}
+      </span>
+    );
+  }
+
   return (
     <div className="relative md:hidden bg-white border-b border-cultured px-2.5 xs:px-4 py-2.5 select-none">
       <div className="flex gap-1.5 xs:gap-2 w-full">
@@ -786,25 +823,7 @@ function MobileCategoryAccordion({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {activeTitle ? (
-              <span
-                style={{ backgroundColor: "rgba(230, 23, 48, 0.15)", color: "#e61730" }}
-                className="px-2 py-0.5 rounded-full text-[10px] font-extrabold max-w-[80px] xs:max-w-[120px] truncate animate-fade-in shrink-0"
-              >
-                {activeTitle}
-              </span>
-            ) : isNewArrivals ? (
-              <span
-                style={{ backgroundColor: "rgba(230, 23, 48, 0.15)", color: "#e61730" }}
-                className="px-2 py-0.5 rounded-full text-[10px] font-extrabold max-w-[110px] xs:max-w-[140px] truncate animate-fade-in shrink-0"
-              >
-                {ui.newArrivals}
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 bg-zinc-100 text-zinc-700 rounded-full text-[10px] font-extrabold max-w-[80px] xs:max-w-[120px] truncate">
-                {t("all_products", lang)}
-              </span>
-            )}
+            {mobileCategoryBadge}
             <ChevronDown className="w-3 h-3 text-zinc-700 transition-transform duration-300 shrink-0" />
           </div>
         </button>
@@ -1151,6 +1170,8 @@ export default function Header({
   const currentLangObj = languages.find((l) => l.code === lang) || languages[0];
   const ui = pickLangText(lang, HEADER_TEXTS);
   const closeLabel = t("close", lang);
+  const rootLogoPath = lang && lang !== "en" ? `/${getCategoryPrefix()}` : "/";
+  const profileLangQuery = lang !== "tr" ? `&lang=${lang}` : "";
 
   return (
     <header className="w-full bg-white select-none border-b border-cultured">
@@ -1214,7 +1235,7 @@ export default function Header({
           <div className="sm:col-span-1 flex items-center justify-between sm:justify-center w-full">
             {isSubdomainHost ? (
               <a
-                href={`${ROOT_ORIGIN}${lang && lang !== "en" ? `/${getCategoryPrefix()}` : "/"}`}
+                href={`${ROOT_ORIGIN}${rootLogoPath}`}
                 className="flex flex-col no-underline group active:scale-[0.98] transition-transform duration-100 shrink-0 text-center sm:mx-auto"
               >
                 <span className="font-serif font-extrabold text-[20px] sm:text-[30px] tracking-[2px] uppercase text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
@@ -1226,7 +1247,7 @@ export default function Header({
               </a>
             ) : (
               <Link
-                href={lang && lang !== "en" ? `/${getCategoryPrefix()}` : "/"}
+                href={rootLogoPath}
                 className="flex flex-col no-underline group active:scale-[0.98] transition-transform duration-100 shrink-0 text-center sm:mx-auto"
               >
                 <span className="font-serif font-extrabold text-[20px] sm:text-[30px] tracking-[2px] uppercase text-eerie-black group-hover:text-salmon-pink transition-colors leading-tight">
@@ -1420,9 +1441,7 @@ export default function Header({
                           window.dispatchEvent(
                             new CustomEvent("merter-profile-tab", { detail: { tab: "favorites" } })
                           );
-                          router.push(
-                            `/profile?tab=favorites${lang !== "tr" ? `&lang=${lang}` : ""}`
-                          );
+                          router.push(`/profile?tab=favorites${profileLangQuery}`);
                         }}
                         className="w-full text-left px-3 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
                       >
@@ -1437,9 +1456,7 @@ export default function Header({
                               detail: { tab: "notifications" },
                             })
                           );
-                          router.push(
-                            `/profile?tab=notifications${lang !== "tr" ? `&lang=${lang}` : ""}`
-                          );
+                          router.push(`/profile?tab=notifications${profileLangQuery}`);
                         }}
                         className="w-full text-left px-3 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
                       >
@@ -1558,9 +1575,7 @@ export default function Header({
                                 detail: { tab: "favorites" },
                               })
                             );
-                            router.push(
-                              `/profile?tab=favorites${lang !== "tr" ? `&lang=${lang}` : ""}`
-                            );
+                            router.push(`/profile?tab=favorites${profileLangQuery}`);
                           }}
                           className="w-full text-left px-4 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
                         >
@@ -1575,9 +1590,7 @@ export default function Header({
                                 detail: { tab: "notifications" },
                               })
                             );
-                            router.push(
-                              `/profile?tab=notifications${lang !== "tr" ? `&lang=${lang}` : ""}`
-                            );
+                            router.push(`/profile?tab=notifications${profileLangQuery}`);
                           }}
                           className="w-full text-left px-4 py-2 text-xs font-bold text-eerie-black hover:bg-cultured transition-colors border-none bg-transparent cursor-pointer"
                         >

@@ -10,7 +10,7 @@ import { getSupplierSubdomainUrl } from "@/utils/subdomain";
 
 export const revalidate = 3600;
 
-const PRODUCTS_PER_SITEMAP = 2000;
+const PRODUCTS_PER_SITEMAP = 1500;
 
 interface SitemapCategory {
   id: string;
@@ -88,19 +88,22 @@ function appendPrefixedStaticRoutes(
     freq: "daily" | "weekly" | "monthly";
     priority: number;
   }> = [
-    { subPath: "", freq: "daily", priority: 0.95 },
-    { subPath: "tum-urunler", freq: "daily", priority: 0.9 },
-    { subPath: "yeni-urunler", freq: "daily", priority: 0.92 },
-    { subPath: "b2b", freq: "weekly", priority: 0.85 },
-    { subPath: "faq", freq: "weekly", priority: 0.8 },
-    { subPath: "contact", freq: "monthly", priority: 0.8 },
-    { subPath: "tedarikci-basvuru", freq: "monthly", priority: 0.8 },
-    { subPath: "site-haritasi", freq: "weekly", priority: 0.7 },
-    { subPath: "blog", freq: "daily", priority: 0.8 },
-  ];
+      { subPath: "", freq: "daily", priority: 0.95 },
+      { subPath: "tum-urunler", freq: "daily", priority: 0.9 },
+      { subPath: "yeni-urunler", freq: "daily", priority: 0.92 },
+      { subPath: "b2b", freq: "weekly", priority: 0.85 },
+      { subPath: "faq", freq: "weekly", priority: 0.8 },
+      { subPath: "contact", freq: "monthly", priority: 0.8 },
+      { subPath: "tedarikci-basvuru", freq: "monthly", priority: 0.8 },
+      { subPath: "site-haritasi", freq: "weekly", priority: 0.7 },
+      { subPath: "blog", freq: "daily", priority: 0.8 },
+    ];
 
   for (const route of subRoutes) {
     for (const lang of SUPPORTED_SEO_LANGS) {
+      if (route.subPath === "" && lang === "tr") {
+        continue;
+      }
       const alt = buildPrefixedAlternates(route.subPath, lang);
       entries.push({
         url: alt.canonical,
@@ -123,12 +126,13 @@ function appendStandaloneDirectoryRoutes(
     freq: "daily" | "weekly" | "monthly";
     priority: number;
   }> = [
-    { path: "/ureticiler", freq: "daily", priority: 0.9 },
-    { path: "/alim-talepleri", freq: "daily", priority: 0.85 },
-    { path: "/hizmet-saglayicilar", freq: "weekly", priority: 0.8 },
-    { path: "/mobil-uygulama", freq: "weekly", priority: 0.75 },
-    { path: "/account-deletion", freq: "monthly", priority: 0.4 },
-  ];
+      { path: "/toptan-hazir-giyim", freq: "daily", priority: 0.98 },
+      { path: "/ureticiler", freq: "daily", priority: 0.9 },
+      { path: "/alim-talepleri", freq: "daily", priority: 0.85 },
+      { path: "/hizmet-saglayicilar", freq: "weekly", priority: 0.8 },
+      { path: "/mobil-uygulama", freq: "weekly", priority: 0.75 },
+      { path: "/account-deletion", freq: "monthly", priority: 0.4 },
+    ];
 
   for (const item of standalonePaths) {
     const alt = buildQueryLangAlternates(item.path, "tr");
@@ -217,6 +221,10 @@ function appendBlogPosts(
   now: Date
 ): void {
   for (const post of posts) {
+    const trTitle = (post.translations?.tr?.title || "").toLowerCase();
+    if (trTitle.includes("merter toptan kadın giyim & tekstil üreticisi")) {
+      continue;
+    }
     const modDate = post.updated_at ? new Date(post.updated_at) : now;
     const languages: Record<string, string> = {};
 
@@ -233,17 +241,14 @@ function appendBlogPosts(
     if (!languages.en && !languages.tr) continue;
     languages["x-default"] = languages.en || languages.tr;
 
-    for (const lang of SUPPORTED_SEO_LANGS) {
-      const targetUrl = languages[lang];
-      if (!targetUrl) continue;
-      entries.push({
-        url: targetUrl,
-        lastModified: modDate,
-        changeFrequency: "weekly",
-        priority: 0.75,
-        alternates: { languages },
-      });
-    }
+    const primaryUrl = languages.tr || languages.en;
+    entries.push({
+      url: primaryUrl,
+      lastModified: modDate,
+      changeFrequency: "weekly",
+      priority: 0.75,
+      alternates: { languages },
+    });
   }
 }
 
@@ -259,11 +264,9 @@ export async function generateSitemaps(): Promise<Array<{ id: number }>> {
   return sitemaps;
 }
 
-export default async function sitemap(props?: {
-  id?: Promise<string | number | undefined> | string | number;
-}): Promise<MetadataRoute.Sitemap> {
-  const now = new Date();
-  const rawId = props?.id;
+async function resolveSitemapPartitionId(
+  rawId?: Promise<string | number | undefined> | string | number
+): Promise<number> {
   const resolvedId =
     typeof rawId === "object" && rawId !== null && "then" in rawId
       ? await rawId
@@ -271,64 +274,64 @@ export default async function sitemap(props?: {
   const numericId =
     typeof resolvedId === "number"
       ? resolvedId
-      : parseInt(String(resolvedId ?? "0"), 10);
-  const safeId = isNaN(numericId) ? 0 : numericId;
+      : Number.parseInt(String(resolvedId ?? "0"), 10);
+  return Number.isNaN(numericId) ? 0 : numericId;
+}
 
-  // Partition 0: Core static, categories, brands, CMS pages, blog posts
-  if (safeId === 0) {
-    const sitemapUrls: MetadataRoute.Sitemap = [];
+async function buildCoreSitemapPartition(now: Date): Promise<MetadataRoute.Sitemap> {
+  const sitemapUrls: MetadataRoute.Sitemap = [];
 
-    const rootAlternates = buildPrefixedAlternates("", "en");
-    sitemapUrls.push({
-      url: SITE_ORIGIN,
-      lastModified: now,
-      changeFrequency: "daily",
-      priority: 1,
-      alternates: {
-        languages: {
-          ...rootAlternates.languages,
-          "x-default": `${SITE_ORIGIN}/en`,
-        },
-      },
-    });
+  const rootAlternates = buildPrefixedAlternates("", "tr");
+  sitemapUrls.push({
+    url: SITE_ORIGIN,
+    lastModified: now,
+    changeFrequency: "daily",
+    priority: 1,
+    alternates: {
+      languages: rootAlternates.languages,
+    },
+  });
 
-    appendPrefixedStaticRoutes(sitemapUrls, now);
+  appendPrefixedStaticRoutes(sitemapUrls, now);
 
-    const [categoriesRaw, blogRaw, brandsRaw, pagesRaw] = await Promise.all([
-      ssrStoreFetch<SitemapCategory[]>("/categories", 3600),
-      ssrStoreFetch<unknown>("/blog", 3600),
-      ssrStoreFetch<SitemapBrand[]>("/brands", 3600),
-      ssrStoreFetch<SitemapStaticPage[]>("/pages", 3600),
-    ]);
+  const [categoriesRaw, blogRaw, brandsRaw, pagesRaw] = await Promise.all([
+    ssrStoreFetch<SitemapCategory[]>("/categories", 3600),
+    ssrStoreFetch<unknown>("/blog", 3600),
+    ssrStoreFetch<SitemapBrand[]>("/brands", 3600),
+    ssrStoreFetch<SitemapStaticPage[]>("/pages", 3600),
+  ]);
 
-    const categories = Array.isArray(categoriesRaw) ? categoriesRaw : [];
-    const categoryPaths = collectCategoryPaths(categories);
-    for (const catPath of categoryPaths) {
-      for (const lang of SUPPORTED_SEO_LANGS) {
-        const alt = buildPrefixedAlternates(catPath, lang);
-        sitemapUrls.push({
-          url: alt.canonical,
-          lastModified: now,
-          changeFrequency: "daily",
-          priority: 0.85,
-          alternates: { languages: alt.languages },
-        });
-      }
+  const categories = Array.isArray(categoriesRaw) ? categoriesRaw : [];
+  const categoryPaths = collectCategoryPaths(categories);
+  for (const catPath of categoryPaths) {
+    for (const lang of SUPPORTED_SEO_LANGS) {
+      const alt = buildPrefixedAlternates(catPath, lang);
+      sitemapUrls.push({
+        url: alt.canonical,
+        lastModified: now,
+        changeFrequency: "daily",
+        priority: 0.85,
+        alternates: { languages: alt.languages },
+      });
     }
-
-    appendStandaloneDirectoryRoutes(
-      sitemapUrls,
-      Array.isArray(brandsRaw) ? brandsRaw : [],
-      now
-    );
-
-    appendCmsPages(sitemapUrls, Array.isArray(pagesRaw) ? pagesRaw : [], now);
-    appendBlogPosts(sitemapUrls, parseBlogPayload(blogRaw), now);
-
-    return sitemapUrls;
   }
 
-  // Partition 1..N: Product URLs with full bidirectional hreflang for all 8 locales
+  appendStandaloneDirectoryRoutes(
+    sitemapUrls,
+    Array.isArray(brandsRaw) ? brandsRaw : [],
+    now
+  );
+
+  appendCmsPages(sitemapUrls, Array.isArray(pagesRaw) ? pagesRaw : [], now);
+  appendBlogPosts(sitemapUrls, parseBlogPayload(blogRaw), now);
+
+  return sitemapUrls;
+}
+
+async function buildProductSitemapPartition(
+  safeId: number,
+  now: Date
+): Promise<MetadataRoute.Sitemap> {
   const productsRaw = await ssrStoreFetch<SitemapProduct[]>("/sitemap/products", 3600);
   const products = parseProductsPayload(productsRaw);
   const startIndex = (safeId - 1) * PRODUCTS_PER_SITEMAP;
@@ -340,18 +343,26 @@ export default async function sitemap(props?: {
     const modDate = prod.updated_at ? new Date(prod.updated_at) : now;
     const alt = buildQueryLangAlternates(`/product/${prod.slug}`, "tr");
 
-    for (const lang of SUPPORTED_SEO_LANGS) {
-      const targetUrl = alt.languages[lang];
-      if (!targetUrl) continue;
-      productUrls.push({
-        url: targetUrl,
-        lastModified: modDate,
-        changeFrequency: "daily",
-        priority: 0.9,
-        alternates: { languages: alt.languages },
-      });
-    }
+    productUrls.push({
+      url: alt.canonical,
+      lastModified: modDate,
+      changeFrequency: "daily",
+      priority: 0.9,
+      alternates: { languages: alt.languages },
+    });
   }
 
   return productUrls;
+}
+
+export default async function sitemap(props?: {
+  id?: Promise<string | number | undefined> | string | number;
+}): Promise<MetadataRoute.Sitemap> {
+  const now = new Date();
+  const safeId = await resolveSitemapPartitionId(props?.id);
+
+  if (safeId === 0) {
+    return buildCoreSitemapPartition(now);
+  }
+  return buildProductSitemapPartition(safeId, now);
 }

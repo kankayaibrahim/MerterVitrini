@@ -13,6 +13,8 @@ import {
   OG_LOCALE_BY_LANG,
   safeJsonLd,
   SITE_ORIGIN,
+  slimSsrCategoriesForNav,
+  slimSsrProductsForCardGrid,
   SUPPORTED_SEO_LANGS,
 } from "@/utils/seoHelpers";
 
@@ -77,7 +79,7 @@ export default async function LocalizedTumUrunlerPage({
   const pageRaw = Array.isArray(resolvedSearch?.page)
     ? resolvedSearch.page[0]
     : resolvedSearch?.page;
-  const pageNum = Math.max(1, parseInt(pageRaw || "1", 10));
+  const pageNum = Math.max(1, Number.parseInt(pageRaw || "1", 10) || 1);
   const offset = (pageNum - 1) * 24;
 
   const lang = normalizeSeoLang(categoryPrefix, "tr");
@@ -153,8 +155,8 @@ export default async function LocalizedTumUrunlerPage({
       <StorefrontLayout
         mode="catalog"
         defaultLang={lang}
-        preFetchedCategories={categories}
-        initialProducts={productsPayload.products}
+        preFetchedCategories={slimSsrCategoriesForNav(categories, lang)}
+        initialProducts={slimSsrProductsForCardGrid(productsPayload.products, lang)}
         initialTotalProducts={productsPayload.total}
       />
     </>

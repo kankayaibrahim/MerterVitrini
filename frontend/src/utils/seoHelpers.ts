@@ -14,10 +14,18 @@ import {
 export function stripBrandTitleSuffix(rawTitle: string): string {
   const trimmed = (rawTitle || "").trim();
   if (!trimmed) return "Merter Vitrini";
-  const stripped = trimmed
-    .replace(/\s*\|\s*(?:Merter\s*Vitrini|مارتر\s*فيتريني)[^|]*$/i, "")
-    .trim();
-  return stripped || trimmed;
+  const pipeIdx = trimmed.lastIndexOf("|");
+  if (pipeIdx === -1) return trimmed;
+  const suffix = trimmed
+    .slice(pipeIdx + 1)
+    .trim()
+    .split(/\s+/)
+    .join(" ")
+    .toLowerCase();
+  if (suffix.startsWith("merter vitrini") || suffix.startsWith("مارتر فيتريني")) {
+    return trimmed.slice(0, pipeIdx).trim() || trimmed;
+  }
+  return trimmed;
 }
 
 export const SITE_ORIGIN = "https://mertervitrini.com.tr";
@@ -79,27 +87,27 @@ export const GLOBAL_B2B_SEO_MATRIX: Record<
 > = {
   tr: {
     keywords:
-      "Merter toptan giyim, İstanbul toptan tekstil üreticileri, seri toptan kadın giyim, fason üretim, doğrudan fabrikadan toptan kıyafet",
+      "toptan hazır giyim, Merter toptan giyim, İstanbul toptan hazır giyim üreticileri, seri toptan kadın giyim, toptan giyim siteleri, fason üretim, doğrudan fabrikadan toptan kıyafet",
     homeLabel: "Ana Sayfa",
     allProductsLabel: "Tüm Toptan Ürünler",
     newArrivalsLabel: "Yeni Ürünler",
     suppliersLabel: "Üretici Firmalar",
     portalTitle:
-      "Merter Toptan Giyim & İstanbul B2B Tekstil Üreticileri",
+      "Toptan Hazır Giyim — Merter İstanbul B2B Üreticileri",
     portalDescription:
-      "Merter toptan giyim ve İstanbul toptan tekstil üreticilerinden aracısız seri toptan kadın giyim, erkek giyim, fason üretim ve Private Label koleksiyonları.",
+      "Türkiye'nin en büyük toptan hazır giyim merkezi Merter'den aracısız seri toptan kadın, erkek, tesettür giyim ve fason üretim. Doğrulanmış İstanbul üreticileriyle doğrudan çalışın.",
     portalH1:
-      "Merter Toptan Giyim — İstanbul Üreticilerinden Doğrudan B2B Tekstil & Moda Vitrini",
+      "Toptan Hazır Giyim — Merter Üreticilerinden Aracısız B2B Tekstil & Moda Vitrini",
     portalLead:
-      "Doğrulanmış Merter fabrikalarıyla aracısız çalışın: asortili beden serileri, düşük MOQ, fason/Private Label üretim ve 50+ ülkeye konsolide ihracat kargo.",
+      "Doğrulanmış Merter toptan hazır giyim fabrikalarıyla aracısız çalışın: asortili beden serileri, düşük MOQ, fason/Private Label üretim ve 50+ ülkeye konsolide ihracat kargo.",
     allProductsTitle:
-      "Tüm Toptan Giyim Koleksiyonları — Seri Bazlı Fabrikadan Toptan Kıyafet",
+      "Tüm Toptan Hazır Giyim Koleksiyonları — Seri & Paket Satış",
     allProductsDescription:
-      "Merter toptan kadın giyim, elbise, takım, dış giyim ve erkek giyim modellerini seri/paket fiyatlarıyla doğrudan üretici fabrikalardan inceleyin.",
+      "Merter ve İstanbul üreticilerinden toptan hazır giyim, kadın elbise, ikili takım, triko, tesettür, büyük beden ve erkek giyim koleksiyonlarını seri/paket fiyatlarıyla inceleyin.",
     newArrivalsTitle:
-      "Yeni Ürünler (Son 7 Gün) — Merter Toptan Giyim Yeni Sezon Modelleri",
+      "Yeni Ürünler (Son 7 Gün) — Merter Toptan Hazır Giyim Yeni Sezon Modelleri",
     newArrivalsDescription:
-      "Son 7 günde Merter toptan giyim üreticileri tarafından eklenen en yeni sezon kadın ve erkek giyim modellerini eklenme tarihine göre inceleyin.",
+      "Son 7 günde Merter toptan hazır giyim üreticileri tarafından eklenen en yeni sezon kadın ve erkek giyim modellerini eklenme tarihine göre inceleyin.",
   },
   en: {
     keywords:
@@ -296,7 +304,7 @@ export function normalizeSeoLang(
  * so untrusted strings can never break out of a `<script type="application/ld+json">` tag.
  */
 export function safeJsonLd(data: unknown): string {
-  return JSON.stringify(data).replace(/</g, "\\u003c");
+  return JSON.stringify(data).replaceAll("<", String.raw`\u003c`);
 }
 
 function stripTrailingSlash(value: string): string {
@@ -322,25 +330,96 @@ export function toAbsoluteSiteUrl(pathOrUrl?: string | null): string {
   return `${SITE_ORIGIN}${stripTrailingSlash(normalizedPath)}`;
 }
 
+function trimOuterSlashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.codePointAt(start) === 47) {
+    start++;
+  }
+  while (end > start && value.codePointAt(end - 1) === 47) {
+    end--;
+  }
+  return value.slice(start, end);
+}
+
 /**
  * Builds self-referencing canonical + full 8-language hreflang + x-default (`/en...`)
  * for `[categoryPrefix]` routes such as `/tr`, `/tr/tum-urunler`, `/tr/kadin-giyim/elbise`.
  */
 export function buildPrefixedAlternates(subPath: string, currentLang: string) {
   const safeLang = normalizeSeoLang(currentLang, "tr");
-  const trimmed = subPath.trim().replace(/^\/+|\/+$/g, "");
+  const trimmed = trimOuterSlashes(subPath.trim());
   const suffix = trimmed ? `/${trimmed}` : "";
 
   const languages: Record<string, string> = {};
   for (const lang of SUPPORTED_SEO_LANGS) {
-    languages[lang] = `${SITE_ORIGIN}/${lang}${suffix}`;
+    if (trimmed === "" && lang === "tr") {
+      languages.tr = SITE_ORIGIN;
+    } else {
+      languages[lang] = `${SITE_ORIGIN}/${lang}${suffix}`;
+    }
   }
   languages["x-default"] = `${SITE_ORIGIN}/en${suffix}`;
 
+  const canonical =
+    trimmed === "" && safeLang === "tr"
+      ? SITE_ORIGIN
+      : `${SITE_ORIGIN}/${safeLang}${suffix}`;
+
   return {
-    canonical: `${SITE_ORIGIN}/${safeLang}${suffix}`,
+    canonical,
     languages,
   };
+}
+
+/**
+ * Strips heavy full-HTML descriptions and non-active language translations from SSR
+ * list payloads so page HTML stays compact without breaking ProductCard rendering.
+ */
+export function slimSsrProductsForCardGrid(
+  products: readonly Product[],
+  lang: SupportedSeoLang
+): Product[] {
+  return products.map((p) => {
+    const activeTrans = p.translations?.[lang];
+    return {
+      ...p,
+      description: undefined,
+      short_description: undefined,
+      variants: undefined,
+      attributes: undefined,
+      translations: activeTrans
+        ? {
+            [lang]: {
+              title: activeTrans.title,
+            },
+          }
+        : undefined,
+    };
+  });
+}
+
+/**
+ * Strips bulky SEO HTML blobs from category trees passed into navigation/sidebar state.
+ */
+export function slimSsrCategoriesForNav(
+  categories: readonly Category[],
+  lang: SupportedSeoLang
+): Category[] {
+  return categories.map((cat) => {
+    const activeTrans = cat.translations?.[lang];
+    return {
+      ...cat,
+      translations: activeTrans
+        ? {
+            [lang]: {
+              title: activeTrans.title,
+            },
+          }
+        : undefined,
+      children: cat.children ? slimSsrCategoriesForNav(cat.children, lang) : undefined,
+    };
+  });
 }
 
 /**
@@ -483,16 +562,43 @@ export function buildOrganizationGraphJsonLd(
     "@context": "https://schema.org",
     "@graph": [
       {
-        "@type": "Organization",
+        "@type": ["Organization", "WholesaleStore"],
         "@id": `${SITE_ORIGIN}/#organization`,
         name: "Merter Vitrini B2B",
         url: SITE_ORIGIN,
+        priceRange: "$$",
         logo: {
           "@type": "ImageObject",
           url: `${SITE_ORIGIN}/og-image.jpg`,
         },
         image: `${SITE_ORIGIN}/og-image.jpg`,
         description: copy.portalDescription,
+        knowsAbout: [
+          "Toptan Hazır Giyim",
+          "Merter Toptan Giyim",
+          "Seri Toptan Kadın Giyim",
+          "Private Label Tekstil Üretimi",
+          "Fason Hazır Giyim Üretimi",
+        ],
+        geo: {
+          "@type": "GeoCoordinates",
+          latitude: 41.0112,
+          longitude: 28.8878,
+        },
+        openingHoursSpecification: [
+          {
+            "@type": "OpeningHoursSpecification",
+            dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+            opens: "08:30",
+            closes: "19:00",
+          },
+        ],
+        sameAs: [
+          "https://facebook.com/mertervitrini",
+          "https://x.com/mertervitrini",
+          "https://instagram.com/mertervitrini",
+          "https://linkedin.com/company/mertervitrini",
+        ],
         address: {
           "@type": "PostalAddress",
           streetAddress,

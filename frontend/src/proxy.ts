@@ -40,6 +40,7 @@ const CENTRAL_PLATFORM_PREFIXES = [
   "/hizmet-saglayicilar",
   "/mobil-uygulama",
   "/tedarikci-basvuru",
+  "/toptan-hazir-giyim",
   "/blog",
   "/account-deletion",
   "/site-haritasi",
@@ -52,8 +53,16 @@ const CENTRAL_PLATFORM_PREFIXES = [
   "/yeni-urunler",
 ] as const;
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.codePointAt(end - 1) === 47) {
+    end--;
+  }
+  return value.slice(0, end);
+}
+
 function getInternalBackendBase(): string {
-  return (process.env.INTERNAL_API_URL || "http://127.0.0.1:8080").replace(/\/+$/, "");
+  return trimTrailingSlashes(process.env.INTERNAL_API_URL || "http://127.0.0.1:8080");
 }
 
 function setBoundedCacheEntry(
@@ -165,8 +174,8 @@ function detectRequestLang(request: NextRequest): SupportedSeoLang {
     return normalizeSeoLang(queryLang, "tr");
   }
 
-  if (pathname === "/") {
-    return "en";
+  if (pathname === "/" || pathname === "/toptan-hazir-giyim") {
+    return "tr";
   }
 
   const firstSegment = pathname.split("/")[1]?.toLowerCase() || "";
@@ -230,6 +239,113 @@ function applyCrossSubdomainCorsHeaders(
   return response;
 }
 
+async function handleTenantSubdomainRequest(
+  request: NextRequest,
+  tenantSubdomain: string,
+  origin: string | null
+): Promise<NextResponse> {
+  const { pathname, search } = request.nextUrl;
+  if (isCentralPlatformPath(pathname)) {
+    return applyCrossSubdomainCorsHeaders(
+      NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308),
+      origin
+    );
+  }
+
+  const tenant = await resolveTenantBySubdomain(tenantSubdomain);
+  if (!tenant) {
+    return NextResponse.rewrite(
+      new URL("/ureticiler/__subdomain_not_found__", request.url)
+    );
+  }
+
+  const detectedLang = detectSubdomainRequestLang(request);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-mv-lang", detectedLang);
+  requestHeaders.set("x-mv-tenant-subdomain", tenant.subdomain);
+  requestHeaders.set("x-mv-tenant-slug", tenant.slug);
+
+  const normalizedPath = stripTrailingSlashExceptRoot(pathname);
+  const slugLower = tenant.slug.toLowerCase();
+  const subLower = tenant.subdomain.toLowerCase();
+  const normLower = normalizedPath.toLowerCase();
+
+  if (
+    normLower === `/ureticiler/${slugLower}` ||
+    normLower === `/ureticiler/${subLower}`
+  ) {
+    return NextResponse.redirect(new URL(`/${search}`, request.url), 308);
+  }
+  if (
+    normLower === `/ureticiler/${slugLower}/tanitim` ||
+    normLower === `/ureticiler/${subLower}/tanitim`
+  ) {
+    return NextResponse.redirect(new URL(`/tanitim${search}`, request.url), 308);
+  }
+
+  if (normalizedPath === "/") {
+    return NextResponse.rewrite(
+      new URL(`/ureticiler/${encodeURIComponent(tenant.slug)}${search}`, request.url),
+      { request: { headers: requestHeaders } }
+    );
+  }
+
+  if (normLower === "/tanitim") {
+    return NextResponse.rewrite(
+      new URL(
+        `/ureticiler/${encodeURIComponent(tenant.slug)}/tanitim${search}`,
+        request.url
+      ),
+      { request: { headers: requestHeaders } }
+    );
+  }
+
+  if (normLower.startsWith("/product/")) {
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+  }
+
+  return applyCrossSubdomainCorsHeaders(
+    NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308),
+    origin
+  );
+}
+
+async function maybeRedirectSupplierSlugToSubdomain(
+  pathname: string,
+  search: string,
+  origin: string | null
+): Promise<NextResponse | null> {
+  const slugMatch = SUPPLIER_SLUG_ROUTE_RE.exec(pathname);
+  if (!slugMatch?.[1]) {
+    return null;
+  }
+
+  let rawSlug = slugMatch[1];
+  try {
+    rawSlug = decodeURIComponent(rawSlug).trim();
+  } catch {
+    rawSlug = rawSlug.trim();
+  }
+  if (!rawSlug || rawSlug.startsWith("__")) {
+    return null;
+  }
+
+  const tenant = await resolveTenantBySlug(rawSlug);
+  if (tenant?.subdomain && tenant.subdomain_enabled) {
+    const subPath = slugMatch[2] ? "/tanitim" : "/";
+    return applyCrossSubdomainCorsHeaders(
+      NextResponse.redirect(
+        `https://${tenant.subdomain}.${ROOT_DOMAIN}${subPath}${search}`,
+        301
+      ),
+      origin
+    );
+  }
+  return null;
+}
+
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get("origin");
   if (request.method === "OPTIONS") {
@@ -257,94 +373,23 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   const tenantSubdomain = extractSupplierSubdomainFromHost(primaryHost);
   if (tenantSubdomain) {
-    if (isCentralPlatformPath(pathname)) {
-      return applyCrossSubdomainCorsHeaders(
-        NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308),
-        origin
-      );
-    }
+    return handleTenantSubdomainRequest(request, tenantSubdomain, origin);
+  }
 
-    const tenant = await resolveTenantBySubdomain(tenantSubdomain);
-    if (!tenant) {
-      return NextResponse.rewrite(
-        new URL("/ureticiler/__subdomain_not_found__", request.url)
-      );
-    }
-
-    const detectedLang = detectSubdomainRequestLang(request);
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set("x-mv-lang", detectedLang);
-    requestHeaders.set("x-mv-tenant-subdomain", tenant.subdomain);
-    requestHeaders.set("x-mv-tenant-slug", tenant.slug);
-
-    const normalizedPath = stripTrailingSlashExceptRoot(pathname);
-    const slugLower = tenant.slug.toLowerCase();
-    const subLower = tenant.subdomain.toLowerCase();
-    const normLower = normalizedPath.toLowerCase();
-
-    if (
-      normLower === `/ureticiler/${slugLower}` ||
-      normLower === `/ureticiler/${subLower}`
-    ) {
-      return NextResponse.redirect(new URL(`/${search}`, request.url), 308);
-    }
-    if (
-      normLower === `/ureticiler/${slugLower}/tanitim` ||
-      normLower === `/ureticiler/${subLower}/tanitim`
-    ) {
-      return NextResponse.redirect(new URL(`/tanitim${search}`, request.url), 308);
-    }
-
-    if (normalizedPath === "/") {
-      return NextResponse.rewrite(
-        new URL(`/ureticiler/${encodeURIComponent(tenant.slug)}${search}`, request.url),
-        { request: { headers: requestHeaders } }
-      );
-    }
-
-    if (normLower === "/tanitim") {
-      return NextResponse.rewrite(
-        new URL(
-          `/ureticiler/${encodeURIComponent(tenant.slug)}/tanitim${search}`,
-          request.url
-        ),
-        { request: { headers: requestHeaders } }
-      );
-    }
-
-    if (normLower.startsWith("/product/")) {
-      return NextResponse.next({
-        request: { headers: requestHeaders },
-      });
-    }
-
+  if (pathname === "/tr" || pathname === "/tr/") {
     return applyCrossSubdomainCorsHeaders(
-      NextResponse.redirect(`${ROOT_ORIGIN}${pathname}${search}`, 308),
+      NextResponse.redirect(`${ROOT_ORIGIN}/${search}`, 301),
       origin
     );
   }
 
-  const slugMatch = pathname.match(SUPPLIER_SLUG_ROUTE_RE);
-  if (slugMatch?.[1]) {
-    let rawSlug = slugMatch[1];
-    try {
-      rawSlug = decodeURIComponent(rawSlug).trim();
-    } catch {
-      rawSlug = rawSlug.trim();
-    }
-    if (rawSlug && !rawSlug.startsWith("__")) {
-      const tenant = await resolveTenantBySlug(rawSlug);
-      if (tenant && tenant.subdomain && tenant.subdomain_enabled) {
-        const subPath = slugMatch[2] ? "/tanitim" : "/";
-        return applyCrossSubdomainCorsHeaders(
-          NextResponse.redirect(
-            `https://${tenant.subdomain}.${ROOT_DOMAIN}${subPath}${search}`,
-            301
-          ),
-          origin
-        );
-      }
-    }
+  const supplierRedirect = await maybeRedirectSupplierSlugToSubdomain(
+    pathname,
+    search,
+    origin
+  );
+  if (supplierRedirect) {
+    return supplierRedirect;
   }
 
   const detectedLang = detectRequestLang(request);
@@ -360,6 +405,6 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
 export const config: ProxyConfig = {
   matcher: [
-    "/((?!api|_next/static|_next/image|uploads|banners|favicon\\.ico|robots\\.txt|sitemap\\.xml).*)",
+    "/((?!api|_next/static|_next/image|uploads|banners|favicon[.]ico|robots[.]txt|sitemap[.]xml).*)",
   ],
 };

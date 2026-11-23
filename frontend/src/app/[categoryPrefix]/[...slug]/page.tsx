@@ -16,6 +16,8 @@ import {
   ssrStoreFetch,
   fetchSsrCategories,
   fetchSsrProducts,
+  slimSsrCategoriesForNav,
+  slimSsrProductsForCardGrid,
 } from "@/utils/seoHelpers";
 import { fixApostropheCase } from "@/utils/formatters";
 
@@ -125,7 +127,7 @@ const CUSTOM_CATEGORY_SEO_RULES: readonly CustomCategorySeoRule[] = [
   {
     matches: (s) => s === "kadin-giyim" || s === "kadin",
     titles: {
-      tr: "Merter Toptan Kadın Giyim | İmalatçıdan Yeni Sezon Ürünler",
+      tr: "Toptan Kadın Hazır Giyim — Merter İmalatçıdan Yeni Sezon",
       en: "Merter Wholesale Women's Clothing | Factory Direct New Season",
       ru: "Женская Одежда Оптом из Мертера | Напрямую от Фабрик Стамбула",
       ar: "ملابس نسائية بالجملة من مصانع مارتر إسطنبول | Merter Vitrini",
@@ -135,7 +137,7 @@ const CUSTOM_CATEGORY_SEO_RULES: readonly CustomCategorySeoRule[] = [
       bg: "Дамски Дрехи на Едро от Мертер | Директно от Производител",
     },
     descriptions: {
-      tr: "Doğrudan Merter tekstil imalatçılarından en yeni sezon toptan kadın giyim ürünleri. Aracısız fabrika fiyatları, butikler için serili paketler ve hızlı teslimat.",
+      tr: "Doğrudan Merter hazır giyim imalatçılarından en yeni sezon toptan kadın giyim ürünleri. Aracısız fabrika fiyatları, butikler için serili paketler ve hızlı teslimat.",
       en: "Buy new season wholesale women's apparel directly from Merter Istanbul manufacturers. No middlemen, factory prices, size-run boutique packs, and express global shipping.",
       ru: "Женская одежда оптом напрямую от фабрик и производителей Мертер (Стамбул). Новые коллекции размерными рядами без посредников, фабричные цены и быстрая доставка карго.",
       ar: "تسوق ملابس نسائية بالجملة مباشرة من مصانع مارتر في إسطنبول بدون وسطاء. أحدث موديلات الموسم بأسعار المصنع المباشرة بنظام الباكيدج مع شحن جوي سريع.",
@@ -328,6 +330,29 @@ const CUSTOM_CATEGORY_SEO_RULES: readonly CustomCategorySeoRule[] = [
       fr: "Grossiste d'ensembles coordonnés 2 pièces pour femmes en direct des ateliers de Merter Istanbul.",
       pl: "Modne komplety dwuczęściowe damskie w hurcie w seriach bezpośrednio z Turcji.",
       bg: "Дамски сетове от две части на едро на серии от Мертер, Истанбул на фабрични цени.",
+    },
+  },
+  {
+    matches: (s) => s === "erkek-giyim" || s === "erkek",
+    titles: {
+      tr: "Toptan Erkek Hazır Giyim — Merter Üreticilerinden Seri Paketler",
+      en: "Wholesale Men's Clothing Turkey | Merter Streetwear & Menswear B2B",
+      ru: "Мужская Одежда Оптом из Турции Мертер | Толстовки и Костюмы",
+      ar: "ملابس رجالية بالجملة تركيا مارتر | تيشرتات وبدلات رياضية",
+      de: "Großhandel Herrenmode Türkei Merter | Streetwear Serienpakete",
+      fr: "Vêtements Homme en Gros Turquie Merter | Prêt-à-Porter B2B",
+      pl: "Hurtownia Odzieży Męskiej Turcja Merter | Odzież w Seriach",
+      bg: "Мъжки Дрехи на Едро от Турция Мертер | Директно от Производител",
+    },
+    descriptions: {
+      tr: "Merter erkek hazır giyim üreticilerinden toptan t-shirt, sweatshirt, eşofman takımı, gömlek ve pantolon modelleri serili fabrika fiyatlarıyla.",
+      en: "Wholesale men's t-shirts, hoodies, tracksuits, shirts and denim packs directly from verified Merter Istanbul menswear manufacturers.",
+      ru: "Мужские футболки, свитшоты, спортивные костюмы и рубашки оптом размерными рядами с фабрик Мертера в Стамбуле.",
+      ar: "ملابس رجالية بالجملة بنظام الباكيدج مباشرة من مصانع مارتر إسطنبول بأفضل أسعار المصنع.",
+      de: "Herrenmode, Hoodies und Streetwear im Großhandel in Serienpaketen direkt ab Werk aus Merter Istanbul.",
+      fr: "Prêt-à-porter homme et streetwear en gros vendu par lots en direct des fabricants de Merter Istanbul.",
+      pl: "Hurtownia odzieży męskiej i streetwear z Turcji w pełnych paczkach prosto od producentów.",
+      bg: "Мъжка конфекция на едро в размерни серии директно от фабрики в Мертер, Истанбул.",
     },
   },
 ];
@@ -760,9 +785,9 @@ export default async function CategoryPage({ params, searchParams }: PageProps) 
       <StorefrontLayout
         mode="catalog"
         initialCategorySlug={slug}
-        preFetchedCategories={preFetchedCategories}
+        preFetchedCategories={slimSsrCategoriesForNav(preFetchedCategories, defaultLang)}
         defaultLang={defaultLang}
-        initialProducts={initialProductsPayload.products}
+        initialProducts={slimSsrProductsForCardGrid(initialProductsPayload.products, defaultLang)}
         initialTotalProducts={initialProductsPayload.total}
         categoryFaqs={faqs}
       />

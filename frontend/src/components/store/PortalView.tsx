@@ -492,6 +492,14 @@ export default function PortalView({
           {t("portal_popular_searches_title", lang)}
         </h4>
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 max-w-2xl mx-auto px-4">
+          {lang === "tr" && (
+            <Link
+              href="/toptan-hazir-giyim"
+              className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"
+            >
+              TOPTAN HAZIR GİYİM
+            </Link>
+          )}
           <a
             href={`/${getCategoryPrefix(lang)}/kadin-giyim/elbise-abiye/elbise`}
             className="text-[11px] font-bold text-onyx hover:text-black transition-colors no-underline uppercase tracking-[1px] hover:underline"

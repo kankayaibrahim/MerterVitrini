@@ -138,6 +138,30 @@ function resolveLocalizedProductTitle(
   );
 }
 
+function stripHtmlTags(raw: string): string {
+  let out = "";
+  let inTag = false;
+  for (const ch of raw) {
+    if (ch === "<") {
+      inTag = true;
+    } else if (ch === ">") {
+      inTag = false;
+      out += " ";
+    } else if (!inTag) {
+      out += ch;
+    }
+  }
+  return out.trim().split(/\s+/).filter(Boolean).join(" ");
+}
+
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.codePointAt(end - 1) === 47) {
+    end--;
+  }
+  return value.slice(0, end);
+}
+
 function resolveLocalizedProductDesc(
   product: SeoEnhancedProduct,
   lang: SupportedSeoLang,
@@ -147,7 +171,7 @@ function resolveLocalizedProductDesc(
     product.translations?.[lang]?.description?.trim() ||
     (lang === "tr" ? product.short_description?.trim() || product.description?.trim() : "");
   if (!raw) return fallbackDesc;
-  const cleaned = raw.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  const cleaned = stripHtmlTags(raw);
   return cleaned || fallbackDesc;
 }
 
@@ -217,7 +241,7 @@ function buildProductBreadcrumbElements(
     : null;
   if (catTrail && catTrail.length > 0) {
     for (const cat of catTrail) {
-      const catRelUrl = getCategoryUrl(categories, cat, lang).replace(/\/+$/, "");
+      const catRelUrl = trimTrailingSlashes(getCategoryUrl(categories, cat, lang));
       items.push({
         "@type": "ListItem",
         position: items.length + 1,
@@ -382,6 +406,17 @@ function buildProductJsonLdGraph(
     baseOffer.priceCurrency = currencyCode;
     baseOffer.price = effectiveOfferPrice.toFixed(2);
     baseOffer.priceValidUntil = "2027-12-31";
+    baseOffer.priceSpecification = {
+      "@type": "UnitPriceSpecification",
+      price: effectiveOfferPrice.toFixed(2),
+      priceCurrency: currencyCode,
+      referenceQuantity: {
+        "@type": "QuantitativeValue",
+        value: moq,
+        unitCode: "C62",
+        unitText: "PACK",
+      },
+    };
   }
 
   const memberQuoteOffer: Record<string, unknown> = {

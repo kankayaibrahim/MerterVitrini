@@ -11,36 +11,34 @@ import {
   OG_LOCALE_BY_LANG,
   safeJsonLd,
   SITE_ORIGIN,
+  slimSsrCategoriesForNav,
+  slimSsrProductsForCardGrid,
 } from "@/utils/seoHelpers";
 
-const rootEnCopy = GLOBAL_B2B_SEO_MATRIX.en;
-const rootAlternates = buildPrefixedAlternates("", "en");
+export const revalidate = 180;
+
+const rootTrCopy = GLOBAL_B2B_SEO_MATRIX.tr;
+const rootAlternates = buildPrefixedAlternates("", "tr");
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_ORIGIN),
-  title: rootEnCopy.portalTitle,
-  description: rootEnCopy.portalDescription,
-  keywords: rootEnCopy.keywords,
-  alternates: {
-    canonical: SITE_ORIGIN,
-    languages: {
-      ...rootAlternates.languages,
-      "x-default": `${SITE_ORIGIN}/en`,
-    },
-  },
+  title: rootTrCopy.portalTitle,
+  description: rootTrCopy.portalDescription,
+  keywords: rootTrCopy.keywords,
+  alternates: rootAlternates,
   openGraph: {
-    title: rootEnCopy.portalTitle,
-    description: rootEnCopy.portalDescription,
+    title: rootTrCopy.portalTitle,
+    description: rootTrCopy.portalDescription,
     url: SITE_ORIGIN,
     siteName: "Merter Vitrini B2B",
-    locale: OG_LOCALE_BY_LANG.en,
+    locale: OG_LOCALE_BY_LANG.tr,
     type: "website",
     images: [
       {
         url: `${SITE_ORIGIN}/og-image.jpg`,
         width: 1200,
         height: 630,
-        alt: "Merter Vitrini — Wholesale Clothing Istanbul Manufacturers",
+        alt: "Merter Vitrini — Toptan Hazır Giyim & İstanbul B2B Tekstil Üreticileri",
       },
     ],
   },
@@ -53,7 +51,7 @@ export default async function StorefrontPage() {
     fetchSsrStoreSettings(),
   ]);
 
-  const jsonLdOrg = buildOrganizationGraphJsonLd("en", settings);
+  const jsonLdOrg = buildOrganizationGraphJsonLd("tr", settings);
 
   return (
     <>
@@ -63,9 +61,9 @@ export default async function StorefrontPage() {
       />
       <StorefrontLayout
         mode="portal"
-        defaultLang="en"
-        preFetchedCategories={categories}
-        initialPortalProducts={portalPayload.products}
+        defaultLang="tr"
+        preFetchedCategories={slimSsrCategoriesForNav(categories, "tr")}
+        initialPortalProducts={slimSsrProductsForCardGrid(portalPayload.products, "tr")}
       />
     </>
   );

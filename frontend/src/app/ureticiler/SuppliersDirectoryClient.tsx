@@ -77,9 +77,9 @@ interface DirectoryLocaleCopy {
 const DIRECTORY_COPY: Record<SupportedSeoLang, DirectoryLocaleCopy> = {
   tr: {
     heroBadge: "AÇIK ÜRETİCİ VİTRİNİ • %0 KOMİSYON DOĞRUDAN TİCARET",
-    heroTitle: "Merter Doğrulanmış Üretici & Toptan Giyim Firmaları Rehberi",
+    heroTitle: "Merter Toptan Hazır Giyim Üreticileri & İmalatçı Firmalar Rehberi",
     heroDesc:
-      "Merter tekstil merkezindeki üretici, toptancı, Private Label ve fason üretim firmalarının açık iletişim, WhatsApp, mağaza adresi ve doğrudan fabrika çıkış koleksiyonlarına aracısız ulaşın.",
+      "İstanbul Merter tekstil merkezindeki toptan hazır giyim üreticileri, toptancı showroom'ları, Private Label ve fason üretim firmalarının WhatsApp, adres ve fabrika çıkış koleksiyonlarına aracısız ulaşın.",
     applyBtn: "Üretici Olarak Yerinizi Alın (Ücretsiz)",
     portalLoginBtn: "Tedarikçi Portalı Girişi",
     searchPlaceholder: "Firma adı, Merter adresi, ihracat ülkesi veya üretim alanı ara...",
@@ -420,7 +420,6 @@ interface SupplierDirectoryCardProps {
   readonly brand: Brand;
   readonly copy: DirectoryLocaleCopy;
   readonly lang: string;
-  readonly langSuffix: string;
 }
 
 function SupplierCardContactDetails({
@@ -680,7 +679,6 @@ interface DirectoryContentProps {
   readonly brands: readonly Brand[];
   readonly copy: DirectoryLocaleCopy;
   readonly lang: string;
-  readonly langSuffix: string;
   readonly onResetFilters: () => void;
 }
 
@@ -689,7 +687,6 @@ function DirectoryContent({
   brands,
   copy,
   lang,
-  langSuffix,
   onResetFilters,
 }: DirectoryContentProps) {
   if (loading) {
@@ -719,7 +716,6 @@ function DirectoryContent({
           brand={brand}
           copy={copy}
           lang={lang}
-          langSuffix={langSuffix}
         />
       ))}
     </div>
@@ -755,7 +751,6 @@ export default function SuppliersDirectoryClient({
 
   const safeLang = normalizeSeoLang(lang, "tr");
   const copy = DIRECTORY_COPY[safeLang];
-  const langSuffix = safeLang === "tr" ? "" : `?lang=${safeLang}`;
 
   const totalPkgs = useSyncExternalStore(
     subscribeStore,
@@ -925,7 +920,6 @@ export default function SuppliersDirectoryClient({
           brands={filteredBrands}
           copy={copy}
           lang={safeLang}
-          langSuffix={langSuffix}
           onResetFilters={() => {
             setSearchQuery("");
             setSelectedType("all");
