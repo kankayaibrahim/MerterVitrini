@@ -143,7 +143,7 @@ func sourceDisplayLabel(source string) string {
 }
 
 func stableEntryID(source, ts, msg string, idx int) string {
-	h := sha1.Sum([]byte(fmt.Sprintf("%s|%s|%d|%s", source, ts, idx, msg)))
+	h := sha1.Sum(fmt.Appendf(nil, "%s|%s|%d|%s", source, ts, idx, msg))
 	return hex.EncodeToString(h[:8])
 }
 
@@ -862,7 +862,7 @@ func (h *AdminSystemLogsHandler) GetSystemHealth(w http.ResponseWriter, r *http.
 	}
 	services = append(services, pgSvc)
 
-	redisSvc := ServiceHealthDTO{Key: "redis", Label: "Redis Cache", Status: "inactive", Detail: "Yapılandırılmamış"}
+	redisSvc := ServiceHealthDTO{Key: "redis", Label: "Redis Cache", Status: "not_configured", Detail: "Yapılandırılmamış"}
 	redisDown := false
 	if db.RedisClient != nil {
 		start := time.Now()
@@ -902,59 +902,77 @@ func (h *AdminSystemLogsHandler) GetSystemHealth(w http.ResponseWriter, r *http.
 	})
 }
 
-func (h *AdminSystemLogsHandler) buildAllSourceSummaries(ctx context.Context) ([]LogSourceSummaryDTO, HealthCounts) {
-	allSources := []string{
-		logSourceExceptions,
-		logSourceBackendErrors,
-		logSourceBackendAll,
-		logSourceFrontendSSR,
-		logSourceNginxError,
-		logSourceNginxAccess,
-		logSourcePostgresql,
+var allLogSources = []string{
+	logSourceExceptions,
+	logSourceBackendErrors,
+	logSourceBackendAll,
+	logSourceFrontendSSR,
+	logSourceNginxError,
+	logSourceNginxAccess,
+	logSourcePostgresql,
+}
+
+func isHealthCountedLogSource(src string) bool {
+	switch src {
+	case logSourceBackendErrors, logSourceNginxError, logSourcePostgresql, logSourceFrontendSSR:
+		return true
+	default:
+		return false
 	}
-	summaries := make([]LogSourceSummaryDTO, 0, len(allSources))
+}
+
+func buildExceptionSourceSummary(ctx context.Context, summary LogSourceSummaryDTO, counts *HealthCounts) LogSourceSummaryDTO {
+	if db.Pool == nil {
+		return summary
+	}
+	summary.Available = true
+	_ = db.Pool.QueryRow(ctx, `
+		SELECT
+			COALESCE(COUNT(*) FILTER (WHERE is_resolved = false AND severity IN ('panic','fatal')), 0)::int,
+			COALESCE(COUNT(*) FILTER (WHERE is_resolved = false AND severity NOT IN ('panic','fatal','warn','info')), 0)::int
+		FROM identity.system_exception_logs
+	`).Scan(&counts.UnresolvedCritical, &counts.UnresolvedErrors)
+	summary.ErrorCount = counts.UnresolvedCritical + counts.UnresolvedErrors
+	return summary
+}
+
+func buildFileOrStreamSourceSummary(ctx context.Context, src string, summary LogSourceSummaryDTO, counts *HealthCounts) LogSourceSummaryDTO {
+	entries, files, avail := readSourceEntries(ctx, src, "", false)
+	summary.Available = avail
+	summary.Files = files
+	summary.FileCount = len(files)
+	for _, f := range files {
+		summary.TotalBytes += f.SizeBytes
+	}
+	if src == logSourceFrontendSSR {
+		if wm := loadLogWatermark(ctx, src); wm != nil {
+			summary.ClearedAfter = wm.In(istanbulLocation()).Format(time.RFC3339)
+		}
+	}
+	errCnt, warnCnt := countSeverities(entries)
+	summary.ErrorCount = errCnt
+	summary.WarnCount = warnCnt
+	if isHealthCountedLogSource(src) {
+		counts.SourceErrors += errCnt
+		counts.SourceWarnings += warnCnt
+	}
+	return summary
+}
+
+func (h *AdminSystemLogsHandler) buildAllSourceSummaries(ctx context.Context) ([]LogSourceSummaryDTO, HealthCounts) {
+	summaries := make([]LogSourceSummaryDTO, 0, len(allLogSources))
 	var counts HealthCounts
 
-	for _, src := range allSources {
+	for _, src := range allLogSources {
 		summary := LogSourceSummaryDTO{
 			Source: src,
 			Label:  sourceDisplayLabel(src),
 		}
 		if src == logSourceExceptions {
-			if db.Pool != nil {
-				summary.Available = true
-				_ = db.Pool.QueryRow(ctx, `
-					SELECT
-						COALESCE(COUNT(*) FILTER (WHERE is_resolved = false AND severity IN ('panic','fatal')), 0)::int,
-						COALESCE(COUNT(*) FILTER (WHERE is_resolved = false AND severity NOT IN ('panic','fatal','warn','info')), 0)::int
-					FROM identity.system_exception_logs
-				`).Scan(&counts.UnresolvedCritical, &counts.UnresolvedErrors)
-				summary.ErrorCount = counts.UnresolvedCritical + counts.UnresolvedErrors
-			}
-			summaries = append(summaries, summary)
+			summaries = append(summaries, buildExceptionSourceSummary(ctx, summary, &counts))
 			continue
 		}
-
-		entries, files, avail := readSourceEntries(ctx, src, "", false)
-		summary.Available = avail
-		summary.Files = files
-		summary.FileCount = len(files)
-		for _, f := range files {
-			summary.TotalBytes += f.SizeBytes
-		}
-		if src == logSourceFrontendSSR {
-			if wm := loadLogWatermark(ctx, src); wm != nil {
-				summary.ClearedAfter = wm.In(istanbulLocation()).Format(time.RFC3339)
-			}
-		}
-		errCnt, warnCnt := countSeverities(entries)
-		summary.ErrorCount = errCnt
-		summary.WarnCount = warnCnt
-		if src == logSourceBackendErrors || src == logSourceNginxError || src == logSourcePostgresql || src == logSourceFrontendSSR {
-			counts.SourceErrors += errCnt
-			counts.SourceWarnings += warnCnt
-		}
-		summaries = append(summaries, summary)
+		summaries = append(summaries, buildFileOrStreamSourceSummary(ctx, src, summary, &counts))
 	}
 	return summaries, counts
 }
@@ -1004,6 +1022,44 @@ func matchesSeverityFilter(entrySeverity, filter string) bool {
 	}
 }
 
+func parseLogQueryLimit(raw string) int {
+	rawLim, err := strconv.Atoi(raw)
+	if err != nil || rawLim <= 0 {
+		return 200
+	}
+	if rawLim > 1000 {
+		return 1000
+	}
+	return rawLim
+}
+
+func matchesLogEntryFilters(item SystemLogEntryDTO, severityFilter, search string) bool {
+	if !matchesSeverityFilter(item.Severity, severityFilter) {
+		return false
+	}
+	if search == "" {
+		return true
+	}
+	haystack := strings.ToLower(item.Message + "\n" + item.StackTrace + "\n" + item.FileName)
+	return strings.Contains(haystack, search)
+}
+
+func appendFilteredLogEntries(
+	collected, rawEntries []SystemLogEntryDTO,
+	src, severityFilter, search string,
+	countsBySeverity, countsBySource map[string]int,
+) []SystemLogEntryDTO {
+	for _, item := range rawEntries {
+		if !matchesLogEntryFilters(item, severityFilter, search) {
+			continue
+		}
+		countsBySeverity[item.Severity]++
+		countsBySource[src]++
+		collected = append(collected, item)
+	}
+	return collected
+}
+
 // QuerySystemLogs handles GET /api/v1/admin/system-logs
 func (h *AdminSystemLogsHandler) QuerySystemLogs(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
@@ -1015,14 +1071,7 @@ func (h *AdminSystemLogsHandler) QuerySystemLogs(w http.ResponseWriter, r *http.
 	search := strings.ToLower(strings.TrimSpace(q.Get("q")))
 	selectedFile := strings.TrimSpace(q.Get("file"))
 	unresolvedOnly := q.Get("unresolved_only") == "true"
-
-	limit := 200
-	if rawLim, err := strconv.Atoi(q.Get("limit")); err == nil && rawLim > 0 {
-		if rawLim > 1000 {
-			rawLim = 1000
-		}
-		limit = rawLim
-	}
+	limit := parseLogQueryLimit(q.Get("limit"))
 
 	collected := make([]SystemLogEntryDTO, 0, 256)
 	countsBySeverity := map[string]int{
@@ -1034,30 +1083,18 @@ func (h *AdminSystemLogsHandler) QuerySystemLogs(w http.ResponseWriter, r *http.
 	}
 	countsBySource := make(map[string]int, len(sources))
 	availableFiles := make([]SystemLogFileDTO, 0)
+	singleSource := len(sources) == 1
 
 	for _, src := range sources {
 		fileArg := ""
-		if len(sources) == 1 {
+		if singleSource {
 			fileArg = selectedFile
 		}
 		rawEntries, files, _ := readSourceEntries(ctx, src, fileArg, unresolvedOnly)
-		if len(sources) == 1 && len(files) > 0 {
+		if singleSource && len(files) > 0 {
 			availableFiles = files
 		}
-		for _, item := range rawEntries {
-			if !matchesSeverityFilter(item.Severity, severityFilter) {
-				continue
-			}
-			if search != "" {
-				haystack := strings.ToLower(item.Message + "\n" + item.StackTrace + "\n" + item.FileName)
-				if !strings.Contains(haystack, search) {
-					continue
-				}
-			}
-			countsBySeverity[item.Severity]++
-			countsBySource[src]++
-			collected = append(collected, item)
-		}
+		collected = appendFilteredLogEntries(collected, rawEntries, src, severityFilter, search, countsBySeverity, countsBySource)
 	}
 
 	sort.Slice(collected, func(i, j int) bool {
@@ -1078,6 +1115,16 @@ func (h *AdminSystemLogsHandler) QuerySystemLogs(w http.ResponseWriter, r *http.
 	})
 }
 
+func filterValidUUIDs(ids []string) []string {
+	validIDs := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if isValidUUIDString(id) {
+			validIDs = append(validIDs, id)
+		}
+	}
+	return validIDs
+}
+
 // ResolveExceptions handles POST /api/v1/admin/system-logs/resolve
 func (h *AdminSystemLogsHandler) ResolveExceptions(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -1088,12 +1135,7 @@ func (h *AdminSystemLogsHandler) ResolveExceptions(w http.ResponseWriter, r *htt
 		httpx.Error(w, http.StatusBadRequest, "Geçersiz istek verisi")
 		return
 	}
-	validIDs := make([]string, 0, len(req.IDs))
-	for _, id := range req.IDs {
-		if isValidUUIDString(id) {
-			validIDs = append(validIDs, id)
-		}
-	}
+	validIDs := filterValidUUIDs(req.IDs)
 	if len(validIDs) == 0 {
 		httpx.Error(w, http.StatusBadRequest, "Geçerli hata kaydı seçilmedi")
 		return
@@ -1122,48 +1164,81 @@ type clearFileTarget struct {
 	Filename string `json:"filename"`
 }
 
-func truncateOrRemoveDirFiles(dir string, files []SystemLogFileDTO, specific []string, includeRotated bool) (int, int64, error) {
-	if dir == "" || len(files) == 0 {
-		return 0, 0, nil
-	}
+type clearLogsRequest struct {
+	Mode           string            `json:"mode"`
+	IDs            []string          `json:"ids"`
+	Sources        []string          `json:"sources"`
+	Files          []clearFileTarget `json:"files"`
+	IncludeRotated bool              `json:"include_rotated"`
+}
+
+type clearLogsResult struct {
+	ClearedSources []string
+	ClearedEntries int
+	ClearedFiles   int
+	FreedBytes     int64
+}
+
+func selectSpecificLogFiles(files []SystemLogFileDTO, specific []string) []SystemLogFileDTO {
 	allowed := make(map[string]SystemLogFileDTO, len(files))
 	for _, f := range files {
 		allowed[f.Name] = f
 	}
-
-	targets := make([]SystemLogFileDTO, 0)
-	if len(specific) > 0 {
-		for _, raw := range specific {
-			if isSafeLogFilename(raw) {
-				if info, ok := allowed[strings.TrimSpace(raw)]; ok {
-					targets = append(targets, info)
-				}
-			}
+	targets := make([]SystemLogFileDTO, 0, len(specific))
+	for _, raw := range specific {
+		if !isSafeLogFilename(raw) {
+			continue
 		}
-	} else {
-		for _, f := range files {
-			if f.IsActive || includeRotated {
-				targets = append(targets, f)
-			}
+		if info, ok := allowed[strings.TrimSpace(raw)]; ok {
+			targets = append(targets, info)
 		}
 	}
+	return targets
+}
 
+func selectClearTargetFiles(files []SystemLogFileDTO, specific []string, includeRotated bool) []SystemLogFileDTO {
+	if len(specific) > 0 {
+		return selectSpecificLogFiles(files, specific)
+	}
+	targets := make([]SystemLogFileDTO, 0, len(files))
+	for _, f := range files {
+		if f.IsActive || includeRotated {
+			targets = append(targets, f)
+		}
+	}
+	return targets
+}
+
+func clearSingleDirFile(dir string, target SystemLogFileDTO) (bool, int64, error) {
+	fullPath := filepath.Join(dir, target.Name)
+	if strings.HasSuffix(target.Name, ".gz") {
+		if err := os.Remove(fullPath); err == nil {
+			return true, target.SizeBytes, nil
+		}
+		return false, 0, nil
+	}
+	if err := os.Truncate(fullPath, 0); err != nil {
+		return false, 0, err
+	}
+	return true, target.SizeBytes, nil
+}
+
+func truncateOrRemoveDirFiles(dir string, files []SystemLogFileDTO, specific []string, includeRotated bool) (int, int64, error) {
+	if dir == "" || len(files) == 0 {
+		return 0, 0, nil
+	}
+	targets := selectClearTargetFiles(files, specific, includeRotated)
 	clearedCount := 0
 	var freed int64
 	for _, t := range targets {
-		fullPath := filepath.Join(dir, t.Name)
-		if strings.HasSuffix(t.Name, ".gz") {
-			if err := os.Remove(fullPath); err == nil {
-				clearedCount++
-				freed += t.SizeBytes
-			}
-			continue
-		}
-		if err := os.Truncate(fullPath, 0); err != nil {
+		cleared, delta, err := clearSingleDirFile(dir, t)
+		if err != nil {
 			return clearedCount, freed, err
 		}
-		clearedCount++
-		freed += t.SizeBytes
+		if cleared {
+			clearedCount++
+			freed += delta
+		}
 	}
 	return clearedCount, freed, nil
 }
@@ -1208,113 +1283,113 @@ func clearSingleLogSource(ctx context.Context, source string, specificFiles []st
 	}
 }
 
+func extractActorEmail(ctx context.Context) string {
+	actor, ok := middleware.GetUserFromContext(ctx)
+	if ok && actor != nil && strings.TrimSpace(actor.Email) != "" {
+		return strings.TrimSpace(actor.Email)
+	}
+	return "admin"
+}
+
+func clearSelectedExceptionIDs(ctx context.Context, ids []string) (clearLogsResult, int, string) {
+	res := clearLogsResult{ClearedSources: make([]string, 0)}
+	validIDs := filterValidUUIDs(ids)
+	if len(validIDs) == 0 {
+		return res, http.StatusBadRequest, "Silinecek geçerli kayıt seçilmedi"
+	}
+	tag, err := db.Pool.Exec(ctx, `DELETE FROM identity.system_exception_logs WHERE id = ANY($1::uuid[])`, validIDs)
+	if err != nil {
+		return res, http.StatusInternalServerError, "Seçili exception kayıtları silinemedi"
+	}
+	res.ClearedEntries = int(tag.RowsAffected())
+	res.ClearedSources = append(res.ClearedSources, logSourceExceptions)
+	return res, 0, ""
+}
+
+func clearSelectedLogFiles(ctx context.Context, files []clearFileTarget, actorEmail string) (clearLogsResult, int, string) {
+	res := clearLogsResult{ClearedSources: make([]string, 0)}
+	bySource := make(map[string][]string)
+	for _, f := range files {
+		if isSafeLogFilename(f.Filename) {
+			bySource[f.Source] = append(bySource[f.Source], f.Filename)
+		}
+	}
+	for src, fileList := range bySource {
+		_, freed, err := clearSingleLogSource(ctx, src, fileList, true, actorEmail)
+		if err != nil {
+			return res, http.StatusInternalServerError, fmt.Sprintf("%s temizlenemedi: %v", src, err)
+		}
+		res.ClearedFiles += len(fileList)
+		res.FreedBytes += freed
+		res.ClearedSources = append(res.ClearedSources, src)
+	}
+	return res, 0, ""
+}
+
+func clearRequestedLogSources(ctx context.Context, req clearLogsRequest, actorEmail string) (clearLogsResult, int, string) {
+	res := clearLogsResult{ClearedSources: make([]string, 0)}
+	targetSources := req.Sources
+	if req.Mode == "all" {
+		targetSources = allLogSources
+	}
+	for _, src := range parseRequestedSources(strings.Join(targetSources, ",")) {
+		cnt, freed, err := clearSingleLogSource(ctx, src, nil, req.IncludeRotated, actorEmail)
+		if err != nil {
+			return res, http.StatusInternalServerError, fmt.Sprintf("%s temizlenemedi: %v", src, err)
+		}
+		if src == logSourceExceptions {
+			res.ClearedEntries += cnt
+		} else {
+			res.ClearedFiles += cnt
+		}
+		res.FreedBytes += freed
+		res.ClearedSources = append(res.ClearedSources, src)
+	}
+	return res, 0, ""
+}
+
 // ClearSystemLogs handles POST /api/v1/admin/system-logs/clear
 func (h *AdminSystemLogsHandler) ClearSystemLogs(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Mode           string            `json:"mode"`
-		IDs            []string          `json:"ids"`
-		Sources        []string          `json:"sources"`
-		Files          []clearFileTarget `json:"files"`
-		IncludeRotated bool              `json:"include_rotated"`
-	}
+	var req clearLogsRequest
 	if err := httpx.DecodeJSON(r, &req, httpx.DefaultMaxJSONBytes); err != nil {
 		httpx.Error(w, http.StatusBadRequest, "Geçersiz temizleme isteği")
 		return
 	}
 
-	actorEmail := "admin"
-	if actor, ok := middleware.GetUserFromContext(r.Context()); ok && actor != nil && strings.TrimSpace(actor.Email) != "" {
-		actorEmail = strings.TrimSpace(actor.Email)
-	}
-
+	actorEmail := extractActorEmail(r.Context())
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	var clearedEntries int
-	var clearedFiles int
-	var freedBytes int64
-	clearedSources := make([]string, 0)
-
+	var (
+		res       clearLogsResult
+		errStatus int
+		errMsg    string
+	)
 	switch req.Mode {
 	case "selected_ids":
-		validIDs := make([]string, 0, len(req.IDs))
-		for _, id := range req.IDs {
-			if isValidUUIDString(id) {
-				validIDs = append(validIDs, id)
-			}
-		}
-		if len(validIDs) == 0 {
-			httpx.Error(w, http.StatusBadRequest, "Silinecek geçerli kayıt seçilmedi")
-			return
-		}
-		tag, err := db.Pool.Exec(ctx, `DELETE FROM identity.system_exception_logs WHERE id = ANY($1::uuid[])`, validIDs)
-		if err != nil {
-			httpx.Error(w, http.StatusInternalServerError, "Seçili exception kayıtları silinemedi")
-			return
-		}
-		clearedEntries = int(tag.RowsAffected())
-		clearedSources = append(clearedSources, logSourceExceptions)
-
+		res, errStatus, errMsg = clearSelectedExceptionIDs(ctx, req.IDs)
 	case "selected_files":
-		bySource := make(map[string][]string)
-		for _, f := range req.Files {
-			if isSafeLogFilename(f.Filename) {
-				bySource[f.Source] = append(bySource[f.Source], f.Filename)
-			}
-		}
-		for src, fileList := range bySource {
-			_, freed, err := clearSingleLogSource(ctx, src, fileList, true, actorEmail)
-			if err != nil {
-				httpx.Error(w, http.StatusInternalServerError, fmt.Sprintf("%s temizlenemedi: %v", src, err))
-				return
-			}
-			clearedFiles += len(fileList)
-			freedBytes += freed
-			clearedSources = append(clearedSources, src)
-		}
-
+		res, errStatus, errMsg = clearSelectedLogFiles(ctx, req.Files, actorEmail)
 	case "selected_sources", "all":
-		targetSources := req.Sources
-		if req.Mode == "all" {
-			targetSources = []string{
-				logSourceExceptions,
-				logSourceBackendErrors,
-				logSourceBackendAll,
-				logSourceFrontendSSR,
-				logSourceNginxError,
-				logSourceNginxAccess,
-				logSourcePostgresql,
-			}
-		}
-		for _, src := range parseRequestedSources(strings.Join(targetSources, ",")) {
-			cnt, freed, err := clearSingleLogSource(ctx, src, nil, req.IncludeRotated, actorEmail)
-			if err != nil {
-				httpx.Error(w, http.StatusInternalServerError, fmt.Sprintf("%s temizlenemedi: %v", src, err))
-				return
-			}
-			if src == logSourceExceptions {
-				clearedEntries += cnt
-			} else {
-				clearedFiles += cnt
-			}
-			freedBytes += freed
-			clearedSources = append(clearedSources, src)
-		}
-
+		res, errStatus, errMsg = clearRequestedLogSources(ctx, req, actorEmail)
 	default:
 		httpx.Error(w, http.StatusBadRequest, "Geçersiz temizleme modu")
 		return
 	}
+	if errStatus != 0 {
+		httpx.Error(w, errStatus, errMsg)
+		return
+	}
 
 	logger.Infof("[ADMIN LOGS] %s cleared logs (mode=%s, sources=%v, entries=%d, freed=%dB)",
-		actorEmail, req.Mode, clearedSources, clearedEntries, freedBytes)
+		actorEmail, req.Mode, res.ClearedSources, res.ClearedEntries, res.FreedBytes)
 
 	httpx.JSON(w, http.StatusOK, map[string]any{
 		"success":         true,
-		"cleared_sources": clearedSources,
-		"cleared_entries": clearedEntries,
-		"cleared_files":   clearedFiles,
-		"freed_bytes":     freedBytes,
+		"cleared_sources": res.ClearedSources,
+		"cleared_entries": res.ClearedEntries,
+		"cleared_files":   res.ClearedFiles,
+		"freed_bytes":     res.FreedBytes,
 		"message":         "Seçilen log kayıtları ve dosyaları güvenli şekilde temizlendi.",
 	})
 }

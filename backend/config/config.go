@@ -19,6 +19,7 @@ type Config struct {
 	DisableOTP               bool   `json:"disable_otp"`
 	LogFormat                string `json:"log_format"`
 	RedisURL                 string `json:"redis_url"`
+	RedisTLSCACert           string `json:"redis_tls_ca_cert,omitempty"`
 	KeycloakURL              string `json:"keycloak_url"`
 	KeycloakRealm            string `json:"keycloak_realm"`
 	KeycloakClientID         string `json:"keycloak_client_id"`
@@ -125,6 +126,7 @@ func applyEnvOverrides(cfg *Config) {
 	setIfPresent(&cfg.ServerPort, "SERVER_PORT")
 	setIfPresent(&cfg.LogFormat, "LOG_FORMAT")
 	setIfPresent(&cfg.RedisURL, "REDIS_URL")
+	setIfPresent(&cfg.RedisTLSCACert, "REDIS_TLS_CA_CERT")
 	setIfPresent(&cfg.KeycloakURL, "KEYCLOAK_URL")
 	setIfPresent(&cfg.KeycloakRealm, "KEYCLOAK_REALM")
 	setIfPresent(&cfg.KeycloakClientID, "KEYCLOAK_CLIENT_ID")

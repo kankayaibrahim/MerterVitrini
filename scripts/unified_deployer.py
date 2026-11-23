@@ -9,6 +9,7 @@ import argparse
 import time
 import hashlib
 import base64
+import urllib.parse
 import paramiko
 
 # Fallback wrapper for PySide6
@@ -234,6 +235,78 @@ class DeployPipeline:
                 sftp.put(local_parser, f"{remote_parsers_dir}/{parser_name}")
                 sftp.chmod(f"{remote_parsers_dir}/{parser_name}", 0o755)
 
+    def _resolve_remote_redis_config(self, ssh):
+        remote_py = r"""import json, os, urllib.parse
+conf_path = next((p for p in ("/etc/redis/redis.conf", "/etc/redis.conf") if os.path.isfile(p)), "")
+if not conf_path:
+    print("{}")
+    raise SystemExit(0)
+
+port = 0
+tls_port = 0
+ca_cert = ""
+requirepass = ""
+with open(conf_path, "r", encoding="utf-8", errors="ignore") as f:
+    for raw in f:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        if len(parts) < 2:
+            continue
+        key = parts[0].lower()
+        val = parts[1].strip()
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
+            val = val[1:-1]
+        if key == "port":
+            try:
+                port = int(val)
+            except ValueError:
+                pass
+        elif key == "tls-port":
+            try:
+                tls_port = int(val)
+            except ValueError:
+                pass
+        elif key == "tls-ca-cert-file":
+            ca_cert = val
+        elif key == "requirepass":
+            requirepass = val
+
+res = {}
+auth_part = f":{urllib.parse.quote(requirepass, safe='')}@" if requirepass else ""
+if tls_port > 0:
+    res["redis_url"] = f"rediss://{auth_part}127.0.0.1:{tls_port}/0"
+    if ca_cert and os.path.isfile(ca_cert):
+        res["redis_tls_ca_cert"] = ca_cert
+elif port > 0:
+    res["redis_url"] = f"redis://{auth_part}127.0.0.1:{port}/0"
+
+print(json.dumps(res))
+"""
+        stdin, stdout, stderr = ssh.exec_command("python3 -", get_pty=False)
+        stdin.write(remote_py)
+        stdin.channel.shutdown_write()
+        out = stdout.read().decode("utf-8", errors="replace").strip()
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status != 0 or not out:
+            return {}
+        try:
+            resolved = json.loads(out)
+        except Exception:
+            return {}
+        if not isinstance(resolved, dict):
+            return {}
+        redis_url = resolved.get("redis_url", "")
+        if redis_url.startswith("rediss://"):
+            ca_disp = resolved.get("redis_tls_ca_cert") or "system"
+            port_disp = redis_url.rsplit(":", 1)[-1].split("/", 1)[0]
+            self.log(f"[CONFIG] Detected live Redis TLS endpoint (127.0.0.1:{port_disp}, CA={ca_disp})")
+        elif redis_url.startswith("redis://"):
+            port_disp = redis_url.rsplit(":", 1)[-1].split("/", 1)[0]
+            self.log(f"[CONFIG] Detected live Redis endpoint (127.0.0.1:{port_disp})")
+        return resolved
+
     def deploy_backend(self, proj_key="unified"):
         self.log("\n" + DIVIDER_LINE_50)
         self.log(" DEPLOYING UNIFIED GO BACKEND (Port 8080)")
@@ -263,12 +336,26 @@ class DeployPipeline:
             sftp.put(local_bin, remote_bin_path)
             sftp.chmod(remote_bin_path, 0o755)
 
-            # Generate and upload production config
+            # Merge existing remote production config (preserving server-only keys) with template and live Redis TLS settings
             prod_config_path = f"{remote_bin_dir}/config.json"
             self.log(f"[CONFIG] Generation for Remote Production -> {prod_config_path}")
-            
-            with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as tmp:
-                json.dump(cfg["config_template"], tmp, indent=4)
+
+            merged_config = {}
+            try:
+                with sftp.open(prod_config_path, "r") as remote_cfg_file:
+                    existing_raw = remote_cfg_file.read().decode("utf-8", errors="replace")
+                loaded_existing = json.loads(existing_raw)
+                if isinstance(loaded_existing, dict):
+                    merged_config.update(loaded_existing)
+            except Exception:
+                pass
+
+            merged_config.update(cfg["config_template"])
+            merged_config.update(self._resolve_remote_redis_config(ssh))
+
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False, suffix=".json") as tmp:
+                json.dump(merged_config, tmp, indent=4, ensure_ascii=False)
+                tmp.write("\n")
                 tmp_path = tmp.name
 
             try:
@@ -285,8 +372,8 @@ class DeployPipeline:
             self.log("[SYSTEMD] Configuring backend daemon service...")
             systemd_content = f"""[Unit]
 Description=Merter Vitrini Unified Go Backend API Service
-After=network.target
-Wants=postgresql.service
+After=network.target redis.service
+Wants=postgresql.service redis.service
 
 [Service]
 Type=simple

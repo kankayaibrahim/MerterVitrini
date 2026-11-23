@@ -137,4 +137,93 @@ func TestComputeOverallHealthVerdict(t *testing.T) {
 	if vDown != "critical" {
 		t.Fatalf("expected critical when DB down, got %s", vDown)
 	}
+	unconfiguredRedis := append(append([]ServiceHealthDTO(nil), active...), ServiceHealthDTO{
+		Key: "redis", Label: "Redis Cache", Status: "not_configured",
+	})
+	vUnconf, _, _ := ComputeOverallHealthVerdict(unconfiguredRedis, HealthCounts{})
+	if vUnconf != "healthy" {
+		t.Fatalf("expected healthy when Redis is not_configured, got %s", vUnconf)
+	}
+	downRedis := append(append([]ServiceHealthDTO(nil), active...), ServiceHealthDTO{
+		Key: "redis", Label: "Redis Cache", Status: "down",
+	})
+	vRedisDown, _, _ := ComputeOverallHealthVerdict(downRedis, HealthCounts{})
+	if vRedisDown != "critical" {
+		t.Fatalf("expected critical when Redis is down, got %s", vRedisDown)
+	}
+}
+
+func TestStableEntryIDDeterministic(t *testing.T) {
+	a := stableEntryID(logSourceNginxError, "2026-11-23T02:00:00Z", "connect refused", 3)
+	b := stableEntryID(logSourceNginxError, "2026-11-23T02:00:00Z", "connect refused", 3)
+	c := stableEntryID(logSourceNginxError, "2026-11-23T02:00:00Z", "connect refused", 4)
+	if len(a) != 16 || a != b || a == c {
+		t.Fatalf("unexpected stableEntryID values: a=%s b=%s c=%s", a, b, c)
+	}
+}
+
+func TestLogQueryHelpers(t *testing.T) {
+	if got := parseLogQueryLimit(""); got != 200 {
+		t.Fatalf("expected default limit 200, got %d", got)
+	}
+	if got := parseLogQueryLimit("-5"); got != 200 {
+		t.Fatalf("expected default limit 200 for negative input, got %d", got)
+	}
+	if got := parseLogQueryLimit("5000"); got != 1000 {
+		t.Fatalf("expected clamped limit 1000, got %d", got)
+	}
+	if got := parseLogQueryLimit("150"); got != 150 {
+		t.Fatalf("expected limit 150, got %d", got)
+	}
+
+	entry := SystemLogEntryDTO{
+		Severity:   severityError,
+		Message:    "Database timeout while syncing",
+		StackTrace: "goroutine 1: handlers/sync.go:44",
+		FileName:   "error-2026-11-23.log",
+	}
+	if !matchesLogEntryFilters(entry, "error", "sync.go:44") {
+		t.Fatal("expected entry to match severity=error and stacktrace query")
+	}
+	if matchesLogEntryFilters(entry, "warn", "") {
+		t.Fatal("did not expect error entry to match warn severity filter")
+	}
+	if matchesLogEntryFilters(entry, "all", "nonexistent-needle") {
+		t.Fatal("did not expect entry to match missing search needle")
+	}
+}
+
+func TestTruncateOrRemoveDirFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	activePath := filepath.Join(tmpDir, "error.log")
+	gzPath := filepath.Join(tmpDir, "error.log.1.gz")
+	otherRotated := filepath.Join(tmpDir, "error.log.2")
+	for _, p := range []string{activePath, gzPath, otherRotated} {
+		if err := os.WriteFile(p, []byte("log payload data"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files := []SystemLogFileDTO{
+		{Name: "error.log", SizeBytes: 16, IsActive: true},
+		{Name: "error.log.1.gz", SizeBytes: 16, IsActive: false},
+		{Name: "error.log.2", SizeBytes: 16, IsActive: false},
+	}
+
+	cleared, freed, err := truncateOrRemoveDirFiles(tmpDir, files, []string{"../escape.log", "error.log", "error.log.1.gz"}, false)
+	if err != nil {
+		t.Fatalf("truncateOrRemoveDirFiles failed: %v", err)
+	}
+	if cleared != 2 || freed != 32 {
+		t.Fatalf("expected cleared=2 freed=32, got cleared=%d freed=%d", cleared, freed)
+	}
+	if info, statErr := os.Stat(activePath); statErr != nil || info.Size() != 0 {
+		t.Fatalf("expected active log truncated to 0, err=%v size=%v", statErr, info)
+	}
+	if _, statErr := os.Stat(gzPath); !os.IsNotExist(statErr) {
+		t.Fatalf("expected .gz file removed, statErr=%v", statErr)
+	}
+	if info, statErr := os.Stat(otherRotated); statErr != nil || info.Size() != 16 {
+		t.Fatalf("expected unselected rotated file untouched, err=%v", statErr)
+	}
 }
