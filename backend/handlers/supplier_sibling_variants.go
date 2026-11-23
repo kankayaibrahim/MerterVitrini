@@ -18,6 +18,11 @@ import (
 	"mertervitrini/backend/pkg/httpx"
 )
 
+const (
+	errSupplierProductNotFound = "Ürün bulunamadı veya bu ürüne erişim yetkiniz yok"
+	errSupplierTxStartFailed   = "Veritabanı işlemi başlatılamadı"
+)
+
 var supplierSiblingSchemaOnce sync.Once
 
 func ensureSupplierSiblingSchema(ctx context.Context) {
@@ -399,6 +404,60 @@ func hasNonEmptyColorVariantDrafts(variants []models.SupplierColorVariantDraftIn
 	return false
 }
 
+func buildInlineColorVariantParams(
+	brandID string,
+	req *models.SupplierProductInput,
+	v models.SupplierColorVariantDraftInput,
+	groupID *string,
+	initialStock, idx int,
+) (supplierProductInsertParams, bool, error) {
+	imgs := cleanNonEmptyStrings(v.Images)
+	colorID := normalizeOptionalIDPtr(v.ColorID)
+	title := strings.TrimSpace(v.Title)
+	if colorID == nil && len(imgs) == 0 && title == "" {
+		return supplierProductInsertParams{}, false, nil
+	}
+	if title == "" {
+		title = req.Title
+	}
+
+	price := req.Price
+	if v.Price != nil {
+		price = max(*v.Price, 0)
+	}
+
+	isActive := resolveInlineVariantActiveState(req, v, price, len(imgs) > 0)
+	if isActive && (price <= 0 || len(imgs) == 0) {
+		return supplierProductInsertParams{}, false, errors.New("Ek renk varyantını yayına almak için fiyat (> 0) ve en az 1 fotoğraf eklemelisiniz.")
+	}
+
+	return supplierProductInsertParams{
+		BrandID:              brandID,
+		SourceProductID:      fmt.Sprintf("SUP-%d-%d", time.Now().UnixNano(), idx+1),
+		SourceProductGroupID: groupID,
+		Title:                title,
+		ShortDescription:     req.ShortDescription,
+		Description:          req.Description,
+		CategoryID:           req.CategoryID,
+		ColorID:              colorID,
+		FabricID:             req.FabricID,
+		Gender:               req.Gender,
+		Season:               req.Season,
+		BuyingPrice:          req.BuyingPrice,
+		Price:                price,
+		Currency:             req.Currency,
+		PackingRatio:         req.PackingRatio,
+		SeriesRatio:          req.SeriesRatio,
+		MinimumOrderQuantity: req.MinimumOrderQuantity,
+		SeriesStock:          req.SeriesStock,
+		InitialStock:         initialStock,
+		IsActive:             isActive,
+		Images:               imgs,
+		Variants:             req.Variants,
+		Translations:         req.Translations,
+	}, true, nil
+}
+
 func insertAdditionalColorVariantsTx(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -406,69 +465,33 @@ func insertAdditionalColorVariantsTx(
 	req *models.SupplierProductInput,
 	groupID *string,
 	initialStock int,
-) ([]string, []string, error) {
-	siblingIDs := make([]string, 0, len(req.AdditionalColorVariants))
+) ([]productAuditItemRef, []string, error) {
+	siblingRefs := make([]productAuditItemRef, 0, len(req.AdditionalColorVariants))
 	activeSlugs := make([]string, 0, len(req.AdditionalColorVariants))
 
 	for idx, v := range req.AdditionalColorVariants {
-		imgs := cleanNonEmptyStrings(v.Images)
-		colorID := normalizeOptionalIDPtr(v.ColorID)
-		title := strings.TrimSpace(v.Title)
-		if colorID == nil && len(imgs) == 0 && title == "" {
+		params, ok, buildErr := buildInlineColorVariantParams(brandID, req, v, groupID, initialStock, idx)
+		if buildErr != nil {
+			return nil, nil, buildErr
+		}
+		if !ok {
 			continue
 		}
-		if title == "" {
-			title = req.Title
-		}
 
-		price := req.Price
-		if v.Price != nil {
-			price = *v.Price
-			if price < 0 {
-				price = 0
-			}
-		}
-
-		isActive := resolveInlineVariantActiveState(req, v, price, len(imgs) > 0)
-		if isActive && (price <= 0 || len(imgs) == 0) {
-			return nil, nil, errors.New("Ek renk varyantını yayına almak için fiyat (> 0) ve en az 1 fotoğraf eklemelisiniz.")
-		}
-
-		sourceProductID := fmt.Sprintf("SUP-%d-%d", time.Now().UnixNano(), idx+1)
-		created, slug, err := insertSupplierProductRowTx(ctx, tx, supplierProductInsertParams{
-			BrandID:              brandID,
-			SourceProductID:      sourceProductID,
-			SourceProductGroupID: groupID,
-			Title:                title,
-			ShortDescription:     req.ShortDescription,
-			Description:          req.Description,
-			CategoryID:           req.CategoryID,
-			ColorID:              colorID,
-			FabricID:             req.FabricID,
-			Gender:               req.Gender,
-			Season:               req.Season,
-			BuyingPrice:          req.BuyingPrice,
-			Price:                price,
-			Currency:             req.Currency,
-			PackingRatio:         req.PackingRatio,
-			SeriesRatio:          req.SeriesRatio,
-			MinimumOrderQuantity: req.MinimumOrderQuantity,
-			SeriesStock:          req.SeriesStock,
-			InitialStock:         initialStock,
-			IsActive:             isActive,
-			Images:               imgs,
-			Variants:             req.Variants,
-			Translations:         req.Translations,
-		})
+		created, slug, err := insertSupplierProductRowTx(ctx, tx, params)
 		if err != nil {
 			return nil, nil, fmt.Errorf("ek renk varyantı oluşturulamadı: %w", err)
 		}
-		siblingIDs = append(siblingIDs, created.ID)
-		if isActive && slug != "" {
+		siblingRefs = append(siblingRefs, productAuditItemRef{
+			ProductID: created.ID,
+			Title:     created.Title,
+			CustomSKU: created.CustomSKU,
+		})
+		if params.IsActive && slug != "" {
 			activeSlugs = append(activeSlugs, slug)
 		}
 	}
-	return siblingIDs, activeSlugs, nil
+	return siblingRefs, activeSlugs, nil
 }
 
 func resolveInlineVariantActiveState(req *models.SupplierProductInput, v models.SupplierColorVariantDraftInput, price float64, hasImg bool) bool {
@@ -507,7 +530,7 @@ func (h *SupplierPortalHandler) ListProductSiblings(w http.ResponseWriter, r *ht
 		FROM catalog.products
 		WHERE id = $1 AND brand_id = $2`, id, claims.BrandID).Scan(&groupID)
 	if err != nil {
-		httpx.Error(w, http.StatusNotFound, "Ürün bulunamadı veya bu ürüne erişim yetkiniz yok")
+		httpx.Error(w, http.StatusNotFound, errSupplierProductNotFound)
 		return
 	}
 
@@ -585,7 +608,7 @@ func (h *SupplierPortalHandler) LinkProductSiblings(w http.ResponseWriter, r *ht
 
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "Veritabanı işlemi başlatılamadı")
+		httpx.Error(w, http.StatusInternalServerError, errSupplierTxStartFailed)
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -596,7 +619,7 @@ func (h *SupplierPortalHandler) LinkProductSiblings(w http.ResponseWriter, r *ht
 		FROM catalog.products
 		WHERE id = $1 AND brand_id = $2`, id, claims.BrandID).Scan(&currentGroup, &customSKU)
 	if err != nil {
-		httpx.Error(w, http.StatusNotFound, "Ürün bulunamadı veya bu ürüne erişim yetkiniz yok")
+		httpx.Error(w, http.StatusNotFound, errSupplierProductNotFound)
 		return
 	}
 
@@ -655,7 +678,7 @@ func (h *SupplierPortalHandler) UnlinkProductSibling(w http.ResponseWriter, r *h
 
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "Veritabanı işlemi başlatılamadı")
+		httpx.Error(w, http.StatusInternalServerError, errSupplierTxStartFailed)
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -774,36 +797,49 @@ func buildBatchDraftSpecs(mode, titlePrefix string, imageURLs []string) []batchD
 	return specs
 }
 
-func insertBatchDraftRowsTx(
-	ctx context.Context,
-	tx pgx.Tx,
-	brandID, categoryID, currency string,
-	price float64,
-	groupID *string,
-	templateReq *models.SupplierProductInput,
-	initialStock int,
-	specs []batchDraftSpec,
-) ([]createdBatchDraftItem, error) {
-	created := make([]createdBatchDraftItem, 0, len(specs))
+type batchDraftInsertInput struct {
+	BrandID      string
+	CategoryID   string
+	Currency     string
+	Price        float64
+	GroupID      *string
+	TemplateReq  *models.SupplierProductInput
+	InitialStock int
+	Specs        []batchDraftSpec
+}
+
+type validatedBatchDraftInput struct {
+	Req          BatchDraftCreateRequest
+	ImageURLs    []string
+	Mode         string
+	CategoryID   string
+	Currency     string
+	Price        float64
+	TemplateReq  models.SupplierProductInput
+	InitialStock int
+}
+
+func insertBatchDraftRowsTx(ctx context.Context, tx pgx.Tx, in batchDraftInsertInput) ([]createdBatchDraftItem, error) {
+	created := make([]createdBatchDraftItem, 0, len(in.Specs))
 	baseStamp := time.Now().UnixNano()
-	for idx, spec := range specs {
+	for idx, spec := range in.Specs {
 		sourceProductID := fmt.Sprintf("SUP-%d-%d", baseStamp, idx+1)
 		item, _, err := insertSupplierProductRowTx(ctx, tx, supplierProductInsertParams{
-			BrandID:              brandID,
+			BrandID:              in.BrandID,
 			SourceProductID:      sourceProductID,
-			SourceProductGroupID: groupID,
+			SourceProductGroupID: in.GroupID,
 			Title:                spec.title,
-			CategoryID:           categoryID,
-			Price:                price,
-			Currency:             currency,
-			PackingRatio:         templateReq.PackingRatio,
-			SeriesRatio:          templateReq.SeriesRatio,
-			MinimumOrderQuantity: templateReq.MinimumOrderQuantity,
-			SeriesStock:          templateReq.SeriesStock,
-			InitialStock:         initialStock,
+			CategoryID:           in.CategoryID,
+			Price:                in.Price,
+			Currency:             in.Currency,
+			PackingRatio:         in.TemplateReq.PackingRatio,
+			SeriesRatio:          in.TemplateReq.SeriesRatio,
+			MinimumOrderQuantity: in.TemplateReq.MinimumOrderQuantity,
+			SeriesStock:          in.TemplateReq.SeriesStock,
+			InitialStock:         in.InitialStock,
 			IsActive:             false,
 			Images:               spec.images,
-			Variants:             templateReq.Variants,
+			Variants:             in.TemplateReq.Variants,
 		})
 		if err != nil {
 			return nil, err
@@ -813,28 +849,18 @@ func insertBatchDraftRowsTx(
 	return created, nil
 }
 
-// BatchCreateDraftProducts handles POST /api/v1/supplier/products/batch-drafts.
-func (h *SupplierPortalHandler) BatchCreateDraftProducts(w http.ResponseWriter, r *http.Request) {
-	claims, ok := middleware.GetSupplierFromContext(r.Context())
-	if !ok {
-		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
-		return
-	}
-
+func parseAndValidateBatchDraftRequest(ctx context.Context, r *http.Request, brandID string) (*validatedBatchDraftInput, string) {
 	var req BatchDraftCreateRequest
 	if err := httpx.DecodeJSON(r, &req, httpx.DefaultMaxJSONBytes); err != nil {
-		httpx.Error(w, http.StatusBadRequest, "Geçersiz veri biçimi")
-		return
+		return nil, "Geçersiz veri biçimi"
 	}
 	if declErr := validateSupplierContentDeclaration(req.ContentResponsibilityAccepted); declErr != nil {
-		httpx.Error(w, http.StatusBadRequest, declErr.Error())
-		return
+		return nil, declErr.Error()
 	}
 
 	imageURLs := cleanNonEmptyStrings(req.ImageURLs)
 	if len(imageURLs) == 0 {
-		httpx.Error(w, http.StatusBadRequest, "Toplu taslak oluşturmak için en az 1 fotoğraf eklemelisiniz")
-		return
+		return nil, "Toplu taslak oluşturmak için en az 1 fotoğraf eklemelisiniz"
 	}
 	if len(imageURLs) > 30 {
 		imageURLs = imageURLs[:30]
@@ -842,28 +868,21 @@ func (h *SupplierPortalHandler) BatchCreateDraftProducts(w http.ResponseWriter, 
 
 	mode, err := normalizeBatchDraftMode(req.Mode)
 	if err != nil {
-		httpx.Error(w, http.StatusBadRequest, err.Error())
-		return
+		return nil, err.Error()
 	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
-	defer cancel()
-	ensureSupplierSiblingSchema(ctx)
 
 	categoryID := strings.TrimSpace(req.CategoryID)
 	if categoryID == "" {
-		categoryID = resolveFallbackCategoryForSupplier(ctx, claims.BrandID)
+		categoryID = resolveFallbackCategoryForSupplier(ctx, brandID)
 	}
 	if categoryID == "" {
-		httpx.Error(w, http.StatusBadRequest, "Taslak ürünler için geçerli bir kategori seçmelisiniz")
-		return
+		return nil, "Taslak ürünler için geçerli bir kategori seçmelisiniz"
 	}
 
 	currency := strings.ToUpper(strings.TrimSpace(req.Currency))
 	if currency == "" {
 		currency = "TRY"
 	}
-	price := max(req.Price, 0)
 	seriesStock := req.SeriesStock
 	if seriesStock <= 0 {
 		seriesStock = defaultSupplierSeriesStock
@@ -876,29 +895,102 @@ func (h *SupplierPortalHandler) BatchCreateDraftProducts(w http.ResponseWriter, 
 	}
 	initialStock, normErr := resolveSupplierSeriesAndVariants(ctx, &templateReq, "")
 	if normErr != nil {
-		httpx.Error(w, http.StatusBadRequest, normErr.Error())
+		return nil, normErr.Error()
+	}
+
+	return &validatedBatchDraftInput{
+		Req:          req,
+		ImageURLs:    imageURLs,
+		Mode:         mode,
+		CategoryID:   categoryID,
+		Currency:     currency,
+		Price:        max(req.Price, 0),
+		TemplateReq:  templateReq,
+		InitialStock: initialStock,
+	}, ""
+}
+
+type batchDraftPostCommitLogInput struct {
+	Claims     *middleware.SupplierClaims
+	Req        *BatchDraftCreateRequest
+	Mode       string
+	Created    []createdBatchDraftItem
+	CreatedIDs []string
+	AuditItems []productAuditItemRef
+	AuditActor ProductAuditActor
+}
+
+func recordBatchDraftPostCommitLogs(r *http.Request, in batchDraftPostCommitLogInput) {
+	recordProductAuditLogsAsync(r, in.Claims.BrandID, in.Claims.BrandName, "batch_create", in.AuditItems, in.AuditActor, map[string]any{
+		"mode":          in.Mode,
+		"created_count": len(in.Created),
+	})
+
+	if in.Req.ContentResponsibilityAccepted != nil && *in.Req.ContentResponsibilityAccepted {
+		recordLegalConsentAsync(legalConsentLogEntry{
+			ConsentType:  "supplier_batch_draft",
+			PolicyType:   "supplier_agreement",
+			ActorRole:    "supplier",
+			ActorUserID:  in.Claims.UserID,
+			BrandID:      in.Claims.BrandID,
+			EntityType:   "product",
+			EntityID:     formatConsentEntityIDs(in.CreatedIDs),
+			Email:        in.Claims.Email,
+			IPAddress:    getClientIP(r),
+			UserAgent:    r.UserAgent(),
+			AcceptedText: supplierContentDeclarationMsg,
+			Metadata:     map[string]any{"created_count": len(in.Created), "mode": in.Mode},
+		})
+	}
+}
+
+// BatchCreateDraftProducts handles POST /api/v1/supplier/products/batch-drafts.
+func (h *SupplierPortalHandler) BatchCreateDraftProducts(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.GetSupplierFromContext(r.Context())
+	if !ok {
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	ensureSupplierSiblingSchema(ctx)
+	_ = EnsureSupplierAuditSchema(ctx)
+
+	parsed, errMsg := parseAndValidateBatchDraftRequest(ctx, r, claims.BrandID)
+	if parsed == nil {
+		httpx.Error(w, http.StatusBadRequest, errMsg)
 		return
 	}
 
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "Veritabanı işlemi başlatılamadı")
+		httpx.Error(w, http.StatusInternalServerError, errSupplierTxStartFailed)
 		return
 	}
 	defer tx.Rollback(ctx)
 
-	linkWith := normalizeOptionalIDPtr(req.LinkWithProductID)
+	linkWith := normalizeOptionalIDPtr(parsed.Req.LinkWithProductID)
 	var groupID *string
-	if mode == "color_siblings" || linkWith != nil {
-		groupID, err = resolveOrLinkGroupIDTx(ctx, tx, claims.BrandID, nil, linkWith, mode == "color_siblings")
+	if parsed.Mode == "color_siblings" || linkWith != nil {
+		groupID, err = resolveOrLinkGroupIDTx(ctx, tx, claims.BrandID, nil, linkWith, parsed.Mode == "color_siblings")
 		if err != nil {
 			httpx.Error(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
 
-	specs := buildBatchDraftSpecs(mode, req.TitlePrefix, imageURLs)
-	created, insertErr := insertBatchDraftRowsTx(ctx, tx, claims.BrandID, categoryID, currency, price, groupID, &templateReq, initialStock, specs)
+	specs := buildBatchDraftSpecs(parsed.Mode, parsed.Req.TitlePrefix, parsed.ImageURLs)
+	created, insertErr := insertBatchDraftRowsTx(ctx, tx, batchDraftInsertInput{
+		BrandID:      claims.BrandID,
+		CategoryID:   parsed.CategoryID,
+		Currency:     parsed.Currency,
+		Price:        parsed.Price,
+		GroupID:      groupID,
+		TemplateReq:  &parsed.TemplateReq,
+		InitialStock: parsed.InitialStock,
+		Specs:        specs,
+	})
 	if insertErr != nil {
 		log.Printf("[SUPPLIER BATCH DRAFT] Insert error: %v", insertErr)
 		httpx.Error(w, http.StatusInternalServerError, "Taslak ürünler kaydedilemedi")
@@ -906,12 +998,24 @@ func (h *SupplierPortalHandler) BatchCreateDraftProducts(w http.ResponseWriter, 
 	}
 
 	createdIDs := make([]string, 0, len(created))
+	auditItems := make([]productAuditItemRef, 0, len(created))
 	for _, item := range created {
 		createdIDs = append(createdIDs, item.ID)
+		auditItems = append(auditItems, productAuditItemRef{
+			ProductID: item.ID,
+			Title:     item.Title,
+			CustomSKU: item.CustomSKU,
+		})
 	}
 	contentVer := resolveActivePolicyVersion(ctx, "supplier_agreement")
-	if stampErr := stampProductsContentResponsibilityTx(ctx, tx, createdIDs, isExplicitlyAccepted(req.ContentResponsibilityAccepted), contentVer); stampErr != nil {
+	if stampErr := stampProductsContentResponsibilityTx(ctx, tx, createdIDs, isExplicitlyAccepted(parsed.Req.ContentResponsibilityAccepted), contentVer); stampErr != nil {
 		httpx.Error(w, http.StatusInternalServerError, "Taslak hukuki onayı kaydedilemedi")
+		return
+	}
+	auditActor := resolveSupplierAuditActor(claims)
+	if auditErr := stampProductsCreatedAuditTx(ctx, tx, createdIDs, auditActor); auditErr != nil {
+		log.Printf("[SUPPLIER BATCH DRAFT] Audit stamp error: %v", auditErr)
+		httpx.Error(w, http.StatusInternalServerError, "Ürün denetim kaydı oluşturulamadı")
 		return
 	}
 
@@ -920,22 +1024,15 @@ func (h *SupplierPortalHandler) BatchCreateDraftProducts(w http.ResponseWriter, 
 		return
 	}
 
-	if req.ContentResponsibilityAccepted != nil && *req.ContentResponsibilityAccepted {
-		recordLegalConsentAsync(legalConsentLogEntry{
-			ConsentType:  "supplier_batch_draft",
-			PolicyType:   "supplier_agreement",
-			ActorRole:    "supplier",
-			ActorUserID:  claims.UserID,
-			BrandID:      claims.BrandID,
-			EntityType:   "product",
-			EntityID:     formatConsentEntityIDs(createdIDs),
-			Email:        claims.Email,
-			IPAddress:    getClientIP(r),
-			UserAgent:    r.UserAgent(),
-			AcceptedText: supplierContentDeclarationMsg,
-			Metadata:     map[string]any{"created_count": len(created), "mode": mode},
-		})
-	}
+	recordBatchDraftPostCommitLogs(r, batchDraftPostCommitLogInput{
+		Claims:     claims,
+		Req:        &parsed.Req,
+		Mode:       parsed.Mode,
+		Created:    created,
+		CreatedIDs: createdIDs,
+		AuditItems: auditItems,
+		AuditActor: auditActor,
+	})
 
 	triggerProductMVRefresh()
 	writeSupplierJSON(w, http.StatusCreated, map[string]any{

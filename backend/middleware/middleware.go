@@ -29,6 +29,7 @@ const (
 	UserContextKey      contextKey      = "user"
 	LogContextKey       contextKey      = "log_container"
 	headerContentType                   = "Content-Type"
+	headerUserAgent                     = "User-Agent"
 	mimeApplicationJSON                 = "application/json"
 	roleSupplier        models.UserRole = "supplier"
 )
@@ -158,7 +159,7 @@ func logJSON(r *http.Request, ip string, container *LogContainer, statusCode int
 		"proto":       r.Proto,
 		"status":      statusCode,
 		"duration_ms": float64(duration.Microseconds()) / 1000.0,
-		"user_agent":  r.Header.Get("User-Agent"),
+		"user_agent":  r.Header.Get(headerUserAgent),
 	}
 
 	jsonBytes, err := json.Marshal(logEntry)
@@ -245,7 +246,7 @@ func buildHTTP5xxAlertPayload(
 		"IP: "+ip,
 		"User: "+userText,
 		fmt.Sprintf("Duration: %.2fms", float64(duration.Microseconds())/1000.0),
-		"UA: "+r.Header.Get("User-Agent"),
+		"UA: "+r.Header.Get(headerUserAgent),
 	)
 	message = strings.Join(msgParts, " | ")
 
@@ -264,7 +265,7 @@ func buildHTTP5xxAlertPayload(
 		"Client IP: "+ip,
 		"User: "+userText,
 		fmt.Sprintf("Duration: %.2fms", float64(duration.Microseconds())/1000.0),
-		"User-Agent: "+truncateAlertField(r.Header.Get("User-Agent"), 240),
+		"User-Agent: "+truncateAlertField(r.Header.Get(headerUserAgent), 240),
 	)
 	if respSnippet != "" {
 		detailLines = append(detailLines, "Response Body: "+truncateAlertField(respSnippet, 512))
@@ -282,7 +283,7 @@ func logText(r *http.Request, ip string, container *LogContainer, statusCode int
 		userText = fmt.Sprintf("%s (%s)", container.UserEmail, container.UserRole)
 	}
 
-	ua := r.Header.Get("User-Agent")
+	ua := r.Header.Get(headerUserAgent)
 	if len(ua) > 50 {
 		ua = ua[:47] + "..."
 	}
@@ -833,19 +834,122 @@ func RequireRole(roles ...models.UserRole) func(http.Handler) http.Handler {
 const SupplierContextKey contextKey = "supplier"
 
 type SupplierClaims struct {
-	UserID      string `json:"sub"`
-	BrandID     string `json:"brand_id"`
-	BrandName   string `json:"brand_name"`
-	AliasCode   string `json:"alias_code"`
-	Email       string `json:"email"`
-	ContactName string `json:"contact_name"`
-	Role        string `json:"role"`
+	UserID             string `json:"sub"`
+	BrandID            string `json:"brand_id"`
+	BrandName          string `json:"brand_name"`
+	AliasCode          string `json:"alias_code"`
+	Email              string `json:"email"`
+	ContactName        string `json:"contact_name"`
+	Role               string `json:"role"`
+	IsOwner            bool   `json:"is_owner"`
+	JobTitle           string `json:"job_title,omitempty"`
+	Impersonated       bool   `json:"impersonated,omitempty"`
+	ImpersonatedBy     string `json:"impersonated_by,omitempty"`
+	ImpersonatedByID   string `json:"impersonated_by_id,omitempty"`
+	ImpersonatedByRole string `json:"impersonated_by_role,omitempty"`
+	ImpersonationLogID string `json:"impersonation_log_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
 func GetSupplierFromContext(ctx context.Context) (*SupplierClaims, bool) {
 	s, ok := ctx.Value(SupplierContextKey).(*SupplierClaims)
 	return s, ok
+}
+
+func parseSupplierClaimsFromMap(claimsMap jwt.MapClaims) *SupplierClaims {
+	isOwner, _ := claimsMap["is_owner"].(bool)
+	impersonated, _ := claimsMap["impersonated"].(bool)
+	return &SupplierClaims{
+		UserID:             stringClaim(claimsMap, "sub"),
+		BrandID:            stringClaim(claimsMap, "brand_id"),
+		BrandName:          stringClaim(claimsMap, "brand_name"),
+		AliasCode:          stringClaim(claimsMap, "alias_code"),
+		Email:              stringClaim(claimsMap, "email"),
+		ContactName:        stringClaim(claimsMap, "contact_name"),
+		Role:               "supplier",
+		IsOwner:            isOwner,
+		JobTitle:           stringClaim(claimsMap, "job_title"),
+		Impersonated:       impersonated,
+		ImpersonatedBy:     stringClaim(claimsMap, "impersonated_by"),
+		ImpersonatedByID:   stringClaim(claimsMap, "impersonated_by_id"),
+		ImpersonatedByRole: stringClaim(claimsMap, "impersonated_by_role"),
+		ImpersonationLogID: stringClaim(claimsMap, "impersonation_log_id"),
+	}
+}
+
+func stringClaim(claimsMap jwt.MapClaims, key string) string {
+	v, _ := claimsMap[key].(string)
+	return v
+}
+
+func enrichSupplierClaimsFromDB(r *http.Request, claimsMap jwt.MapClaims, parsed *SupplierClaims) error {
+	if parsed.BrandID == "" {
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+
+		var resolvedUserID, resolvedBrandID, resolvedBrandName, resolvedAlias, resolvedContactName, resolvedJobTitle string
+		var resolvedIsOwner bool
+		const query = `
+			SELECT u.id, u.brand_id, b.brand_name, coalesce(b.alias_code, ''), u.contact_name,
+			       coalesce(u.is_owner, false), coalesce(u.job_title, '')
+			FROM catalog.supplier_users u
+			JOIN catalog.brands b ON u.brand_id = b.id
+			WHERE (u.keycloak_id = $1 OR lower(u.email) = lower($2)) AND u.is_active = true AND b.is_active = true
+			LIMIT 1`
+		err := db.Pool.QueryRow(ctx, query, parsed.UserID, parsed.Email).Scan(
+			&resolvedUserID, &resolvedBrandID, &resolvedBrandName, &resolvedAlias, &resolvedContactName,
+			&resolvedIsOwner, &resolvedJobTitle,
+		)
+		if err != nil {
+			return err
+		}
+		parsed.UserID = resolvedUserID
+		parsed.BrandID = resolvedBrandID
+		parsed.BrandName = resolvedBrandName
+		parsed.AliasCode = resolvedAlias
+		parsed.ContactName = resolvedContactName
+		parsed.IsOwner = resolvedIsOwner
+		parsed.JobTitle = resolvedJobTitle
+		return nil
+	}
+
+	_, hasIsOwner := claimsMap["is_owner"]
+	if !parsed.Impersonated && !hasIsOwner && parsed.UserID != "" && db.Pool != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		var dbIsOwner bool
+		var dbJobTitle string
+		if err := db.Pool.QueryRow(ctx, `
+			SELECT coalesce(is_owner, false), coalesce(job_title, '')
+			FROM catalog.supplier_users
+			WHERE id = $1
+			LIMIT 1
+		`, parsed.UserID).Scan(&dbIsOwner, &dbJobTitle); err == nil {
+			parsed.IsOwner = dbIsOwner
+			if parsed.JobTitle == "" {
+				parsed.JobTitle = dbJobTitle
+			}
+		}
+	}
+	return nil
+}
+
+func recordSupplierRequestLogIdentity(r *http.Request, parsed *SupplierClaims) {
+	container, ok := r.Context().Value(LogContextKey).(*LogContainer)
+	if !ok || container == nil || parsed == nil {
+		return
+	}
+	if parsed.Impersonated {
+		container.UserEmail = fmt.Sprintf("admin-impersonate:%s->%s", parsed.ImpersonatedBy, parsed.BrandName)
+		container.UserRole = "admin_supplier_impersonation"
+		return
+	}
+	container.UserEmail = fmt.Sprintf("supplier:%s", parsed.Email)
+	if parsed.IsOwner {
+		container.UserRole = "supplier_owner"
+	} else {
+		container.UserRole = "supplier_sub_user"
+	}
 }
 
 // SupplierAuthMiddleware validates JWT Bearer tokens issued to suppliers (both RS256 Keycloak and HS256 Local)
@@ -885,52 +989,16 @@ func SupplierAuthMiddleware(jwtSecret string, keycloakPublicKey string) func(htt
 				return
 			}
 
-			brandID, _ := claimsMap["brand_id"].(string)
-			userID, _ := claimsMap["sub"].(string)
-			email, _ := claimsMap["email"].(string)
-			brandName, _ := claimsMap["brand_name"].(string)
-			aliasCode, _ := claimsMap["alias_code"].(string)
-			contactName, _ := claimsMap["contact_name"].(string)
-
-			// If brandID is missing in token claims (Keycloak token), dynamically resolve it from catalog.supplier_users
-			if brandID == "" {
-				ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-				defer cancel()
-
-				var resolvedBrandID, resolvedBrandName, resolvedAlias, resolvedContactName, resolvedUserID string
-				query := `
-					SELECT u.id, u.brand_id, b.brand_name, coalesce(b.alias_code, ''), u.contact_name
-					FROM catalog.supplier_users u
-					JOIN catalog.brands b ON u.brand_id = b.id
-					WHERE (u.keycloak_id = $1 OR lower(u.email) = lower($2)) AND u.is_active = true AND b.is_active = true
-					LIMIT 1`
-				err := db.Pool.QueryRow(ctx, query, userID, email).Scan(
-					&resolvedUserID, &resolvedBrandID, &resolvedBrandName, &resolvedAlias, &resolvedContactName,
-				)
-				if err != nil {
-					w.Header().Set(headerContentType, mimeApplicationJSON)
-					w.WriteHeader(http.StatusForbidden)
-					json.NewEncoder(w).Encode(map[string]string{"error": "Bu Keycloak hesabı ile ilişkili aktif bir tedarikçi markası bulunamadı."})
-					return
-				}
-				brandID = resolvedBrandID
-				brandName = resolvedBrandName
-				aliasCode = resolvedAlias
-				contactName = resolvedContactName
-				userID = resolvedUserID
+			parsed := parseSupplierClaimsFromMap(claimsMap)
+			if err := enrichSupplierClaimsFromDB(r, claimsMap, parsed); err != nil {
+				w.Header().Set(headerContentType, mimeApplicationJSON)
+				w.WriteHeader(http.StatusForbidden)
+				json.NewEncoder(w).Encode(map[string]string{"error": "Bu Keycloak hesabı ile ilişkili aktif bir tedarikçi markası bulunamadı."})
+				return
 			}
 
-			claims := &SupplierClaims{
-				UserID:      userID,
-				BrandID:     brandID,
-				BrandName:   brandName,
-				AliasCode:   aliasCode,
-				Email:       email,
-				ContactName: contactName,
-				Role:        "supplier",
-			}
-
-			ctx := context.WithValue(r.Context(), SupplierContextKey, claims)
+			recordSupplierRequestLogIdentity(r, parsed)
+			ctx := context.WithValue(r.Context(), SupplierContextKey, parsed)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

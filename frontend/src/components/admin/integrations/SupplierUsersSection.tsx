@@ -21,10 +21,12 @@ import {
   ShieldCheck,
   MessageSquare,
   Gift,
-  Filter
+  Filter,
+  LogIn
 } from "lucide-react";
 import { Brand, SupplierUser } from "@/types/integration";
 import { ChatRoom, ChatMessage, ChatOfferMetadata } from "@/types/chat";
+import { launchSupplierImpersonationSession } from "@/utils/supplierImpersonation";
 
 interface SupplierUsersSectionProps {
   suppliers: Brand[];
@@ -161,6 +163,11 @@ export default function SupplierUsersSection({
   const [formIsActive, setFormIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+  const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
+  const [impersonationNotice, setImpersonationNotice] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Admin Chat Monitor states
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
@@ -250,6 +257,29 @@ export default function SupplierUsersSection({
   const handleOpenDelete = (user: SupplierUser) => {
     setSelectedUser(user);
     setActiveModal("delete");
+  };
+
+  const handleImpersonateUser = async (user: SupplierUser) => {
+    setImpersonationNotice(null);
+    setImpersonatingUserId(user.id);
+    const res = await launchSupplierImpersonationSession({
+      apiUrl,
+      token,
+      brandId: user.brand_id,
+      supplierUserId: user.id,
+    });
+    setImpersonatingUserId(null);
+    if (res.ok) {
+      setImpersonationNotice({
+        type: "success",
+        text: `${user.brand_name || "Tedarikçi"} (${user.contact_name}) adına tedarikçi portalı yeni sekmede açıldı.`,
+      });
+    } else {
+      setImpersonationNotice({
+        type: "error",
+        text: res.error || "Tedarikçi oturumu açılamadı.",
+      });
+    }
   };
 
   const handleOpenChatMonitor = async (user?: SupplierUser) => {
@@ -482,6 +512,25 @@ export default function SupplierUsersSection({
       </div>
 
       {/* Filter & Search Bar */}
+      {impersonationNotice && (
+        <div
+          className={`px-4 py-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 ${
+            impersonationNotice.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-rose-50 border-rose-200 text-rose-800"
+          }`}
+        >
+          <span>{impersonationNotice.text}</span>
+          <button
+            type="button"
+            onClick={() => setImpersonationNotice(null)}
+            className="text-current opacity-60 hover:opacity-100 cursor-pointer"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
@@ -609,6 +658,20 @@ export default function SupplierUsersSection({
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="inline-flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => void handleImpersonateUser(user)}
+                          disabled={!user.is_active || impersonatingUserId === user.id}
+                          className="px-2 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-45 disabled:cursor-not-allowed inline-flex items-center gap-1 text-[11px] font-bold transition-colors cursor-pointer"
+                          title={
+                            user.is_active
+                              ? "Bu Kullanıcı Adına Tedarikçi Portalında Oturum Aç"
+                              : "Pasif kullanıcı adına oturum açılamaz"
+                          }
+                        >
+                          <LogIn size={13} />
+                          <span>{impersonatingUserId === user.id ? "..." : "Oturum Aç"}</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => void handleOpenChatMonitor(user)}

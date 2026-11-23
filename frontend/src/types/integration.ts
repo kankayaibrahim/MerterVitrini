@@ -79,6 +79,16 @@ export interface Product {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  created_by_actor_type?: string;
+  created_by_user_id?: string;
+  created_by_email?: string;
+  created_by_name?: string;
+  created_by_role?: string;
+  created_by_impersonated_by_email?: string;
+  updated_by_actor_type?: string;
+  updated_by_email?: string;
+  updated_by_name?: string;
+  updated_by_impersonated_by_email?: string;
   brand_name?: string;
   category_title?: string;
   source_url?: string | null;
@@ -358,6 +368,67 @@ export interface SupplierApplication {
   created_at: string;
   updated_at: string;
 }
+
+export interface SupplierAuditProductLog {
+  id: string;
+  product_id?: string | null;
+  product_title: string;
+  custom_sku: string;
+  brand_id: string;
+  brand_name: string;
+  action: string;
+  actor_type: string;
+  actor_user_id: string;
+  actor_email: string;
+  actor_name: string;
+  actor_role: string;
+  impersonated_by_id?: string;
+  impersonated_by_email?: string;
+  impersonated_by_role?: string;
+  impersonation_log_id?: string | null;
+  ip_address: string;
+  user_agent: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SupplierAuditSessionLog {
+  id: string;
+  session_type: string;
+  brand_id: string;
+  brand_name: string;
+  supplier_user_id: string;
+  supplier_email: string;
+  supplier_contact_name: string;
+  supplier_is_owner: boolean;
+  supplier_job_title: string;
+  admin_user_id?: string;
+  admin_email?: string;
+  admin_name?: string;
+  admin_role?: string;
+  ip_address: string;
+  user_agent: string;
+  created_at: string;
+}
+
+export interface SupplierAuditSummary {
+  total_product_events: number;
+  admin_impersonation_creates: number;
+  owner_creates: number;
+  sub_user_creates: number;
+  total_sessions: number;
+  admin_impersonation_sessions: number;
+}
+
+export interface SupplierAuditLogsResponse {
+  type: "products" | "sessions";
+  items: SupplierAuditProductLog[] | SupplierAuditSessionLog[];
+  total: number;
+  limit: number;
+  offset: number;
+  summary: SupplierAuditSummary;
+}
+
 
 
 

@@ -416,6 +416,7 @@ type adminProductFilterParams struct {
 	Gender      string
 	Season      string
 	Source      string
+	ActorType   string
 	DateFrom    string
 	DateTo      string
 	SortBy      string
@@ -477,6 +478,7 @@ func parseAdminProductFilterParams(r *http.Request) adminProductFilterParams {
 		Gender:      strings.TrimSpace(q.Get("gender")),
 		Season:      strings.TrimSpace(q.Get("season")),
 		Source:      strings.TrimSpace(q.Get("source")),
+		ActorType:   strings.TrimSpace(q.Get("actor_type")),
 		DateFrom:    parseAdminDateQuery(q.Get("date_from")),
 		DateTo:      parseAdminDateQuery(q.Get("date_to")),
 		SortBy:      strings.TrimSpace(q.Get("sort_by")),
@@ -612,6 +614,15 @@ func appendAdminProductCatalogMetaFilter(filterSQL *strings.Builder, args *[]any
 	case "manual":
 		filterSQL.WriteString(" AND p.feed_id IS NULL")
 	}
+
+	switch strings.ToLower(strings.TrimSpace(params.ActorType)) {
+	case AuditActorAdminImpersonation, AuditActorSupplierOwner, AuditActorSupplierSubUser, AuditActorAdminPanel:
+		filterSQL.WriteString(fmt.Sprintf(" AND COALESCE(p.created_by_actor_type, '') = $%d", *argIndex))
+		*args = append(*args, strings.ToLower(strings.TrimSpace(params.ActorType)))
+		*argIndex++
+	case AuditActorXMLFeed:
+		filterSQL.WriteString(" AND (COALESCE(p.created_by_actor_type, '') = 'xml_feed' OR (COALESCE(p.created_by_actor_type, '') = '' AND p.feed_id IS NOT NULL))")
+	}
 }
 
 func appendAdminProductAttributesAndDateFilter(filterSQL *strings.Builder, args *[]any, argIndex *int, params adminProductFilterParams) {
@@ -702,6 +713,7 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
+	_ = EnsureSupplierAuditSchema(ctx)
 
 	filterSQL, args := buildAdminProductFilterSQL(params)
 
@@ -730,6 +742,16 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 		       col.color_name, p.barcode, p.is_active,
 		       p.created_at, p.updated_at, b.brand_name as brand_name, c.title as category_title,
 		       p.source_url,
+		       CASE WHEN COALESCE(p.created_by_actor_type, '') <> '' THEN p.created_by_actor_type WHEN p.feed_id IS NOT NULL THEN 'xml_feed' ELSE '' END,
+		       COALESCE(p.created_by_user_id, ''),
+		       COALESCE(p.created_by_email, ''),
+		       COALESCE(p.created_by_name, ''),
+		       COALESCE(p.created_by_role, ''),
+		       COALESCE(p.created_by_impersonated_by_email, ''),
+		       COALESCE(p.updated_by_actor_type, ''),
+		       COALESCE(p.updated_by_email, ''),
+		       COALESCE(p.updated_by_name, ''),
+		       COALESCE(p.updated_by_impersonated_by_email, ''),
 		       COALESCE(
 		           (SELECT json_agg(json_build_object('id', img.id, 'product_id', img.product_id, 'image_url', img.image_url, 'sort_order', img.sort_order, 'is_cover', img.is_cover))
 		            FROM catalog.product_images img
@@ -766,7 +788,10 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 			&p.Currency, &p.Stock, &p.SeriesStock,
 			&p.Color, &p.Barcode, &p.IsActive,
 			&p.CreatedAt, &p.UpdatedAt, &p.BrandName, &p.CategoryTitle,
-			&p.SourceURL, &imgJSON,
+			&p.SourceURL,
+			&p.CreatedByActorType, &p.CreatedByUserID, &p.CreatedByEmail, &p.CreatedByName, &p.CreatedByRole, &p.CreatedByImpersonatedByEmail,
+			&p.UpdatedByActorType, &p.UpdatedByEmail, &p.UpdatedByName, &p.UpdatedByImpersonatedByEmail,
+			&imgJSON,
 		)
 		if err != nil {
 			log.Printf("Failed to scan product: %v", err)
@@ -887,6 +912,7 @@ func (h *AdminCatalogHandler) GetProductByID(w http.ResponseWriter, r *http.Requ
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
+	_ = EnsureSupplierAuditSchema(ctx)
 
 	var p models.Product
 	prodQuery := `
@@ -898,7 +924,17 @@ func (h *AdminCatalogHandler) GetProductByID(w http.ResponseWriter, r *http.Requ
 		       COALESCE(NULLIF(p.currency, ''), 'TRY'), COALESCE(p.stock, 0), COALESCE(p.series_stock, 0),
 		       col.color_name, p.barcode, p.is_active,
 		       p.created_at, p.updated_at, b.brand_name as brand_name, c.title as category_title,
-		       p.source_url, COALESCE(p.source_product_group_id, '')
+		       p.source_url, COALESCE(p.source_product_group_id, ''),
+		       CASE WHEN COALESCE(p.created_by_actor_type, '') <> '' THEN p.created_by_actor_type WHEN p.feed_id IS NOT NULL THEN 'xml_feed' ELSE '' END,
+		       COALESCE(p.created_by_user_id, ''),
+		       COALESCE(p.created_by_email, ''),
+		       COALESCE(p.created_by_name, ''),
+		       COALESCE(p.created_by_role, ''),
+		       COALESCE(p.created_by_impersonated_by_email, ''),
+		       COALESCE(p.updated_by_actor_type, ''),
+		       COALESCE(p.updated_by_email, ''),
+		       COALESCE(p.updated_by_name, ''),
+		       COALESCE(p.updated_by_impersonated_by_email, '')
 		FROM catalog.products p
 		LEFT JOIN catalog.brands b ON p.brand_id = b.id
 		LEFT JOIN catalog.categories c ON p.category_id = c.id
@@ -916,6 +952,8 @@ func (h *AdminCatalogHandler) GetProductByID(w http.ResponseWriter, r *http.Requ
 		&p.Color, &p.Barcode, &p.IsActive,
 		&p.CreatedAt, &p.UpdatedAt, &p.BrandName, &p.CategoryTitle,
 		&p.SourceURL, &p.SourceProductGroupID,
+		&p.CreatedByActorType, &p.CreatedByUserID, &p.CreatedByEmail, &p.CreatedByName, &p.CreatedByRole, &p.CreatedByImpersonatedByEmail,
+		&p.UpdatedByActorType, &p.UpdatedByEmail, &p.UpdatedByName, &p.UpdatedByImpersonatedByEmail,
 	)
 
 	if err != nil {

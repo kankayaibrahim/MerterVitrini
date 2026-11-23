@@ -12,9 +12,12 @@ import {
   Trash2,
   ExternalLink,
   Globe,
+  Clock,
+  ShieldCheck,
 } from "lucide-react";
 import { Product, XmlFeed, ProductImage, GroupProductColor } from "@/types/integration";
 import { BulkProductActionType } from "@/services/admin-api.service";
+import { resolveProductActorMeta } from "@/utils/supplierImpersonation";
 
 // Localized labels dictionary to prevent JSX literal internationalization warnings
 const LABELS = {
@@ -349,6 +352,77 @@ export default function ProductDetailModal({
                     </a>
                   </div>
                 )}
+
+                {(() => {
+                  const actorMeta = resolveProductActorMeta(
+                    product.created_by_actor_type,
+                    product.created_by_role
+                  );
+                  const createdAtText = product.created_at
+                    ? new Date(product.created_at).toLocaleString("tr-TR")
+                    : "-";
+                  const updatedAtText = product.updated_at
+                    ? new Date(product.updated_at).toLocaleString("tr-TR")
+                    : "-";
+                  return (
+                    <div className="p-3.5 bg-slate-50/80 border border-slate-200/80 rounded-xl col-span-2 flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider inline-flex items-center gap-1">
+                          <ShieldCheck size={12} className="text-violet-600" />
+                          Ürün Yükleme & Oturum Kaydı
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${actorMeta.badgeClass}`}>
+                          {actorMeta.label}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-zinc-400 block text-[10px] font-semibold">Oluşturan Hesap / Temsilci</span>
+                          <span className="font-bold text-zinc-800">
+                            {product.created_by_name || product.created_by_email || (product.feed_id ? "XML Feed Senkronizasyonu" : "Kayıtlı Kullanıcı")}
+                          </span>
+                          {product.created_by_email && product.created_by_name !== product.created_by_email && (
+                            <span className="block font-mono text-[10px] text-zinc-500">
+                              {product.created_by_email}
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <span className="text-zinc-400 block text-[10px] font-semibold">Açılma Tarih & Saati</span>
+                          <span className="font-mono font-bold text-zinc-800 inline-flex items-center gap-1">
+                            <Clock size={11} className="text-zinc-400" />
+                            {createdAtText}
+                          </span>
+                        </div>
+
+                        {product.created_by_impersonated_by_email && (
+                          <div className="sm:col-span-2 bg-amber-50 border border-amber-200/80 rounded-lg px-2.5 py-1.5">
+                            <span className="text-[10px] font-bold text-amber-700 uppercase block">
+                              Tedarikçi Adına Yükleyen Yönetici
+                            </span>
+                            <span className="text-xs font-extrabold text-amber-950 font-mono">
+                              {product.created_by_impersonated_by_email}
+                            </span>
+                          </div>
+                        )}
+
+                        {product.updated_by_actor_type && (
+                          <div className="sm:col-span-2 pt-1 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-500">
+                            <span>
+                              Son Güncelleme:{" "}
+                              <strong className="text-zinc-800">
+                                {product.updated_by_impersonated_by_email || product.updated_by_name || product.updated_by_email || "-"}
+                              </strong>
+                            </span>
+                            <span className="font-mono">{updatedAtText}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Secure Text Description view */}

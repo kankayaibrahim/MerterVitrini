@@ -3,17 +3,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { 
-  Building2, 
-  Package, 
-  Plus, 
-  Search, 
-  RefreshCw, 
-  LogOut, 
-  CheckCircle2, 
-  Trash2, 
-  Edit3, 
-  Layers, 
+import {
+  Building2,
+  Package,
+  Plus,
+  Search,
+  RefreshCw,
+  LogOut,
+  CheckCircle2,
+  Trash2,
+  Edit3,
+  Layers,
   Tag,
   MessageSquare,
   ShoppingBag,
@@ -30,8 +30,10 @@ import {
   Loader2,
   AlertCircle,
   Sparkles,
-  X
+  X,
+  ShieldAlert
 } from "lucide-react";
+import { clearStoredSupplierImpersonationMeta } from "@/utils/supplierImpersonation";
 import {
   SupplierProductRow,
   SizeDefinitionDTO,
@@ -125,6 +127,13 @@ export interface SupplierProfile {
   email: string;
   contact_name: string;
   role: string;
+  is_owner?: boolean;
+  job_title?: string;
+  impersonated?: boolean;
+  impersonated_by?: string;
+  impersonated_by_id?: string;
+  impersonated_by_role?: string;
+  impersonation_log_id?: string;
 }
 
 interface DashboardStats {
@@ -700,6 +709,7 @@ function clearStoredSupplierSession(): void {
   if (typeof window !== "undefined") {
     localStorage.removeItem("supplier_token");
     localStorage.removeItem("supplier_user");
+    clearStoredSupplierImpersonationMeta();
   }
 }
 
@@ -823,6 +833,71 @@ function normalizeEditableProductDetail(
   };
 }
 
+function SupplierImpersonationBanner({
+  profile,
+  onExitImpersonation,
+}: Readonly<{
+  profile: SupplierProfile | null;
+  onExitImpersonation: () => void;
+}>) {
+  if (!profile?.impersonated) return null;
+
+  return (
+    <div className="bg-amber-950 text-amber-50 border-b border-amber-800 px-4 sm:px-6 lg:px-8 py-2.5 text-xs shadow-sm">
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400 text-amber-950 font-extrabold uppercase tracking-wider text-[10px]">
+            <ShieldAlert size={12} />
+            Admin Tedarikçi Oturumu Aktif
+          </span>
+          <span className="font-medium text-amber-100">
+            Yönetici:{" "}
+            <strong className="text-white font-mono">
+              {profile.impersonated_by || "Admin"}
+            </strong>{" "}
+            <span className="text-amber-300">→</span>{" "}
+            <strong className="text-white">{profile.brand_name}</strong>{" "}
+            <span className="text-amber-200/80">({profile.email}) adına işlem yapıyorsunuz.</span>
+          </span>
+          <span className="text-[11px] text-amber-200/90 hidden md:inline">
+            • Eklenen ve düzenlenen tüm ürünler denetim loglarında sizin yönetici oturumunuzla işaretlenir.
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={onExitImpersonation}
+          className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-amber-950 font-extrabold text-[11px] transition-colors cursor-pointer shrink-0"
+        >
+          Admin Oturumunu Kapat
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function resolveSupplierHeaderRoleBadge(profile: SupplierProfile): {
+  label: string;
+  cls: string;
+} {
+  if (profile.impersonated) {
+    return {
+      label: "Admin Oturumu",
+      cls: "bg-amber-100 text-amber-800 border-amber-300",
+    };
+  }
+  if (profile.is_owner) {
+    return {
+      label: "Ana Hesap",
+      cls: "bg-slate-100 text-slate-700 border-slate-200",
+    };
+  }
+  return {
+    label: profile.job_title || "Alt Kullanıcı",
+    cls: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  };
+}
+
 function SupplierHeader({
   profile,
   onLogout,
@@ -830,6 +905,8 @@ function SupplierHeader({
   profile: SupplierProfile | null;
   onLogout: () => void;
 }>) {
+  const roleBadge = profile ? resolveSupplierHeaderRoleBadge(profile) : null;
+
   return (
     <header className="bg-white/95 backdrop-blur-md text-slate-800 border-b border-slate-200/80 sticky top-0 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
@@ -843,6 +920,11 @@ function SupplierHeader({
               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold uppercase">
                 Tedarikçi Portalı
               </span>
+              {roleBadge && (
+                <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${roleBadge.cls}`}>
+                  {roleBadge.label}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <span className="font-bold text-slate-800">{profile?.brand_name || "Yükleniyor..."}</span>
@@ -1020,9 +1102,8 @@ function SupplierProductTable({
                     <td className="py-2.5 px-4">
                       <div className="flex flex-col">
                         <span
-                          className={`font-bold line-clamp-1 ${
-                            p.title ? "text-slate-900" : "text-slate-400 italic"
-                          }`}
+                          className={`font-bold line-clamp-1 ${p.title ? "text-slate-900" : "text-slate-400 italic"
+                            }`}
                         >
                           {p.title || "İsimsiz Taslak Model"}
                         </span>
@@ -1326,10 +1407,9 @@ function SupplierDashboardNavTabs({
   onOpenBulkArchive,
 }: SupplierDashboardNavTabsProps) {
   const tabClass = (sec: SupplierDashboardSection) =>
-    `shrink-0 h-9 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer inline-flex items-center gap-1.5 ${
-      activeSection === sec
-        ? "bg-slate-900 text-white shadow-xs"
-        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
+    `shrink-0 h-9 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer inline-flex items-center gap-1.5 ${activeSection === sec
+      ? "bg-slate-900 text-white shadow-xs"
+      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/80"
     }`;
 
   return (
@@ -1525,38 +1605,34 @@ function SupplierCatalogToolbar({
           <button
             type="button"
             onClick={() => setStatusFilter("all")}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              statusFilter === "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${statusFilter === "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+              }`}
           >
             Tümü
           </button>
           <button
             type="button"
             onClick={() => setStatusFilter("active")}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              statusFilter === "active" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${statusFilter === "active" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+              }`}
           >
             Yayında
           </button>
           <button
             type="button"
             onClick={() => setStatusFilter("passive")}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              statusFilter === "passive"
-                ? "bg-white text-amber-800 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${statusFilter === "passive"
+              ? "bg-white text-amber-800 shadow-xs"
+              : "text-slate-600 hover:text-slate-900"
+              }`}
           >
             Taslaklar ({draftCount})
           </button>
           <button
             type="button"
             onClick={() => setStatusFilter("archived")}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-              statusFilter === "archived" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${statusFilter === "archived" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+              }`}
           >
             Arşiv (Eski Koleksiyon)
           </button>
@@ -1705,11 +1781,10 @@ function SupplierSectionContent({
 
       {catalogBanner && (
         <div
-          className={`px-4 py-3 rounded-xl border flex items-center justify-between gap-3 text-xs font-bold ${
-            catalogBanner.type === "success"
-              ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-              : "bg-red-50 border-red-200 text-red-800"
-          }`}
+          className={`px-4 py-3 rounded-xl border flex items-center justify-between gap-3 text-xs font-bold ${catalogBanner.type === "success"
+            ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+            : "bg-red-50 border-red-200 text-red-800"
+            }`}
         >
           <div className="flex items-center gap-2">
             {catalogBanner.type === "success" ? (
@@ -1822,6 +1897,11 @@ function useSupplierAuthAndProfile(router: ReturnType<typeof useRouter>) {
     router.push("/supplier/login");
   }, [router]);
 
+  const handleExitImpersonation = useCallback(() => {
+    clearStoredSupplierSession();
+    router.push("/admin/suppliers?tab=audit");
+  }, [router]);
+
   const loadProfile = useCallback(async () => {
     const token = getToken();
     if (!token) return handleLogout();
@@ -1888,6 +1968,7 @@ function useSupplierAuthAndProfile(router: ReturnType<typeof useRouter>) {
     seriesTemplates,
     getToken,
     handleLogout,
+    handleExitImpersonation,
     loadProfile,
     handleSaveQuickWhatsapp,
   };
@@ -1994,6 +2075,7 @@ export default function SupplierDashboardClient() {
     seriesTemplates,
     getToken,
     handleLogout,
+    handleExitImpersonation,
     loadProfile,
     handleSaveQuickWhatsapp,
   } = useSupplierAuthAndProfile(router);
@@ -2442,7 +2524,7 @@ export default function SupplierDashboardClient() {
     setFormGender(defaults.gender);
     setFormSeason(defaults.season);
     setFormBuyingPrice(0);
-    setFormPrice(prod.price > 0 ? prod.price : 0);
+    setFormPrice(Math.max(0, prod.price));
     setFormCurrency(prod.currency || defaults.currency);
     setFormSelectedSizes(defaults.selectedSizes);
     setFormSeriesRatio(defaults.seriesRatio);
@@ -2721,6 +2803,10 @@ export default function SupplierDashboardClient() {
 
   return (
     <div className="min-h-screen bg-[#f0f2f5] text-slate-800 flex flex-col">
+      <SupplierImpersonationBanner
+        profile={profile}
+        onExitImpersonation={handleExitImpersonation}
+      />
       <SupplierHeader profile={profile} onLogout={handleLogout} />
 
       <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-6 flex-1">

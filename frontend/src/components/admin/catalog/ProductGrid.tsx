@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { ShoppingBag, PackageCheck, Check } from "lucide-react";
 import { Product, XmlFeed } from "@/types/integration";
+import { resolveProductActorMeta } from "@/utils/supplierImpersonation";
 
 // Localized labels dictionary to prevent JSX literal internationalization warnings
 const LABELS = {
@@ -294,6 +295,40 @@ export default function ProductGrid({
                       </b>
                     </span>
                   </div>
+
+                  {(() => {
+                    const actorMeta = resolveProductActorMeta(
+                      product.created_by_actor_type,
+                      product.created_by_role
+                    );
+                    const uploaderText =
+                      product.created_by_actor_type === "admin_impersonation"
+                        ? product.created_by_impersonated_by_email || product.created_by_name
+                        : product.created_by_name || product.created_by_email;
+                    const createdLabel = product.created_at
+                      ? new Date(product.created_at).toLocaleString("tr-TR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "";
+                    return (
+                      <div className="border-t border-zinc-100/80 pt-2 flex items-center justify-between gap-2 text-[10px]">
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-bold border truncate max-w-[55%] ${actorMeta.badgeClass}`}
+                          title={uploaderText ? `${actorMeta.label} • ${uploaderText}` : actorMeta.label}
+                        >
+                          {actorMeta.shortLabel}
+                          {uploaderText ? `: ${uploaderText}` : ""}
+                        </span>
+                        <span className="font-mono text-zinc-400 shrink-0">
+                          {createdLabel}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </button>
             </div>

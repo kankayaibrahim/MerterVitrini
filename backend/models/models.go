@@ -183,10 +183,20 @@ type Product struct {
 	SeriesStock          int                  `json:"series_stock,omitempty"`
 	Sku                  *string              `json:"sku,omitempty"`
 	Barcode              *string              `json:"barcode,omitempty"`
-	IsActive             bool                 `json:"is_active"`
-	LastSyncRunID        *string              `json:"last_sync_run_id,omitempty"`
-	CreatedAt            time.Time            `json:"created_at"`
-	UpdatedAt            time.Time            `json:"updated_at"`
+	IsActive                     bool                  `json:"is_active"`
+	LastSyncRunID                *string               `json:"last_sync_run_id,omitempty"`
+	CreatedAt                    time.Time             `json:"created_at"`
+	UpdatedAt                    time.Time             `json:"updated_at"`
+	CreatedByActorType           string                `json:"created_by_actor_type,omitempty"`
+	CreatedByUserID              string                `json:"created_by_user_id,omitempty"`
+	CreatedByEmail               string                `json:"created_by_email,omitempty"`
+	CreatedByName                string                `json:"created_by_name,omitempty"`
+	CreatedByRole                string                `json:"created_by_role,omitempty"`
+	CreatedByImpersonatedByEmail string                `json:"created_by_impersonated_by_email,omitempty"`
+	UpdatedByActorType           string                `json:"updated_by_actor_type,omitempty"`
+	UpdatedByEmail               string                `json:"updated_by_email,omitempty"`
+	UpdatedByName                string                `json:"updated_by_name,omitempty"`
+	UpdatedByImpersonatedByEmail string                `json:"updated_by_impersonated_by_email,omitempty"`
 	MetaAttributes       map[string]any       `json:"meta_attributes,omitempty"`
 	Attributes           []*ProductAttribute  `json:"attributes,omitempty"`
 	Variants             []*ProductVariant    `json:"variants,omitempty"`

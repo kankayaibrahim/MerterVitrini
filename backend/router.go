@@ -37,6 +37,7 @@ type AppHandlers struct {
 	Cron                 *handlers.CronHandler
 	Customers            *handlers.CustomersHandler
 	SupplierApplications *handlers.SupplierApplicationsHandler
+	SupplierImpersonation *handlers.SupplierImpersonationHandler
 	Analytics            *handlers.AnalyticsHandler
 	AdminDashboard       *handlers.AdminDashboardHandler
 	AdminNotifications   *handlers.AdminNotificationsHandler
@@ -85,6 +86,7 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 		Cron:                 handlers.NewCronHandler(),
 		Customers:            handlers.NewCustomersHandler(cfg),
 		SupplierApplications: supplierApps,
+		SupplierImpersonation: handlers.NewSupplierImpersonationHandler(cfg),
 		Analytics:            handlers.NewAnalyticsHandler(cfg),
 		AdminDashboard:       handlers.NewAdminDashboardHandler(cfg),
 		AdminNotifications:   handlers.NewAdminNotificationsHandler(cfg),
@@ -315,6 +317,9 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("POST /api/v1/admin/supplier-users", protect(h.AdminSupplierUsers.CreateSupplierUser))
 	mux.Handle("PUT /api/v1/admin/supplier-users/{id}", protect(h.AdminSupplierUsers.UpdateSupplierUser))
 	mux.Handle("DELETE /api/v1/admin/supplier-users/{id}", protect(h.AdminSupplierUsers.DeleteSupplierUser))
+	supplierImpersonateMW := middleware.RequireRole(models.RoleSuperAdmin, models.RoleAdmin)
+	mux.Handle("POST /api/v1/admin/suppliers/{id}/impersonate", authMW(supplierImpersonateMW(http.HandlerFunc(h.SupplierImpersonation.ImpersonateSupplier))))
+	mux.Handle("GET /api/v1/admin/supplier-audit-logs", protect(h.SupplierImpersonation.ListSupplierAuditLogs))
 	mux.Handle("GET /api/v1/admin/chat/rooms", protect(h.Chat.ListAdminRooms))
 	mux.Handle("GET /api/v1/admin/chat/rooms/{room_id}/messages", protect(h.Chat.ListAdminMessages))
 	mux.Handle("GET /api/v1/admin/supplier-applications", protect(h.SupplierApplications.ListApplications))

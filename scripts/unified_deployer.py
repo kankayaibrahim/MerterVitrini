@@ -284,7 +284,7 @@ elif port > 0:
 
 print(json.dumps(res))
 """
-        stdin, stdout, stderr = ssh.exec_command("python3 -", get_pty=False)
+        stdin, stdout, _ = ssh.exec_command("python3 -", get_pty=False)
         stdin.write(remote_py)
         stdin.channel.shutdown_write()
         out = stdout.read().decode("utf-8", errors="replace").strip()

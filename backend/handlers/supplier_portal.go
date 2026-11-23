@@ -363,6 +363,8 @@ func issueLocalSupplierJWT(jwtSecret string, u *models.SupplierUser) string {
 		"alias_code":   u.AliasCode,
 		"email":        u.Email,
 		"contact_name": u.ContactName,
+		"is_owner":     u.IsOwner,
+		"job_title":    u.JobTitle,
 		"role":         "supplier",
 		"iat":          now.Unix(),
 		"exp":          now.Add(7 * 24 * time.Hour).Unix(),
@@ -446,8 +448,22 @@ func (h *SupplierPortalHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update last_login_at
+	// Update last_login_at and record login session audit
 	_, _ = db.Pool.Exec(ctx, "UPDATE catalog.supplier_users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1", u.ID)
+	loginSessType := AuditActorSupplierSubUser
+	if u.IsOwner {
+		loginSessType = AuditActorSupplierOwner
+	}
+	recordSupplierSessionLogAsync(r, supplierSessionLogInput{
+		SessionType:         loginSessType,
+		BrandID:             u.BrandID,
+		BrandName:           u.BrandName,
+		SupplierUserID:      u.ID,
+		SupplierEmail:       u.Email,
+		SupplierContactName: u.ContactName,
+		SupplierIsOwner:     u.IsOwner,
+		SupplierJobTitle:    u.JobTitle,
+	})
 
 	writeSupplierJSON(w, http.StatusOK, models.SupplierLoginResponse{
 		Token: tokenString,
@@ -1175,6 +1191,7 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 	defer cancel()
 	ensureSupplierSiblingSchema(ctx)
 	ensureSupplierSkuUniqueIndex(ctx)
+	_ = EnsureSupplierAuditSchema(ctx)
 
 	if err := normalizeSupplierDraftOrPublishInput(ctx, claims.BrandID, &req, false); err != nil {
 		httpx.Error(w, http.StatusBadRequest, err.Error())
@@ -1217,10 +1234,22 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	siblingIDs, activeSiblingSlugs, sibErr := insertAdditionalColorVariantsTx(ctx, tx, claims.BrandID, &req, groupID, initialStock)
+	siblingRefs, activeSiblingSlugs, sibErr := insertAdditionalColorVariantsTx(ctx, tx, claims.BrandID, &req, groupID, initialStock)
 	if sibErr != nil {
 		httpx.Error(w, http.StatusBadRequest, sibErr.Error())
 		return
+	}
+
+	siblingIDs := make([]string, 0, len(siblingRefs))
+	auditItems := make([]productAuditItemRef, 0, 1+len(siblingRefs))
+	auditItems = append(auditItems, productAuditItemRef{
+		ProductID: mainItem.ID,
+		Title:     mainItem.Title,
+		CustomSKU: mainItem.CustomSKU,
+	})
+	for _, sr := range siblingRefs {
+		siblingIDs = append(siblingIDs, sr.ProductID)
+		auditItems = append(auditItems, sr)
 	}
 
 	allCreatedIDs := make([]string, 0, 1+len(siblingIDs))
@@ -1231,11 +1260,22 @@ func (h *SupplierPortalHandler) CreateProduct(w http.ResponseWriter, r *http.Req
 		httpx.Error(w, http.StatusInternalServerError, "Hukuki sorumluluk onayı kaydedilemedi")
 		return
 	}
+	auditActor := resolveSupplierAuditActor(claims)
+	if auditErr := stampProductsCreatedAuditTx(ctx, tx, allCreatedIDs, auditActor); auditErr != nil {
+		log.Printf("[SUPPLIER PRODUCT] Audit stamp error: %v", auditErr)
+		httpx.Error(w, http.StatusInternalServerError, "Ürün denetim kaydı oluşturulamadı")
+		return
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "İşlem onaylanamadı")
 		return
 	}
+
+	recordProductAuditLogsAsync(r, claims.BrandID, claims.BrandName, "create", auditItems, auditActor, map[string]any{
+		"is_active":     req.IsActive,
+		"product_count": len(allCreatedIDs),
+	})
 
 	if req.ContentResponsibilityAccepted != nil && *req.ContentResponsibilityAccepted {
 		recordLegalConsentAsync(legalConsentLogEntry{
@@ -1343,6 +1383,7 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 	defer cancel()
 	ensureSupplierSiblingSchema(ctx)
 	ensureSupplierSkuUniqueIndex(ctx)
+	_ = EnsureSupplierAuditSchema(ctx)
 
 	hasExisting := len(cleanNonEmptyStrings(req.Images)) == 0 && hasExistingProductImages(ctx, id)
 	if err := normalizeSupplierDraftOrPublishInput(ctx, claims.BrandID, &req, hasExisting); err != nil {
@@ -1396,9 +1437,9 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 			sku = CASE WHEN $19 THEN NULLIF(BTRIM($20), '') ELSE sku END,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = $21 AND brand_id = $22
-		RETURNING coalesce(slug, '')`
+		RETURNING coalesce(slug, ''), coalesce(custom_sku, '')`
 
-	var updatedSlug string
+	var updatedSlug, updatedCustomSKU string
 	err = tx.QueryRow(
 		ctx, updateSQL,
 		req.Title, req.ShortDescription, req.Description,
@@ -1407,7 +1448,7 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 		req.Currency, req.PackingRatio, req.SeriesRatio,
 		req.MinimumOrderQuantity, req.SeriesStock, initialStock, req.IsActive,
 		groupID, hasSKUField, supplierSKU, id, claims.BrandID,
-	).Scan(&updatedSlug)
+	).Scan(&updatedSlug, &updatedCustomSKU)
 	if err != nil {
 		if isUniqueViolationErr(err) {
 			httpx.Error(w, http.StatusConflict, fmt.Sprintf("Bu ürün/model kodu (%s) mağazanızda zaten başka bir üründe kayıtlı.", supplierSKU))
@@ -1428,11 +1469,23 @@ func (h *SupplierPortalHandler) UpdateProduct(w http.ResponseWriter, r *http.Req
 			return
 		}
 	}
+	auditActor := resolveSupplierAuditActor(claims)
+	if auditErr := stampProductUpdatedAuditTx(ctx, tx, id, auditActor); auditErr != nil {
+		log.Printf("[SUPPLIER PRODUCT] Update audit stamp error: %v", auditErr)
+		httpx.Error(w, http.StatusInternalServerError, "Ürün güncelleme denetim kaydı oluşturulamadı")
+		return
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "İşlem kaydedilemedi")
 		return
 	}
+
+	recordProductAuditLogsAsync(r, claims.BrandID, claims.BrandName, "update", []productAuditItemRef{{
+		ProductID: id,
+		Title:     req.Title,
+		CustomSKU: updatedCustomSKU,
+	}}, auditActor, map[string]any{"is_active": req.IsActive})
 
 	if req.ContentResponsibilityAccepted != nil && *req.ContentResponsibilityAccepted {
 		recordLegalConsentAsync(legalConsentLogEntry{
@@ -1498,13 +1551,13 @@ func (h *SupplierPortalHandler) DeleteProduct(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	var deletedSKU, deletedTitle string
+	var deletedSKU, deletedCustomSKU, deletedTitle string
 	err := db.Pool.QueryRow(
 		ctx,
-		"DELETE FROM catalog.products WHERE id = $1 AND brand_id = $2 RETURNING coalesce(sku, ''), coalesce(title, '')",
+		"DELETE FROM catalog.products WHERE id = $1 AND brand_id = $2 RETURNING coalesce(sku, ''), coalesce(custom_sku, ''), coalesce(title, '')",
 		id,
 		claims.BrandID,
-	).Scan(&deletedSKU, &deletedTitle)
+	).Scan(&deletedSKU, &deletedCustomSKU, &deletedTitle)
 	if err != nil {
 		http.Error(w, `{"error":"Ürün silinemedi veya yetkiniz yok"}`, http.StatusBadRequest)
 		return
@@ -1514,6 +1567,11 @@ func (h *SupplierPortalHandler) DeleteProduct(w http.ResponseWriter, r *http.Req
 		INSERT INTO catalog.product_deletion_logs (product_id, brand_id, sku, title, deletion_mode, actor_type)
 		VALUES ($1, $2, $3, $4, 'hard', 'supplier')
 	`, id, claims.BrandID, deletedSKU, deletedTitle)
+	recordProductAuditLogsAsync(r, claims.BrandID, claims.BrandName, "delete", []productAuditItemRef{{
+		ProductID: id,
+		Title:     deletedTitle,
+		CustomSKU: firstNonEmptyAuditStr(deletedCustomSKU, deletedSKU),
+	}}, resolveSupplierAuditActor(claims), map[string]any{"deletion_mode": "hard"})
 
 	triggerProductMVRefresh()
 

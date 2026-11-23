@@ -39,11 +39,29 @@ type CustomerImpersonationInput struct {
 	TTL           time.Duration
 }
 
+// SupplierImpersonationInput carries target supplier brand/user and acting admin claims for an impersonation JWT.
+type SupplierImpersonationInput struct {
+	SupplierUserID     string
+	BrandID            string
+	BrandName          string
+	AliasCode          string
+	Email              string
+	ContactName        string
+	IsOwner            bool
+	JobTitle           string
+	ImpersonatedBy     string
+	ImpersonatedByID   string
+	ImpersonatedByRole string
+	ImpersonationLogID string
+	TTL                time.Duration
+}
+
 // TokenService defines the DIP contract for dual-role JWT verification and local supplier token issuance.
 type TokenService interface {
 	ResolvePrincipal(ctx context.Context, authHeader string) (*MobilePrincipal, error)
 	IssueSupplierJWT(u *models.SupplierUser) string
 	IssueCustomerImpersonationJWT(in CustomerImpersonationInput) string
+	IssueSupplierImpersonationJWT(in SupplierImpersonationInput) (string, int, error)
 }
 
 // UnifiedTokenService validates HS256 (local supplier) and RS256 (Keycloak OIDC) Bearer tokens.
@@ -119,6 +137,8 @@ func (s *UnifiedTokenService) IssueSupplierJWT(u *models.SupplierUser) string {
 		"alias_code":   u.AliasCode,
 		"email":        u.Email,
 		"contact_name": u.ContactName,
+		"is_owner":     u.IsOwner,
+		"job_title":    u.JobTitle,
 		"role":         roleSupplierLiteral,
 		"iat":          now.Unix(),
 		"exp":          now.Add(7 * 24 * time.Hour).Unix(),
@@ -129,6 +149,45 @@ func (s *UnifiedTokenService) IssueSupplierJWT(u *models.SupplierUser) string {
 		return ""
 	}
 	return signed
+}
+
+// IssueSupplierImpersonationJWT mints a short-lived HS256 supplier portal JWT on behalf of an authorized admin.
+func (s *UnifiedTokenService) IssueSupplierImpersonationJWT(in SupplierImpersonationInput) (string, int, error) {
+	if s == nil || strings.TrimSpace(s.jwtSecret) == "" {
+		return "", 0, errors.New("token imzalama anahtarı yapılandırılmamış")
+	}
+	if strings.TrimSpace(in.BrandID) == "" {
+		return "", 0, errors.New("tedarikçi marka kimliği zorunludur")
+	}
+	ttl := in.TTL
+	if ttl <= 0 {
+		ttl = 2 * time.Hour
+	}
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"sub":                  in.SupplierUserID,
+		"brand_id":             in.BrandID,
+		"brand_name":           in.BrandName,
+		"alias_code":           in.AliasCode,
+		"email":                in.Email,
+		"contact_name":         in.ContactName,
+		"role":                 roleSupplierLiteral,
+		"is_owner":             in.IsOwner,
+		"job_title":            in.JobTitle,
+		"impersonated":         true,
+		"impersonated_by":      in.ImpersonatedBy,
+		"impersonated_by_id":   in.ImpersonatedByID,
+		"impersonated_by_role": in.ImpersonatedByRole,
+		"impersonation_log_id": in.ImpersonationLogID,
+		"iat":                  now.Unix(),
+		"exp":                  now.Add(ttl).Unix(),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString([]byte(s.jwtSecret))
+	if err != nil {
+		return "", 0, err
+	}
+	return signed, int(ttl.Seconds()), nil
 }
 
 // IssueCustomerImpersonationJWT mints a short-lived HS256 storefront JWT scoped strictly to a customer session on behalf of staff.

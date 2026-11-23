@@ -29,7 +29,9 @@ import {
   Users,
   FileText,
   Mail,
-  MessageCircle
+  MessageCircle,
+  LogIn,
+  History
 } from "lucide-react";
 import { XmlFeed, Brand, CategoryNode, SupplierAddress } from "@/types/integration";
 import TurkeyLocationSelects from "@/components/shared/TurkeyLocationSelects";
@@ -45,6 +47,8 @@ import XmlImportWizard, { getDefaultFeedUrlForScript } from "./XmlImportWizard";
 import SupplierUsersSection from "./SupplierUsersSection";
 import SupplierApplicationsSection from "./SupplierApplicationsSection";
 import SupplierBillingAdminSection from "./SupplierBillingAdminSection";
+import SupplierAuditLogsSection from "./SupplierAuditLogsSection";
+import { launchSupplierImpersonationSession } from "@/utils/supplierImpersonation";
 import {
   ROOT_DOMAIN,
   getSupplierSubdomainUrl,
@@ -201,7 +205,7 @@ function createEmptyBrandFormState(): SupplierBrandFormState {
   };
 }
 
-export type SupplierSubTab = "suppliers" | "users" | "applications" | "billing";
+export type SupplierSubTab = "suppliers" | "users" | "applications" | "billing" | "audit";
 
 interface SuppliersManagerProps {
   suppliers: Brand[];
@@ -437,6 +441,8 @@ function XmlHistoryTableBody({
 interface SupplierCardProps {
   supplier: Brand;
   activeSyncing: Record<string, string>;
+  impersonatingBrandId?: string | null;
+  onImpersonateSupplier?: (supplier: Brand) => void;
   onDeactivateProducts: (supplier: Brand) => void;
   onDeleteProducts: (supplier: Brand) => void;
   onEditSupplier: (supplier: Brand) => void;
@@ -446,9 +452,198 @@ interface SupplierCardProps {
   onDeleteFeed: (feed: XmlFeed) => void;
 }
 
+function SupplierSubdomainBadge({ supplier }: Readonly<{ supplier: Brand }>) {
+  const subdomainUrl = getSupplierSubdomainUrl(supplier);
+  if (subdomainUrl) {
+    return (
+      <a
+        href={subdomainUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 no-underline"
+      >
+        <Globe size={10} />
+        <span>
+          {supplier.subdomain}.{ROOT_DOMAIN}
+        </span>
+        <ExternalLink size={9} />
+      </a>
+    );
+  }
+  if (supplier.subdomain) {
+    return (
+      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex bg-zinc-100 text-zinc-500 border border-zinc-200">
+        Subdomain Pasif ({supplier.subdomain})
+      </span>
+    );
+  }
+  return null;
+}
+
+function SupplierContactsBlock({ supplier }: Readonly<{ supplier: Brand }>) {
+  const addresses = (supplier.addresses as SupplierAddress[]) || [];
+  const websiteUrl = formatBrandWebsiteUrl(supplier.website);
+  const instagramUrl = formatBrandInstagramUrl(supplier.instagram_handle);
+  const hasAnyPhone = Boolean(
+    supplier.whatsapp_phone || supplier.phone || supplier.landline_phone
+  );
+
+  return (
+    <div className="flex flex-col gap-3.5 bg-zinc-50/50 rounded-2xl p-4 border border-zinc-100">
+      <div className="flex items-center justify-between gap-2 border-b border-zinc-200/50 pb-2 flex-wrap">
+        <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <Globe size={13} />
+          {LABELS.CONTACTS_INFO}
+        </h4>
+        {(supplier.district || supplier.city) && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-[10px] font-bold">
+            <MapPin size={10} />
+            {[supplier.district, supplier.city].filter(Boolean).join(" / ")}
+          </span>
+        )}
+      </div>
+
+      {/* Website, Instagram, Email & Phones rows */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        {websiteUrl ? (
+          <a
+            href={websiteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-violet-600 hover:text-violet-700 font-semibold transition-colors"
+          >
+            <Globe size={15} className="text-violet-500 shrink-0" />
+            <span className="truncate">{formatBrandWebsiteLabel(supplier.website)}</span>
+            <ExternalLink size={11} className="shrink-0" />
+          </a>
+        ) : (
+          <div className="flex items-center gap-2 text-zinc-400">
+            <Globe size={15} className="shrink-0" />
+            <span className="italic text-xs">Web sitesi girilmedi</span>
+          </div>
+        )}
+
+        {instagramUrl ? (
+          <a
+            href={instagramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-rose-600 hover:text-rose-700 font-semibold transition-colors"
+          >
+            <InstagramIcon size={15} className="text-rose-500 shrink-0" />
+            <span className="truncate">{formatBrandInstagramLabel(supplier.instagram_handle)}</span>
+            <ExternalLink size={11} className="shrink-0" />
+          </a>
+        ) : (
+          <div className="flex items-center gap-2 text-zinc-400">
+            <InstagramIcon size={15} className="shrink-0" />
+            <span className="italic text-xs">Instagram girilmedi</span>
+          </div>
+        )}
+
+        {hasAnyPhone ? (
+          <div className="flex flex-col gap-0.5 text-zinc-700 font-semibold">
+            {supplier.whatsapp_phone && (
+              <div className="flex items-center gap-2 text-emerald-700 flex-wrap">
+                <MessageCircle size={15} className="text-emerald-600 shrink-0" />
+                <span>WhatsApp: {supplier.whatsapp_phone}</span>
+                <Link
+                  href={`/admin/whatsapp-logs?brand_id=${encodeURIComponent(supplier.id)}`}
+                  className="text-[11px] font-bold text-emerald-700 underline hover:text-emerald-900"
+                >
+                  Logları Gör
+                </Link>
+              </div>
+            )}
+            {supplier.landline_phone && (
+              <div className="flex items-center gap-2 text-zinc-700 text-xs">
+                <Phone size={13} className="text-zinc-500 shrink-0" />
+                <span>Sabit Hat: {supplier.landline_phone}</span>
+              </div>
+            )}
+            {supplier.phone && supplier.phone !== supplier.whatsapp_phone && (
+              <div className="flex items-center gap-2 text-zinc-600 text-xs">
+                <Phone size={13} className="text-zinc-400 shrink-0" />
+                <span>Cep: {supplier.phone}</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-zinc-400">
+            <Phone size={15} className="shrink-0" />
+            <span className="italic text-xs">Telefon girilmedi</span>
+          </div>
+        )}
+
+        {supplier.public_email && (
+          <div className="flex items-center gap-2 text-zinc-600 text-xs">
+            <Mail size={14} className="text-zinc-400 shrink-0" />
+            <span className="truncate">{supplier.public_email}</span>
+          </div>
+        )}
+      </div>
+
+      {(supplier.location_address || supplier.city || supplier.district) && (
+        <div className="flex items-start gap-2 text-xs text-zinc-600 pt-1 border-t border-zinc-200/40">
+          <MapPin size={14} className="text-violet-600 shrink-0 mt-0.5" />
+          <span>
+            {formatBrandLocationLine(supplier.location_address, supplier.district, supplier.city)}
+          </span>
+        </div>
+      )}
+
+      {addresses.length > 0 ? (
+        <div className="flex flex-col gap-2 mt-1">
+          {addresses.map((addr, idx) => {
+            const addrKey = addr.id || `${supplier.id}-addr-${addr.title || idx}`;
+            const regionLabel = [addr.district, addr.city].filter(Boolean).join(" / ");
+            return (
+              <div key={addrKey} className="flex items-start justify-between border-t border-zinc-200/40 pt-2 gap-3">
+                <div className="flex items-start gap-2 text-xs">
+                  <MapPin size={14} className="text-red-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-zinc-800 block mb-0.5">
+                      {addr.title}
+                      {regionLabel ? (
+                        <span className="ml-1.5 text-[10px] font-semibold text-zinc-500">
+                          ({regionLabel})
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-zinc-500 block leading-relaxed">{addr.text}</span>
+                  </div>
+                </div>
+
+                {addr.coordinates && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr.coordinates)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100/60 px-2 py-1 rounded border border-violet-100 flex items-center gap-1 shrink-0 transition-colors"
+                    title={LABELS.GO_TO_MAPS}
+                  >
+                    <Map size={10} />
+                    {LABELS.GO_TO_MAPS}
+                  </a>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        !supplier.location_address && (
+          <div className="text-xs text-zinc-400 italic pt-1">{LABELS.NO_ADDRESSES}</div>
+        )
+      )}
+    </div>
+  );
+}
+
 function SupplierCard({
   supplier,
   activeSyncing,
+  impersonatingBrandId,
+  onImpersonateSupplier,
   onDeactivateProducts,
   onDeleteProducts,
   onEditSupplier,
@@ -457,7 +652,6 @@ function SupplierCard({
   onTriggerSync,
   onDeleteFeed
 }: Readonly<SupplierCardProps>) {
-  const addresses = (supplier.addresses as SupplierAddress[]) || [];
   const feeds = supplier.feeds || [];
 
   return (
@@ -487,22 +681,7 @@ function SupplierCard({
                   Yalnızca WhatsApp Sipariş
                 </span>
               )}
-              {getSupplierSubdomainUrl(supplier) ? (
-                <a
-                  href={getSupplierSubdomainUrl(supplier) || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 no-underline"
-                >
-                  <Globe size={10} />
-                  <span>{supplier.subdomain}.{ROOT_DOMAIN}</span>
-                  <ExternalLink size={9} />
-                </a>
-              ) : supplier.subdomain ? (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex bg-zinc-100 text-zinc-500 border border-zinc-200">
-                  Subdomain Pasif ({supplier.subdomain})
-                </span>
-              ) : null}
+              <SupplierSubdomainBadge supplier={supplier} />
             </h3>
             <p className="text-xs font-mono text-zinc-400 mt-1 uppercase">
               {LABELS.ALIAS_PREFIX}<span className="font-bold text-zinc-700">{supplier.alias_code || "-"}</span>
@@ -511,7 +690,23 @@ function SupplierCard({
         </div>
 
         {/* Edit & Delete quick buttons */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap justify-end">
+          {onImpersonateSupplier && (
+            <button
+              onClick={() => onImpersonateSupplier(supplier)}
+              disabled={!supplier.is_active || impersonatingBrandId === supplier.id}
+              className="px-2.5 py-1.5 text-[11px] font-bold rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-45 disabled:cursor-not-allowed inline-flex items-center gap-1 transition-all cursor-pointer mr-1"
+              title={
+                supplier.is_active
+                  ? "Bu Tedarikçi Adına Portal Oturumu Aç"
+                  : "Pasif tedarikçi adına oturum açılamaz"
+              }
+              type="button"
+            >
+              <LogIn size={13} />
+              <span>{impersonatingBrandId === supplier.id ? "Açılıyor..." : "Oturum Aç"}</span>
+            </button>
+          )}
           <button
             onClick={() => onDeactivateProducts(supplier)}
             className="p-2 text-zinc-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
@@ -547,156 +742,7 @@ function SupplierCard({
         </div>
       </div>
 
-      {/* CONTACTS & ADDRESSES BLOCK */}
-      <div className="flex flex-col gap-3.5 bg-zinc-50/50 rounded-2xl p-4 border border-zinc-100">
-        <div className="flex items-center justify-between gap-2 border-b border-zinc-200/50 pb-2 flex-wrap">
-          <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Globe size={13} />
-            {LABELS.CONTACTS_INFO}
-          </h4>
-          {(supplier.district || supplier.city) && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-[10px] font-bold">
-              <MapPin size={10} />
-              {[supplier.district, supplier.city].filter(Boolean).join(" / ")}
-            </span>
-          )}
-        </div>
-
-        {/* Website, Instagram, Email & Phones rows */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-          {formatBrandWebsiteUrl(supplier.website) ? (
-            <a
-              href={formatBrandWebsiteUrl(supplier.website)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-violet-600 hover:text-violet-700 font-semibold transition-colors"
-            >
-              <Globe size={15} className="text-violet-500 shrink-0" />
-              <span className="truncate">{formatBrandWebsiteLabel(supplier.website)}</span>
-              <ExternalLink size={11} className="shrink-0" />
-            </a>
-          ) : (
-            <div className="flex items-center gap-2 text-zinc-400">
-              <Globe size={15} className="shrink-0" />
-              <span className="italic text-xs">Web sitesi girilmedi</span>
-            </div>
-          )}
-
-          {formatBrandInstagramUrl(supplier.instagram_handle) ? (
-            <a
-              href={formatBrandInstagramUrl(supplier.instagram_handle)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-rose-600 hover:text-rose-700 font-semibold transition-colors"
-            >
-              <InstagramIcon size={15} className="text-rose-500 shrink-0" />
-              <span className="truncate">{formatBrandInstagramLabel(supplier.instagram_handle)}</span>
-              <ExternalLink size={11} className="shrink-0" />
-            </a>
-          ) : (
-            <div className="flex items-center gap-2 text-zinc-400">
-              <InstagramIcon size={15} className="shrink-0" />
-              <span className="italic text-xs">Instagram girilmedi</span>
-            </div>
-          )}
-
-          {(supplier.whatsapp_phone || supplier.phone || supplier.landline_phone) ? (
-            <div className="flex flex-col gap-0.5 text-zinc-700 font-semibold">
-              {supplier.whatsapp_phone && (
-                <div className="flex items-center gap-2 text-emerald-700 flex-wrap">
-                  <MessageCircle size={15} className="text-emerald-600 shrink-0" />
-                  <span>WhatsApp: {supplier.whatsapp_phone}</span>
-                  <Link
-                    href={`/admin/whatsapp-logs?brand_id=${encodeURIComponent(supplier.id)}`}
-                    className="text-[11px] font-bold text-emerald-700 underline hover:text-emerald-900"
-                  >
-                    Logları Gör
-                  </Link>
-                </div>
-              )}
-              {supplier.landline_phone && (
-                <div className="flex items-center gap-2 text-zinc-700 text-xs">
-                  <Phone size={13} className="text-zinc-500 shrink-0" />
-                  <span>Sabit Hat: {supplier.landline_phone}</span>
-                </div>
-              )}
-              {supplier.phone && supplier.phone !== supplier.whatsapp_phone && (
-                <div className="flex items-center gap-2 text-zinc-600 text-xs">
-                  <Phone size={13} className="text-zinc-400 shrink-0" />
-                  <span>Cep: {supplier.phone}</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-zinc-400">
-              <Phone size={15} className="shrink-0" />
-              <span className="italic text-xs">Telefon girilmedi</span>
-            </div>
-          )}
-
-          {supplier.public_email && (
-            <div className="flex items-center gap-2 text-zinc-600 text-xs">
-              <Mail size={14} className="text-zinc-400 shrink-0" />
-              <span className="truncate">{supplier.public_email}</span>
-            </div>
-          )}
-        </div>
-
-        {(supplier.location_address || supplier.city || supplier.district) && (
-          <div className="flex items-start gap-2 text-xs text-zinc-600 pt-1 border-t border-zinc-200/40">
-            <MapPin size={14} className="text-violet-600 shrink-0 mt-0.5" />
-            <span>
-              {formatBrandLocationLine(supplier.location_address, supplier.district, supplier.city)}
-            </span>
-          </div>
-        )}
-
-        {/* Supplier Multiple Addresses display */}
-        {addresses.length > 0 ? (
-          <div className="flex flex-col gap-2 mt-1">
-            {addresses.map((addr, idx) => {
-              const addrKey = addr.id || `${supplier.id}-addr-${addr.title || idx}`;
-              const regionLabel = [addr.district, addr.city].filter(Boolean).join(" / ");
-              return (
-                <div key={addrKey} className="flex items-start justify-between border-t border-zinc-200/40 pt-2 gap-3">
-                  <div className="flex items-start gap-2 text-xs">
-                    <MapPin size={14} className="text-red-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-zinc-800 block mb-0.5">
-                        {addr.title}
-                        {regionLabel ? (
-                          <span className="ml-1.5 text-[10px] font-semibold text-zinc-500">
-                            ({regionLabel})
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="text-zinc-500 block leading-relaxed">{addr.text}</span>
-                    </div>
-                  </div>
-
-                  {/* Coordinates GPS map button */}
-                  {addr.coordinates && (
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr.coordinates)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100/60 px-2 py-1 rounded border border-violet-100 flex items-center gap-1 shrink-0 transition-colors"
-                      title={LABELS.GO_TO_MAPS}
-                    >
-                      <Map size={10} />
-                      {LABELS.GO_TO_MAPS}
-                    </a>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          !supplier.location_address && (
-            <div className="text-xs text-zinc-400 italic pt-1">{LABELS.NO_ADDRESSES}</div>
-          )
-        )}
-      </div>
+      <SupplierContactsBlock supplier={supplier} />
 
       {/* Connected Feeds List */}
       <div className="flex flex-col gap-3">
@@ -1052,10 +1098,14 @@ function SupplierFormFields({
         />
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-bold text-zinc-600 uppercase tracking-wider">
+          <label
+            htmlFor="admin-supplier-location-address"
+            className="text-xs font-bold text-zinc-600 uppercase tracking-wider"
+          >
             Ana Mağaza / Showroom Açık Adresi
           </label>
           <textarea
+            id="admin-supplier-location-address"
             value={brandForm.locationAddress}
             onChange={(e) => onFieldChange("locationAddress", e.target.value)}
             rows={2}
@@ -1449,6 +1499,29 @@ export default function SuppliersManager({
   // Status indicators
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [impersonatingBrandId, setImpersonatingBrandId] = useState<string | null>(null);
+
+  const handleImpersonateSupplier = useCallback(
+    async (supplier: Brand) => {
+      setFormError(null);
+      setSuccessMessage(null);
+      setImpersonatingBrandId(supplier.id);
+      const res = await launchSupplierImpersonationSession({
+        apiUrl,
+        token,
+        brandId: supplier.id,
+      });
+      setImpersonatingBrandId(null);
+      if (res.ok) {
+        setSuccessMessage(
+          `${supplier.name} adına tedarikçi oturumu yeni sekmede açıldı. Yapılan tüm ürün yüklemeleri denetim loglarına kaydedilecektir.`
+        );
+      } else {
+        setFormError(res.error || "Tedarikçi oturumu açılamadı.");
+      }
+    },
+    [apiUrl, token]
+  );
 
   // XML History Manager states
   const [xmlHistory, setXmlHistory] = useState<XmlHistoryRecord[]>([]);
@@ -1799,7 +1872,7 @@ export default function SuppliersManager({
 
     switch (activeModal) {
       case "create_supplier":
-      case "edit_supplier":
+      case "edit_supplier": {
         if (!brandForm.name.trim()) {
           setFormError(LABELS.REQUIRED_FIELDS);
           return;
@@ -1837,6 +1910,7 @@ export default function SuppliersManager({
           whatsapp_only_ordering: brandForm.whatsappOnlyOrdering,
         });
         break;
+      }
       case "delete_supplier":
         handleSupplierDelete();
         break;
@@ -1953,6 +2027,19 @@ export default function SuppliersManager({
           <Database size={15} />
           Tedarikçi Muhasebe, Abonelik & Faturalandırma
         </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange("audit")}
+          className={`pb-3 text-xs font-bold transition-all relative cursor-pointer flex items-center gap-2 ${
+            subTab === "audit"
+              ? "text-indigo-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-indigo-600"
+              : "text-zinc-500 hover:text-zinc-900"
+          }`}
+        >
+          <History size={15} />
+          Oturum & Ürün Yükleme Logları
+        </button>
       </div>
 
       {subTab === "users" && (
@@ -1965,6 +2052,10 @@ export default function SuppliersManager({
 
       {subTab === "billing" && (
         <SupplierBillingAdminSection apiUrl={apiUrl} token={token} />
+      )}
+
+      {subTab === "audit" && (
+        <SupplierAuditLogsSection suppliers={suppliers} apiUrl={apiUrl} token={token} />
       )}
 
       {subTab === "suppliers" && (
@@ -1992,11 +2083,17 @@ export default function SuppliersManager({
         )}
       </div>
 
-      {/* Success Notification */}
+      {/* Success / Error Notification */}
       {successMessage && (
         <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl animate-in fade-in slide-in-from-top-4 duration-300 shadow-sm">
           <Check size={18} className="text-emerald-600 shrink-0" />
           <span className="text-sm font-semibold">{successMessage}</span>
+        </div>
+      )}
+      {formError && !activeModal && (
+        <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-2xl shadow-sm">
+          <AlertTriangle size={18} className="text-rose-600 shrink-0" />
+          <span className="text-sm font-semibold">{formError}</span>
         </div>
       )}
 
@@ -2008,6 +2105,8 @@ export default function SuppliersManager({
               key={supplier.id}
               supplier={supplier}
               activeSyncing={activeSyncing}
+              impersonatingBrandId={impersonatingBrandId}
+              onImpersonateSupplier={(sup) => void handleImpersonateSupplier(sup)}
               onDeactivateProducts={openDeactivateProducts}
               onDeleteProducts={openDeleteProducts}
               onEditSupplier={openEditSupplier}
