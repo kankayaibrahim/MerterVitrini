@@ -12,9 +12,8 @@ import {
   slimSsrProductsForCardGrid,
   ssrStoreFetch,
 } from "@/utils/seoHelpers";
-import ToptanHazirGiyimClient, {
-  TOPTAN_HAZIR_GIYIM_FAQS,
-} from "./ToptanHazirGiyimClient";
+import ToptanHazirGiyimClient from "./ToptanHazirGiyimClient";
+import { TOPTAN_HAZIR_GIYIM_FAQS } from "./faqs";
 
 export const revalidate = 300;
 
