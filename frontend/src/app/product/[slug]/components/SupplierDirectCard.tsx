@@ -31,7 +31,11 @@ import {
   formatBrandWebsiteLabel,
   formatBrandWebsiteUrl,
 } from "@/utils/brandContactHelpers";
-import { isProductWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
+import {
+  formatDualProductSku,
+  getWhatsappOrderingCopy,
+  isProductWhatsappOnly,
+} from "@/utils/whatsappOrdering";
 import { getDirectSellerNoticeCopy } from "@/utils/legalNotices";
 import { getSupplierShowcaseHref } from "@/utils/subdomain";
 
@@ -499,7 +503,7 @@ export default function SupplierDirectCard({
   const formattedTotalPrice = formatTotalPrice(totalPrice);
   const numericUnitPrice = computeNumericUnitPrice(product, totalPieces, totalPrice);
 
-  const skuCode = product.custom_sku || "-";
+  const skuCode = formatDualProductSku(product.custom_sku, product.sku);
   const localizedProdTitle =
     product.translations?.[safeLang]?.title || product.title;
 
