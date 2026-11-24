@@ -618,6 +618,19 @@ LIVE_CATEGORY_SLUG_PATHS = {
 
 KW_GOMLEK = "gömlek"
 
+ACCESSORY_CATEGORY_SLUGS = frozenset(
+    {"bel-aksesuari", "canta", "kemer", "sal-esarp", "sapka-bere-atki"}
+)
+GARMENT_HEAD_WORD_RE = re.compile(
+    r"(?<![a-zçğıöşü])("
+    r"pantolon|jean|palazzo|baggy|elbise|abiye|etek|şort|sort|skort|tayt|legging|"
+    r"hırka|hirka|bluz|yelek|kazak|süveter|suveter|gömlek|gomlek|ceket|blazer|bomber|"
+    r"kaban|palto|pardösü|manto|mont|trençkot|trenckot|tulum|salopet|tunik|"
+    r"sweatshirt|hoodie|tişört|tisort|t-shirt|tshirt|büstiyer|bustiyer|bodysuit|korse|"
+    r"atlet|crop|takım|takim|eşofman|esofman"
+    r")(?![a-zçğıöşü])"
+)
+
 # (slug, include_keywords, exclude_keywords, regex_pattern)
 CATEGORY_TITLE_RULES = (
     # 1. Kesin eşleşen takım ve dış/özel parçalar
@@ -629,7 +642,7 @@ CATEGORY_TITLE_RULES = (
     # 2. Aksesuarlar & Çanta & İç Giyim (0040 kategorileri dahil)
     ("bel-aksesuari", ("bel aksesuar", "bel zinciri"), (), None),
     ("canta", ("çanta", "canta", "portföy", "clutch"), (), None),
-    ("kemer", ("kemer",), ("kemerli pantolon", "kemerli elbise", "kemerli etek", "kemerli kaban", "kemerli trençkot", "kemerli ceket", "kemerli yelek", "kemerli şort"), None),
+    ("kemer", ("kemer",), ("kemer detay", "kemerli "), None),
     ("sal-esarp", ("şal", "sal ", "eşarp", "esarp", "bandana", "fular"), ("şal yaka", "sal yaka"), None),
     ("sapka-bere-atki", ("şapka", "sapka", "bere", "atkı", "atki", "saç bandı", "sac bandi", "saç aksesuar", "sac aksesuar"), (), CAP_WORD_RE),
     ("kulot-ic-camasiri", ("külot", "kulot", "slip ", "tanga", "string", "iç çamaşır"), (), None),
@@ -673,7 +686,10 @@ def _rule_matches_title(tlow, includes, excludes=(), pattern=None):
 
 def detect_category_slug_from_title(title_raw, shopify_cat_id=""):
     tlow = tr_lower(title_raw)
+    has_garment_word = bool(GARMENT_HEAD_WORD_RE.search(tlow))
     for slug, includes, excludes, pattern in CATEGORY_TITLE_RULES:
+        if has_garment_word and slug in ACCESSORY_CATEGORY_SLUGS:
+            continue
         if _rule_matches_title(tlow, includes, excludes, pattern):
             return slug
     if shopify_cat_id and shopify_cat_id in SHOPIFY_ID_TO_SLUG:

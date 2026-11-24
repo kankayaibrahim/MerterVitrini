@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useSyncExternalStore } from "react";
+import React, { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -19,8 +19,13 @@ import Header from "@/components/store/Header";
 import Footer from "@/components/store/Footer";
 import ProductCard from "@/components/store/ProductCard";
 import PolicyViewerModal from "@/components/store/PolicyViewerModal";
-import { Brand, Category, Product } from "@/types/store";
+import { Brand, CartItem, Category, Product } from "@/types/store";
+import { apiFetch, ExchangeRate, getUnitsFromSeriesRatio, showToast } from "@/app/utils";
+import { useIsStoreMemberLoggedIn } from "@/app/storeAuth";
+import { persistStoreCart } from "@/utils/cartSync";
+import { extractBrandFieldsFromProduct } from "@/utils/cartSupplierGroups";
 import { getSupplierShowcaseHref } from "@/utils/subdomain";
+import { isProductWhatsappOnly } from "@/utils/whatsappOrdering";
 import { TOPTAN_HAZIR_GIYIM_FAQS } from "./faqs";
 
 const HUB_CATEGORIES: ReadonlyArray<{
@@ -72,7 +77,11 @@ const HUB_CATEGORIES: ReadonlyArray<{
 
 function subscribeStore(cb: () => void) {
   window.addEventListener("storage", cb);
-  return () => window.removeEventListener("storage", cb);
+  window.addEventListener("merter-cart-update", cb);
+  return () => {
+    window.removeEventListener("storage", cb);
+    window.removeEventListener("merter-cart-update", cb);
+  };
 }
 
 function getCurrencySnap(): string {
@@ -89,10 +98,9 @@ function getCartSnap(): number {
   try {
     const raw = localStorage.getItem("merter_b2b_cart");
     if (!raw) return 0;
-    const parsed = JSON.parse(raw) as Array<{ quantity?: number }>;
-    return Array.isArray(parsed)
-      ? parsed.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0)
-      : 0;
+    const parsed = JSON.parse(raw) as Array<{ packages_qty?: number; quantity?: number }>;
+    if (!Array.isArray(parsed)) return 0;
+    return parsed.reduce((acc, item) => acc + (Number(item.packages_qty ?? item.quantity) || 0), 0);
   } catch {
     return 0;
   }
@@ -100,6 +108,71 @@ function getCartSnap(): number {
 
 function getCartServerSnap(): number {
   return 0;
+}
+
+function buildStoredCartItem(product: Product, quantity: number): CartItem {
+  const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);
+  const hasDiscount = product.discounted_price < product.price && product.discounted_price > 0;
+  const unitPrice = hasDiscount ? product.discounted_price : product.price;
+  const coverObj = product.images?.find((img) => img.is_cover) || product.images?.[0];
+  const fallbackTitle = product.title || "";
+  const tr = product.translations;
+
+  return {
+    product_id: product.id,
+    title: tr?.tr?.title || fallbackTitle,
+    custom_sku: product.custom_sku || product.source_product_id || "",
+    color: product.color || "Standart",
+    packages_qty: quantity,
+    units_per_package: unitsPerPkg,
+    price_per_unit: unitPrice,
+    weight_per_unit: product.shipping_weight_kg || 0.35,
+    image_url: coverObj?.image_url || "/placeholder.png",
+    currency: product.currency || "TRY",
+    title_translations: {
+      tr: fallbackTitle,
+      en: tr?.en?.title || fallbackTitle,
+      pl: tr?.pl?.title || fallbackTitle,
+      ar: tr?.ar?.title || fallbackTitle,
+      ru: tr?.ru?.title || fallbackTitle,
+      de: tr?.de?.title || fallbackTitle,
+      bg: tr?.bg?.title || fallbackTitle,
+      fr: tr?.fr?.title || fallbackTitle,
+    },
+    slug: product.slug || product.id,
+    ...extractBrandFieldsFromProduct(product),
+  };
+}
+
+function addProductToStoredCart(product: Product, quantity: number): void {
+  let currentCart: CartItem[] = [];
+  try {
+    const raw = localStorage.getItem("merter_b2b_cart");
+    if (raw) {
+      const parsed = JSON.parse(raw) as CartItem[];
+      if (Array.isArray(parsed)) currentCart = parsed;
+    }
+  } catch {
+    currentCart = [];
+  }
+
+  const updatedCart = [...currentCart];
+  const duplicateIdx = updatedCart.findIndex(
+    (item) => item.product_id === product.id && item.units_per_package > 1
+  );
+
+  if (duplicateIdx > -1) {
+    updatedCart[duplicateIdx] = {
+      ...updatedCart[duplicateIdx],
+      packages_qty: (Number(updatedCart[duplicateIdx].packages_qty) || 0) + quantity,
+    };
+  } else {
+    updatedCart.push(buildStoredCartItem(product, quantity));
+  }
+
+  persistStoreCart(updatedCart);
+  window.dispatchEvent(new Event("merter-cart-update"));
+  showToast("Ürün sepete eklendi");
 }
 
 interface ToptanHazirGiyimClientProps {
@@ -118,12 +191,59 @@ export default function ToptanHazirGiyimClient({
   totalBrandsCount,
 }: Readonly<ToptanHazirGiyimClientProps>) {
   const router = useRouter();
+  const isMemberLoggedIn = useIsStoreMemberLoggedIn();
+  const [authProducts, setAuthProducts] = useState<readonly Product[] | null>(null);
+  const [exchangeRates, setExchangeRates] = useState<readonly ExchangeRate[]>([]);
   const [isLangOpen, setIsLangOpen] = useState(false);
   const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(0);
   const [isPolicyOpen, setIsPolicyOpen] = useState(false);
   const [policyType, setPolicyType] = useState<
     "cancellation_and_return" | "terms_of_service" | "privacy_policy" | ""
   >("");
+
+  const liveProducts = isMemberLoggedIn && authProducts ? authProducts : featuredProducts;
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiFetch<ExchangeRate[]>("/exchange-rates").then((rates) => {
+      if (!cancelled && Array.isArray(rates)) {
+        setExchangeRates(rates);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMemberLoggedIn) {
+      return;
+    }
+    const controller = new AbortController();
+    let disposed = false;
+    void apiFetch<{ products?: Product[] }>("/products?limit=16&sort_by=newest", {
+      signal: controller.signal,
+    }).then((data) => {
+      if (!disposed && Array.isArray(data?.products) && data.products.length > 0) {
+        setAuthProducts(data.products);
+      }
+    });
+    return () => {
+      disposed = true;
+      controller.abort();
+    };
+  }, [isMemberLoggedIn]);
+
+  useEffect(() => {
+    const handleDirectAddToCart = (e: Event) => {
+      const customEvent = e as CustomEvent<{ product?: Product; quantity?: number }>;
+      const product = customEvent.detail?.product;
+      if (!product || isProductWhatsappOnly(product)) return;
+      addProductToStoredCart(product, customEvent.detail?.quantity || 1);
+    };
+    window.addEventListener("merter-add-to-cart", handleDirectAddToCart);
+    return () => window.removeEventListener("merter-add-to-cart", handleDirectAddToCart);
+  }, []);
 
   const displayCurrency = useSyncExternalStore(
     subscribeStore,
@@ -344,7 +464,7 @@ export default function ToptanHazirGiyimClient({
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-              {featuredProducts.map((product) => (
+              {liveProducts.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
@@ -353,7 +473,7 @@ export default function ToptanHazirGiyimClient({
                     router.push(`/product/${product.slug || product.id}`);
                   }}
                   displayCurrency={displayCurrency}
-                  exchangeRates={[]}
+                  exchangeRates={exchangeRates}
                 />
               ))}
             </div>

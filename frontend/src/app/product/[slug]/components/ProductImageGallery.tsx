@@ -4,12 +4,14 @@ import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { getResizedImageUrl } from "@/app/utils";
 import { Product } from "@/types/store";
 import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
+import ProductFavoriteButton from "./ProductFavoriteButton";
 
 interface ProductImageGalleryProps {
   readonly images: Product["images"];
   readonly title: string;
   readonly lang: string;
   readonly t: (key: string, lang: string) => string;
+  readonly productId?: string;
 }
 
 const GALLERY_FALLBACKS: Record<
@@ -42,6 +44,7 @@ export default function ProductImageGallery({
   title,
   lang,
   t,
+  productId,
 }: ProductImageGalleryProps) {
   const safeLang = normalizeSeoLang(lang, "tr");
   const fb = GALLERY_FALLBACKS[safeLang];
@@ -89,22 +92,35 @@ export default function ProductImageGallery({
   return (
     <>
       <div className="flex flex-col gap-4 md:max-w-[550px] w-full md:mx-auto">
-        <button
-          type="button"
-          aria-label={zoomLabel}
-          onClick={handleOpenLightbox}
-          className="aspect-[4/5] max-h-[460px] md:max-h-[680px] rounded-[12px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group flex items-center justify-center w-full p-0"
-        >
-          <img
-            src={getResizedImageUrl(mainImg, 600, 800)}
-            alt={title}
-            width={600}
-            height={800}
-            loading="eager"
-            fetchPriority="high"
-            className="max-w-full max-h-full object-contain transition-all duration-300 group-hover:scale-105"
-          />
-        </button>
+        <div className="relative w-full">
+          <button
+            type="button"
+            aria-label={zoomLabel}
+            onClick={handleOpenLightbox}
+            className="aspect-[4/5] max-h-[460px] md:max-h-[680px] rounded-[12px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group flex items-center justify-center w-full p-0"
+          >
+            <img
+              src={getResizedImageUrl(mainImg, 600, 800)}
+              alt={title}
+              width={600}
+              height={800}
+              loading="eager"
+              fetchPriority="high"
+              className="max-w-full max-h-full object-contain transition-all duration-300 group-hover:scale-105"
+            />
+          </button>
+          {productId && (
+            <div className="absolute top-3 right-3 z-20">
+              <ProductFavoriteButton
+                productId={productId}
+                title={title}
+                lang={safeLang}
+                imageUrl={mainImg}
+                variant="icon"
+              />
+            </div>
+          )}
+        </div>
 
         {images && images.length > 1 && (
           <div className="flex gap-2.5 overflow-x-auto py-1 scrollbar-none select-none">

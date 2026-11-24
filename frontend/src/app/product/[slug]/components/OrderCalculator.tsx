@@ -11,8 +11,12 @@ import {
 } from "@/app/storeAuth";
 import { normalizeSeoLang, SupportedSeoLang } from "@/utils/seoHelpers";
 import { getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
+import ProductFavoriteButton from "./ProductFavoriteButton";
 
 interface OrderCalculatorProps {
+  readonly productId?: string;
+  readonly productTitle?: string;
+  readonly productImageUrl?: string;
   readonly hasSeries: boolean;
   readonly unitsPerPkg: number;
   readonly sizes: readonly string[];
@@ -152,6 +156,9 @@ function SupplierWhatsappCta({
 }
 
 export default function OrderCalculator({
+  productId,
+  productTitle,
+  productImageUrl,
   hasSeries,
   unitsPerPkg,
   sizes,
@@ -374,6 +381,16 @@ export default function OrderCalculator({
             onClick={onSupplierWhatsappClick}
           />
         </div>
+      )}
+
+      {productId && (
+        <ProductFavoriteButton
+          productId={productId}
+          title={productTitle || ""}
+          lang={safeLang}
+          imageUrl={productImageUrl}
+          variant="button"
+        />
       )}
     </>
   );

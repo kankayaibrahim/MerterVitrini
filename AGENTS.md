@@ -99,8 +99,9 @@ Bu projede tek bir jenerik asistan yerine, kendi içinde koordine olan **Özerk 
 ## 5. Kesin Ajan Çalışma Kuralları (Demir Kurallar)
 
 1. **ASLA İZİNSİZ COMMIT VEYA PUSH YAPMA:**
-   - Kullanıcı açıkça *"commit'le"*, *"commit et"* veya *"push yap"* demedikçe **KESİNLİKLE** `git commit` veya `git push` komutlarını ÇALIŞTIRMA!
-   - Tüm yeni dosyaları ve değişiklikleri çalışma dizininde (working tree) bırak ve kullanıcıdan inceleme/onay talep et.
+   - Kullanıcı açıkça *"commit'le"*, *"commit et"*, *"push yap"* veya *"yayınla"* demedikçe **KESİNLİKLE** `git commit` veya `git push` komutlarını ÇALIŞTIRMA!
+   - **Birleşik "Yayınla" Kuralı (Kalıcı):** Kullanıcı *"yayınla"* dediğinde bu talimat **`git commit` + `git push origin main` + canlı sunucuya dağıtım (`unified_deployer.py`)** adımlarının tamamını kapsar; her "yayınla" talebinde üç adım eksiksiz ve sırayla uygulanır.
+   - Onay verilmeden önce tüm yeni dosyaları ve değişiklikleri çalışma dizininde (working tree) bırak ve kullanıcıdan inceleme/onay talep et.
 2. **KURUMSAL COMMIT FORMATINA UY (İzin Verildiğinde):**
    - Commit mesajlarında kesinlikle [Conventional Commits](https://www.conventionalcommits.org/) formatı kullanılacaktır:
      - `feat: <yeni özellik>`

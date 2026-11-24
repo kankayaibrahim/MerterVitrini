@@ -929,6 +929,7 @@ export default function ProductDetailClient({
                 title={title}
                 lang={safeLang}
                 t={t}
+                productId={activeProduct.id}
               />
             </div>
 
@@ -950,6 +951,12 @@ export default function ProductDetailClient({
               <ColorVariants product={activeProduct} lang={safeLang} t={t} />
 
               <OrderCalculator
+                productId={activeProduct.id}
+                productTitle={title}
+                productImageUrl={
+                  activeProduct.images?.find((img) => img.is_cover)?.image_url ||
+                  activeProduct.images?.[0]?.image_url
+                }
                 hasSeries={hasSeries}
                 unitsPerPkg={unitsPerPkg}
                 sizes={sizes}
