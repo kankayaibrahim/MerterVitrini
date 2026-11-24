@@ -16,6 +16,7 @@ import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel }
 import { useRouter } from "next/navigation";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
 import { isProductWhatsappOnly, getWhatsappOrderingCopy } from "@/utils/whatsappOrdering";
+import { useWishlistStore } from "@/store/useWishlistStore";
 
 interface WishlistUiTexts {
   title: string;
@@ -341,77 +342,74 @@ export default function WishlistDrawer({
 }: Readonly<WishlistDrawerProps>) {
   const router = useRouter();
   const isAuthenticated = useIsStoreAuthenticated();
-  const [favoritesList, setFavoritesList] = useState<string[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        return JSON.parse(localStorage.getItem("merter_wishlist") || "[]") as string[];
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  });
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const favoritesList = useWishlistStore((state) => state.wishlistIds);
+  const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
 
-  // Sync favorites list on mount and update
+  const [fetchedRates, setFetchedRates] = useState<ExchangeRate[]>([]);
+  const [loadedState, setLoadedState] = useState<{
+    key: string;
+    products: Product[];
+  }>({ key: "", products: [] });
+
+  const effectiveRates = exchangeRates.length > 0 ? exchangeRates : fetchedRates;
+  const favoritesKey = favoritesList.join(",");
+  const authFlag = isAuthenticated ? "1" : "0";
+  const fetchKey = favoritesList.length > 0 ? `${favoritesKey}|${authFlag}` : "";
+  const isLoading = Boolean(fetchKey) && loadedState.key !== fetchKey;
+  const visibleProducts = fetchKey ? loadedState.products : [];
+
   useEffect(() => {
-    const handleWishlistUpdate = (e: Event) => {
-      const customEvent = e as CustomEvent<string[]>;
-      if (customEvent.detail && Array.isArray(customEvent.detail)) {
-        setFavoritesList(customEvent.detail);
-      } else {
-        try {
-          const currentFavs = JSON.parse(localStorage.getItem("merter_wishlist") || "[]") as string[];
-          setFavoritesList(currentFavs);
-        } catch {
-          setFavoritesList([]);
+    if (exchangeRates.length > 0) {
+      return;
+    }
+    let cancelled = false;
+    void apiFetch<ExchangeRate[]>("/exchange-rates").then((rates) => {
+      if (!cancelled && Array.isArray(rates)) {
+        setFetchedRates(rates);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [exchangeRates.length]);
+
+  useEffect(() => {
+    if (!fetchKey) {
+      return;
+    }
+    let cancelled = false;
+    const loadFavorites = async () => {
+      try {
+        const fetched = await Promise.all(
+          favoritesList.map((id) =>
+            apiFetch<Product>(`/products/${encodeURIComponent(id)}`, {
+              cache: "no-store",
+            })
+          )
+        );
+        if (!cancelled) {
+          setLoadedState({
+            key: fetchKey,
+            products: fetched.filter((p): p is Product => Boolean(p)),
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load wishlist details:", err);
+        if (!cancelled) {
+          setLoadedState({ key: fetchKey, products: [] });
         }
       }
     };
-    window.addEventListener("merter-wishlist-update", handleWishlistUpdate);
+    void loadFavorites();
     return () => {
-      window.removeEventListener("merter-wishlist-update", handleWishlistUpdate);
+      cancelled = true;
     };
-  }, []);
+  }, [fetchKey, favoritesList]);
 
-  // Fetch full details of each favorite product
-  useEffect(() => {
-    const fetchFavoriteProducts = async () => {
-      if (favoritesList.length === 0) {
-        setProducts([]);
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const promises = favoritesList.map((id) =>
-          apiFetch<Product>(`/products/${encodeURIComponent(id)}`, {
-            cache: "no-store",
-          })
-        );
-
-        const fetched = await Promise.all(promises);
-        // Filter out nulls/failures
-        setProducts(fetched.filter((p): p is Product => Boolean(p)));
-      } catch (err) {
-        console.error("Failed to load wishlist details:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void fetchFavoriteProducts();
-  }, [favoritesList, isAuthenticated]);
-
-  // Remove a favorite product
   const handleRemoveFavorite = (e: React.MouseEvent, productId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const updated = favoritesList.filter((id) => id !== productId);
-    localStorage.setItem("merter_wishlist", JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent("merter-wishlist-update", { detail: updated }));
+    toggleWishlist(productId);
   };
 
   const uiTexts = pickLangText(lang, WISHLIST_UI_TEXTS);
@@ -452,19 +450,19 @@ export default function WishlistDrawer({
 
         {/* Content Body */}
         <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4">
-          {loading && <WishlistLoading lang={lang} />}
-          {!loading && products.length === 0 && (
+          {isLoading && <WishlistLoading lang={lang} />}
+          {!isLoading && visibleProducts.length === 0 && (
             <WishlistEmpty lang={lang} onClose={onClose} />
           )}
-          {!loading && products.length > 0 && (
+          {!isLoading && visibleProducts.length > 0 && (
             <div className="flex flex-col gap-3">
-              {products.map((product) => (
+              {visibleProducts.map((product) => (
                 <WishlistItemCard
                   key={product.id}
                   product={product}
                   lang={lang}
                   displayCurrency={displayCurrency}
-                  exchangeRates={exchangeRates}
+                  exchangeRates={effectiveRates}
                   onProductClick={handleProductClick}
                   onRemoveFavorite={handleRemoveFavorite}
                   onClose={onClose}
