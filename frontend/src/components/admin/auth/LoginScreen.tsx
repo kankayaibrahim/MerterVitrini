@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ShieldCheck, AlertCircle, RefreshCw, LogIn, Building2 } from "lucide-react";
+import { ShieldCheck, AlertCircle, RefreshCw, LogIn, LogOut, Building2 } from "lucide-react";
 import { normalizeCanonicalAdminUrl } from "@/services/admin-api.service";
 import { useAdminAuth } from "@/context/AdminContext";
 
@@ -12,6 +12,11 @@ const LABELS = {
   subtitle: "Toptan Katalog, Sipariş ve Tedarikçi Komuta Merkezi",
   loginButton: "Keycloak Kurumsal Kimlik ile Giriş Yap",
   loadingButton: "Keycloak Servisine Yönlendiriliyor...",
+  switchSessionButton: "Farklı / Yönetici Hesabıyla Giriş Yap (SSO Oturumunu Değiştir)",
+  clearAndSwitchButton: "Mevcut Oturumu Kapat ve Yönetici Hesabıyla Giriş Yap",
+  privilegeDeniedTitle: "Bu hesapta yönetici yetkisi bulunmuyor",
+  privilegeDeniedDesc:
+    "Tarayıcınızda aktif bir müşteri/vitrin Keycloak oturumu açık olduğu için SSO otomatik olarak o hesabı doğruladı. Yönetici hesabınızla (admin@...) giriş yapmak için mevcut oturumu kapatıp yeniden giriş yapın.",
   systemSlogan: "KURUMSAL YÖNETİM PANELİ • MERTER VİTRİNİ",
   logoText: "MV",
   secureNotice:
@@ -19,8 +24,14 @@ const LABELS = {
   mfaNotice: "Kurumsal SSO & Rol Tabanlı Erişim Koruması",
 };
 
+function isAdminPrivilegeDeniedError(message: string | null): boolean {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return lower.includes("admin privileges") || lower.includes("forbidden");
+}
+
 export default function LoginScreen() {
-  const { authError, clearAuthError } = useAdminAuth();
+  const { authError, clearAuthError, handleLogout } = useAdminAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +70,7 @@ export default function LoginScreen() {
   };
 
   const displayError = error || authError;
+  const isPrivilegeDenied = isAdminPrivilegeDeniedError(displayError);
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#F8FAFC] p-4 font-sans text-[#0F172A] antialiased overflow-hidden relative">
@@ -94,9 +106,34 @@ export default function LoginScreen() {
 
         {/* Error Alert Box */}
         {displayError && (
-          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-start gap-3 animate-in slide-in-from-top-2 duration-200">
-            <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
-            <span>{displayError}</span>
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex flex-col gap-3 animate-in slide-in-from-top-2 duration-200">
+            <div className="flex items-start gap-3">
+              <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
+              <div className="space-y-1">
+                {isPrivilegeDenied ? (
+                  <>
+                    <p className="font-extrabold text-rose-900 m-0">
+                      {LABELS.privilegeDeniedTitle}
+                    </p>
+                    <p className="leading-relaxed text-rose-700 m-0">
+                      {LABELS.privilegeDeniedDesc}
+                    </p>
+                  </>
+                ) : (
+                  <span>{displayError}</span>
+                )}
+              </div>
+            </div>
+            {isPrivilegeDenied && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full bg-rose-700 hover:bg-rose-800 text-white font-bold py-2.5 px-3.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer border-none"
+              >
+                <LogOut size={14} />
+                <span>{LABELS.clearAndSwitchButton}</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -123,6 +160,15 @@ export default function LoginScreen() {
                 <span>{LABELS.loginButton}</span>
               </>
             )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full bg-slate-100 hover:bg-slate-200/80 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer border border-slate-200"
+          >
+            <LogOut size={14} className="text-slate-600 shrink-0" />
+            <span>{LABELS.switchSessionButton}</span>
           </button>
 
           <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-50/80 border border-emerald-200/70 text-[11px] font-bold text-emerald-800">

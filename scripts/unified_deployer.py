@@ -39,6 +39,22 @@ EXT_SERVICE = ".service"
 CMD_DAEMON_RELOAD = "systemctl daemon-reload"
 CMD_RESTART_NGINX = "systemctl restart nginx || true"
 
+DEFAULT_DENY_NGINX_CONF = """# Default catch-all deny blocks: direct IP and unknown Host/SNI requests must never serve any site
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    return 444;
+}
+
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    server_name _;
+    ssl_reject_handshake on;
+}
+"""
+
 SERVER_CONFIG = {
     "hostname": SERVER_HOST_ADDR,
     "port": int(os.getenv("SERVER_PORT", "22")),
@@ -622,7 +638,7 @@ WantedBy=multi-user.target
         return f"""# 1A. Main Unified Storefront & Admin Server Block (HTTPS - Let's Encrypt ECDSA)
 server {{
     listen 443 ssl;
-    server_name {SERVER_HOST_ADDR} mertervitrini.com.tr www.mertervitrini.com.tr;
+    server_name mertervitrini.com.tr www.mertervitrini.com.tr;
 
     if ($host = 'www.mertervitrini.com.tr') {{
         return 301 https://mertervitrini.com.tr$request_uri;
@@ -691,7 +707,7 @@ server {{
 # 4. HTTP redirect block (Port 80)
 server {{
     listen 80;
-    server_name {SERVER_HOST_ADDR} mertervitrini.com.tr www.mertervitrini.com.tr *.mertervitrini.com.tr api.mertervitrini.com.tr admin.mertervitrini.com.tr;
+    server_name mertervitrini.com.tr www.mertervitrini.com.tr *.mertervitrini.com.tr api.mertervitrini.com.tr admin.mertervitrini.com.tr;
 
     # Let Certbot challenges bypass HTTPS redirect
     location /.well-known/acme-challenge/ {{
@@ -722,6 +738,8 @@ server {{
         try:
             sftp = ssh.open_sftp()
             sftp.put(tmp_path, dest_conf)
+            with sftp.open("/etc/nginx/conf.d/00-default-deny.conf", "w") as deny_fh:
+                deny_fh.write(DEFAULT_DENY_NGINX_CONF)
             sftp.close()
         finally:
             os.remove(tmp_path)
