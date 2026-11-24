@@ -155,6 +155,192 @@ function SupplierWhatsappCta({
   );
 }
 
+type OrderChatCopy = (typeof CHAT_CTA_COPY)[SupportedSeoLang];
+
+function OrderTotalPriceDisplay({
+  isWhatsappOnly,
+  isAuthenticated,
+  isPriceLoading,
+  safeTotalPrice,
+  currency,
+  lang,
+  waPriceBadge,
+}: Readonly<{
+  isWhatsappOnly: boolean;
+  isAuthenticated: boolean;
+  isPriceLoading?: boolean;
+  safeTotalPrice: number;
+  currency: string;
+  lang: string;
+  waPriceBadge: string;
+}>) {
+  if (isWhatsappOnly) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-2.5 py-1 rounded">
+        <MessageCircle className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
+        <span>{waPriceBadge}</span>
+      </span>
+    );
+  }
+  if (!isAuthenticated) {
+    return (
+      <span className="text-xs font-bold text-[#6E542E]">
+        {getShortMemberPriceLabel(lang)}
+      </span>
+    );
+  }
+  if (isPriceLoading) {
+    return (
+      <span
+        className="inline-block h-5 w-20 rounded bg-[#E5E0D8] animate-pulse"
+        aria-busy="true"
+      />
+    );
+  }
+  return (
+    <span className="text-[#1C1C1C]">
+      {safeTotalPrice.toFixed(2)} {currency}
+    </span>
+  );
+}
+
+function SupplierChatButton({
+  visible,
+  label,
+  onClick,
+}: Readonly<{
+  visible: boolean;
+  label: string;
+  onClick?: () => void;
+}>) {
+  if (!visible || !onClick) {
+    return null;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full py-3 bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border border-[#D6D1C7] hover:border-[#1C1C1C] flex items-center justify-center gap-2.5 cursor-pointer select-none active:scale-[0.99]"
+    >
+      <MessageSquare className="w-4 h-4 text-[#8C6D3F]" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function OrderPrimaryActions({
+  isWhatsappOnly,
+  isAuthenticated,
+  isMemberLoggedIn,
+  isPriceLoading,
+  lang,
+  t,
+  cta,
+  waCtaButton,
+  handleAddToCart,
+  onOpenSupplierChat,
+  supplierWhatsappUrl,
+  supplierWhatsappPhone,
+  onSupplierWhatsappClick,
+}: Readonly<{
+  isWhatsappOnly: boolean;
+  isAuthenticated: boolean;
+  isMemberLoggedIn: boolean;
+  isPriceLoading?: boolean;
+  lang: string;
+  t: (key: string, lang: string) => string;
+  cta: OrderChatCopy;
+  waCtaButton: string;
+  handleAddToCart: () => void;
+  onOpenSupplierChat?: () => void;
+  supplierWhatsappUrl?: string;
+  supplierWhatsappPhone?: string;
+  onSupplierWhatsappClick?: () => void;
+}>) {
+  const handleChatClick = isMemberLoggedIn
+    ? onOpenSupplierChat
+    : () => openStoreAuthModal("login");
+  const chatLabel = isMemberLoggedIn ? cta.askSupplier : cta.loginForChat;
+
+  if (isWhatsappOnly) {
+    return (
+      <div className="flex flex-col gap-2.5">
+        <SupplierWhatsappCta
+          href={supplierWhatsappUrl}
+          label={waCtaButton}
+          phone={supplierWhatsappPhone}
+          onClick={onSupplierWhatsappClick}
+        />
+        <SupplierChatButton
+          visible={Boolean(onOpenSupplierChat)}
+          label={chatLabel}
+          onClick={handleChatClick}
+        />
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return (
+      <div className="flex flex-col gap-2.5">
+        <button
+          type="button"
+          disabled={Boolean(isPriceLoading)}
+          onClick={handleAddToCart}
+          className="w-full py-3.5 bg-[#1C1C1C] hover:bg-[#333333] disabled:opacity-60 disabled:cursor-wait text-white rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border-none flex items-center justify-center gap-2.5 cursor-pointer select-none active:scale-[0.99]"
+        >
+          <ShoppingBag className="w-4 h-4 text-white" />
+          <span>{t("add_to_cart", lang)}</span>
+        </button>
+
+        <SupplierChatButton
+          visible={Boolean(onOpenSupplierChat)}
+          label={chatLabel}
+          onClick={handleChatClick}
+        />
+
+        <SupplierWhatsappCta
+          href={supplierWhatsappUrl}
+          label={cta.whatsappSupplierBtn}
+          phone={supplierWhatsappPhone}
+          onClick={onSupplierWhatsappClick}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-[#FAF7F2] border border-[#D8C7A6] rounded-lg p-4 flex flex-col gap-3">
+      <p className="text-xs font-semibold text-[#525252] leading-relaxed">
+        {cta.unlockHint}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => openStoreAuthModal("login")}
+          className="w-full py-3 px-4 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs tracking-[0.4px] uppercase transition-colors border-none flex items-center justify-center gap-2 cursor-pointer select-none"
+        >
+          <Lock className="w-3.5 h-3.5 shrink-0" />
+          <span>{getMemberPriceLabel(lang)}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => openStoreAuthModal("register")}
+          className="w-full py-3 px-4 bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] rounded-md font-extrabold text-xs tracking-[0.4px] uppercase transition-colors border border-[#D6D1C7] hover:border-[#1C1C1C] flex items-center justify-center cursor-pointer select-none"
+        >
+          <span>{cta.registerFree}</span>
+        </button>
+      </div>
+      <SupplierWhatsappCta
+        href={supplierWhatsappUrl}
+        label={cta.whatsappSupplierBtn}
+        phone={supplierWhatsappPhone}
+        onClick={onSupplierWhatsappClick}
+      />
+    </div>
+  );
+}
+
 export default function OrderCalculator({
   productId,
   productTitle,
@@ -278,110 +464,34 @@ export default function OrderCalculator({
             <span className="select-none text-[#1C1C1C]">
               {t("total_price_calc", lang)} ({t("excluding_vat", lang)}):
             </span>
-            {isWhatsappOnly ? (
-              <span className="inline-flex items-center gap-1 text-xs font-extrabold text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] px-2.5 py-1 rounded">
-                <MessageCircle className="w-3.5 h-3.5 text-[#15803D] shrink-0" />
-                <span>{waCopy.priceBadge}</span>
-              </span>
-            ) : isAuthenticated ? (
-              isPriceLoading ? (
-                <span
-                  className="inline-block h-5 w-20 rounded bg-[#E5E0D8] animate-pulse"
-                  aria-busy="true"
-                />
-              ) : (
-                <span className="text-[#1C1C1C]">
-                  {safeTotalPrice.toFixed(2)} {currency}
-                </span>
-              )
-            ) : (
-              <span className="text-xs font-bold text-[#6E542E]">
-                {getShortMemberPriceLabel(lang)}
-              </span>
-            )}
+            <OrderTotalPriceDisplay
+              isWhatsappOnly={isWhatsappOnly}
+              isAuthenticated={isAuthenticated}
+              isPriceLoading={isPriceLoading}
+              safeTotalPrice={safeTotalPrice}
+              currency={currency}
+              lang={lang}
+              waPriceBadge={waCopy.priceBadge}
+            />
           </div>
         </div>
       </div>
 
-      {isWhatsappOnly ? (
-        <div className="flex flex-col gap-2.5">
-          <SupplierWhatsappCta
-            href={supplierWhatsappUrl}
-            label={waCopy.ctaButton}
-            phone={supplierWhatsappPhone}
-            onClick={onSupplierWhatsappClick}
-          />
-          {onOpenSupplierChat && (
-            <button
-              type="button"
-              onClick={isMemberLoggedIn ? onOpenSupplierChat : () => openStoreAuthModal("login")}
-              className="w-full py-3 bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border border-[#D6D1C7] hover:border-[#1C1C1C] flex items-center justify-center gap-2.5 cursor-pointer select-none active:scale-[0.99]"
-            >
-              <MessageSquare className="w-4 h-4 text-[#8C6D3F]" />
-              <span>{isMemberLoggedIn ? cta.askSupplier : cta.loginForChat}</span>
-            </button>
-          )}
-        </div>
-      ) : isAuthenticated ? (
-        <div className="flex flex-col gap-2.5">
-          <button
-            type="button"
-            disabled={Boolean(isPriceLoading)}
-            onClick={handleAddToCart}
-            className="w-full py-3.5 bg-[#1C1C1C] hover:bg-[#333333] disabled:opacity-60 disabled:cursor-wait text-white rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border-none flex items-center justify-center gap-2.5 cursor-pointer select-none active:scale-[0.99]"
-          >
-            <ShoppingBag className="w-4 h-4 text-white" />
-            <span>{t("add_to_cart", lang)}</span>
-          </button>
-
-          {onOpenSupplierChat && (
-            <button
-              type="button"
-              onClick={isMemberLoggedIn ? onOpenSupplierChat : () => openStoreAuthModal("login")}
-              className="w-full py-3 bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] rounded-md font-extrabold text-xs tracking-[0.5px] uppercase transition-colors border border-[#D6D1C7] hover:border-[#1C1C1C] flex items-center justify-center gap-2.5 cursor-pointer select-none active:scale-[0.99]"
-            >
-              <MessageSquare className="w-4 h-4 text-[#8C6D3F]" />
-              <span>{isMemberLoggedIn ? cta.askSupplier : cta.loginForChat}</span>
-            </button>
-          )}
-
-          <SupplierWhatsappCta
-            href={supplierWhatsappUrl}
-            label={cta.whatsappSupplierBtn}
-            phone={supplierWhatsappPhone}
-            onClick={onSupplierWhatsappClick}
-          />
-        </div>
-      ) : (
-        <div className="bg-[#FAF7F2] border border-[#D8C7A6] rounded-lg p-4 flex flex-col gap-3">
-          <p className="text-xs font-semibold text-[#525252] leading-relaxed">
-            {cta.unlockHint}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => openStoreAuthModal("login")}
-              className="w-full py-3 px-4 bg-[#1C1C1C] hover:bg-[#333333] text-white rounded-md font-extrabold text-xs tracking-[0.4px] uppercase transition-colors border-none flex items-center justify-center gap-2 cursor-pointer select-none"
-            >
-              <Lock className="w-3.5 h-3.5 shrink-0" />
-              <span>{getMemberPriceLabel(lang)}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => openStoreAuthModal("register")}
-              className="w-full py-3 px-4 bg-white hover:bg-[#F8F6F2] text-[#1C1C1C] rounded-md font-extrabold text-xs tracking-[0.4px] uppercase transition-colors border border-[#D6D1C7] hover:border-[#1C1C1C] flex items-center justify-center cursor-pointer select-none"
-            >
-              <span>{cta.registerFree}</span>
-            </button>
-          </div>
-          <SupplierWhatsappCta
-            href={supplierWhatsappUrl}
-            label={cta.whatsappSupplierBtn}
-            phone={supplierWhatsappPhone}
-            onClick={onSupplierWhatsappClick}
-          />
-        </div>
-      )}
+      <OrderPrimaryActions
+        isWhatsappOnly={isWhatsappOnly}
+        isAuthenticated={isAuthenticated}
+        isMemberLoggedIn={isMemberLoggedIn}
+        isPriceLoading={isPriceLoading}
+        lang={lang}
+        t={t}
+        cta={cta}
+        waCtaButton={waCopy.ctaButton}
+        handleAddToCart={handleAddToCart}
+        onOpenSupplierChat={onOpenSupplierChat}
+        supplierWhatsappUrl={supplierWhatsappUrl}
+        supplierWhatsappPhone={supplierWhatsappPhone}
+        onSupplierWhatsappClick={onSupplierWhatsappClick}
+      />
 
       {productId && (
         <ProductFavoriteButton
