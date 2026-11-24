@@ -45,18 +45,34 @@ type TranslationLog struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+type AutoTranslateState struct {
+	Status              string           `json:"status"` // "idle", "running", "cooldown"
+	CurrentProductTitle string           `json:"current_product_title,omitempty"`
+	CurrentLanguage     string           `json:"current_language,omitempty"`
+	TotalProducts       int              `json:"total_products"`
+	ProcessedProducts   int              `json:"processed_products"`
+	TranslatedCount     int              `json:"translated_count"`
+	FailedCount         int              `json:"failed_count"`
+	StartedAt           *time.Time       `json:"started_at,omitempty"`
+	LastActivityAt      *time.Time       `json:"last_activity_at,omitempty"`
+	CooldownUntil       *time.Time       `json:"cooldown_until,omitempty"`
+	LastError           string           `json:"last_error,omitempty"`
+	Logs                []TranslationLog `json:"logs,omitempty"`
+}
+
 type TranslationJobState struct {
-	Status       TranslationStatus `json:"status"`
-	Table        string            `json:"table"`
-	Language     string            `json:"language"`
-	TotalItems   int               `json:"total_items"`
-	Processed    int               `json:"processed"`
-	SuccessCount int               `json:"success_count"`
-	FailedCount  int               `json:"failed_count"`
-	StartTime    time.Time         `json:"start_time"`
-	Speed        float64           `json:"speed"` // items/sec
-	ErrorMsg     string            `json:"error_msg,omitempty"`
-	Logs         []TranslationLog  `json:"logs,omitempty"`
+	Status        TranslationStatus   `json:"status"`
+	Table         string              `json:"table"`
+	Language      string              `json:"language"`
+	TotalItems    int                 `json:"total_items"`
+	Processed     int                 `json:"processed"`
+	SuccessCount  int                 `json:"success_count"`
+	FailedCount   int                 `json:"failed_count"`
+	StartTime     time.Time           `json:"start_time"`
+	Speed         float64             `json:"speed"` // items/sec
+	ErrorMsg      string              `json:"error_msg,omitempty"`
+	Logs          []TranslationLog    `json:"logs,omitempty"`
+	AutoTranslate *AutoTranslateState `json:"auto_translate,omitempty"`
 }
 
 type TranslationManager struct {
@@ -344,9 +360,14 @@ func (h *TranslateHandler) GetStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Copy and attach logs
+	// Copy and attach logs and live auto-translate snapshot
 	jobStateCopy := globalTranslationManager.state
-	jobStateCopy.Logs = globalTranslationManager.logs
+	if len(globalTranslationManager.logs) > 0 {
+		logsCopy := make([]TranslationLog, len(globalTranslationManager.logs))
+		copy(logsCopy, globalTranslationManager.logs)
+		jobStateCopy.Logs = logsCopy
+	}
+	jobStateCopy.AutoTranslate = getAutoTranslateStateSnapshot()
 
 	w.Header().Set(contentTypeHeader, appJSON)
 	json.NewEncoder(w).Encode(jobStateCopy)
@@ -584,7 +605,7 @@ func (m *TranslationManager) runWorkerPool(ctx context.Context, table, language 
 	}
 	close(itemsChan)
 
-	numWorkers := 4
+	numWorkers := 2
 	var workerWg sync.WaitGroup
 
 	for i := 0; i < numWorkers; i++ {
@@ -1024,17 +1045,125 @@ func loadExistingProductTranslationsByLang(ctx context.Context, productID string
 }
 
 const (
-	autoTranslateMaxChunkRunes  = 450
+	autoTranslateMaxChunkRunes  = 350
 	autoTranslateCallTimeout    = 50 * time.Second
 	autoTranslateBreakerLimit   = 3
 	autoTranslateBreakerCoolOff = 10 * time.Minute
+	autoTranslateMaxLogs        = 30
 )
 
 var (
 	autoTranslateRunMu         sync.Mutex
 	autoTranslateBreakerMu     sync.Mutex
 	autoTranslateCooldownUntil time.Time
+	autoTranslateStateMu       sync.RWMutex
+	autoTranslateState         = AutoTranslateState{Status: string(StatusIdle)}
+	autoTranslateLogSeq        int64
 )
+
+func beginAutoTranslateRun(totalProducts int) {
+	now := time.Now()
+	autoTranslateStateMu.Lock()
+	defer autoTranslateStateMu.Unlock()
+	autoTranslateState.Status = string(StatusRunning)
+	autoTranslateState.CurrentProductTitle = ""
+	autoTranslateState.CurrentLanguage = ""
+	autoTranslateState.TotalProducts = totalProducts
+	autoTranslateState.ProcessedProducts = 0
+	autoTranslateState.StartedAt = &now
+	autoTranslateState.LastActivityAt = &now
+	autoTranslateState.CooldownUntil = nil
+}
+
+func updateAutoTranslateCursor(productTitle, lang string) {
+	now := time.Now()
+	autoTranslateStateMu.Lock()
+	defer autoTranslateStateMu.Unlock()
+	autoTranslateState.CurrentProductTitle = truncatedText(productTitle, 80)
+	autoTranslateState.CurrentLanguage = strings.ToUpper(lang)
+	autoTranslateState.LastActivityAt = &now
+}
+
+func recordAutoTranslateLog(status, textIn, textOut, errMsg string) {
+	now := time.Now()
+	autoTranslateStateMu.Lock()
+	defer autoTranslateStateMu.Unlock()
+	autoTranslateLogSeq++
+	entry := TranslationLog{
+		ID:        autoTranslateLogSeq,
+		Status:    status,
+		TextIn:    textIn,
+		TextOut:   textOut,
+		ErrorMsg:  errMsg,
+		Timestamp: now,
+	}
+	autoTranslateState.Logs = append([]TranslationLog{entry}, autoTranslateState.Logs...)
+	if len(autoTranslateState.Logs) > autoTranslateMaxLogs {
+		autoTranslateState.Logs = autoTranslateState.Logs[:autoTranslateMaxLogs]
+	}
+	if status == "success" {
+		autoTranslateState.TranslatedCount++
+	} else {
+		autoTranslateState.FailedCount++
+		if errMsg != "" {
+			autoTranslateState.LastError = errMsg
+		}
+	}
+	autoTranslateState.LastActivityAt = &now
+}
+
+func markAutoTranslateProductDone() {
+	now := time.Now()
+	autoTranslateStateMu.Lock()
+	defer autoTranslateStateMu.Unlock()
+	autoTranslateState.ProcessedProducts++
+	autoTranslateState.LastActivityAt = &now
+}
+
+func markAutoTranslateCooldown(until time.Time, errMsg string) {
+	now := time.Now()
+	untilCopy := until
+	autoTranslateStateMu.Lock()
+	defer autoTranslateStateMu.Unlock()
+	autoTranslateState.Status = "cooldown"
+	autoTranslateState.CurrentProductTitle = ""
+	autoTranslateState.CurrentLanguage = ""
+	autoTranslateState.CooldownUntil = &untilCopy
+	autoTranslateState.LastError = errMsg
+	autoTranslateState.LastActivityAt = &now
+}
+
+func finishAutoTranslateRun() {
+	coolingDown := isAutoTranslateCoolingDown()
+	autoTranslateStateMu.Lock()
+	defer autoTranslateStateMu.Unlock()
+	autoTranslateState.CurrentProductTitle = ""
+	autoTranslateState.CurrentLanguage = ""
+	if coolingDown {
+		autoTranslateState.Status = "cooldown"
+	} else {
+		autoTranslateState.Status = string(StatusIdle)
+		autoTranslateState.CooldownUntil = nil
+	}
+}
+
+func getAutoTranslateStateSnapshot() *AutoTranslateState {
+	coolingDown := isAutoTranslateCoolingDown()
+	autoTranslateStateMu.RLock()
+	defer autoTranslateStateMu.RUnlock()
+
+	snap := autoTranslateState
+	if snap.Status == "cooldown" && !coolingDown {
+		snap.Status = string(StatusIdle)
+		snap.CooldownUntil = nil
+	}
+	if len(autoTranslateState.Logs) > 0 {
+		logsCopy := make([]TranslationLog, len(autoTranslateState.Logs))
+		copy(logsCopy, autoTranslateState.Logs)
+		snap.Logs = logsCopy
+	}
+	return &snap
+}
 
 type translateChunkAccumulator struct {
 	maxRunes int
@@ -1163,6 +1292,7 @@ func translateFieldIfMissing(ctx context.Context, sourceText, existingTarget, ta
 	translated, err := translateTextChunked(ctx, trimmedSrc, "tr", targetLang)
 	if err != nil {
 		log.Printf("[AUTO-TRANSLATE] Translate '%s'->'%s' warning: %v", "tr", targetLang, err)
+		recordAutoTranslateLog("error", truncatedText(trimmedSrc, 80), "", fmt.Sprintf("[%s] %v", strings.ToUpper(targetLang), err))
 		return "", true
 	}
 	return strings.TrimSpace(translated), false
@@ -1206,6 +1336,7 @@ func translateSingleProductLang(
 		log.Printf("[AUTO-TRANSLATE ERROR] Failed to write %s/%s: %v", prod.ID, lang2, err)
 		return 0, false
 	}
+	recordAutoTranslateLog("success", truncatedText(prod.Title, 80), fmt.Sprintf("[%s] %s", strings.ToUpper(lang2), truncatedText(nextTitle, 80)), "")
 	return 1, errDesc || errShort
 }
 
@@ -1217,9 +1348,12 @@ func isAutoTranslateCoolingDown() bool {
 }
 
 func tripAutoTranslateCircuitBreaker(consecutiveFailures int) {
+	until := time.Now().Add(autoTranslateBreakerCoolOff)
 	autoTranslateBreakerMu.Lock()
-	autoTranslateCooldownUntil = time.Now().Add(autoTranslateBreakerCoolOff)
+	autoTranslateCooldownUntil = until
 	autoTranslateBreakerMu.Unlock()
+	errMsg := fmt.Sprintf("Ardışık %d zaman aşımı nedeniyle %v bekleme", consecutiveFailures, autoTranslateBreakerCoolOff)
+	markAutoTranslateCooldown(until, errMsg)
 	log.Printf("[AUTO-TRANSLATE] Circuit breaker opened for %v after %d consecutive translate timeouts.", autoTranslateBreakerCoolOff, consecutiveFailures)
 }
 
@@ -1235,6 +1369,7 @@ func translateProductTargetLangs(ctx context.Context, prod autoTranslateProductR
 		if ctx.Err() != nil {
 			return translatedCount, false, ctx.Err()
 		}
+		updateAutoTranslateCursor(prod.Title, lang2)
 		written, hadFailure := translateSingleProductLang(ctx, prod, lang2, existingMap)
 		translatedCount += written
 		if hadFailure {
@@ -1252,7 +1387,7 @@ func translateProductTargetLangs(ctx context.Context, prod autoTranslateProductR
 
 // AutoTranslateProductsByIDs translates missing title/short_description/description fields into all active target languages.
 func AutoTranslateProductsByIDs(ctx context.Context, productIDs []string) (int, error) {
-	if db.Pool == nil {
+	if db.Pool == nil || isTranslationManagerRunning() {
 		return 0, nil
 	}
 	cleanIDs := dedupeNonEmptyStrings(productIDs)
@@ -1270,9 +1405,12 @@ func AutoTranslateProductsByIDs(ctx context.Context, productIDs []string) (int, 
 	}
 
 	products, err := loadAutoTranslateProducts(ctx, cleanIDs)
-	if err != nil {
+	if err != nil || len(products) == 0 {
 		return 0, err
 	}
+
+	beginAutoTranslateRun(len(products))
+	defer finishAutoTranslateRun()
 
 	translatedCount := 0
 	consecutiveFailures := 0
@@ -1282,6 +1420,7 @@ func AutoTranslateProductsByIDs(ctx context.Context, productIDs []string) (int, 
 		}
 		written, tripped, prodErr := translateProductTargetLangs(ctx, prod, targetLangs, &consecutiveFailures)
 		translatedCount += written
+		markAutoTranslateProductDone()
 		if prodErr != nil {
 			return translatedCount, prodErr
 		}

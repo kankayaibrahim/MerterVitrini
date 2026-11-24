@@ -30,7 +30,7 @@ const LABELS = {
   MISSING_COUNT: "Eksik Kayıt:",
   PIECES: "adet",
   PAUSE_JOB: "Çeviri İşlemini Duraklat",
-  START_JOB: "4 Kanallı Çeviriyi Başlat",
+  START_JOB: "2 Kanallı Çeviriyi Başlat",
   SELECT_CELL_PROMPT: "Lütfen yukarıdaki matristen bir eksik hücresine tıklayın.",
   PROGRESS_PANEL_TITLE: "Canlı İlerleme & Performans Ekranı",
   NO_ACTIVE_ENGINE: "Şu an çalışan aktif bir çeviri motoru bulunmamaktadır. Kontrol panelinden çeviriyi tetikleyebilirsiniz.",
@@ -85,6 +85,21 @@ interface TranslationLog {
   readonly timestamp: string;
 }
 
+export interface AutoTranslateState {
+  readonly status: "idle" | "running" | "cooldown";
+  readonly current_product_title?: string;
+  readonly current_language?: string;
+  readonly total_products: number;
+  readonly processed_products: number;
+  readonly translated_count: number;
+  readonly failed_count: number;
+  readonly started_at?: string;
+  readonly last_activity_at?: string;
+  readonly cooldown_until?: string;
+  readonly last_error?: string;
+  readonly logs?: readonly TranslationLog[];
+}
+
 interface TranslationJobState {
   readonly status: "idle" | "running" | "paused" | "completed" | "failed";
   readonly table: string;
@@ -96,6 +111,7 @@ interface TranslationJobState {
   readonly speed: number;
   readonly error_msg?: string;
   readonly logs?: readonly TranslationLog[];
+  readonly auto_translate?: AutoTranslateState;
 }
 
 interface TranslationManagerProps {
@@ -173,7 +189,7 @@ function getJobStatusBadge(status: TranslationJobState["status"]) {
     case "running":
       return {
         className: "bg-blue-50 border-blue-200 text-blue-700 animate-pulse",
-        label: "Çeviri Yapılıyor (4 Thread)"
+        label: "Çeviri Yapılıyor (2 Thread)"
       };
     case "paused":
       return {
@@ -423,6 +439,130 @@ function TranslationControlPanel({
   );
 }
 
+function getAutoTranslateBadge(auto: AutoTranslateState) {
+  if (auto.status === "running") {
+    return {
+      className: "bg-blue-50 border-blue-200 text-blue-700 animate-pulse",
+      label: "Arka Plan Çevirisi Aktif"
+    };
+  }
+  if (auto.status === "cooldown") {
+    const untilText = auto.cooldown_until
+      ? new Date(auto.cooldown_until).toLocaleTimeString()
+      : "";
+    return {
+      className: "bg-amber-50 border-amber-200 text-amber-800",
+      label: untilText ? `Devre Kesici Beklemede (${untilText})` : "Devre Kesici Beklemede"
+    };
+  }
+  const lastAt = auto.last_activity_at
+    ? new Date(auto.last_activity_at).toLocaleTimeString()
+    : "";
+  return {
+    className: "bg-emerald-50 border-emerald-200 text-emerald-700",
+    label: lastAt ? `Arka Plan Servisi Hazır (${lastAt})` : "Arka Plan Servisi Hazır"
+  };
+}
+
+function AutoTranslateLogList({ logs }: { readonly logs: readonly TranslationLog[] }) {
+  return (
+    <div className="w-full max-h-44 overflow-y-auto bg-zinc-950 rounded-2xl p-3.5 border border-zinc-800/80 font-mono text-[11px] flex flex-col gap-2 text-zinc-300 shadow-inner scrollbar-thin">
+      {logs.map((log) => (
+        <div
+          key={log.id}
+          className={`flex items-start gap-2 py-1 border-b border-zinc-800/40 last:border-0 ${
+            log.status === "error" ? "text-rose-400" : "text-zinc-300"
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
+              log.status === "error" ? "bg-rose-500 animate-pulse" : "bg-emerald-500"
+            }`}
+          />
+          <div className="flex-1 flex flex-col gap-0.5">
+            <div className="flex justify-between items-center text-[10px] text-zinc-500 font-bold select-none">
+              <span>Oto-Kayıt #{log.id}</span>
+              <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+            </div>
+            <div className="flex flex-wrap gap-1 leading-relaxed">
+              <span className="text-zinc-500 font-semibold">TR:</span>
+              <span className="text-zinc-200">{`"${log.text_in}"`}</span>
+              {log.status === "success" ? (
+                <>
+                  <span className="text-emerald-500 font-semibold">&rarr;</span>
+                  <span className="text-emerald-300">{log.text_out}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-rose-500 font-semibold">&rarr; Hata:</span>
+                  <span className="text-rose-300">{log.error_msg}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AutoTranslateStatusCard({ auto }: { readonly auto: AutoTranslateState }) {
+  const badge = getAutoTranslateBadge(auto);
+  const percent = auto.total_products > 0
+    ? Math.min(Math.round((auto.processed_products / auto.total_products) * 100), 100)
+    : 0;
+
+  return (
+    <div className="rounded-2xl border border-zinc-200/70 bg-zinc-50/70 p-4 flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-extrabold uppercase text-zinc-400 tracking-wider">
+            Otomatik Katalog & XML Arka Plan Çeviricisi
+          </span>
+          {auto.status === "running" && auto.current_product_title && (
+            <span className="text-xs font-bold text-zinc-800 mt-0.5">
+              {auto.current_product_title}
+              {auto.current_language ? ` → ${auto.current_language}` : ""}
+            </span>
+          )}
+        </div>
+        <span className={`inline-flex items-center px-3 py-1 rounded-xl text-[10px] font-bold border uppercase tracking-wider ${badge.className}`}>
+          {badge.label}
+        </span>
+      </div>
+
+      {auto.total_products > 0 && (
+        <div className="flex flex-col gap-1">
+          <div className="w-full h-2.5 bg-zinc-200/70 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-violet-500 rounded-full transition-all duration-500"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          <div className="flex flex-wrap justify-between items-center text-[11px] font-bold text-zinc-500">
+            <span>
+              Ürün: {auto.processed_products} / {auto.total_products} ({percent}%)
+            </span>
+            <span>
+              Başarılı: <strong className="text-emerald-700">{auto.translated_count}</strong> • Hata:{" "}
+              <strong className={auto.failed_count > 0 ? "text-rose-600" : ""}>{auto.failed_count}</strong>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {auto.last_error && (
+        <div className="flex items-start gap-2 bg-rose-50 border border-rose-200/70 text-rose-900 rounded-xl p-2.5 text-xs font-semibold">
+          <AlertCircle size={14} className="text-rose-600 shrink-0 mt-0.5" />
+          <span>Son Uyarı: {auto.last_error}</span>
+        </div>
+      )}
+
+      {auto.logs && auto.logs.length > 0 && <AutoTranslateLogList logs={auto.logs} />}
+    </div>
+  );
+}
+
 interface TranslationProgressPanelProps {
   readonly jobState: TranslationJobState;
   readonly progressPercent: number;
@@ -435,6 +575,12 @@ function TranslationProgressPanel({
   remainingTime
 }: Readonly<TranslationProgressPanelProps>) {
   const statusBadge = getJobStatusBadge(jobState.status);
+  const auto = jobState.auto_translate;
+  const hasAutoActivity = Boolean(
+    auto &&
+    (auto.status !== "idle" || (auto.logs && auto.logs.length > 0) || auto.last_activity_at || auto.last_error)
+  );
+  const showIdleNotice = jobState.status === "idle" && auto?.status !== "running";
 
   return (
     <div className="lg:col-span-2 bg-white border border-zinc-200/50 rounded-3xl p-5 shadow-sm flex flex-col gap-4">
@@ -443,12 +589,16 @@ function TranslationProgressPanel({
         {LABELS.PROGRESS_PANEL_TITLE}
       </h3>
 
-      {jobState.status === "idle" ? (
-        <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
-          <CheckCircle size={36} className="text-zinc-300" />
+      {hasAutoActivity && auto && <AutoTranslateStatusCard auto={auto} />}
+
+      {showIdleNotice && (
+        <div className="flex flex-col items-center justify-center py-6 text-center gap-2.5">
+          <CheckCircle size={32} className="text-zinc-300" />
           <p className="text-xs font-bold text-zinc-400 max-w-xs">{LABELS.NO_ACTIVE_ENGINE}</p>
         </div>
-      ) : (
+      )}
+
+      {jobState.status !== "idle" && (
         <div className="flex flex-col gap-5 animate-in fade-in duration-300">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-col">
@@ -618,6 +768,7 @@ export default function TranslationManager({ apiUrl, token }: Readonly<Translati
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const prevAutoStatusRef = useRef<AutoTranslateState["status"]>("idle");
 
   // API Request Helper
   const apiRequest = useCallback(async (path: string, method: string, body?: unknown) => {
@@ -679,6 +830,18 @@ export default function TranslationManager({ apiUrl, token }: Readonly<Translati
     }
   }, [apiRequest, selectedCell]);
 
+  const applyPolledStatus = useCallback((data: TranslationJobState) => {
+    setJobState(data);
+    const nextAutoStatus = data.auto_translate?.status ?? "idle";
+    if (prevAutoStatusRef.current === "running" && nextAutoStatus !== "running") {
+      void loadStats();
+    }
+    prevAutoStatusRef.current = nextAutoStatus;
+    if (data.status === "completed") {
+      void loadStats();
+    }
+  }, [loadStats]);
+
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -686,46 +849,32 @@ export default function TranslationManager({ apiUrl, token }: Readonly<Translati
     }
   }, []);
 
-  const startPolling = useCallback(() => {
-    if (pollingIntervalRef.current) return;
+  const startPolling = useCallback((intervalMs = 1500) => {
+    stopPolling();
     pollingIntervalRef.current = setInterval(() => {
       void (async () => {
         try {
-          const data = await apiRequest("/api/v1/translate/status", "GET");
+          const data = (await apiRequest("/api/v1/translate/status", "GET")) as TranslationJobState | null;
           if (data) {
-            setJobState(data);
-            if (data.status !== "running") {
-              stopPolling();
-              if (data.status === "completed") {
-                void loadStats();
-              }
-            }
+            applyPolledStatus(data);
           }
         } catch (err: unknown) {
           console.error("Failed to poll translation status", err);
         }
       })();
-    }, 1000);
-  }, [apiRequest, loadStats, stopPolling]);
+    }, intervalMs);
+  }, [apiRequest, applyPolledStatus, stopPolling]);
 
   const loadJobStatus = useCallback(async () => {
     try {
-      const data = await apiRequest("/api/v1/translate/status", "GET");
+      const data = (await apiRequest("/api/v1/translate/status", "GET")) as TranslationJobState | null;
       if (data) {
-        setJobState(data);
-        if (data.status === "running") {
-          startPolling();
-        } else {
-          stopPolling();
-          if (data.status === "completed") {
-            void loadStats();
-          }
-        }
+        applyPolledStatus(data);
       }
     } catch (err: unknown) {
       console.error("Failed to fetch translation status", err);
     }
-  }, [apiRequest, loadStats, startPolling, stopPolling]);
+  }, [apiRequest, applyPolledStatus]);
 
   useEffect(() => {
     let isMounted = true;
@@ -743,10 +892,9 @@ export default function TranslationManager({ apiUrl, token }: Readonly<Translati
           setLoadingStats(false);
 
           if (jobData) {
-            setJobState(jobData);
-            if (jobData.status === "running") {
-              startPolling();
-            }
+            const typed = jobData as TranslationJobState;
+            prevAutoStatusRef.current = typed.auto_translate?.status ?? "idle";
+            setJobState(typed);
           }
         }
       } catch (err: unknown) {
@@ -763,7 +911,18 @@ export default function TranslationManager({ apiUrl, token }: Readonly<Translati
       isMounted = false;
       stopPolling();
     };
-  }, [token, apiRequest, startPolling, stopPolling]);
+  }, [token, apiRequest, stopPolling]);
+
+  const isAnyEngineRunning =
+    jobState.status === "running" || jobState.auto_translate?.status === "running";
+
+  useEffect(() => {
+    if (!token) return;
+    startPolling(isAnyEngineRunning ? 1500 : 8000);
+    return () => {
+      stopPolling();
+    };
+  }, [token, isAnyEngineRunning, startPolling, stopPolling]);
 
   const handleStartJob = async () => {
     if (!selectedCell) return;
