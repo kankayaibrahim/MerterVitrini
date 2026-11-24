@@ -576,30 +576,43 @@ func queryWhatsappTopProducts(ctx context.Context, whereSQL string, args []any) 
 	return list
 }
 
-func queryWhatsappClickLogs(ctx context.Context, whereSQL string, args []any, limit, offset int) ([]WhatsappClickLogItem, int) {
-	var total int
-	countQuery := `SELECT COUNT(*)::int ` + whatsappBaseJoinsSQL + whereSQL
-	_ = db.Pool.QueryRow(ctx, countQuery, args...).Scan(&total)
+func buildWhatsappClickLogsQuery(whereSQL string, baseArgs []any, limit, offset int) (string, []any) {
+	n := len(baseArgs)
+	pagedArgs := make([]any, 0, n+7)
+	pagedArgs = append(pagedArgs, baseArgs...)
+	pagedArgs = append(pagedArgs,
+		whatsappActorCustomer,
+		whatsappActorGuest,
+		whatsappGuestLabel,
+		whatsappBrandFilterPlatform,
+		whatsappPlatformBrandName,
+		limit,
+		offset,
+	)
 
-	pagedArgs := append(append([]any{}, args...), limit, offset)
-	limitParam := len(args) + 1
-	offsetParam := len(args) + 2
+	actorCustomerParam := n + 1
+	actorGuestParam := n + 2
+	guestLabelParam := n + 3
+	platformBrandIDParam := n + 4
+	platformBrandNameParam := n + 5
+	limitParam := n + 6
+	offsetParam := n + 7
 
 	logQuery := fmt.Sprintf(`
 		SELECT
 			wc.id::text,
 			wc.created_at,
 			COALESCE(wc.user_id, ''),
-			CASE WHEN COALESCE(wc.user_id, '') <> '' THEN %q ELSE %q END AS actor_type,
+			CASE WHEN COALESCE(wc.user_id, '') <> '' THEN $%d::text ELSE $%d::text END AS actor_type,
 			CASE WHEN COALESCE(wc.user_id, '') <> ''
 				THEN COALESCE(NULLIF(TRIM(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), COALESCE(u.email, 'Kayıtlı Müşteri'))
-				ELSE %q
+				ELSE $%d::text
 			END AS customer_name,
 			COALESCE(u.email, ''),
 			COALESCE(u.phone, ''),
 			COALESCE(wc.visitor_id, ''),
-			COALESCE(b.id::text, %q),
-			COALESCE(b.brand_name, %q),
+			COALESCE(b.id::text, $%d::text),
+			COALESCE(b.brand_name, $%d::text),
 			COALESCE(b.slug, ''),
 			COALESCE(NULLIF(wc.target_phone, ''), COALESCE(NULLIF(b.whatsapp_phone, ''), NULLIF(b.phone, ''), '')),
 			COALESCE(p.id::text, ''),
@@ -617,8 +630,18 @@ func queryWhatsappClickLogs(ctx context.Context, whereSQL string, args []any, li
 		%s
 		ORDER BY wc.created_at DESC
 		LIMIT $%d OFFSET $%d
-	`, whatsappActorCustomer, whatsappActorGuest, whatsappGuestLabel, whatsappBrandFilterPlatform, whatsappPlatformBrandName,
+	`, actorCustomerParam, actorGuestParam, guestLabelParam, platformBrandIDParam, platformBrandNameParam,
 		whatsappBaseJoinsSQL, whereSQL, limitParam, offsetParam)
+
+	return logQuery, pagedArgs
+}
+
+func queryWhatsappClickLogs(ctx context.Context, whereSQL string, args []any, limit, offset int) ([]WhatsappClickLogItem, int) {
+	var total int
+	countQuery := `SELECT COUNT(*)::int ` + whatsappBaseJoinsSQL + whereSQL
+	_ = db.Pool.QueryRow(ctx, countQuery, args...).Scan(&total)
+
+	logQuery, pagedArgs := buildWhatsappClickLogsQuery(whereSQL, args, limit, offset)
 
 	list := []WhatsappClickLogItem{}
 	rows, err := db.Pool.Query(ctx, logQuery, pagedArgs...)

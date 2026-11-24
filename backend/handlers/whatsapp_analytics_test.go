@@ -75,3 +75,29 @@ func TestGetAdminWhatsappClicksRejectsNonGetAndHandlesNilPool(t *testing.T) {
 		t.Fatalf("unexpected JSON body: %s", getRec.Body.String())
 	}
 }
+
+func TestWhatsappClickLogsQueryUsesParametersNotDoubleQuotes(t *testing.T) {
+	baseArgs := []any{"desktop"}
+	query, args := buildWhatsappClickLogsQuery("WHERE wc.device_type = $1", baseArgs, 25, 50)
+
+	for _, forbidden := range []string{`"customer"`, `"guest"`, `"platform"`} {
+		if strings.Contains(query, forbidden) {
+			t.Fatalf("query unexpectedly contains SQL identifier %s:\n%s", forbidden, query)
+		}
+	}
+
+	if len(args) != 8 {
+		t.Fatalf("expected 8 SQL parameters, got %d (%v)", len(args), args)
+	}
+	if args[0] != "desktop" || args[1] != whatsappActorCustomer || args[2] != whatsappActorGuest {
+		t.Fatalf("unexpected leading query parameters: %v", args[:3])
+	}
+	if args[6] != 25 || args[7] != 50 {
+		t.Fatalf("expected limit=25, offset=50 at trailing positions, got %v", args[6:])
+	}
+	for _, placeholder := range []string{"$2::text", "$3::text", "$4::text", "$5::text", "$6::text", "LIMIT $7 OFFSET $8"} {
+		if !strings.Contains(query, placeholder) {
+			t.Fatalf("expected placeholder %q in query", placeholder)
+		}
+	}
+}

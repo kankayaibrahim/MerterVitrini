@@ -26,6 +26,16 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const statusClientClosedRequest = 499
+
+func isClientCanceled(r *http.Request, err error) bool {
+	return err != nil && errors.Is(r.Context().Err(), context.Canceled) && errors.Is(err, context.Canceled)
+}
+
+func isContextCanceled(ctx context.Context, err error) bool {
+	return err != nil && errors.Is(ctx.Err(), context.Canceled) && errors.Is(err, context.Canceled)
+}
+
 type StoreCatalogHandler struct {
 	Cfg *config.Config
 }
@@ -539,7 +549,9 @@ func querySiblingProductMap(ctx context.Context, groupIDs []string) map[string][
 		}
 	}
 	if err := sRows.Err(); err != nil {
-		log.Printf("[STORE API WARNING] Sibling color variants scan iteration error: %v", err)
+		if !isContextCanceled(ctx, err) {
+			log.Printf("[STORE API WARNING] Sibling color variants scan iteration error: %v", err)
+		}
 	}
 	return siblingsMap
 }
@@ -578,7 +590,9 @@ func fetchBrandFacets(ctx context.Context, sqlBase string, baseArgs []any) map[s
 	query := "SELECT p.brand_id, COUNT(*)" + sqlBase + " GROUP BY p.brand_id"
 	rows, err := db.Pool.Query(ctx, query, baseArgs...)
 	if err != nil {
-		log.Printf("[STORE API ERROR] Failed to query brand facets: %v", err)
+		if !isContextCanceled(ctx, err) {
+			log.Printf("[STORE API ERROR] Failed to query brand facets: %v", err)
+		}
 		return brandStats
 	}
 	defer rows.Close()
@@ -596,7 +610,9 @@ func fetchStringFacets(ctx context.Context, query string, baseArgs []any) map[st
 	stats := make(map[string]int)
 	rows, err := db.Pool.Query(ctx, query, baseArgs...)
 	if err != nil {
-		log.Printf("[STORE API ERROR] Failed to query facets: %v", err)
+		if !isContextCanceled(ctx, err) {
+			log.Printf("[STORE API ERROR] Failed to query facets: %v", err)
+		}
 		return stats
 	}
 	defer rows.Close()
@@ -616,7 +632,9 @@ func fetchAttributeFacets(ctx context.Context, sqlBase string, baseArgs []any) m
 	attrQuery := "SELECT a.attribute_name, av.attribute_value, COUNT(DISTINCT p.id) " + cleanSqlBase + " GROUP BY a.attribute_name, av.attribute_value"
 	rows, err := db.Pool.Query(ctx, attrQuery, baseArgs...)
 	if err != nil {
-		log.Printf("[STORE API ERROR] Failed to query attribute facets: %v", err)
+		if !isContextCanceled(ctx, err) {
+			log.Printf("[STORE API ERROR] Failed to query attribute facets: %v", err)
+		}
 		return attributeStats
 	}
 	defer rows.Close()
@@ -753,6 +771,10 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 	countQuery := "SELECT COUNT(*)" + sqlBase
 	var totalCount int
 	if countErr := db.Pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); countErr != nil {
+		if isClientCanceled(r, countErr) {
+			w.WriteHeader(statusClientClosedRequest)
+			return
+		}
 		log.Printf("[STORE API ERROR] Failed to count products: %v", countErr)
 		middleware.SetRequestErrorDetail(r.Context(), fmt.Sprintf("Failed to count products: %v", countErr))
 		http.Error(w, `{"error":"Failed to fetch catalog"}`, http.StatusInternalServerError)
@@ -806,6 +828,10 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 
 	rows, err := db.Pool.Query(ctx, sqlQuery, args...)
 	if err != nil {
+		if isClientCanceled(r, err) {
+			w.WriteHeader(statusClientClosedRequest)
+			return
+		}
 		log.Printf("[STORE API ERROR] Failed to query products: %v", err)
 		middleware.SetRequestErrorDetail(r.Context(), fmt.Sprintf("Failed to query products: %v", err))
 		http.Error(w, `{"error":"Failed to fetch catalog"}`, http.StatusInternalServerError)
@@ -815,6 +841,10 @@ func (h *StoreCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 
 	products, err := scanCatalogProducts(rows)
 	if err != nil {
+		if isClientCanceled(r, err) {
+			w.WriteHeader(statusClientClosedRequest)
+			return
+		}
 		log.Printf("Failed to scan storefront product row: %v", err)
 		middleware.SetRequestErrorDetail(r.Context(), fmt.Sprintf("Failed to scan storefront product row: %v", err))
 		http.Error(w, `{"error":"Failed to process products"}`, http.StatusInternalServerError)
