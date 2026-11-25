@@ -11,7 +11,31 @@ import (
 	"mertervitrini/backend/pkg/safe"
 )
 
-const dateTimeFormatTR = "02.01.2006 15:04"
+const (
+	dateTimeFormatTR = "02.01.2006 15:04"
+
+	customerWelcomeWhatsAppMsgTR = `Merhaba, Merter Vitrini’ne hoş geldiniz. Üyeliğiniz için teşekkür ederiz.
+
+Merter’deki giyim üreticilerini toptan alıcılarla buluşturacak Merter Vitrini’nin açılış hazırlıkları devam ediyor.
+
+Bu süreçte toptan kadın giyim alışverişiniz için ToptanModa’yı ziyaret edebilirsiniz. Web sitemizden güncel koleksiyonları, toptan fiyatları ve her seride yer alan bedenleri inceleyebilir, sipariş verebilirsiniz.
+
+https://www.toptanmoda.net
+
+Saygılarımızla,
+Merter Vitrini Ekibi`
+
+	customerWelcomeWhatsAppMsgEN = `Hello, welcome to Merter Vitrini. Thank you for registering with us.
+
+Launch preparations are currently underway for Merter Vitrini, which will connect clothing manufacturers in Merter with wholesale buyers.
+
+In the meantime, you can visit ToptanModa for your wholesale women's clothing needs. On our website, you can browse the latest collections, wholesale prices, and the sizes included in each series, and place your orders.
+
+https://www.toptanmoda.net
+
+Best regards,
+Merter Vitrini Team`
+)
 
 // SupplierApplicationData encapsulates fields submitted through public supplier application form
 type SupplierApplicationData struct {
@@ -32,13 +56,19 @@ func SendRawMail(cfg *config.Config, to, subject, htmlBody, textBody string) err
 	return SendMailEnvelope(cfg, []string{to}, nil, subject, htmlBody, textBody)
 }
 
-func cleanPhoneForWhatsApp(phone string) string {
-	digits := ""
-	for _, r := range phone {
+func extractDigits(raw string) string {
+	var b strings.Builder
+	for _, r := range raw {
 		if r >= '0' && r <= '9' {
-			digits += string(r)
+			b.WriteRune(r)
 		}
 	}
+	return b.String()
+}
+
+func cleanPhoneForWhatsApp(phone string) string {
+	digits := extractDigits(phone)
+	digits = strings.TrimPrefix(digits, "00")
 	if strings.HasPrefix(digits, "0") && len(digits) == 11 {
 		digits = "9" + digits
 	} else if len(digits) == 10 {
@@ -47,8 +77,44 @@ func cleanPhoneForWhatsApp(phone string) string {
 	return digits
 }
 
-func formatGeoLocationHTML(meta ClientMeta) string {
-	flag := CountryCodeToFlag(meta.CountryCode)
+func isTurkishCustomer(rawPhone, cleanPhone string, meta ClientMeta) bool {
+	trimmed := strings.TrimSpace(rawPhone)
+	if strings.HasPrefix(trimmed, "+") || strings.HasPrefix(trimmed, "00") {
+		intlDigits := strings.TrimPrefix(extractDigits(trimmed), "00")
+		return strings.HasPrefix(intlDigits, "90")
+	}
+
+	cc := strings.TrimSpace(meta.CountryCode)
+	if strings.EqualFold(cc, "TR") {
+		return true
+	}
+
+	country := strings.ToLower(strings.TrimSpace(meta.Country))
+	if country == "turkey" || country == "türkiye" || country == "turkiye" {
+		return true
+	}
+
+	if cc != "" {
+		return false
+	}
+
+	return strings.HasPrefix(cleanPhone, "90") && len(cleanPhone) == 12
+}
+
+func buildCustomerWelcomeWhatsAppURL(phone string, meta ClientMeta) string {
+	cleanPhone := cleanPhoneForWhatsApp(phone)
+	if cleanPhone == "" {
+		return ""
+	}
+	msg := customerWelcomeWhatsAppMsgEN
+	if isTurkishCustomer(phone, cleanPhone, meta) {
+		msg = customerWelcomeWhatsAppMsgTR
+	}
+	encodedMsg := strings.ReplaceAll(url.QueryEscape(msg), "+", "%20")
+	return fmt.Sprintf("https://wa.me/%s?text=%s", cleanPhone, encodedMsg)
+}
+
+func formatGeoLocationText(meta ClientMeta) string {
 	locParts := []string{}
 	if meta.City != "" && meta.City != "Bilinmiyor" {
 		locParts = append(locParts, meta.City)
@@ -59,11 +125,13 @@ func formatGeoLocationHTML(meta ClientMeta) string {
 	if meta.Country != "" && meta.Country != "Bilinmiyor" {
 		locParts = append(locParts, meta.Country)
 	}
-	locationText := strings.Join(locParts, ", ")
-	if locationText == "" {
-		locationText = "Konum Belirlenemedi"
+	if len(locParts) == 0 {
+		return "Konum Belirlenemedi"
 	}
+	return strings.Join(locParts, ", ")
+}
 
+func formatGeoISPText(meta ClientMeta) string {
 	ispText := meta.ISP
 	if meta.Org != "" && meta.Org != meta.ISP {
 		if ispText != "" {
@@ -73,21 +141,34 @@ func formatGeoLocationHTML(meta ClientMeta) string {
 		}
 	}
 	if ispText == "" {
-		ispText = "Bilinmiyor"
+		return "Bilinmiyor"
 	}
+	return ispText
+}
 
+func formatIPVersionBadge(ipVersion string) string {
+	switch ipVersion {
+	case "IPv6":
+		return `<span style="display:inline-block;margin-left:6px;background:#e0f2fe;color:#0369a1;font-size:10px;font-weight:800;padding:2px 7px;border-radius:9999px;font-family:sans-serif;">IPv6 • Doğrulanmış İstemci IP</span>`
+	case "IPv4":
+		return `<span style="display:inline-block;margin-left:6px;background:#f1f5f9;color:#334155;font-size:10px;font-weight:800;padding:2px 7px;border-radius:9999px;font-family:sans-serif;">IPv4</span>`
+	default:
+		return ""
+	}
+}
+
+func formatGeoLocationHTML(meta ClientMeta) string {
+	flag := CountryCodeToFlag(meta.CountryCode)
+	locationText := formatGeoLocationText(meta)
+	ispText := formatGeoISPText(meta)
 	deviceText := fmt.Sprintf("%s • %s", meta.Device, meta.Browser)
+
 	ipDisplay := meta.IP
 	if ipDisplay == "" {
 		ipDisplay = "Bilinmiyor"
 	}
-	ipBadge := ""
-	switch meta.IPVersion {
-	case "IPv6":
-		ipBadge = `<span style="display:inline-block;margin-left:6px;background:#e0f2fe;color:#0369a1;font-size:10px;font-weight:800;padding:2px 7px;border-radius:9999px;font-family:sans-serif;">IPv6 • Doğrulanmış İstemci IP</span>`
-	case "IPv4":
-		ipBadge = `<span style="display:inline-block;margin-left:6px;background:#f1f5f9;color:#334155;font-size:10px;font-weight:800;padding:2px 7px;border-radius:9999px;font-family:sans-serif;">IPv4</span>`
-	}
+	ipBadge := formatIPVersionBadge(meta.IPVersion)
+
 	pseudoRow := ""
 	if meta.PseudoIPv4 != "" {
 		pseudoRow = fmt.Sprintf(`<tr>
@@ -472,7 +553,7 @@ func SendCustomerRegisteredNotification(cfg *config.Config, firstName, lastName,
 		subject := fmt.Sprintf("👤 Yeni Müşteri Kaydı: %s", fullName)
 		nowStr := time.Now().Format(dateTimeFormatTR)
 		geoHTML := formatGeoLocationHTML(meta)
-		cleanPhone := cleanPhoneForWhatsApp(phone)
+		waURL := buildCustomerWelcomeWhatsAppURL(phone, meta)
 
 		phoneDisplay := phone
 		if phoneDisplay == "" {
@@ -567,8 +648,8 @@ Merter Vitrini Bildirim Servisi`, fullName, email, phoneDisplay, nowStr, meta.IP
 			nowStr,
 			geoHTML,
 			func() string {
-				if cleanPhone != "" {
-					return fmt.Sprintf(`<a href="https://wa.me/%s" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; display: inline-block;">💬 WhatsApp'tan Yaz</a>`, cleanPhone)
+				if waURL != "" {
+					return fmt.Sprintf(`<a href="%s" style="background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-weight: 700; font-size: 13px; display: inline-block;">💬 WhatsApp'tan Yaz</a>`, html.EscapeString(waURL))
 				}
 				return ""
 			}(),
