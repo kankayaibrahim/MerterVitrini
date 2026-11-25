@@ -609,9 +609,17 @@ WantedBy=multi-user.target
         add_header Content-Security-Policy "{csp_policy}" always;
     }}
 
+    # Permanently drop legacy /firmalar/ URLs from old site version without flooding error.log
+    location ^~ /firmalar/ {{
+        access_log off;
+        log_not_found off;
+        return 410;
+    }}
+
     # Cache other static file extensions with security headers
     location ~* \\.(?:ico|css|js|gif|jpe?g|png|svg|webp|avif|woff2?|eot|ttf|otf)$ {{
         access_log off;
+        log_not_found off;
         expires 30d;
         add_header Cache-Control "public, max-age=2592000, no-transform" always;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;

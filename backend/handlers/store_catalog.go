@@ -26,7 +26,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const statusClientClosedRequest = 499
+const (
+	statusClientClosedRequest = 499
+	errMsgTenantNotFound      = "Tenant not found"
+)
 
 func isClientCanceled(r *http.Request, err error) bool {
 	return err != nil && (errors.Is(r.Context().Err(), context.Canceled) || errors.Is(err, context.Canceled))
@@ -1527,7 +1530,7 @@ func (h *StoreCatalogHandler) ResolveTenantBySubdomain(w http.ResponseWriter, r 
 	rawSub := strings.ToLower(strings.TrimSpace(r.PathValue("subdomain")))
 	normalizedSub, valErr := NormalizeAndValidateBrandSubdomain(rawSub)
 	if normalizedSub == "" || valErr != nil {
-		httpx.Error(w, http.StatusNotFound, "Tenant not found")
+		httpx.Error(w, http.StatusNotFound, errMsgTenantNotFound)
 		return
 	}
 
@@ -1552,7 +1555,7 @@ func (h *StoreCatalogHandler) ResolveTenantBySubdomain(w http.ResponseWriter, r 
 		LIMIT 1
 	`, normalizedSub).Scan(&id, &name, &slug, &resolvedSub, &subEnabled)
 	if err != nil {
-		httpx.Error(w, http.StatusNotFound, "Tenant not found")
+		httpx.Error(w, http.StatusNotFound, errMsgTenantNotFound)
 		return
 	}
 
@@ -1575,7 +1578,7 @@ func (h *StoreCatalogHandler) ResolveTenantBySlug(w http.ResponseWriter, r *http
 
 	rawSlug := strings.TrimSpace(r.PathValue("slug"))
 	if rawSlug == "" || strings.HasPrefix(rawSlug, "__") {
-		httpx.Error(w, http.StatusNotFound, "Tenant not found")
+		httpx.Error(w, http.StatusNotFound, errMsgTenantNotFound)
 		return
 	}
 
@@ -1598,7 +1601,7 @@ func (h *StoreCatalogHandler) ResolveTenantBySlug(w http.ResponseWriter, r *http
 		LIMIT 1
 	`, rawSlug).Scan(&id, &name, &slug, &resolvedSub, &subEnabled)
 	if err != nil {
-		httpx.Error(w, http.StatusNotFound, "Tenant not found")
+		httpx.Error(w, http.StatusNotFound, errMsgTenantNotFound)
 		return
 	}
 

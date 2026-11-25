@@ -1853,6 +1853,29 @@ const biBotCrawlUnionCTE = `
 	)
 `
 
+const biBotTopCrawledPathsSQL = biBotCrawlUnionCTE + `,
+	ranked_path_bots AS (
+		SELECT
+			path,
+			bot_name,
+			SUM(hits) AS bot_hits,
+			ROW_NUMBER() OVER (PARTITION BY path ORDER BY SUM(hits) DESC, bot_name ASC) AS rn
+		FROM bot_hits
+		GROUP BY path, bot_name
+	)
+	SELECT
+		bh.path,
+		COALESCE(SUM(bh.hits), 0)::int AS hits,
+		COALESCE(MAX(rpb.bot_name) FILTER (WHERE rpb.rn = 1), 'UnknownBot') AS top_bot,
+		COUNT(DISTINCT bh.bot_name)::int AS uniq_bots,
+		MAX(bh.created_at) AS last_at
+	FROM bot_hits bh
+	LEFT JOIN ranked_path_bots rpb ON rpb.path = bh.path AND rpb.rn = 1
+	GROUP BY bh.path
+	ORDER BY hits DESC
+	LIMIT 20
+`
+
 func queryBIBotCrawlMonitor(ctx context.Context, win biTimeWindow) BIBotCrawlMonitor {
 	out := BIBotCrawlMonitor{
 		Bots:            []BIBotSummaryRow{},
@@ -1889,28 +1912,7 @@ func queryBIBotCrawlMonitor(ctx context.Context, win biTimeWindow) BIBotCrawlMon
 		}
 	}
 
-	pathRows, err := db.Pool.Query(ctx, biBotCrawlUnionCTE+`
-		WITH ranked_path_bots AS (
-			SELECT
-				path,
-				bot_name,
-				SUM(hits) AS bot_hits,
-				ROW_NUMBER() OVER (PARTITION BY path ORDER BY SUM(hits) DESC, bot_name ASC) AS rn
-			FROM bot_hits
-			GROUP BY path, bot_name
-		)
-		SELECT
-			bh.path,
-			COALESCE(SUM(bh.hits), 0)::int AS hits,
-			COALESCE(MAX(rpb.bot_name) FILTER (WHERE rpb.rn = 1), 'UnknownBot') AS top_bot,
-			COUNT(DISTINCT bh.bot_name)::int AS uniq_bots,
-			MAX(bh.created_at) AS last_at
-		FROM bot_hits bh
-		LEFT JOIN ranked_path_bots rpb ON rpb.path = bh.path AND rpb.rn = 1
-		GROUP BY bh.path
-		ORDER BY hits DESC
-		LIMIT 20
-	`, win.Since, win.Until)
+	pathRows, err := db.Pool.Query(ctx, biBotTopCrawledPathsSQL, win.Since, win.Until)
 	if err == nil {
 		defer pathRows.Close()
 		for pathRows.Next() {
