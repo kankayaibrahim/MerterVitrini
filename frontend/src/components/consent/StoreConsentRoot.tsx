@@ -10,6 +10,7 @@ import {
   useSetActiveUI,
 } from "@c15t/react";
 import { gtag } from "@c15t/integrations/google-tag";
+import { clarity } from "@c15t/integrations/microsoft-clarity";
 import StoreConsentBanner from "./StoreConsentBanner";
 import StoreConsentDialog from "./StoreConsentDialog";
 import { CONSENT_UI_COPY, normalizeConsentLang, type ConsentLang } from "./consentCopy";
@@ -21,6 +22,10 @@ import {
   getCachedConsentInitData,
   setRuntimeCategoryPermissions,
 } from "./consentRuntime";
+
+const CLARITY_PROJECT_ID = (
+  process.env.NEXT_PUBLIC_CLARITY_PROJECT_ID ?? "zj9nfrsl6j"
+).trim();
 
 const PATH_PREFIX_LANGS: readonly ConsentLang[] = [
   "tr",
@@ -35,7 +40,7 @@ const PATH_PREFIX_LANGS: readonly ConsentLang[] = [
 
 function extractLangFromPathname(pathname: string | null): ConsentLang | null {
   if (!pathname) return null;
-  const firstSegment = pathname.split("/").filter(Boolean)[0]?.toLowerCase() || "";
+  const firstSegment = pathname.split("/").find(Boolean)?.toLowerCase() || "";
   if ((PATH_PREFIX_LANGS as readonly string[]).includes(firstSegment)) {
     return firstSegment as ConsentLang;
   }
@@ -48,7 +53,7 @@ function readStoredConsentLang(): ConsentLang | null {
   return stored ? normalizeConsentLang(stored) : null;
 }
 
-function ConsentKernelBridge({ lang }: { lang: ConsentLang }) {
+function ConsentKernelBridge({ lang }: Readonly<{ lang: ConsentLang }>) {
   const consents = useConsents();
   const setLanguage = useSetLanguage();
   const setActiveUI = useSetActiveUI();
@@ -103,14 +108,14 @@ function ConsentKernelBridge({ lang }: { lang: ConsentLang }) {
 }
 
 interface StoreConsentRootProps {
-  initialLang?: string;
-  children: React.ReactNode;
+  readonly initialLang?: string;
+  readonly children: React.ReactNode;
 }
 
 export default function StoreConsentRoot({
   initialLang = "tr",
   children,
-}: StoreConsentRootProps) {
+}: Readonly<StoreConsentRootProps>) {
   const pathname = usePathname();
   const isInternalPortal =
     Boolean(pathname?.startsWith("/admin")) ||
@@ -139,13 +144,16 @@ export default function StoreConsentRoot({
     [baseLang]
   );
 
-  const gaScripts = useMemo(
+  const consentScripts = useMemo(
     () => [
       gtag({
         id: "G-CNMNCL62Q2",
         category: "measurement",
         loadMode: "always",
       }),
+      ...(CLARITY_PROJECT_ID
+        ? [clarity({ id: CLARITY_PROJECT_ID })]
+        : []),
     ],
     []
   );
@@ -166,7 +174,7 @@ export default function StoreConsentRoot({
           "measurement",
           "marketing",
         ],
-        scripts: gaScripts,
+        scripts: consentScripts,
         clearOnRevocation: CLEAR_ON_REVOCATION_MAP,
         reloadOnConsentRevoked: false,
         overrides: {

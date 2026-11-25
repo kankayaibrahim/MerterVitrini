@@ -38,7 +38,7 @@ export interface ConsentSettingsPublicDTO {
   banner_layout: string;
   floating_trigger_enabled: boolean;
   ga_measurement_id: string;
-  google_consent_mode: "always" | "after-consent" | string;
+  google_consent_mode: string;
   reconsent_days: number;
   iab_enabled: boolean;
   iab_cmp_id: number;
@@ -86,7 +86,7 @@ const runtimeSnapshotStore: {
 
 export const CLEAR_ON_REVOCATION_MAP: ClearOnRevocationConfig = {
   measurement: {
-    cookies: [{ name: "_ga" }, { name: "_ga_*" }, { name: "_gid" }, { name: "_clck" }, { name: "_ym_uid" }],
+    cookies: [{ name: "_ga" }, { name: "_ga_*" }, { name: "_gid" }, { name: "_clck" }, { name: "_clsk" }, { name: "_ym_uid" }],
     localStorage: ["mv_vid", "mv_sid"],
   },
   marketing: {
@@ -117,7 +117,7 @@ export function getCachedConsentReceipt(): ConsentReceiptDTO | null {
     const raw = window.localStorage.getItem(CONSENT_RECEIPT_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ConsentReceiptDTO;
-    if (parsed && parsed.consent_ref_id) {
+    if (parsed?.consent_ref_id) {
       runtimeSnapshotStore.receipt = parsed;
       return parsed;
     }
