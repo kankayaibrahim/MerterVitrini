@@ -71,6 +71,7 @@ export const CONSENT_OPEN_PREFERENCES_EVENT = "merter-open-consent-preferences";
 export const CONSENT_RUNTIME_UPDATED_EVENT = "merter-consent-runtime-updated";
 export const CONSENT_RECEIPT_STORAGE_KEY = "merter_consent_receipt";
 export const CONSENT_SUBJECT_STORAGE_KEY = "merter_consent_subject_id";
+export const CONSENT_POLICY_COPY_REVISION = "2026-11-25-clarity-v2";
 
 const runtimeSnapshotStore: {
   initData: StoreConsentInitDTO | null;
@@ -172,6 +173,7 @@ function buildPolicyRules(initData: StoreConsentInitDTO | null): OfflinePolicyRu
       actions: ["accept", "reject", "customize"],
       rights: ["disclosure", "preferences"],
       validity: { choiceDays: reconsentDays },
+      copyRevision: CONSENT_POLICY_COPY_REVISION,
     },
   ];
 }
