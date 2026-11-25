@@ -285,6 +285,7 @@ type ProductImage struct {
 	ID        string    `json:"id"`
 	ProductID string    `json:"product_id"`
 	ImageUrl  string    `json:"image_url"`
+	MediaType string    `json:"media_type,omitempty"`
 	SortOrder int       `json:"sort_order"`
 	IsCover   bool      `json:"is_cover"`
 	CreatedAt time.Time `json:"created_at"`

@@ -202,6 +202,18 @@ func TestResolveSafeMediaPathsAndDiskCleanup(t *testing.T) {
 	t.Run("removes unreferenced original and cache files without touching shared or sibling files", func(t *testing.T) {
 		testRemoveUnreferencedMediaFiles(t, tempDir, mediaRoot)
 	})
+	t.Run("handles mp4 upload paths safely and picks first image as product cover", func(t *testing.T) {
+		videoPaths := resolveSafeMediaPaths(mediaRoot, "/uploads/products/vid_123_demo.mp4")
+		if len(videoPaths) != 4 || videoPaths[0] != filepath.Join(mediaRoot, "products", "vid_123_demo.mp4") {
+			t.Fatalf("unexpected resolved video paths: %v", videoPaths)
+		}
+		if idx := resolveProductCoverIndex([]string{"/uploads/products/clip.mp4", "/uploads/products/photo.webp"}); idx != 1 {
+			t.Fatalf("expected cover index 1 (first image after video), got %d", idx)
+		}
+		if idx := resolveProductCoverIndex([]string{"/uploads/products/clip.mp4"}); idx != 0 {
+			t.Fatalf("expected fallback cover index 0 for video-only slice, got %d", idx)
+		}
+	})
 }
 
 func testParseAndBuildAdvancedAdminFilter(t *testing.T) {

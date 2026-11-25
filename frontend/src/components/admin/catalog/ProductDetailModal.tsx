@@ -14,10 +14,19 @@ import {
   Globe,
   Clock,
   ShieldCheck,
+  Play,
+  UploadCloud,
+  Loader2,
+  Film,
 } from "lucide-react";
 import { Product, XmlFeed, ProductImage, GroupProductColor } from "@/types/integration";
 import { BulkProductActionType } from "@/services/admin-api.service";
 import { resolveProductActorMeta } from "@/utils/supplierImpersonation";
+import {
+  isVideoMedia,
+  isVideoUploadFile,
+  MAX_PRODUCT_VIDEO_BYTES,
+} from "@/utils/media";
 
 // Localized labels dictionary to prevent JSX literal internationalization warnings
 const LABELS = {
@@ -107,6 +116,263 @@ const getStockBadgeClass = (stock: number): string => {
   return "bg-rose-100 text-rose-800";
 };
 
+interface AdminProductMediaPanelProps {
+  readonly productId: string;
+  readonly productTitle: string;
+  readonly images: readonly ProductImage[];
+  readonly activeImageIdx: number;
+  readonly setActiveImageIdx: React.Dispatch<React.SetStateAction<number>>;
+  readonly mediaBusy: boolean;
+  readonly mediaFeedback: { type: "success" | "error"; text: string } | null;
+  readonly canUpload: boolean;
+  readonly canDelete: boolean;
+  readonly onMediaFileSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  readonly onDeleteActiveMedia: () => void;
+}
+
+function AdminProductMediaPanel({
+  productTitle,
+  images,
+  activeImageIdx,
+  setActiveImageIdx,
+  mediaBusy,
+  mediaFeedback,
+  canUpload,
+  canDelete,
+  onMediaFileSelected,
+  onDeleteActiveMedia,
+}: AdminProductMediaPanelProps) {
+  const safeActiveIdx = Math.min(activeImageIdx, Math.max(images.length - 1, 0));
+  const activeImage = images[safeActiveIdx] || images[0] || null;
+  const activeIsVideo = activeImage ? isVideoMedia(activeImage) : false;
+
+  return (
+    <div className="md:col-span-2 flex flex-col gap-3">
+      <div
+        className={`w-full aspect-[4/5] border border-zinc-200/50 rounded-2xl overflow-hidden flex items-center justify-center relative group select-none ${
+          activeIsVideo ? "bg-black" : "bg-zinc-50"
+        }`}
+      >
+        {images.length > 0 ? (
+          <>
+            {activeIsVideo && activeImage ? (
+              <video
+                key={activeImage.image_url}
+                src={activeImage.image_url}
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full h-full object-contain bg-black"
+              >
+                <track kind="captions" />
+              </video>
+            ) : (
+              <img
+                src={activeImage?.image_url}
+                alt={productTitle}
+                className="w-full h-full object-cover transition-all duration-300 animate-in fade-in"
+              />
+            )}
+            {images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImageIdx((prev) => (prev <= 0 ? images.length - 1 : prev - 1));
+                  }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white text-zinc-800 rounded-full shadow-md backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImageIdx((prev) => (prev >= images.length - 1 ? 0 : prev + 1));
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white text-zinc-800 rounded-full shadow-md backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10"
+                >
+                  <ChevronRight size={16} />
+                </button>
+                <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/65 rounded-full text-[10px] text-white font-bold tracking-wider backdrop-blur-sm z-10 pointer-events-none">
+                  {safeActiveIdx + 1} / {images.length}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center text-zinc-300">
+            <ShoppingBag size={64} />
+            <span className="text-[10px] mt-2 font-bold">{LABELS.noImage}</span>
+          </div>
+        )}
+      </div>
+
+      {images.length > 1 && (
+        <div className="flex gap-2 flex-wrap max-h-24 overflow-y-auto">
+          {images.map((img, idx) => (
+            <button
+              key={img.id}
+              type="button"
+              onClick={() => setActiveImageIdx(idx)}
+              className={`relative w-12 h-15 rounded-lg border overflow-hidden cursor-pointer bg-zinc-50 transition-all ${
+                safeActiveIdx === idx
+                  ? "border-violet-600 ring-2 ring-violet-500/20 scale-95"
+                  : "border-zinc-200/60 hover:border-violet-400"
+              }`}
+            >
+              {isVideoMedia(img) ? (
+                <div className="w-full h-full bg-slate-900 flex items-center justify-center text-white">
+                  <Play size={14} className="fill-white" />
+                </div>
+              ) : (
+                <img src={img.image_url} alt="" className="w-full h-full object-cover" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {(canUpload || canDelete) && (
+        <div className="p-3 bg-zinc-50 border border-zinc-200/70 rounded-xl flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider inline-flex items-center gap-1">
+              <Film size={12} className="text-violet-600" />
+              Medya Yönetimi (MP4 Video / Görsel)
+            </span>
+            <span className="text-[10px] text-zinc-400 font-semibold">Max 50 MB</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {canUpload && (
+              <label
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 border transition-colors ${
+                  mediaBusy
+                    ? "bg-zinc-100 text-zinc-400 border-zinc-200 cursor-not-allowed"
+                    : "bg-violet-600 hover:bg-violet-700 text-white border-violet-600 cursor-pointer shadow-xs"
+                }`}
+              >
+                {mediaBusy ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <UploadCloud size={14} />
+                )}
+                <span>{mediaBusy ? "Yükleniyor..." : "Video / Görsel Ekle"}</span>
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm,image/jpeg,image/png,image/webp"
+                  disabled={mediaBusy}
+                  onChange={onMediaFileSelected}
+                  className="hidden"
+                />
+              </label>
+            )}
+
+            {canDelete && activeImage && (
+              <button
+                type="button"
+                disabled={mediaBusy}
+                onClick={onDeleteActiveMedia}
+                className="px-3 py-2 rounded-lg text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 inline-flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              >
+                <Trash2 size={13} />
+                <span>Seçiliyi Sil</span>
+              </button>
+            )}
+          </div>
+
+          {mediaFeedback && (
+            <div
+              className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border ${
+                mediaFeedback.type === "success"
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                  : "bg-rose-50 text-rose-800 border-rose-200"
+              }`}
+            >
+              {mediaFeedback.text}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminProductAuditCard({ product }: Readonly<{ product: Product }>) {
+  const actorMeta = resolveProductActorMeta(
+    product.created_by_actor_type,
+    product.created_by_role
+  );
+  const createdAtText = product.created_at
+    ? new Date(product.created_at).toLocaleString("tr-TR")
+    : "-";
+  const updatedAtText = product.updated_at
+    ? new Date(product.updated_at).toLocaleString("tr-TR")
+    : "-";
+  const defaultCreator = product.feed_id ? "XML Feed Senkronizasyonu" : "Kayıtlı Kullanıcı";
+  const creatorDisplay = product.created_by_name || product.created_by_email || defaultCreator;
+  const updaterDisplay =
+    product.updated_by_impersonated_by_email ||
+    product.updated_by_name ||
+    product.updated_by_email ||
+    "-";
+
+  return (
+    <div className="p-3.5 bg-slate-50/80 border border-slate-200/80 rounded-xl col-span-2 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider inline-flex items-center gap-1">
+          <ShieldCheck size={12} className="text-violet-600" />
+          Ürün Yükleme & Oturum Kaydı
+        </span>
+        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${actorMeta.badgeClass}`}>
+          {actorMeta.label}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+        <div>
+          <span className="text-zinc-400 block text-[10px] font-semibold">Oluşturan Hesap / Temsilci</span>
+          <span className="font-bold text-zinc-800">{creatorDisplay}</span>
+          {product.created_by_email && product.created_by_name !== product.created_by_email && (
+            <span className="block font-mono text-[10px] text-zinc-500">
+              {product.created_by_email}
+            </span>
+          )}
+        </div>
+
+        <div>
+          <span className="text-zinc-400 block text-[10px] font-semibold">Açılma Tarih & Saati</span>
+          <span className="font-mono font-bold text-zinc-800 inline-flex items-center gap-1">
+            <Clock size={11} className="text-zinc-400" />
+            {createdAtText}
+          </span>
+        </div>
+
+        {product.created_by_impersonated_by_email && (
+          <div className="sm:col-span-2 bg-amber-50 border border-amber-200/80 rounded-lg px-2.5 py-1.5">
+            <span className="text-[10px] font-bold text-amber-700 uppercase block">
+              Tedarikçi Adına Yükleyen Yönetici
+            </span>
+            <span className="text-xs font-extrabold text-amber-950 font-mono">
+              {product.created_by_impersonated_by_email}
+            </span>
+          </div>
+        )}
+
+        {product.updated_by_actor_type && (
+          <div className="sm:col-span-2 pt-1 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-500">
+            <span>
+              Son Güncelleme: <strong className="text-zinc-800">{updaterDisplay}</strong>
+            </span>
+            <span className="font-mono">{updatedAtText}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface ProductDetailModalProps {
   readonly product: Product | null;
   readonly feeds: readonly XmlFeed[];
@@ -116,6 +382,9 @@ interface ProductDetailModalProps {
     product: Product,
     action: BulkProductActionType
   ) => void;
+  readonly onUploadMedia?: (productId: string, file: File) => Promise<ProductImage[]>;
+  readonly onDeleteMedia?: (productId: string, mediaId: string) => Promise<ProductImage[]>;
+  readonly onProductImagesUpdated?: (productId: string, images: ProductImage[]) => void;
 }
 
 export default function ProductDetailModal({
@@ -123,22 +392,85 @@ export default function ProductDetailModal({
   feeds,
   onClose,
   onViewProduct,
-  onRequestProductAction
+  onRequestProductAction,
+  onUploadMedia,
+  onDeleteMedia,
+  onProductImagesUpdated,
 }: Readonly<ProductDetailModalProps>) {
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   const [prevProductId, setPrevProductId] = useState(product?.id);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [mediaFeedback, setMediaFeedback] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Reset image index when switching between product colors/variations
   if (product?.id !== prevProductId) {
     setPrevProductId(product?.id);
     setActiveImageIdx(0);
+    setMediaFeedback(null);
   }
 
   if (!product) return null;
 
   const images = product.images || [];
-  const activeImage = images[activeImageIdx] || images[0] || null;
+  const safeActiveIdx = Math.min(activeImageIdx, Math.max(images.length - 1, 0));
+  const activeImage = images[safeActiveIdx] || images[0] || null;
   const storefrontUrl = buildStorefrontProductUrl(product);
+
+  const handleMediaFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !onUploadMedia || mediaBusy) return;
+
+    if (isVideoUploadFile(file) && file.size > MAX_PRODUCT_VIDEO_BYTES) {
+      setMediaFeedback({
+        type: "error",
+        text: "Video dosyası en fazla 50 MB olabilir.",
+      });
+      return;
+    }
+
+    setMediaBusy(true);
+    setMediaFeedback(null);
+    try {
+      const nextImages = await onUploadMedia(product.id, file);
+      onProductImagesUpdated?.(product.id, nextImages);
+      setActiveImageIdx(Math.max(0, nextImages.length - 1));
+      setMediaFeedback({
+        type: "success",
+        text: isVideoUploadFile(file)
+          ? "MP4/WebM video ürüne eklendi."
+          : "Görsel ürüne eklendi.",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Medya yüklenemedi.";
+      setMediaFeedback({ type: "error", text: msg });
+    } finally {
+      setMediaBusy(false);
+    }
+  };
+
+  const handleDeleteActiveMedia = async () => {
+    if (!activeImage || !onDeleteMedia || mediaBusy) return;
+    setMediaBusy(true);
+    setMediaFeedback(null);
+    try {
+      const nextImages = await onDeleteMedia(product.id, activeImage.id);
+      onProductImagesUpdated?.(product.id, nextImages);
+      setActiveImageIdx((prev) => Math.max(0, Math.min(prev, nextImages.length - 1)));
+      setMediaFeedback({
+        type: "success",
+        text: "Seçili medya kaldırıldı.",
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Medya silinemedi.";
+      setMediaFeedback({ type: "error", text: msg });
+    } finally {
+      setMediaBusy(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
@@ -194,70 +526,19 @@ export default function ProductDetailModal({
 
           {/* Product Info Splitted Grid */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-
-            {/* Images side */}
-            <div className="md:col-span-2 flex flex-col gap-3">
-              <div className="w-full aspect-[4/5] bg-zinc-50 border border-zinc-200/50 rounded-2xl overflow-hidden flex items-center justify-center relative group select-none">
-                {images.length > 0 ? (
-                  <>
-                    <img
-                      src={activeImage?.image_url}
-                      alt={product.title}
-                      className="w-full h-full object-cover transition-all duration-300 animate-in fade-in"
-                    />
-                    {images.length > 1 && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveImageIdx(prev => (prev === 0 ? images.length - 1 : prev - 1));
-                          }}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white text-zinc-800 rounded-full shadow-md backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        >
-                          <ChevronLeft size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveImageIdx(prev => (prev === images.length - 1 ? 0 : prev + 1));
-                          }}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-white/80 hover:bg-white text-zinc-800 rounded-full shadow-md backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        >
-                          <ChevronRight size={16} />
-                        </button>
-                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-black/60 rounded-full text-[10px] text-white font-bold tracking-wider backdrop-blur-sm">
-                          {activeImageIdx + 1} / {images.length}
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-zinc-300">
-                    <ShoppingBag size={64} />
-                    <span className="text-[10px] mt-2 font-bold">{LABELS.noImage}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Thumbnail gallery */}
-              {images.length > 1 && (
-                <div className="flex gap-2 flex-wrap max-h-24 overflow-y-auto">
-                  {images.map((img: ProductImage, idx: number) => (
-                    <button
-                      key={img.id}
-                      type="button"
-                      onClick={() => setActiveImageIdx(idx)}
-                      className={`w-12 h-15 rounded-lg border overflow-hidden cursor-pointer bg-zinc-50 transition-all ${activeImageIdx === idx ? "border-violet-600 ring-2 ring-violet-500/20 scale-95" : "border-zinc-200/60 hover:border-violet-400"
-                        }`}
-                    >
-                      <img src={img.image_url} alt="" className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <AdminProductMediaPanel
+              productId={product.id}
+              productTitle={product.title}
+              images={images}
+              activeImageIdx={activeImageIdx}
+              setActiveImageIdx={setActiveImageIdx}
+              mediaBusy={mediaBusy}
+              mediaFeedback={mediaFeedback}
+              canUpload={Boolean(onUploadMedia)}
+              canDelete={Boolean(onDeleteMedia)}
+              onMediaFileSelected={(e) => void handleMediaFileSelected(e)}
+              onDeleteActiveMedia={() => void handleDeleteActiveMedia()}
+            />
 
             {/* Information details side */}
             <div className="md:col-span-3 flex flex-col gap-4">
@@ -353,76 +634,7 @@ export default function ProductDetailModal({
                   </div>
                 )}
 
-                {(() => {
-                  const actorMeta = resolveProductActorMeta(
-                    product.created_by_actor_type,
-                    product.created_by_role
-                  );
-                  const createdAtText = product.created_at
-                    ? new Date(product.created_at).toLocaleString("tr-TR")
-                    : "-";
-                  const updatedAtText = product.updated_at
-                    ? new Date(product.updated_at).toLocaleString("tr-TR")
-                    : "-";
-                  return (
-                    <div className="p-3.5 bg-slate-50/80 border border-slate-200/80 rounded-xl col-span-2 flex flex-col gap-2">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider inline-flex items-center gap-1">
-                          <ShieldCheck size={12} className="text-violet-600" />
-                          Ürün Yükleme & Oturum Kaydı
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${actorMeta.badgeClass}`}>
-                          {actorMeta.label}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                        <div>
-                          <span className="text-zinc-400 block text-[10px] font-semibold">Oluşturan Hesap / Temsilci</span>
-                          <span className="font-bold text-zinc-800">
-                            {product.created_by_name || product.created_by_email || (product.feed_id ? "XML Feed Senkronizasyonu" : "Kayıtlı Kullanıcı")}
-                          </span>
-                          {product.created_by_email && product.created_by_name !== product.created_by_email && (
-                            <span className="block font-mono text-[10px] text-zinc-500">
-                              {product.created_by_email}
-                            </span>
-                          )}
-                        </div>
-
-                        <div>
-                          <span className="text-zinc-400 block text-[10px] font-semibold">Açılma Tarih & Saati</span>
-                          <span className="font-mono font-bold text-zinc-800 inline-flex items-center gap-1">
-                            <Clock size={11} className="text-zinc-400" />
-                            {createdAtText}
-                          </span>
-                        </div>
-
-                        {product.created_by_impersonated_by_email && (
-                          <div className="sm:col-span-2 bg-amber-50 border border-amber-200/80 rounded-lg px-2.5 py-1.5">
-                            <span className="text-[10px] font-bold text-amber-700 uppercase block">
-                              Tedarikçi Adına Yükleyen Yönetici
-                            </span>
-                            <span className="text-xs font-extrabold text-amber-950 font-mono">
-                              {product.created_by_impersonated_by_email}
-                            </span>
-                          </div>
-                        )}
-
-                        {product.updated_by_actor_type && (
-                          <div className="sm:col-span-2 pt-1 border-t border-slate-200/70 flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-500">
-                            <span>
-                              Son Güncelleme:{" "}
-                              <strong className="text-zinc-800">
-                                {product.updated_by_impersonated_by_email || product.updated_by_name || product.updated_by_email || "-"}
-                              </strong>
-                            </span>
-                            <span className="font-mono">{updatedAtText}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                <AdminProductAuditCard product={product} />
               </div>
 
               {/* Secure Text Description view */}

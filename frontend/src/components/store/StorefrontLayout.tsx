@@ -16,6 +16,7 @@ import {
 } from "@/app/storeAuth";
 import { persistStoreCart, syncLocalCartStateIfChanged } from "@/utils/cartSync";
 import { isProductWhatsappOnly } from "@/utils/whatsappOrdering";
+import { getProductCoverImageUrl } from "@/utils/media";
 import { extractBrandFieldsFromProduct } from "@/utils/cartSupplierGroups";
 import { submitStoreCartInquiry } from "@/utils/cartInquiry";
 
@@ -717,11 +718,7 @@ export default function StorefrontLayout({
 
       setSelectedColor(colors[0]);
 
-      let cover = "/placeholder.png";
-      if (product.images && product.images.length > 0) {
-        const coverObj = product.images.find(img => img.is_cover) || product.images[0];
-        cover = coverObj.image_url;
-      }
+      const cover = getProductCoverImageUrl(product.images);
       setModalMainImg(cover);
 
       const unitsPerPkg = getUnitsFromSeriesRatio(product.series_ratio);

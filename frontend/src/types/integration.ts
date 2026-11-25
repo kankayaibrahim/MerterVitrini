@@ -119,6 +119,7 @@ export interface ProductImage {
   id: string;
   product_id: string;
   image_url: string;
+  media_type?: string;
   sort_order: number;
   is_cover: boolean;
 }

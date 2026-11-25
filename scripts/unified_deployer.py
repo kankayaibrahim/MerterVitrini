@@ -518,6 +518,7 @@ WantedBy=multi-user.target
             "img-src 'self' https: http: data: blob:; "
             "font-src 'self' https: data:; "
             "connect-src 'self' https: wss:; "
+            "media-src 'self' https: blob: data:; "
             "frame-src 'self' https://www.google.com https://maps.google.com https://www.recaptcha.net https://auth.mertervitrini.com.tr; "
             "frame-ancestors 'self';"
         )
@@ -537,6 +538,7 @@ WantedBy=multi-user.target
         shared_frontend_body = f"""    root {cfg['remote_dir']}/public;
     index index.html index.htm;
     access_log /var/log/nginx/mertervitrini_access.log main;
+    client_max_body_size 64m;
 
     # Security Headers
     server_tokens off;
@@ -595,11 +597,12 @@ WantedBy=multi-user.target
         proxy_pass http://127.0.0.1:8080;
     }}
 
-    # Direct static media uploads serving
+    # Direct static media uploads serving (supports HTTP 206 byte-range seeking for MP4/WebM)
     location ^~ /uploads/ {{
         alias /var/www/media/;
         access_log off;
         expires 30d;
+        add_header Accept-Ranges bytes always;
         add_header Cache-Control "public, max-age=2592000, no-transform" always;
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
         add_header X-Frame-Options "SAMEORIGIN" always;
@@ -641,6 +644,8 @@ WantedBy=multi-user.target
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
     }}"""
 
         return f"""# 1A. Main Unified Storefront & Admin Server Block (HTTPS - Let's Encrypt ECDSA)
@@ -672,6 +677,7 @@ server {{
     listen 443 ssl;
     server_name api.mertervitrini.com.tr;
     access_log /var/log/nginx/mertervitrini_access.log main;
+    client_max_body_size 64m;
 
     # Security Headers
     server_tokens off;
@@ -680,7 +686,7 @@ server {{
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; frame-ancestors 'self';" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' https: data: blob:; font-src 'self' https: data:; connect-src 'self' https:; media-src 'self' https: blob: data:; frame-ancestors 'self';" always;
 
     location / {{
         proxy_pass http://127.0.0.1:8080;
@@ -692,6 +698,8 @@ server {{
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
     }}
 
 {letsencrypt_ssl_block}

@@ -1,3 +1,5 @@
+import { isVideoMediaUrl } from "@/utils/media";
+
 export function getUnitsFromSeriesRatio(seriesRatio?: string): number {
   if (!seriesRatio) return 1;
   const parts = seriesRatio.split(/[- ,]/).filter(Boolean);
@@ -242,6 +244,7 @@ export function convertPrice(
 
 export function getResizedImageUrl(url?: string, width: number = 288, height: number = 385): string {
   if (!url) return "/placeholder.png";
+  if (isVideoMediaUrl(url)) return url;
   if (url.startsWith("/uploads/") && !url.includes("/uploads/cache/")) {
     return url.replace("/uploads/", `/uploads/cache/${width}x${height}/`);
   }

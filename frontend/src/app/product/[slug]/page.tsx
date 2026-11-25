@@ -21,6 +21,7 @@ import {
 } from "@/utils/seoHelpers";
 import ProductDetailClient from "./ProductDetailClient";
 import { getSupplierShowcaseHref } from "@/utils/subdomain";
+import { getProductImageItems, getProductVideoItems } from "@/utils/media";
 
 interface PageProps {
   readonly params: Promise<{ readonly slug: string }>;
@@ -294,12 +295,28 @@ function buildProductJsonLdGraph(
   );
   const localizedDesc = resolveLocalizedProductDesc(product, lang, fallbackDesc);
 
-  const absoluteImages = (product.images || [])
+  const imageItems = getProductImageItems(product.images);
+  const videoItems = getProductVideoItems(product.images);
+  const absoluteImages = imageItems
     .map((img) => toAbsoluteSiteUrl(img.image_url))
     .filter(Boolean);
   if (absoluteImages.length === 0) {
     absoluteImages.push(`${SITE_ORIGIN}/og-image.jpg`);
   }
+  const videoNodes = videoItems
+    .map((vid) => {
+      const contentUrl = toAbsoluteSiteUrl(vid.image_url);
+      if (!contentUrl) return null;
+      return {
+        "@type": "VideoObject",
+        name: localizedTitle,
+        description: localizedDesc,
+        thumbnailUrl: [absoluteImages[0]],
+        contentUrl,
+        ...(product.created_at ? { uploadDate: product.created_at } : {}),
+      };
+    })
+    .filter(Boolean);
 
   const isWhatsappOnly = Boolean(product.brand_profile?.whatsapp_only_ordering);
   const availability = isProductInStock(product)
@@ -453,6 +470,7 @@ function buildProductJsonLdGraph(
         "@type": "BreadcrumbList",
         itemListElement: breadcrumbs,
       },
+      ...videoNodes,
     ],
   };
 }
@@ -479,9 +497,10 @@ export async function generateMetadata({
   const { metaTitle, metaDesc } = buildProductMetaStrings(product, lang);
   const cleanMetaTitle = stripBrandTitleSuffix(metaTitle);
 
+  const ogImageItems = getProductImageItems(product.images);
   const coverRaw =
-    product.images?.find((img) => img.is_cover)?.image_url ||
-    product.images?.[0]?.image_url ||
+    ogImageItems.find((img) => img.is_cover)?.image_url ||
+    ogImageItems[0]?.image_url ||
     "/og-image.jpg";
   const coverAbsolute = toAbsoluteSiteUrl(coverRaw) || `${SITE_ORIGIN}/og-image.jpg`;
 

@@ -1,6 +1,7 @@
 export interface ProductImage {
   id: string;
   image_url: string;
+  media_type?: string;
   is_cover: boolean;
 }
 
@@ -65,6 +66,7 @@ export interface Product {
   color_variants?: SiblingProduct[];
   slug?: string;
   slug_id?: string;
+  created_at?: string;
 }
 
 export interface SiblingProduct {

@@ -2,6 +2,7 @@ import {
   Brand,
   CategoryNode,
   Product,
+  ProductImage,
   SyncRun,
   UserInfo,
   XmlFeed,
@@ -116,6 +117,8 @@ export interface IAdminCatalogService {
     productIds: string[],
     deleteImages?: boolean
   ): Promise<BulkProductActionResult>;
+  uploadProductMedia(productId: string, file: File): Promise<ProductImage[]>;
+  deleteProductMedia(productId: string, mediaId: string): Promise<ProductImage[]>;
 }
 
 export interface IAdminSettingsService {
@@ -504,6 +507,39 @@ export class AdminApiService
       product_ids: productIds,
       delete_images: deleteImages,
     });
+  }
+
+  async uploadProductMedia(productId: string, file: File): Promise<ProductImage[]> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await this.http.rawFetch(
+      `/api/v1/products/${encodeURIComponent(productId)}/media`,
+      {
+        method: "POST",
+        body: fd,
+      }
+    );
+    if (!res.ok) {
+      const errData = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(errData.error || "Medya yüklenemedi.");
+    }
+    const payload = (await res.json()) as { images?: ProductImage[] };
+    return Array.isArray(payload.images) ? payload.images : [];
+  }
+
+  async deleteProductMedia(productId: string, mediaId: string): Promise<ProductImage[]> {
+    const res = await this.http.rawFetch(
+      `/api/v1/products/${encodeURIComponent(productId)}/media/${encodeURIComponent(mediaId)}`,
+      {
+        method: "DELETE",
+      }
+    );
+    if (!res.ok) {
+      const errData = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(errData.error || "Medya silinemedi.");
+    }
+    const payload = (await res.json()) as { images?: ProductImage[] };
+    return Array.isArray(payload.images) ? payload.images : [];
   }
 
   async getStoreSettings(): Promise<StoreSettingsDTO> {

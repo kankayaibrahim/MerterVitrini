@@ -21,6 +21,7 @@ import (
 
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/pkg/safe"
+	"mertervitrini/backend/services"
 )
 
 type ImageHandler struct{}
@@ -64,6 +65,10 @@ func (h *ImageHandler) ResizeImage(w http.ResponseWriter, r *http.Request) {
 	relPath = filepath.Clean(relPath)
 	if strings.Contains(relPath, "..") || strings.HasPrefix(relPath, "/") {
 		http.Error(w, `{"error":"Invalid path"}`, http.StatusBadRequest)
+		return
+	}
+	if services.IsVideoMediaURL(relPath) {
+		http.Error(w, `{"error":"Video files cannot be resized as images"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -246,7 +251,7 @@ func startWorkerPool() {
 }
 
 func fetchCatalogImageURLs(ctx context.Context) ([]string, error) {
-	query := `SELECT DISTINCT image_url FROM catalog.product_images`
+	query := `SELECT DISTINCT image_url FROM catalog.product_images WHERE COALESCE(media_type, 'image') = 'image'`
 	rows, err := db.Pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -369,7 +374,7 @@ func countMissingCachedImages(urls []string, mediaRoot string) int {
 	missingCount := 0
 
 	for _, urlPath := range urls {
-		if !strings.HasPrefix(urlPath, uploadsPrefix) {
+		if !strings.HasPrefix(urlPath, uploadsPrefix) || services.IsVideoMediaURL(urlPath) {
 			continue
 		}
 		relPath := strings.TrimPrefix(urlPath, uploadsPrefix)

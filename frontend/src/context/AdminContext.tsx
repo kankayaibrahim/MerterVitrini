@@ -13,6 +13,7 @@ import {
   SyncRun,
   CategoryNode,
   Product,
+  ProductImage,
   UserInfo,
   Brand,
 } from "@/types/integration";
@@ -104,6 +105,8 @@ export interface AdminCatalogSlice {
     productIds: string[],
     deleteImages?: boolean
   ) => Promise<BulkProductActionResult>;
+  uploadProductMedia: (productId: string, file: File) => Promise<ProductImage[]>;
+  deleteProductMedia: (productId: string, mediaId: string) => Promise<ProductImage[]>;
 }
 
 export interface AdminSettingsSlice {
@@ -386,6 +389,18 @@ export function AdminProvider({
     [adminService]
   );
 
+  const uploadProductMedia = useCallback(
+    (productId: string, file: File) =>
+      adminService.uploadProductMedia(productId, file),
+    [adminService]
+  );
+
+  const deleteProductMedia = useCallback(
+    (productId: string, mediaId: string) =>
+      adminService.deleteProductMedia(productId, mediaId),
+    [adminService]
+  );
+
   const loadStoreSettings = useCallback(async () => {
     setLoadingSettings(true);
     try {
@@ -536,6 +551,8 @@ export function AdminProvider({
       deactivateSupplierProducts,
       deleteSupplierProducts,
       bulkProductAction,
+      uploadProductMedia,
+      deleteProductMedia,
       storeSettings,
       setStoreSettings,
       loadingSettings,
@@ -585,6 +602,8 @@ export function AdminProvider({
       deactivateSupplierProducts,
       deleteSupplierProducts,
       bulkProductAction,
+      uploadProductMedia,
+      deleteProductMedia,
       storeSettings,
       loadingSettings,
       savingSettings,
@@ -678,6 +697,8 @@ export function useAdminCatalog(): AdminCatalogSlice {
     deactivateSupplierProducts: ctx.deactivateSupplierProducts,
     deleteSupplierProducts: ctx.deleteSupplierProducts,
     bulkProductAction: ctx.bulkProductAction,
+    uploadProductMedia: ctx.uploadProductMedia,
+    deleteProductMedia: ctx.deleteProductMedia,
   };
 }
 

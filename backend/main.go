@@ -103,6 +103,11 @@ func withStreamingWriteDeadlines(next http.Handler) http.Handler {
 		path := r.URL.Path
 		if strings.HasSuffix(path, "/ws") || strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+		} else if strings.Contains(path, "/upload") || strings.HasSuffix(path, "/media") {
+			rc := http.NewResponseController(w)
+			deadline := time.Now().Add(5 * time.Minute)
+			_ = rc.SetReadDeadline(deadline)
+			_ = rc.SetWriteDeadline(deadline)
 		} else if strings.Contains(path, "/mobile/apk") || strings.Contains(path, "/export") || strings.HasSuffix(path, "/images") {
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(10 * time.Minute))
 		}
@@ -128,6 +133,9 @@ func initBackgroundWorkers(appCtx context.Context, cfg *config.Config) {
 	}
 	if err := handlers.EnsureCustomerImpersonationSchema(cronInitCtx); err != nil {
 		log.Printf("[WARNING] Failed to provision impersonation logs schema: %v\n", err)
+	}
+	if err := handlers.EnsureProductMediaSchema(cronInitCtx); err != nil {
+		log.Printf("[WARNING] Failed to provision product media schema: %v\n", err)
 	}
 	if err := handlers.EnsureNotificationSettingsSchema(cronInitCtx); err != nil {
 		log.Printf("[WARNING] Failed to provision notification settings schema: %v\n", err)

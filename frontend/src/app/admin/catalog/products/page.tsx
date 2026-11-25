@@ -14,7 +14,7 @@ import BulkActionConfirmModal, {
 import ProductGrid from "@/components/admin/catalog/ProductGrid";
 import ProductDetailModal from "@/components/admin/catalog/ProductDetailModal";
 import { useAdmin } from "@/context/AdminContext";
-import { Brand, Product } from "@/types/integration";
+import { Brand, Product, ProductImage } from "@/types/integration";
 import {
   AdminProductFilterParams,
   BulkProductActionResult,
@@ -134,6 +134,13 @@ function formatActionFeedbackMessage(res: BulkProductActionResult): string {
   return `${base}${imageNote} Vitrin önbelleği arka planda güncelleniyor.`;
 }
 
+function isModalProductDeleted(modal: ConfirmModalState, selectedProductId: string): boolean {
+  if (modal.action !== "delete") return false;
+  if (modal.scope === "supplier") return true;
+  if (modal.scope === "single") return modal.product.id === selectedProductId;
+  return modal.productIds.includes(selectedProductId);
+}
+
 interface AdminCatalogProductsContentProps {
   readonly initialCategory: string;
   readonly initialStatus: ProductStatusFilter;
@@ -145,6 +152,7 @@ function AdminCatalogProductsContent({
 }: AdminCatalogProductsContentProps) {
   const {
     products,
+    setProducts,
     totalProductsCount,
     suppliers,
     feeds,
@@ -155,6 +163,8 @@ function AdminCatalogProductsContent({
     deactivateSupplierProducts,
     deleteSupplierProducts,
     bulkProductAction,
+    uploadProductMedia,
+    deleteProductMedia,
     fetchWithConfig,
   } = useAdmin();
 
@@ -260,6 +270,18 @@ function AdminCatalogProductsContent({
     [fetchWithConfig]
   );
 
+  const handleProductImagesUpdated = useCallback(
+    (productId: string, nextImages: ProductImage[]) => {
+      setSelectedProduct((prev) =>
+        prev?.id === productId ? { ...prev, images: nextImages } : prev
+      );
+      setProducts((prev) =>
+        prev.map((p) => (p.id === productId ? { ...p, images: nextImages } : p))
+      );
+    },
+    [setProducts]
+  );
+
   const handleToggleSelectProduct = (productId: string) => {
     setSelectedProductIds((prev) =>
       prev.includes(productId)
@@ -326,22 +348,15 @@ function AdminCatalogProductsContent({
       const result = await runConfirmedAction(confirmModal);
       setFeedback({ type: "success", message: formatActionFeedbackMessage(result) });
 
-      if (confirmModal.scope === "selection") {
-        setSelectedProductIds([]);
-      } else if (confirmModal.scope === "supplier" && confirmModal.action === "delete") {
+      if (
+        confirmModal.scope === "selection" ||
+        (confirmModal.scope === "supplier" && confirmModal.action === "delete")
+      ) {
         setSelectedProductIds([]);
       }
 
       if (selectedProduct) {
-        const modalDeletedCurrent =
-          confirmModal.action === "delete" &&
-          (confirmModal.scope === "supplier" ||
-            (confirmModal.scope === "single" &&
-              confirmModal.product.id === selectedProduct.id) ||
-            (confirmModal.scope === "selection" &&
-              confirmModal.productIds.includes(selectedProduct.id)));
-
-        if (modalDeletedCurrent) {
+        if (isModalProductDeleted(confirmModal, selectedProduct.id)) {
           setSelectedProduct(null);
         } else {
           await handleViewProductById(selectedProduct.id);
@@ -442,6 +457,9 @@ function AdminCatalogProductsContent({
           onClose={() => setSelectedProduct(null)}
           onViewProduct={handleViewProductById}
           onRequestProductAction={openSingleProductModal}
+          onUploadMedia={uploadProductMedia}
+          onDeleteMedia={deleteProductMedia}
+          onProductImagesUpdated={handleProductImagesUpdated}
         />
       )}
 

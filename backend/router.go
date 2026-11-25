@@ -56,6 +56,8 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 	tokenSvc := services.NewUnifiedTokenService(cfg.JWTSecret, cfg.KeycloakPublicKey, db.Pool)
 
 	storeAuth := handlers.NewStoreAuthHandler(cfg)
+	adminCatalog := handlers.NewAdminCatalogHandler(cfg)
+	adminCatalog.SetMediaProcessor(mediaSvc)
 	supplierPortal := handlers.NewSupplierPortalHandler(cfg, mediaSvc)
 	supplierPortal.SetNotifier(notifierSvc)
 	supplierApps := handlers.NewSupplierApplicationsHandler(cfg)
@@ -70,7 +72,7 @@ func NewAppHandlers(cfg *config.Config) *AppHandlers {
 		StoreAuth:            storeAuth,
 		StoreInquiry:         handlers.NewInquiryHandler(cfg),
 		AdminAuth:            handlers.NewAdminAuthHandler(cfg),
-		AdminCatalog:         handlers.NewAdminCatalogHandler(cfg),
+		AdminCatalog:         adminCatalog,
 		AdminOrders:          handlers.NewAdminOrdersHandler(cfg),
 		Integration:          handlers.NewIntegrationHandler(cfg),
 		Suppliers:            handlers.NewSuppliersHandler(),
@@ -281,6 +283,8 @@ func registerAdminRoutes(mux *http.ServeMux, h *AppHandlers, authMW func(http.Ha
 	mux.Handle("GET /api/v1/products", protect(h.AdminCatalog.ListProducts))
 	mux.Handle("POST /api/v1/products/bulk-action", protect(h.AdminCatalog.BulkProductAction))
 	mux.Handle("GET /api/v1/products/{id}", protect(h.AdminCatalog.GetProductByID))
+	mux.Handle("POST /api/v1/products/{id}/media", protect(h.AdminCatalog.UploadProductMedia))
+	mux.Handle("DELETE /api/v1/products/{id}/media/{mediaId}", protect(h.AdminCatalog.DeleteProductMedia))
 	mux.Handle("POST /api/v1/products/refresh-cache", protect(h.AdminCatalog.RefreshProductCache))
 	mux.Handle("GET /api/v1/settings", protect(h.AdminCatalog.GetSettings))
 	mux.Handle("PUT /api/v1/settings", protect(h.AdminCatalog.UpdateSettings))
@@ -510,6 +514,7 @@ func registerSupplierPortalRoutes(mux *http.ServeMux, h *AppHandlers, supplierMW
 	mux.Handle("PUT /api/v1/supplier/products/{id}", protect(h.SupplierPortal.UpdateProduct))
 	mux.Handle("DELETE /api/v1/supplier/products/{id}", protect(h.SupplierPortal.DeleteProduct))
 	mux.Handle("POST /api/v1/supplier/upload-image", protect(h.SupplierPortal.UploadImage))
+	mux.Handle("POST /api/v1/supplier/upload-video", protect(h.SupplierPortal.UploadVideo))
 	mux.Handle("GET /api/v1/supplier/categories", protect(h.SupplierPortal.ListCategories))
 	mux.Handle("GET /api/v1/supplier/attributes", protect(h.SupplierPortal.ListAttributes))
 

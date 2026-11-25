@@ -115,3 +115,34 @@ func cleanupUnreferencedProductImages(ctx context.Context, imageURLs []string) i
 	stillReferenced := loadStillReferencedImageSet(ctx, cleanURLs)
 	return removeUnreferencedFilesOnDisk(getMediaDir(), cleanURLs, stillReferenced)
 }
+
+// EnsureProductMediaSchema guarantees catalog.product_images has the media_type discriminator column
+// and backfills existing video URLs idempotently on startup.
+func EnsureProductMediaSchema(ctx context.Context) error {
+	if db.Pool == nil {
+		return nil
+	}
+	const ddl = `
+		ALTER TABLE catalog.product_images
+			ADD COLUMN IF NOT EXISTS media_type VARCHAR(16) NOT NULL DEFAULT 'image';
+		DO $$
+		BEGIN
+			IF NOT EXISTS (
+				SELECT 1
+				FROM pg_constraint
+				WHERE conname = 'product_images_media_type_check'
+				  AND conrelid = 'catalog.product_images'::regclass
+			) THEN
+				ALTER TABLE catalog.product_images
+					ADD CONSTRAINT product_images_media_type_check
+					CHECK (media_type IN ('image', 'video'));
+			END IF;
+		END $$;
+		UPDATE catalog.product_images
+		SET media_type = 'video'
+		WHERE media_type <> 'video'
+		  AND LOWER(image_url) ~ '\.(mp4|webm|m4v|mov)(\?.*)?$';
+	`
+	_, err := db.Pool.Exec(ctx, ddl)
+	return err
+}

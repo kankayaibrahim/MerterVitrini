@@ -2,8 +2,9 @@
 
 import React from "react";
 import Image from "next/image";
-import { X, ShoppingBag, Plus, Minus, ChevronLeft, ChevronRight, MessageCircle, Phone, Lock } from "lucide-react";
+import { X, ShoppingBag, Plus, Minus, ChevronLeft, ChevronRight, MessageCircle, Phone, Lock, Play, Maximize2 } from "lucide-react";
 import { Product } from "@/types/store";
+import { getProductCoverImageUrl, isVideoMedia, isVideoMediaUrl } from "@/utils/media";
 import {
   buildLocalizedProductHref,
   getProductAttributes,
@@ -412,12 +413,28 @@ function ModalLightboxOverlay({
         />
 
         <div className="w-full h-full flex items-center justify-center p-2 relative z-10 pointer-events-none">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={images.at(lightboxIndex)?.image_url || ""}
-            alt={title}
-            className="max-w-full max-h-[70vh] md:max-h-[75vh] object-contain rounded-[8px] shadow-2xl transition-all duration-300 transform scale-100 ease-out pointer-events-auto"
-          />
+          {isVideoMedia(images.at(lightboxIndex)) ? (
+            <video
+              key={images.at(lightboxIndex)?.image_url}
+              src={images.at(lightboxIndex)?.image_url || ""}
+              poster={getProductCoverImageUrl(images, "") || undefined}
+              controls
+              autoPlay
+              playsInline
+              preload="metadata"
+              controlsList="nodownload"
+              className="max-w-full max-h-[70vh] md:max-h-[75vh] rounded-[8px] shadow-2xl pointer-events-auto bg-black"
+            >
+              <track kind="captions" />
+            </video>
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={images.at(lightboxIndex)?.image_url || ""}
+              alt={title}
+              className="max-w-full max-h-[70vh] md:max-h-[75vh] object-contain rounded-[8px] shadow-2xl transition-all duration-300 transform scale-100 ease-out pointer-events-auto"
+            />
+          )}
         </div>
 
         {images.length > 1 && (
@@ -447,8 +464,14 @@ function ModalLightboxOverlay({
                   : "border-transparent opacity-40 hover:opacity-100"
                 }`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.image_url} alt="thumb" className="w-full h-full object-cover" />
+              {isVideoMedia(img) ? (
+                <div className="w-full h-full bg-slate-900 flex items-center justify-center text-white">
+                  <Play className="w-4 h-4 fill-white text-white" />
+                </div>
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={img.image_url} alt="thumb" className="w-full h-full object-cover" />
+              )}
             </button>
           ))}
         </div>
@@ -595,42 +618,95 @@ export default function ProductDetailsModal({
 
             {/* Left side Image Gallery */}
             <div className="flex flex-col gap-3 md:max-w-[420px] w-full md:mx-auto">
-              <button
-                type="button"
-                onClick={handleOpenLightbox}
-                aria-label={t("zoom_image", lang)}
-                className="w-full aspect-[4/5] max-h-[400px] md:max-h-[520px] rounded-[10px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group flex items-center justify-center p-0"
-              >
-                <Image
-                  src={getResizedImageUrl(modalMainImg, 600, 800)}
-                  alt={title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  className="object-contain transition-all duration-300 group-hover:scale-105"
-                />
-              </button>
+              {(() => {
+                const coverPoster = getProductCoverImageUrl(product.images, "");
+                const activeMedia =
+                  product.images?.find((img) => img.image_url === modalMainImg) ?? null;
+                const isMainVideo = isVideoMedia(activeMedia) || isVideoMediaUrl(modalMainImg);
+
+                return isMainVideo ? (
+                  <div className="w-full aspect-[4/5] max-h-[400px] md:max-h-[520px] rounded-[10px] overflow-hidden bg-black border border-cultured relative shadow-inner flex items-center justify-center">
+                    <video
+                      key={modalMainImg}
+                      src={modalMainImg}
+                      poster={coverPoster || undefined}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      controlsList="nodownload"
+                      className="w-full h-full object-contain bg-black"
+                    >
+                      <track kind="captions" />
+                    </video>
+                    <button
+                      type="button"
+                      onClick={handleOpenLightbox}
+                      aria-label={t("zoom_image", lang)}
+                      className="absolute top-3 left-3 z-20 w-8 h-8 rounded-full bg-black/65 hover:bg-black/85 text-white border border-white/20 flex items-center justify-center cursor-pointer transition-colors"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleOpenLightbox}
+                    aria-label={t("zoom_image", lang)}
+                    className="w-full aspect-[4/5] max-h-[400px] md:max-h-[520px] rounded-[10px] overflow-hidden bg-[#fafafa] border border-cultured relative shadow-inner cursor-zoom-in group flex items-center justify-center p-0"
+                  >
+                    <Image
+                      src={getResizedImageUrl(modalMainImg, 600, 800)}
+                      alt={title}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      className="object-contain transition-all duration-300 group-hover:scale-105"
+                    />
+                  </button>
+                );
+              })()}
 
               {product.images && product.images.length > 1 && (
                 <div className="flex gap-2 overflow-x-auto py-1">
-                  {product.images.map((img) => (
-                    <button
-                      key={img.id}
-                      type="button"
-                      onClick={() => setModalMainImg(img.image_url)}
-                      className={`relative w-14 h-18 rounded-[5px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${modalMainImg === img.image_url
-                          ? "border-salmon-pink scale-[1.02]"
-                          : "border-transparent opacity-60 hover:opacity-100"
-                        }`}
-                    >
-                      <Image
-                        src={getResizedImageUrl(img.image_url, 80, 106)}
-                        alt={title}
-                        fill
-                        sizes="56px"
-                        className="object-cover"
-                      />
-                    </button>
-                  ))}
+                  {product.images.map((img) => {
+                    const thumbIsVideo = isVideoMedia(img);
+                    const coverPoster = getProductCoverImageUrl(product.images, "");
+                    return (
+                      <button
+                        key={img.id}
+                        type="button"
+                        onClick={() => setModalMainImg(img.image_url)}
+                        className={`relative w-14 h-18 rounded-[5px] overflow-hidden shrink-0 border-2 cursor-pointer transition-all ${modalMainImg === img.image_url
+                            ? "border-salmon-pink scale-[1.02]"
+                            : "border-transparent opacity-60 hover:opacity-100"
+                          }`}
+                      >
+                        {thumbIsVideo ? (
+                          <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center text-white relative">
+                            {coverPoster && (
+                              <Image
+                                src={getResizedImageUrl(coverPoster, 80, 106)}
+                                alt={title}
+                                fill
+                                sizes="56px"
+                                className="object-cover opacity-50"
+                              />
+                            )}
+                            <span className="relative z-10 w-5 h-5 rounded-full bg-black/75 border border-white/40 flex items-center justify-center">
+                              <Play className="w-2.5 h-2.5 fill-white text-white ml-0.5" />
+                            </span>
+                          </div>
+                        ) : (
+                          <Image
+                            src={getResizedImageUrl(img.image_url, 80, 106)}
+                            alt={title}
+                            fill
+                            sizes="56px"
+                            className="object-cover"
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -712,7 +788,7 @@ export default function ProductDetailsModal({
                     <div className="w-12 h-14 rounded-[5px] overflow-hidden bg-[#f0f0f0] border border-cultured relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={getResizedImageUrl(product.images?.find(img => img.is_cover)?.image_url || product.images?.[0]?.image_url || "/placeholder.png", 80, 106)}
+                        src={getResizedImageUrl(getProductCoverImageUrl(product.images), 80, 106)}
                         alt={product.color || "Standart"}
                         className="w-full h-full object-cover"
                       />

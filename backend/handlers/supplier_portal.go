@@ -277,18 +277,37 @@ func insertProductVariants(ctx context.Context, tx pgx.Tx, productID, sourceProd
 		productID, fallbackStock, sourceVarID)
 }
 
-func insertProductImages(ctx context.Context, tx pgx.Tx, productID string, images []string) {
-	for idx, imgUrl := range images {
-		imgUrl = strings.TrimSpace(imgUrl)
-		if imgUrl == "" {
+func resolveProductCoverIndex(mediaURLs []string) int {
+	for idx, rawURL := range mediaURLs {
+		trimmed := strings.TrimSpace(rawURL)
+		if trimmed != "" && !services.IsVideoMediaURL(trimmed) {
+			return idx
+		}
+	}
+	return 0
+}
+
+func insertProductMediaRows(ctx context.Context, tx pgx.Tx, productID string, mediaURLs []string) {
+	coverIdx := resolveProductCoverIndex(mediaURLs)
+	for idx, rawURL := range mediaURLs {
+		trimmed := strings.TrimSpace(rawURL)
+		if trimmed == "" {
 			continue
 		}
-		isCover := (idx == 0)
+		mediaType := "image"
+		if services.IsVideoMediaURL(trimmed) {
+			mediaType = "video"
+		}
+		isCover := (idx == coverIdx)
 		_, _ = tx.Exec(ctx, `
-			INSERT INTO catalog.product_images (product_id, image_url, sort_order, is_cover)
-			VALUES ($1, $2, $3, $4)`,
-			productID, imgUrl, idx, isCover)
+			INSERT INTO catalog.product_images (product_id, image_url, sort_order, is_cover, media_type)
+			VALUES ($1, $2, $3, $4, $5)`,
+			productID, trimmed, idx, isCover, mediaType)
 	}
+}
+
+func insertProductImages(ctx context.Context, tx pgx.Tx, productID string, images []string) {
+	insertProductMediaRows(ctx, tx, productID, images)
 }
 
 func updateProductVariants(ctx context.Context, tx pgx.Tx, productID string, variants []models.SupplierProductVariantInput) {
@@ -315,17 +334,7 @@ func updateProductImages(ctx context.Context, tx pgx.Tx, productID string, image
 		return
 	}
 	_, _ = tx.Exec(ctx, "DELETE FROM catalog.product_images WHERE product_id = $1", productID)
-	for idx, imgUrl := range images {
-		imgUrl = strings.TrimSpace(imgUrl)
-		if imgUrl == "" {
-			continue
-		}
-		isCover := (idx == 0)
-		_, _ = tx.Exec(ctx, `
-			INSERT INTO catalog.product_images (product_id, image_url, sort_order, is_cover)
-			VALUES ($1, $2, $3, $4)`,
-			productID, imgUrl, idx, isCover)
-	}
+	insertProductMediaRows(ctx, tx, productID, images)
 }
 
 type SupplierPortalHandler struct {
@@ -1041,7 +1050,7 @@ func loadSupplierProductImages(ctx context.Context, productID string) []*models.
 	images := make([]*models.ProductImage, 0)
 	iRows, err := db.Pool.Query(
 		ctx,
-		"SELECT id, product_id, image_url, sort_order, is_cover FROM catalog.product_images WHERE product_id = $1 ORDER BY is_cover DESC, sort_order ASC",
+		"SELECT id, product_id, image_url, COALESCE(media_type, 'image'), sort_order, is_cover FROM catalog.product_images WHERE product_id = $1 ORDER BY is_cover DESC, sort_order ASC",
 		productID,
 	)
 	if err != nil {
@@ -1051,7 +1060,7 @@ func loadSupplierProductImages(ctx context.Context, productID string) []*models.
 
 	for iRows.Next() {
 		var img models.ProductImage
-		if scanErr := iRows.Scan(&img.ID, &img.ProductID, &img.ImageUrl, &img.SortOrder, &img.IsCover); scanErr == nil {
+		if scanErr := iRows.Scan(&img.ID, &img.ProductID, &img.ImageUrl, &img.MediaType, &img.SortOrder, &img.IsCover); scanErr == nil {
 			images = append(images, &img)
 		}
 	}
@@ -1610,6 +1619,50 @@ func (h *SupplierPortalHandler) UploadImage(w http.ResponseWriter, r *http.Reque
 
 	writeSupplierJSON(w, http.StatusOK, map[string]string{
 		"image_url": imageURL,
+	})
+}
+
+// UploadVideo handles MP4/WebM product video uploads for authenticated suppliers (Max 50 MB).
+func (h *SupplierPortalHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
+	_, ok := middleware.GetSupplierFromContext(r.Context())
+	if !ok {
+		http.Error(w, errJSONUnauthorized, http.StatusUnauthorized)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 52<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Video dosyası çok büyük (Max: 50MB)")
+		return
+	}
+
+	file, header, err := r.FormFile("video")
+	if err != nil {
+		file, header, err = r.FormFile("file")
+	}
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Yüklenecek video dosyası bulunamadı")
+		return
+	}
+	defer file.Close()
+
+	var videoSvc services.VideoMediaProcessor
+	if v, ok := h.Media.(services.VideoMediaProcessor); ok {
+		videoSvc = v
+	} else {
+		videoSvc = services.NewLocalImageMediaService("")
+	}
+
+	videoURL, err := videoSvc.SaveUploadedVideo(file, header.Filename, "products", "supvid")
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeSupplierJSON(w, http.StatusOK, map[string]string{
+		"video_url":  videoURL,
+		"image_url":  videoURL,
+		"media_type": "video",
 	})
 }
 

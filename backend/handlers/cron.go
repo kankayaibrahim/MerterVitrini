@@ -14,6 +14,7 @@ import (
 
 	"mertervitrini/backend/db"
 	"mertervitrini/backend/pkg/safe"
+	"mertervitrini/backend/services"
 )
 
 type CronHandler struct{}
@@ -388,7 +389,7 @@ func collectImageResizeJobs(urls []string, mediaRoot string) []ResizeJob {
 
 	var jobs []ResizeJob
 	for _, urlPath := range urls {
-		if !strings.HasPrefix(urlPath, "/uploads/") {
+		if !strings.HasPrefix(urlPath, "/uploads/") || services.IsVideoMediaURL(urlPath) {
 			continue
 		}
 		relPath := strings.TrimPrefix(urlPath, "/uploads/")
@@ -450,7 +451,7 @@ func runCronImageResize(ctx context.Context) error {
 		<-jobQueue
 	}
 
-	rows, err := db.Pool.Query(ctx, `SELECT DISTINCT image_url FROM catalog.product_images`)
+	rows, err := db.Pool.Query(ctx, `SELECT DISTINCT image_url FROM catalog.product_images WHERE COALESCE(media_type, 'image') = 'image'`)
 	if err != nil {
 		bulkStatus.Lock()
 		bulkStatus.IsRunning = false

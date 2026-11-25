@@ -12,10 +12,11 @@ import {
 } from "@/app/i18n";
 import { getUnitsFromSeriesRatio, convertPrice, getResizedImageUrl, ExchangeRate, trackWhatsappClick } from "@/app/utils";
 import { useIsStoreAuthenticated, openStoreAuthModal, getShortMemberPriceLabel } from "@/app/storeAuth";
-import { Heart, ShoppingBag, Eye, ChevronLeft, ChevronRight, Lock, MessageCircle } from "lucide-react";
+import { Heart, ShoppingBag, Eye, ChevronLeft, ChevronRight, Lock, MessageCircle, Play } from "lucide-react";
 import Link from "next/link";
 import { useWishlistStore } from "@/store/useWishlistStore";
 import { formatAsciiSafeUpper } from "@/utils/formatters";
+import { getProductImageItems, productHasVideo } from "@/utils/media";
 import {
   isProductWhatsappOnly,
   getWhatsappOrderingCopy,
@@ -179,7 +180,7 @@ function calculateProductPricing(
 }
 
 function getSortedProductImages(product: Product): string[] {
-  const cardImages = product.images && product.images.length > 0 ? product.images : [];
+  const cardImages = getProductImageItems(product.images);
   const coverIndex = cardImages.findIndex((img) => img.is_cover);
   const sorted = [...cardImages];
   if (coverIndex > 0) {
@@ -335,6 +336,7 @@ export default function ProductCard({
       })
     : null;
   const displayImages = getSortedProductImages(product);
+  const hasVideo = productHasVideo(product.images);
   const units = getUnitsFromSeriesRatio(product.series_ratio);
   const colorText = getColorText(product, lang);
   const btnText = cardLabels.addToCart;
@@ -460,6 +462,14 @@ export default function ProductCard({
         {(isWhatsappOnly || !isAuthenticated || !hasDiscount) && product.gender && (
           <span className="absolute top-3 left-3 bg-white border border-black/10 text-onyx text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-none z-10 pointer-events-none">
             {t(product.gender, lang)}
+          </span>
+        )}
+
+        {/* Video Indicator Badge */}
+        {hasVideo && (
+          <span className="absolute top-3 right-3 bg-black/80 text-white text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 inline-flex items-center gap-1 rounded-none z-20 pointer-events-none">
+            <Play className="w-2.5 h-2.5 fill-white text-white" />
+            <span>Video</span>
           </span>
         )}
 

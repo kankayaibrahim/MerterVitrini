@@ -17,6 +17,7 @@ import (
 	"mertervitrini/backend/models"
 	"mertervitrini/backend/pkg/httpx"
 	"mertervitrini/backend/pkg/safe"
+	"mertervitrini/backend/services"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -41,7 +42,8 @@ func notifyCategoryIndexNowAsync(categoryID, title string, isActive bool) {
 }
 
 type AdminCatalogHandler struct {
-	Cfg *config.Config
+	Cfg   *config.Config
+	Media services.MediaProcessor
 }
 
 func NewAdminCatalogHandler(cfgs ...*config.Config) *AdminCatalogHandler {
@@ -50,6 +52,11 @@ func NewAdminCatalogHandler(cfgs ...*config.Config) *AdminCatalogHandler {
 		cfg = cfgs[0]
 	}
 	return &AdminCatalogHandler{Cfg: cfg}
+}
+
+// SetMediaProcessor injects the shared media processor dependency.
+func (h *AdminCatalogHandler) SetMediaProcessor(media services.MediaProcessor) {
+	h.Media = media
 }
 
 // --- CATEGORY HANDLERS ---
@@ -753,7 +760,7 @@ func (h *AdminCatalogHandler) ListProducts(w http.ResponseWriter, r *http.Reques
 		       COALESCE(p.updated_by_name, ''),
 		       COALESCE(p.updated_by_impersonated_by_email, ''),
 		       COALESCE(
-		           (SELECT json_agg(json_build_object('id', img.id, 'product_id', img.product_id, 'image_url', img.image_url, 'sort_order', img.sort_order, 'is_cover', img.is_cover))
+		           (SELECT json_agg(json_build_object('id', img.id, 'product_id', img.product_id, 'image_url', img.image_url, 'media_type', COALESCE(img.media_type, 'image'), 'sort_order', img.sort_order, 'is_cover', img.is_cover) ORDER BY img.sort_order ASC)
 		            FROM catalog.product_images img
 		            WHERE img.product_id = p.id), '[]'::json
 		       ) as images_json
@@ -876,7 +883,7 @@ func fetchGroupProducts(ctx context.Context, feedID *string, groupID *string) []
 
 func fetchProductImages(ctx context.Context, productID string) []*models.ProductImage {
 	imageQuery := `
-		SELECT id, product_id, image_url, sort_order, is_cover, created_at
+		SELECT id, product_id, image_url, COALESCE(media_type, 'image'), sort_order, is_cover, created_at
 		FROM catalog.product_images
 		WHERE product_id = $1
 		ORDER BY sort_order ASC`
@@ -890,7 +897,7 @@ func fetchProductImages(ctx context.Context, productID string) []*models.Product
 
 	for iRows.Next() {
 		var img models.ProductImage
-		if err := iRows.Scan(&img.ID, &img.ProductID, &img.ImageUrl, &img.SortOrder, &img.IsCover, &img.CreatedAt); err == nil {
+		if err := iRows.Scan(&img.ID, &img.ProductID, &img.ImageUrl, &img.MediaType, &img.SortOrder, &img.IsCover, &img.CreatedAt); err == nil {
 			images = append(images, &img)
 		}
 	}
@@ -1323,5 +1330,165 @@ func (h *AdminCatalogHandler) BulkProductAction(w http.ResponseWriter, r *http.R
 		"affected_count": affected,
 		"images_removed": imagesRemoved,
 		"message":        message,
+	})
+}
+
+func isAdminVideoUpload(filename, contentType string) bool {
+	if services.IsVideoMediaURL(filename) {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "video/")
+}
+
+func (h *AdminCatalogHandler) resolveMediaProcessor() services.MediaProcessor {
+	if h.Media != nil {
+		return h.Media
+	}
+	return services.NewLocalImageMediaService("")
+}
+
+func promoteFallbackCoverImage(ctx context.Context, productID string) {
+	_, _ = db.Pool.Exec(ctx, `
+		UPDATE catalog.product_images
+		SET is_cover = true
+		WHERE id = (
+			SELECT id
+			FROM catalog.product_images
+			WHERE product_id = $1 AND COALESCE(media_type, 'image') = 'image'
+			ORDER BY sort_order ASC
+			LIMIT 1
+		)`, productID)
+}
+
+// UploadProductMedia attaches an image or MP4/WebM video directly to an existing product.
+func (h *AdminCatalogHandler) UploadProductMedia(w http.ResponseWriter, r *http.Request) {
+	productID := strings.TrimSpace(r.PathValue("id"))
+	if productID == "" {
+		httpx.Error(w, http.StatusBadRequest, "Product ID is required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+
+	var exists bool
+	if err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM catalog.products WHERE id = $1 AND deleted_at IS NULL)`, productID).Scan(&exists); err != nil || !exists {
+		httpx.Error(w, http.StatusNotFound, "Ürün bulunamadı")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 52<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Medya dosyası çok büyük (Video max 50 MB, Görsel max 25 MB)")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		file, header, err = r.FormFile("video")
+	}
+	if err != nil {
+		file, header, err = r.FormFile("image")
+	}
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, "Yüklenecek medya dosyası bulunamadı")
+		return
+	}
+	defer file.Close()
+
+	mediaSvc := h.resolveMediaProcessor()
+	isVideo := isAdminVideoUpload(header.Filename, header.Header.Get("Content-Type"))
+
+	var savedURL string
+	mediaType := "image"
+	if isVideo {
+		mediaType = "video"
+		var videoSvc services.VideoMediaProcessor
+		if v, ok := mediaSvc.(services.VideoMediaProcessor); ok {
+			videoSvc = v
+		} else {
+			videoSvc = services.NewLocalImageMediaService("")
+		}
+		savedURL, err = videoSvc.SaveUploadedVideo(file, header.Filename, "products", "admvid")
+	} else {
+		savedURL, err = mediaSvc.SaveUploadedImage(file, header.Filename, "products", "adm")
+	}
+	if err != nil {
+		httpx.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var hasCover bool
+	_ = db.Pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM catalog.product_images
+			WHERE product_id = $1 AND is_cover = true AND COALESCE(media_type, 'image') = 'image'
+		)`, productID).Scan(&hasCover)
+
+	isCover := mediaType == "image" && !hasCover
+	var created models.ProductImage
+	err = db.Pool.QueryRow(ctx, `
+		INSERT INTO catalog.product_images (product_id, image_url, media_type, sort_order, is_cover)
+		VALUES (
+			$1, $2, $3,
+			COALESCE((SELECT MAX(sort_order) + 1 FROM catalog.product_images WHERE product_id = $1), 0),
+			$4
+		)
+		RETURNING id, product_id, image_url, media_type, sort_order, is_cover, created_at`,
+		productID, savedURL, mediaType, isCover,
+	).Scan(&created.ID, &created.ProductID, &created.ImageUrl, &created.MediaType, &created.SortOrder, &created.IsCover, &created.CreatedAt)
+	if err != nil {
+		log.Printf("[ADMIN MEDIA ERROR] DB insert failed for product %s: %v", productID, err)
+		httpx.Error(w, http.StatusInternalServerError, "Medya veritabanına kaydedilemedi")
+		return
+	}
+
+	triggerProductMVRefresh()
+
+	httpx.JSON(w, http.StatusCreated, map[string]any{
+		"media":  created,
+		"images": fetchProductImages(ctx, productID),
+	})
+}
+
+// DeleteProductMedia removes a single photo or video from a product and cleans up unreferenced disk files.
+func (h *AdminCatalogHandler) DeleteProductMedia(w http.ResponseWriter, r *http.Request) {
+	productID := strings.TrimSpace(r.PathValue("id"))
+	mediaID := strings.TrimSpace(r.PathValue("mediaId"))
+	if productID == "" || mediaID == "" {
+		httpx.Error(w, http.StatusBadRequest, "Product ID ve Media ID zorunludur")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	var deletedURL string
+	var wasCover bool
+	err := db.Pool.QueryRow(ctx, `
+		DELETE FROM catalog.product_images
+		WHERE id = $1 AND product_id = $2
+		RETURNING image_url, COALESCE(is_cover, false)`,
+		mediaID, productID,
+	).Scan(&deletedURL, &wasCover)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			httpx.Error(w, http.StatusNotFound, "Medya kaydı bulunamadı")
+			return
+		}
+		log.Printf("[ADMIN MEDIA ERROR] Delete failed product=%s media=%s err=%v", productID, mediaID, err)
+		httpx.Error(w, http.StatusInternalServerError, "Medya silinemedi")
+		return
+	}
+
+	if wasCover {
+		promoteFallbackCoverImage(ctx, productID)
+	}
+	cleanupUnreferencedProductImages(ctx, []string{deletedURL})
+	triggerProductMVRefresh()
+
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"deleted": true,
+		"images":  fetchProductImages(ctx, productID),
 	})
 }

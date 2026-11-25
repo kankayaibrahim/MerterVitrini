@@ -1,8 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
-import { ShoppingBag, PackageCheck, Check } from "lucide-react";
+import { ShoppingBag, PackageCheck, Check, Play } from "lucide-react";
 import { Product, XmlFeed } from "@/types/integration";
 import { resolveProductActorMeta } from "@/utils/supplierImpersonation";
+import { getProductCoverImageUrl, productHasVideo } from "@/utils/media";
 
 // Localized labels dictionary to prevent JSX literal internationalization warnings
 const LABELS = {
@@ -187,11 +188,8 @@ export default function ProductGrid({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {products.map((product) => {
-          const coverUrl =
-            product.images && product.images.length > 0
-              ? product.images.find((img) => img.is_cover)?.image_url ||
-              product.images[0].image_url
-              : undefined;
+          const coverUrl = getProductCoverImageUrl(product.images, "") || undefined;
+          const hasVideo = productHasVideo(product.images);
           const isSelected = selectedSet.has(product.id);
 
           return (
@@ -225,6 +223,12 @@ export default function ProductGrid({
                 {/* Product image (cover or first image) */}
                 <div className="relative w-full aspect-[4/5] bg-zinc-100 flex items-center justify-center overflow-hidden border-b border-zinc-100">
                   <ProductCoverThumb imageUrl={coverUrl} title={product.title} />
+                  {hasVideo && (
+                    <span className="absolute top-2.5 right-2.5 bg-black/80 text-white text-[9px] px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1 shadow-md">
+                      <Play size={9} className="fill-white" />
+                      <span>Video</span>
+                    </span>
+                  )}
                   <span className="absolute bottom-2.5 right-2.5 bg-black/75 text-[10px] text-white px-2 py-0.5 rounded-full font-bold shadow-md">
                     {feeds.find((f) => f.id === product.feed_id)?.alias_code ||
                       "PROD"}

@@ -130,3 +130,45 @@ func TestAccountDeletionRegistryOCPDispatch(t *testing.T) {
 	}
 }
 
+func TestVideoMediaServiceValidationAndStorage(t *testing.T) {
+	tmpDir := t.TempDir()
+	svc := NewLocalImageMediaService(tmpDir)
+
+	mp4Sample := []byte{
+		0x00, 0x00, 0x00, 0x18,
+		'f', 't', 'y', 'p',
+		'm', 'p', '4', '2',
+		0x00, 0x00, 0x00, 0x00,
+		'i', 's', 'o', 'm', 'm', 'p', '4', '2',
+	}
+	mp4URL, err := svc.SaveUploadedVideo(bytes.NewReader(mp4Sample), "Yeni Sezon Tanitim.mp4", "products", "vid")
+	if err != nil {
+		t.Fatalf("expected valid MP4 sample to succeed, got %v", err)
+	}
+	if !strings.HasPrefix(mp4URL, "/uploads/products/vid_") || !strings.HasSuffix(mp4URL, ".mp4") {
+		t.Fatalf("unexpected MP4 public URL: %s", mp4URL)
+	}
+	if !IsVideoMediaURL(mp4URL + "?v=1") {
+		t.Fatalf("expected IsVideoMediaURL to detect %s", mp4URL)
+	}
+
+	webmSample := []byte{0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81, 0x01, 0x42, 0xF7, 0x81, 0x01}
+	webmURL, err := svc.SaveUploadedVideo(bytes.NewReader(webmSample), "clip.webm", "products", "vid")
+	if err != nil {
+		t.Fatalf("expected valid WebM sample to succeed, got %v", err)
+	}
+	if !strings.HasSuffix(webmURL, ".webm") {
+		t.Fatalf("expected .webm URL, got %s", webmURL)
+	}
+
+	if _, err := svc.SaveUploadedVideo(strings.NewReader("<html>not a video</html>"), "fake.mp4", "products", "vid"); err == nil {
+		t.Fatalf("expected spoofed HTML file to be rejected")
+	}
+
+	svc.maxVideoBytes = 1024
+	oversized := append(append([]byte{}, mp4Sample...), bytes.Repeat([]byte{'A'}, 1200)...)
+	if _, err := svc.SaveUploadedVideo(bytes.NewReader(oversized), "big.mp4", "products", "vid"); err == nil {
+		t.Fatalf("expected oversized video to be rejected")
+	}
+}
+

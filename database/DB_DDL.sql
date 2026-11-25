@@ -1604,11 +1604,13 @@ CREATE TABLE catalog.product_images (
     image_url character varying(255) NOT NULL,
     sort_order integer DEFAULT 0,
     is_cover boolean DEFAULT false,
+    media_type character varying(16) DEFAULT 'image'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     original_size_bytes bigint,
     optimized_size_bytes bigint,
     is_optimized boolean DEFAULT false NOT NULL,
-    optimized_at timestamp with time zone
+    optimized_at timestamp with time zone,
+    CONSTRAINT product_images_media_type_check CHECK (((media_type)::text = ANY (ARRAY['image'::text, 'video'::text])))
 );
 
 
