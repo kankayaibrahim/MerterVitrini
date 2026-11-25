@@ -64,7 +64,7 @@ npm run start                         # SSR üretim sunucusunu başlatma
 .\scripts\build_deploy.ps1 -Project all -Deploy     # Hepsini derleyip canlı sunucuya aktarır
 
 # Gelişmiş GUI/CLI Deployment Tool (Python)
-python scripts\unified_deployer.py -p unified -c all -a deploy
+python scripts\unified_deployer.py -p unified -c all -a all
 ```
 
 ---

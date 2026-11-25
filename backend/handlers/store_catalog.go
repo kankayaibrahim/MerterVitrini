@@ -29,11 +29,11 @@ import (
 const statusClientClosedRequest = 499
 
 func isClientCanceled(r *http.Request, err error) bool {
-	return err != nil && errors.Is(r.Context().Err(), context.Canceled) && errors.Is(err, context.Canceled)
+	return err != nil && (errors.Is(r.Context().Err(), context.Canceled) || errors.Is(err, context.Canceled))
 }
 
 func isContextCanceled(ctx context.Context, err error) bool {
-	return err != nil && errors.Is(ctx.Err(), context.Canceled) && errors.Is(err, context.Canceled)
+	return err != nil && (errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled))
 }
 
 type StoreCatalogHandler struct {

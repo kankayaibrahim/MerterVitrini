@@ -1263,12 +1263,13 @@ if PYSIDE_AVAILABLE:
 # CLI EXECUTION ENTRY POINT
 # ==============================================================================
 def _execute_cli_step(pipeline, proj, comp, action):
-    if action in ["build", "all"]:
+    # Always cross-compile fresh Linux Go binary when deploying backend so stale binaries are never shipped.
+    if action in ["build", "all"] or (comp == "backend" and action == "deploy"):
         if comp == "backend":
             pipeline.build_backend(proj)
-        elif comp == "frontend":
+        elif comp == "frontend" and action in ["build", "all"]:
             pipeline.build_frontend(proj)
-            
+
     if action in ["deploy", "all"]:
         if comp == "backend":
             pipeline.deploy_backend(proj)
